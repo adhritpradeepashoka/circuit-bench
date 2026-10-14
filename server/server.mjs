@@ -8,10 +8,11 @@ import { readFile, stat } from 'node:fs/promises';
 import { join, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCompiler, RequestError, BOARDS } from './compile-service.mjs';
+import { createAiService } from './ai-service.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
-export function createServer({ compiler = createCompiler(), staticDir = null, log = () => {}, corsOrigin = null } = {}) {
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null } = {}) {
   const buckets = new Map();   // ip → recent request timestamps (small in-memory rate limit)
   const limited = ip => {
     const now = Date.now(), list = (buckets.get(ip) || []).filter(t => now - t < 60_000);
@@ -42,6 +43,21 @@ export function createServer({ compiler = createCompiler(), staticDir = null, lo
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
         const result = await compiler.compile(body);
         log(`compile ${result.ok ? 'ok' : 'failed'} ${result.cached ? '(cached)' : `${result.ms} ms`}`);
+        return send(res, 200, result);
+      }
+      if (url.pathname === '/api/ai/generate-code') {
+        if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
+        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
+        let raw = '', seen = 0, tooBig = false;
+        for await (const chunk of req) {
+          seen += chunk.length;
+          if (seen > 200_000) { req.destroy(); return; }
+          if (!tooBig) { raw += chunk; if (raw.length > 40_000) { tooBig = true; raw = ''; } }
+        }
+        if (tooBig) throw new RequestError('Request too large.', 413);
+        let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
+        const result = await ai.generateCode(body);
+        log(`ai generate-code ok`);
         return send(res, 200, result);
       }
       if (url.pathname.startsWith('/api/')) return send(res, 404, { ok: false, error: 'Unknown endpoint.' });

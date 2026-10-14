@@ -7,6 +7,7 @@ import { initCode } from './ui/code.js';
 import { initResistorEditor } from './ui/resistor-editor.js';
 import { initLedEditor } from './ui/led-editor.js';
 import { initValueEditor } from './ui/value-editor.js';
+import { initAiPanel } from './ui/ai-panel.js';
 import { WOKWI_PINS } from './core/pins.generated.js';
 
 const $ = id => document.getElementById(id);
@@ -29,6 +30,7 @@ editor.init();
 initResistorEditor(editor);
 initLedEditor(editor);
 initValueEditor(editor);
+initAiPanel(editor, code);
 
 // The code dock starts on the lightweight editor; Monaco (a few hundred KB, loaded on demand) takes over the first time it's opened —
 // unless you chose the simple editor, or Monaco fails to show your code (then we fall back automatically and remember that).

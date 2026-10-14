@@ -47,6 +47,15 @@ The single-file build (`npm run build:single`, ~5 MB because Monaco is inlined) 
 bundled examples all work; compiling your own sketch needs a service. Page served from elsewhere (for example that file)? Point it at the service with `?compiler=http://127.0.0.1:8787` and
 start the service with `VLAB_CORS_ORIGIN=*` (or your page's origin).
 
+### AI "Ask AI" (beta, bring-your-own-key)
+
+The ✨ Ask AI button in the code dock turns a plain-English instruction + the circuit you've built + the current sketch into an edited
+sketch, via Gemini. **v0.1 is bring-your-own-key only** — each visitor pastes their own free key (get one at
+[aistudio.google.com/apikey](https://aistudio.google.com/apikey)); it's stored in their browser only (`localStorage`) and sent with
+each request, so CircuitBench's own server never sees or pays for anyone's usage. Nothing needs configuring server-side for this to
+work. (A server-funded free quota before asking for a key is the intended next step — `server/ai-service.mjs` is written so that
+slots in as a second way to satisfy the same request, without the client changing.)
+
 ### Security
 
 The service compiles code it is sent. It validates file names and sizes, rate-limits, queues (2 at a time), times out at 90 s, and refuses

@@ -106,6 +106,31 @@
             <select id="codeExamples" aria-label="Load an example sketch"></select>
             <button id="codeCompile" title="Compile with Arduino CLI (does not run)">Verify</button>
             <button id="codeReset" title="Restore the default Blink sketch">Reset</button>
+            <span class="ai-menu">
+              <button id="aiBtn" type="button" title="Ask AI to write or change this sketch (beta)">✨ Ask AI</button>
+              <div class="ai-panel" id="aiPanel" hidden>
+                <div class="ai-key-row" id="aiKeyRow" hidden>
+                  <p>AI features are in beta and need a free API key for now — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one free at Google AI Studio</a>, then paste it below. It's stored only in this browser.</p>
+                  <input id="aiKeyInput" type="password" placeholder="Paste your Gemini API key" autocomplete="off" spellcheck="false">
+                  <button id="aiKeySave" type="button">Save key</button>
+                </div>
+                <div class="ai-ask-row" id="aiAskRow">
+                  <textarea id="aiPrompt" placeholder="e.g. Make the LED blink twice as fast, or: wire this up to blink when the button is pressed" rows="2"></textarea>
+                  <div class="ai-ask-actions">
+                    <button id="aiForgetKey" type="button" class="ai-link" title="Remove the saved key">change key</button>
+                    <button id="aiGenerate" type="button">Generate</button>
+                  </div>
+                </div>
+                <div class="ai-result" id="aiResult" hidden>
+                  <p id="aiExplain"></p>
+                  <div class="ai-result-actions">
+                    <button id="aiDiscard" type="button">Discard</button>
+                    <button id="aiApply" type="button">Apply to sketch</button>
+                  </div>
+                </div>
+                <p class="ai-status" id="aiStatus" role="status"></p>
+              </div>
+            </span>
             <button id="codeCollapse" title="Hide the editor" aria-label="Hide the editor">✕</button>
           </span>
         </div>
