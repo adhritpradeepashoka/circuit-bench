@@ -1,0 +1,30 @@
+{
+  "name": "circuit-bench",
+  "version": "0.1.0",
+  "description": "CircuitBench \u2014 browser-based virtual electronics lab: circuit editor + real Arduino firmware (Arduino CLI) running on a simulated ATmega328P (avr8js)",
+  "scripts": {
+    "dev": "vite",
+    "server": "node server/server.mjs",
+    "start": "vite build && node server/server.mjs",
+    "build": "vite build",
+    "preview": "vite preview",
+    "build:single": "SINGLE=1 vite build",
+    "test": "node --test test/core.test.mjs test/firmware.test.mjs test/compile-client.test.mjs test/server.test.mjs test/doctor.test.mjs test/ui-smoke.test.mjs",
+    "extract-pins": "node scripts/extract-pins.mjs",
+    "build-firmware": "node scripts/build-firmware.mjs",
+    "doctor": "node scripts/doctor.mjs"
+  },
+  "dependencies": {
+    "@wokwi/elements": "^1.9.2",
+    "avr8js": "^0.21.1",
+    "monaco-editor": "^0.56.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "jsdom": "^30.1.0",
+    "vite": "^8.3.0",
+    "vite-plugin-singlefile": "^2.3.3"
+  },
+  "private": true,
+  "type": "module"
+}

@@ -1,0 +1,9 @@
+import '@wokwi/elements';
+import { Editor } from '../../src/ui/editor.js';
+import { initSidebar } from '../../src/ui/sidebar.js';
+import { Simulation } from '../../src/ui/simulation.js';
+import { initCode } from '../../src/ui/code.js';
+import { initResistorEditor } from '../../src/ui/resistor-editor.js';
+import { initLedEditor } from '../../src/ui/led-editor.js';
+import { initValueEditor } from '../../src/ui/value-editor.js';
+window.__lab = { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor };

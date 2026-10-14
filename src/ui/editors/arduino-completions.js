@@ -1,0 +1,41 @@
+// Autocomplete entries for the Arduino API. Everything here is real Arduino core API (it compiles); the list is a convenience, not a language definition.
+const fn = (label, insert, detail, doc) => ({ label, insert, detail, doc, kind: 'fn' });
+const constant = (label, doc) => ({ label, doc, kind: 'const' });
+const member = (label, insert, detail, doc) => ({ label, insert, detail, doc, kind: 'fn', member: true });
+
+export const ARDUINO_COMPLETIONS = [
+  fn('pinMode', 'pinMode(${1:pin}, ${2|OUTPUT,INPUT,INPUT_PULLUP|});', 'void pinMode(uint8_t pin, uint8_t mode)', 'Configure a pin as an input, output or input with the internal pull-up.'),
+  fn('digitalWrite', 'digitalWrite(${1:pin}, ${2|HIGH,LOW|});', 'void digitalWrite(uint8_t pin, uint8_t value)', 'Drive a digital output pin HIGH (5 V) or LOW (0 V).'),
+  fn('digitalRead', 'digitalRead(${1:pin})', 'int digitalRead(uint8_t pin)', 'Read a digital pin: HIGH or LOW.'),
+  fn('analogRead', 'analogRead(${1:A0})', 'int analogRead(uint8_t pin)', 'Read an analog pin with the 10-bit ADC: 0 (0 V) to 1023 (5 V).'),
+  fn('analogWrite', 'analogWrite(${1:pin}, ${2:value});', 'void analogWrite(uint8_t pin, int value)', 'PWM output, 0–255, on pins 3, 5, 6, 9, 10, 11.'),
+  fn('delay', 'delay(${1:ms});', 'void delay(unsigned long ms)', 'Pause the program for the given milliseconds.'),
+  fn('delayMicroseconds', 'delayMicroseconds(${1:us});', 'void delayMicroseconds(unsigned int us)', 'Pause for the given microseconds.'),
+  fn('millis', 'millis()', 'unsigned long millis()', 'Milliseconds since the program started.'),
+  fn('micros', 'micros()', 'unsigned long micros()', 'Microseconds since the program started.'),
+  fn('map', 'map(${1:value}, ${2:fromLow}, ${3:fromHigh}, ${4:toLow}, ${5:toHigh})', 'long map(long, long, long, long, long)', 'Re-map a number from one range to another.'),
+  fn('constrain', 'constrain(${1:x}, ${2:low}, ${3:high})', 'constrain(x, a, b)', 'Clamp a number between two limits.'),
+  fn('min', 'min(${1:a}, ${2:b})', 'min(a, b)', 'The smaller of two numbers.'),
+  fn('max', 'max(${1:a}, ${2:b})', 'max(a, b)', 'The larger of two numbers.'),
+  fn('abs', 'abs(${1:x})', 'abs(x)', 'Absolute value.'),
+  fn('pow', 'pow(${1:base}, ${2:exponent})', 'double pow(double, double)', 'Raise a number to a power.'),
+  fn('sqrt', 'sqrt(${1:x})', 'double sqrt(double)', 'Square root.'),
+  fn('random', 'random(${1:max})', 'long random(long max)', 'A pseudo-random number in [0, max).'),
+  fn('randomSeed', 'randomSeed(${1:seed});', 'void randomSeed(unsigned long)', 'Seed the pseudo-random generator.'),
+  fn('tone', 'tone(${1:pin}, ${2:frequency});', 'void tone(uint8_t pin, unsigned int frequency)', 'Generate a square wave of the given frequency on a pin.'),
+  fn('noTone', 'noTone(${1:pin});', 'void noTone(uint8_t pin)', 'Stop the tone.'),
+  member('begin', 'begin(${1:9600});', 'Serial.begin(baud)', 'Start the serial port at the given baud rate.'),
+  member('print', 'print(${1:value});', 'Serial.print(value)', 'Print a value to the Serial Monitor.'),
+  member('println', 'println(${1:value});', 'Serial.println(value)', 'Print a value followed by a newline.'),
+  member('write', 'write(${1:byte});', 'Serial.write(byte)', 'Send a raw byte.'),
+  member('available', 'available()', 'int Serial.available()', 'Number of bytes waiting to be read.'),
+  member('read', 'read()', 'int Serial.read()', 'Read one incoming byte (-1 if none).'),
+  member('readStringUntil', "readStringUntil('\\n')", 'String Serial.readStringUntil(char)', 'Read characters up to a terminator.'),
+  member('parseInt', 'parseInt()', 'long Serial.parseInt()', 'Parse the next integer from the input.'),
+  constant('HIGH', 'Logic level 1 (5 V).'), constant('LOW', 'Logic level 0 (0 V).'), constant('INPUT', 'Pin mode: high-impedance input.'),
+  constant('OUTPUT', 'Pin mode: output.'), constant('INPUT_PULLUP', 'Pin mode: input with the internal pull-up resistor.'), constant('LED_BUILTIN', 'The on-board LED pin (13 on the Uno).'),
+  ...['A0', 'A1', 'A2', 'A3', 'A4', 'A5'].map(a => constant(a, `Analog pin ${a} (digital pin ${14 + Number(a[1])}).`)),
+  { label: 'setup', kind: 'snippet', insert: 'void setup() {\n  ${1}\n}', detail: 'snippet', doc: 'Runs once at start-up.' },
+  { label: 'loop', kind: 'snippet', insert: 'void loop() {\n  ${1}\n}', detail: 'snippet', doc: 'Runs over and over.' },
+  { label: 'for', kind: 'snippet', insert: 'for (int ${1:i} = 0; ${1:i} < ${2:n}; ${1:i}++) {\n  ${3}\n}', detail: 'snippet', doc: 'A counting loop.' },
+];

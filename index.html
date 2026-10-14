@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Virtual Lab — V0.1</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314191c'/%3E%3Crect x='7' y='9' width='3.5' height='14' fill='%23c9853c'/%3E%3Crect x='14' y='9' width='3.5' height='14' fill='%23d64b3d'/%3E%3Crect x='21' y='9' width='3.5' height='14' fill='%23f0b429'/%3E%3C/svg%3E">
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#232b30"/><rect x="6" y="8" width="3.2" height="12" fill="#c9853c"/><rect x="12.4" y="8" width="3.2" height="12" fill="#d64b3d"/><rect x="18.8" y="8" width="3.2" height="12" fill="#f0b429"/></svg>
+      <div><div class="brand-name">Virtual Lab</div><div class="brand-sub">V0.1 circuit editor</div></div>
+    </div>
+    <button class="run" id="runBtn" title="Run simulation (Ctrl+Enter)"><span class="run-icon" id="runIcon">▶</span><span id="runLabel">Run</span></button>
+    <button class="code-toggle" id="codeToggle" aria-pressed="false" title="Show / hide the sketch editor"><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="m7 6-4 4 4 4M13 6l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Code</button>
+    <label class="top-search"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.6 10.6 3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="topSearch" placeholder="Search parts" autocomplete="off" spellcheck="false"></label>
+    <div class="project-menu">
+      <button id="exportBtn" aria-haspopup="true" aria-expanded="false">Export ▾</button>
+      <div class="menu" id="exportMenu" hidden>
+        <button id="exportJson">Download project (.json)</button>
+        <button id="copyJson">Copy project JSON</button>
+        <hr>
+        <button id="importJson">Open project file…</button>
+        <button id="newProject">New workspace</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+  </header>
+
+  <main class="main" id="main">
+    <section class="stage">
+      <div class="toolbar" role="toolbar" aria-label="Editor tools">
+        <button class="tool active" id="selectTool" title="Select and move (V)" aria-pressed="true"><svg viewBox="0 0 20 20"><path d="M5 3l10 6.2-4.4 1.1L13 15.6l-2 1-2.4-5.2L5.6 14z" fill="currentColor"/></svg></button>
+        <button class="tool" id="wireTool" title="Draw wire (W)" aria-pressed="false"><svg viewBox="0 0 20 20"><circle cx="4.5" cy="15" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="15.5" cy="5" r="2.3" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M6.4 13.6C9 11 9 9 13.6 6.4" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></button>
+        <span class="sep"></span>
+        <button class="tool" id="rotateTool" title="Rotate selected part (R)"><svg viewBox="0 0 20 20"><path d="M15.5 10a5.5 5.5 0 1 1-1.9-4.2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M14.6 2.6v3.6h-3.6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="tool" id="deleteTool" title="Delete selected (Del)"><svg viewBox="0 0 20 20"><path d="M5.5 6h9M8 6V4.5h4V6m-5.2 0 .6 9.5h5.2l.6-9.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <span class="sep"></span>
+        <button class="tool" id="undoTool" title="Undo (Ctrl+Z)"><svg viewBox="0 0 20 20"><path d="M7.5 5 4 8.5 7.5 12M4.5 8.5H12a3.5 3.5 0 0 1 0 7H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="tool" id="redoTool" title="Redo (Ctrl+Y)"><svg viewBox="0 0 20 20"><path d="M12.5 5 16 8.5 12.5 12M15.5 8.5H8a3.5 3.5 0 0 0 0 7h3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <span class="sep"></span>
+        <button class="tool" id="zoomOut" title="Zoom out"><svg viewBox="0 0 20 20"><path d="M5 10h10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+        <button class="zoom-readout" id="zoomFit" title="Fit everything (F)">100%</button>
+        <button class="tool" id="zoomIn" title="Zoom in"><svg viewBox="0 0 20 20"><path d="M5 10h10M10 5v10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
+        <span class="status" id="status" role="status" aria-live="polite"></span>
+      </div>
+
+      <div class="canvas" id="canvas">
+        <div class="world" id="world">
+          <div id="partsLayer"></div>
+          <svg id="overlay" class="overlay" width="1" height="1"></svg>
+        </div>
+        <div class="wire-editor" id="wireEditor" hidden>
+          <span class="we-title">Wire</span>
+          <label>Style <select id="wireStyle"><option value="straight">Straight</option><option value="orthogonal">90°</option><option value="curve">Curve</option></select></label>
+          <label>Color <input id="wireColor" type="color" value="#454d53"></label>
+          <label>Width <select id="wireWidth"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>
+          <button id="wireDelete" title="Delete wire">Delete</button>
+        </div>
+        <div class="part-editor" id="resEditor" hidden role="dialog" aria-label="Edit resistance">
+          <div class="pe-head"><span class="pe-title">Resistor</span><span class="pe-bands" id="resBands" aria-hidden="true"></span></div>
+          <label class="pe-field">Resistance
+            <span class="pe-input"><input id="resInput" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="e.g. 4.7k"><i>Ω</i></span>
+          </label>
+          <div class="pe-msg" id="resMsg" role="status"></div>
+          <div class="pe-presets" id="resPresets"></div>
+          <div class="pe-actions"><button type="button" id="resCancel">Cancel</button><button type="button" id="resApply" class="primary">Apply</button></div>
+        </div>
+        <div class="part-editor led-editor" id="ledEditor" hidden role="dialog" aria-label="LED colour">
+          <div class="pe-head"><span class="pe-title">LED colour</span><span class="pe-vf" id="ledVf"></span></div>
+          <div class="swatches" id="ledSwatches"></div>
+        </div>
+        <div class="part-editor value-editor" id="valEditor" hidden role="dialog" aria-label="Edit value">
+          <div class="pe-head"><span class="pe-title" id="valTitle">Value</span><span class="pe-vf" id="valReadout"></span></div>
+          <label class="pe-field"><span id="valLabel">Value</span>
+            <input type="range" id="valSlider" min="0" max="100" step="0.1">
+          </label>
+          <div class="pe-msg" id="valNote"></div>
+          <div class="pe-presets ve-presets" id="valPresets"></div>
+        </div>
+        <div class="tip" id="tip" hidden></div>
+        <div class="hint-card" id="hintCard">
+          <b>Build your first circuit</b>
+          <span>Drag an LED and a resistor onto the breadboard (right-click the resistor to change its value) — the leads snap into holes. Choose <em>Wire</em> and draw D13 → resistor → LED → GND, then press <em>Run</em>. Open <em>Code</em> to change what the Arduino does.</span>
+        </div>
+        <div class="sim-tray" id="simTray" hidden>
+          <div class="sim-row">
+            <span class="sim-state"><i class="sim-dot" id="simDot"></i><span id="simStatus">Stopped</span></span>
+            <span class="sim-readout">ATmega328P <b id="simTime">0.00 s</b></span>
+            <span class="sim-readout">High pins <b id="simPin">–</b></span>
+            <span class="sim-actions"><button id="simPause">Pause</button><button id="simStop">Stop</button></span>
+          </div>
+          <ul class="sim-notes" id="simNotes"></ul>
+        </div>
+      </div>
+
+      <section class="code-dock collapsed" id="codeDock" aria-label="Sketch editor">
+        <div class="code-resize" id="codeResize" title="Drag to resize"></div>
+        <div class="code-head">
+          <span class="code-title">sketch.ino</span>
+          <span class="code-status" id="codeStatus" role="status"></span>
+          <span class="code-actions">
+            <button id="codeEditorKind" type="button" title="Switch editor">Monaco editor</button>
+            <select id="codeExamples" aria-label="Load an example sketch"></select>
+            <button id="codeCompile" title="Compile with Arduino CLI (does not run)">Verify</button>
+            <button id="codeReset" title="Restore the default Blink sketch">Reset</button>
+            <button id="codeCollapse" title="Hide the editor" aria-label="Hide the editor">✕</button>
+          </span>
+        </div>
+        <div class="code-body" id="codeBody">
+          <div class="code-main" id="codeMain">
+            <div class="file-tabs" id="fileTabs" role="tablist" aria-label="Project files"></div>
+            <div class="code-editor-row">
+              <div class="code-gutter" id="codeGutter" aria-hidden="true"></div>
+              <div class="code-editor">
+                <div class="code-hl" id="codeHighlight" aria-hidden="true"></div>
+                <textarea id="codeInput" spellcheck="false" autocomplete="off" autocapitalize="off" wrap="off" aria-label="Arduino sketch"></textarea>
+              </div>
+              <div class="code-monaco" id="codeMonaco" hidden></div>
+            </div>
+          </div>
+          <div class="code-side" id="codeSide">
+            <div class="side-tabs" role="tablist">
+              <button type="button" role="tab" id="tabCode" aria-selected="false" aria-controls="codeMain">Code</button>
+              <button type="button" role="tab" id="tabOutput" class="on" aria-selected="true" aria-controls="outputPane">Output</button>
+              <button type="button" role="tab" id="tabSerial" aria-selected="false" aria-controls="serialPane">Serial Monitor</button>
+              <span class="side-info" id="serialBaud"></span>
+            </div>
+            <div class="side-pane" id="outputPane" role="tabpanel"></div>
+            <div class="side-pane serial" id="serialPane" role="tabpanel" hidden>
+              <pre class="serial-log" id="serialLog" aria-live="polite"></pre>
+              <div class="serial-bar">
+                <input id="serialInput" placeholder="Send to the Arduino" autocomplete="off" spellcheck="false" aria-label="Text to send over Serial">
+                <select id="serialEol" aria-label="Line ending">
+                  <option value="none">No line ending</option><option value="nl" selected>Newline</option><option value="cr">Carriage return</option><option value="crnl">Both NL &amp; CR</option>
+                </select>
+                <button type="button" id="serialSend">Send</button>
+                <button type="button" id="serialClear" title="Clear the monitor">Clear</button>
+                <label class="auto"><input type="checkbox" id="serialAuto" checked>Autoscroll</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+
+    <aside class="parts" id="partsPanel" aria-label="Parts">
+      <div class="parts-head">
+        <span class="parts-title">Parts</span>
+        <button class="collapse" id="collapseBtn" title="Collapse parts panel" aria-expanded="true" aria-controls="partsBody"><svg viewBox="0 0 16 16" width="14" height="14"><path id="collapseChevron" d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="parts-rail" aria-hidden="true">Parts</div>
+      <div class="parts-body" id="partsBody">
+        <label class="search"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.6 10.6 3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="partsSearch" placeholder="Search parts" autocomplete="off" spellcheck="false"></label>
+        <div id="catalog"></div>
+        <div class="workspace"><div class="group-title">In workspace</div><div id="workspaceList"></div></div>
+        <p class="note">Drag a part onto the canvas, or press Add. Leads snap into breadboard holes.</p>
+      </div>
+    </aside>
+  </main>
+</div>
+<script type="module" src="/src/main.js"></script>
+</body>
+</html>
