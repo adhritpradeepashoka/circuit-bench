@@ -1,15 +1,17 @@
 // AI service: turns a plain-English instruction + the current circuit + sketch into a sketch edit.
 //
-// v0.1 (beta) is bring-your-own-key only: every call must carry the caller's own free Gemini key, so
+// v0.1 (beta) is bring-your-own-key only: every call must carry the caller's own free key, so
 // CircuitBench pays nothing and no quota bookkeeping is needed. This is intentional, not a shortcut —
 // the freemium layer (a small server-funded daily quota before asking for a key) is meant to slot in
 // later as a *second* way to satisfy the same call, without the client or this module's shape changing:
 // a future "no userKey → try the house key under a quota, else ask for one" branch replaces the single
 // `if (!userKey)` check below, and callers never need to change.
+//
+// Two providers are supported because Google AI Studio's key-creation flow fails for some accounts
+// (a known, longstanding "project creation failed" bug unrelated to anything here) — Groq is a working
+// fallback that doesn't involve that step at all. Both are wrapped to the same { ok, code, explanation }
+// shape so the rest of the app (and the client) never needs to know which one answered.
 import { RequestError } from './compile-service.mjs';
-
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_URL = key => `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(key)}`;
 
 const LIMITS = { promptChars: 4_000, codeChars: 20_000, partsN: 80, wiresN: 200 };
 
@@ -43,9 +45,36 @@ function extractCode(text) {
   return m ? m[1].trim() : null;
 }
 
+function statusFor(httpStatus, message) {
+  if (httpStatus === 429) return 429;
+  if (httpStatus === 400 || httpStatus === 401 || httpStatus === 403) return /key|unauthoriz|permission/i.test(message) ? 401 : 400;
+  return 502;
+}
+
+const PROVIDERS = {
+  gemini: {
+    label: 'Gemini',
+    url: key => `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+    headers: () => ({ 'content-type': 'application/json' }),
+    body: prompt => JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } }),
+    errorMessage: body => body?.error?.message,
+    text: body => body?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '',
+  },
+  groq: {
+    label: 'Groq',
+    url: () => 'https://api.groq.com/openai/v1/chat/completions',
+    headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
+    body: prompt => JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0.2, messages: [{ role: 'user', content: prompt }] }),
+    errorMessage: body => body?.error?.message,
+    text: body => body?.choices?.[0]?.message?.content || '',
+  },
+};
+
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
-  async function generateCode({ instruction, circuit, code, userKey }) {
+  async function generateCode({ instruction, circuit, code, userKey, provider = 'gemini' }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
+    const p = PROVIDERS[provider];
+    if (!p) throw new RequestError(`Unknown AI provider "${provider}".`);
     if (!userKey) {
       const err = new RequestError('AI features need a free API key for now — add one in Settings → AI.', 428);
       err.needsKey = true;
@@ -54,21 +83,16 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     const prompt = buildPrompt({ instruction, circuit, code });
     let res;
     try {
-      res = await fetchImpl(GEMINI_URL(userKey), {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } }),
-      });
+      res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt) });
     } catch {
-      throw new RequestError('Could not reach the AI provider — check your connection and try again.', 502);
+      throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
     }
     let body; try { body = await res.json(); } catch { body = null; }
     if (!res.ok) {
-      const msg = body?.error?.message || `HTTP ${res.status}`;
-      const status = res.status === 400 && /API key/i.test(msg) ? 401 : res.status === 429 ? 429 : 502;
-      throw new RequestError(`AI provider error: ${msg}`, status);
+      const msg = p.errorMessage(body) || `HTTP ${res.status}`;
+      throw new RequestError(`${p.label} error: ${msg}`, statusFor(res.status, msg));
     }
-    const text = body?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '';
+    const text = p.text(body);
     const newCode = extractCode(text);
     if (!newCode) throw new RequestError('The AI did not return usable code — try rephrasing the instruction.', 502);
     const explanation = text.replace(/```[\s\S]*?```/, '').trim();

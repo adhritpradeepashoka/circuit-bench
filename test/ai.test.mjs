@@ -43,6 +43,29 @@ test('generateCode: a provider rate limit is surfaced as 429', async () => {
   await assert.rejects(() => ai.generateCode({ instruction: 'blink', userKey: 'k' }), e => e instanceof RequestError && e.status === 429);
 });
 
+test('generateCode: the groq provider parses its OpenAI-shaped response and hits the OpenAI-compatible endpoint', async () => {
+  let seenUrl = null, seenAuth = null;
+  const ai = createAiService({
+    fetchImpl: async (url, opts) => {
+      seenUrl = url; seenAuth = opts.headers.authorization;
+      return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '```cpp\nvoid setup(){} void loop(){}\n```\nSwitched to Groq.' } }] }) };
+    },
+  });
+  const res = await ai.generateCode({ instruction: 'blink', userKey: 'gk', provider: 'groq' });
+  assert.equal(res.ok, true);
+  assert.match(res.code, /void setup/);
+  assert.match(res.explanation, /Groq/);
+  assert.match(seenUrl, /api\.groq\.com/);
+  assert.equal(seenAuth, 'Bearer gk');
+});
+
+test('generateCode: an unknown provider name is rejected before any network call', async () => {
+  let called = false;
+  const ai = createAiService({ fetchImpl: async () => { called = true; } });
+  await assert.rejects(() => ai.generateCode({ instruction: 'blink', userKey: 'k', provider: 'bogus' }), RequestError);
+  assert.equal(called, false);
+});
+
 test('summariseCircuit: keeps it to ids/types and net names/pins, drops geometry', () => {
   const project = { parts: [{ id: 'p1', type: 'led', x: 10, y: 20, rot: 0 }], nets: [{ name: 'net-1', pins: ['p1|A'] }] };
   assert.deepEqual(summariseCircuit(project), { parts: [{ id: 'p1', type: 'led' }], nets: [{ name: 'net-1', pins: ['p1|A'] }] });

@@ -110,8 +110,13 @@
               <button id="aiBtn" type="button" title="Ask AI to write or change this sketch (beta)">✨ Ask AI</button>
               <div class="ai-panel" id="aiPanel" hidden>
                 <div class="ai-key-row" id="aiKeyRow" hidden>
-                  <p>AI features are in beta and need a free API key for now — <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">get one free at Google AI Studio</a>, then paste it below. It's stored only in this browser.</p>
-                  <input id="aiKeyInput" type="password" placeholder="Paste your Gemini API key" autocomplete="off" spellcheck="false">
+                  <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
+                  <div class="ai-provider-tabs" role="tablist">
+                    <button type="button" role="tab" id="aiProviderGemini" class="on" data-provider="gemini">Gemini</button>
+                    <button type="button" role="tab" id="aiProviderGroq" data-provider="groq">Groq</button>
+                  </div>
+                  <p class="ai-provider-hint" id="aiProviderHint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key</a> at Google AI Studio. If that page says "project creation failed" (a known Google-side bug on some accounts), switch to the Groq tab above instead.</p>
+                  <input id="aiKeyInput" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
                   <button id="aiKeySave" type="button">Save key</button>
                 </div>
                 <div class="ai-ask-row" id="aiAskRow">
