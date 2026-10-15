@@ -49,12 +49,24 @@ start the service with `VLAB_CORS_ORIGIN=*` (or your page's origin).
 
 ### AI "Ask AI" (beta, bring-your-own-key)
 
-The ✨ Ask AI button in the code dock turns a plain-English instruction + the circuit you've built + the current sketch into an edited
-sketch, via Gemini. **v0.1 is bring-your-own-key only** — each visitor pastes their own free key (get one at
-[aistudio.google.com/apikey](https://aistudio.google.com/apikey)); it's stored in their browser only (`localStorage`) and sent with
-each request, so CircuitBench's own server never sees or pays for anyone's usage. Nothing needs configuring server-side for this to
-work. (A server-funded free quota before asking for a key is the intended next step — `server/ai-service.mjs` is written so that
-slots in as a second way to satisfy the same request, without the client changing.)
+The ✨ Ask AI button in the code dock turns a plain-English instruction + the circuit you've built + the current sketch into an edit —
+via Gemini or Groq, your choice. The AI can now change the **circuit itself**, not just the firmware: add, move, rotate or remove
+parts, wire them up, and tweak properties (resistor value, LED color, and so on), in the same request as a sketch rewrite. A reply
+like "add a pushbutton on pin 2 with a pull-down resistor" lands on the board, wired, with the matching code — all in one step.
+
+Under the hood the model only ever proposes a JSON list of actions (`add_part`, `move_part`, `rotate_part`, `set_prop`,
+`remove_part`, `add_wire`, `remove_wire`); `src/core/ai-actions.js` — plain, DOM-free JS shared verbatim between the server and the
+browser — is the sole gatekeeper that validates every action against the real part/pin catalogue before anything touches your
+project. A hallucinated part type or pin name is dropped with a warning instead of corrupting the circuit, and you see those
+warnings (and a summary of what changed) before deciding whether to Apply.
+
+**v0.1 is bring-your-own-key only** — each visitor pastes their own free key (Gemini at
+[aistudio.google.com/apikey](https://aistudio.google.com/apikey), or Groq at
+[console.groq.com/keys](https://console.groq.com/keys) if the Gemini flow hits Google's "project creation failed" bug); it's stored
+in their browser only (`localStorage`) and sent with each request, so CircuitBench's own server never sees or pays for anyone's
+usage. Nothing needs configuring server-side for this to work. (A server-funded free quota before asking for a key is the intended
+next step — `server/ai-service.mjs` is written so that slots in as a second way to satisfy the same request, without the client
+changing.)
 
 ### Security
 

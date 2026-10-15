@@ -1,19 +1,32 @@
 // Wires the "✨ Ask AI" popover in the code dock: shows the key prompt (beta, bring-your-own-key) when
 // needed, sends the instruction + circuit + current sketch to the server, and lets the user apply or
-// discard the result. See src/sim/ai-client.mjs for the BYOK rationale and request shape.
+// discard the result — which can now be a circuit edit (parts/wires), a firmware edit, or both.
+// See src/sim/ai-client.mjs for the BYOK rationale and request shape, and src/core/ai-actions.js for
+// how proposed circuit edits are validated against the real part/pin catalogue before anything renders.
 import { generateCode, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider } from '../sim/ai-client.mjs';
+import { applyCircuitActions } from '../core/ai-actions.js';
+import { FORMAT, VERSION } from '../core/project.js';
 
 const PROVIDER_HINTS = {
   gemini: '<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key</a> at Google AI Studio. If that page says "project creation failed" (a known Google-side bug on some accounts), switch to the Groq tab above instead.',
   groq: '<a href="https://console.groq.com/keys" target="_blank" rel="noopener">Get a free Groq key</a> at console.groq.com — no Google account step involved.',
 };
 
+/** parts/wires from applyCircuitActions use the live-state field names (rot, from/to→a/b happens inside importProject); shape them the way fromProjectFile expects. */
+function toProjectFileShape(parts, wires) {
+  return {
+    format: FORMAT, version: VERSION,
+    parts: parts.map(p => ({ ...p, rotate: p.rot })),
+    wires: wires.map(w => ({ id: w.id, from: w.from, to: w.to, style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag })),
+  };
+}
+
 export function initAiPanel(editor, code) {
   const $ = id => document.getElementById(id);
   const btn = $('aiBtn'), panel = $('aiPanel'), keyRow = $('aiKeyRow'), askRow = $('aiAskRow'), resultRow = $('aiResult');
   const keyInput = $('aiKeyInput'), status = $('aiStatus'), promptEl = $('aiPrompt'), explainEl = $('aiExplain');
   const providerTabs = $('aiKeyRow').querySelectorAll('[data-provider]'), providerHint = $('aiProviderHint');
-  let lastCode = null, pending = null;
+  let pending = null; // { code, circuitEdit: {parts, wires} | null }
 
   const setStatus = (msg, busy = false) => { status.textContent = msg || ''; status.classList.toggle('busy', busy); };
   const hasKey = () => !!getStoredKey();
@@ -47,16 +60,24 @@ export function initAiPanel(editor, code) {
     const genBtn = $('aiGenerate');
     genBtn.disabled = true; setStatus('Asking the AI…', true); resultRow.hidden = true;
     try {
-      lastCode = code.source;
       const circuit = editor.exportProject();
-      const res = await generateCode({ instruction, circuit, code: lastCode });
+      const res = await generateCode({ instruction, circuit, code: code.source });
       if (!res.ok) {
         if (res.needsKey) { setStoredKey(''); refreshKeyUi(); }
         setStatus(res.error || 'Something went wrong.');
         return;
       }
-      pending = res.code;
-      explainEl.textContent = res.explanation || 'Ready to apply.';
+      let circuitEdit = null, warnings = [];
+      if (res.actions?.length) {
+        const applied = applyCircuitActions(circuit, res.actions);
+        circuitEdit = { parts: applied.parts, wires: applied.wires };
+        warnings = applied.warnings;
+      }
+      pending = { code: res.code, circuitEdit };
+      const parts = [];
+      if (circuitEdit) parts.push(`${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'}`);
+      if (res.code) parts.push('new sketch');
+      explainEl.textContent = (res.explanation || 'Ready to apply.') + (parts.length ? `\n\nWill update: ${parts.join(' + ')}.` : '') + (warnings.length ? `\n\n⚠ ${warnings.join(' ')}` : '');
       resultRow.hidden = false; setStatus('');
     } catch (err) {
       setStatus(err?.message || 'Something went wrong.');
@@ -66,9 +87,10 @@ export function initAiPanel(editor, code) {
   });
 
   $('aiApply').addEventListener('click', () => {
-    if (pending == null) return;
-    code.source = pending; code.open();
-    editor.status('AI edit applied to sketch.ino — Verify to compile it');
+    if (!pending) return;
+    if (pending.circuitEdit) editor.importProject(toProjectFileShape(pending.circuitEdit.parts, pending.circuitEdit.wires));
+    if (pending.code) { code.source = pending.code; code.open(); }
+    editor.status(pending.circuitEdit && pending.code ? 'AI edit applied — circuit and sketch.ino both updated' : pending.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify to compile it');
     resultRow.hidden = true; promptEl.value = ''; pending = null; close();
   });
   $('aiDiscard').addEventListener('click', () => { resultRow.hidden = true; pending = null; });

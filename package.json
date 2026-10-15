@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:single": "SINGLE=1 vite build",
-    "test": "node --test test/core.test.mjs test/firmware.test.mjs test/compile-client.test.mjs test/server.test.mjs test/doctor.test.mjs test/ui-smoke.test.mjs test/ai.test.mjs",
+    "test": "node --test test/core.test.mjs test/firmware.test.mjs test/compile-client.test.mjs test/server.test.mjs test/doctor.test.mjs test/ui-smoke.test.mjs test/ai.test.mjs test/ai-actions.test.mjs",
     "extract-pins": "node scripts/extract-pins.mjs",
     "build-firmware": "node scripts/build-firmware.mjs",
     "doctor": "node scripts/doctor.mjs"
