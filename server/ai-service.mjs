@@ -64,7 +64,8 @@ const PROVIDERS = {
     label: 'Groq',
     url: () => 'https://api.groq.com/openai/v1/chat/completions',
     headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
-    body: prompt => JSON.stringify({ model: 'llama-3.3-70b-versatile', temperature: 0.2, messages: [{ role: 'user', content: prompt }] }),
+    // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
+    body: prompt => JSON.stringify({ model: 'openai/gpt-oss-120b', temperature: 0.2, messages: [{ role: 'user', content: prompt }] }),
     errorMessage: body => body?.error?.message,
     text: body => body?.choices?.[0]?.message?.content || '',
   },
