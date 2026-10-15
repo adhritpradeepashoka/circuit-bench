@@ -53,7 +53,9 @@ Reply with EXACTLY ONE fenced \`\`\`json block containing a single object:
   "code": "<complete new sketch.ino, or null if firmware does not need to change>",
   "explanation": "<at most two short sentences on what you did>"
 }
-Use "id" values for new parts yourself (short, like "led2"); you can reference them in the same actions array before they exist in the circuit above. Only reference real part ids/pin names — never invent a pin that isn't listed for that part type. Nothing outside that one fenced json block.`;
+Use "id" values for new parts yourself (short, like "led2"); you can reference them in the same actions array before they exist in the circuit above. Only reference real part ids/pin names — never invent a pin that isn't listed for that part type.
+To "rewire" or "move a connection" you must emit BOTH steps as separate actions: remove_wire with the exact id of the wire being replaced (copy it from the circuit above — never guess one), then add_wire for the new connection. A new wire does not delete an old one by itself, so skipping the remove_wire leaves both connected.
+Your "explanation" must describe only what the "actions" array actually does — never claim a change (a rewire, a part added, a value changed) that has no matching action in the array; if you cannot find the exact id you need, say so in "explanation" and leave that part out of "actions" rather than guessing. Nothing outside that one fenced json block.`;
 }
 
 function extractJson(text) {

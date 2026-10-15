@@ -25,8 +25,16 @@ export function initAiPanel(editor, code) {
   const $ = id => document.getElementById(id);
   const btn = $('aiBtn'), panel = $('aiPanel'), keyRow = $('aiKeyRow'), askRow = $('aiAskRow'), resultRow = $('aiResult');
   const keyInput = $('aiKeyInput'), status = $('aiStatus'), promptEl = $('aiPrompt'), explainEl = $('aiExplain');
+  const summaryEl = $('aiSummary'), warningsEl = $('aiWarnings'), applyBtn = $('aiApply');
   const providerTabs = $('aiKeyRow').querySelectorAll('[data-provider]'), providerHint = $('aiProviderHint');
   let pending = null; // { code, circuitEdit: {parts, wires} | null }
+
+  /** applyCircuitActions never throws away a change silently — but every op it can't do pushes a warning. A model that narrates a change it didn't actually request (no matching action, or every matching action warned) is the "it says it rewired but didn't" case — catch it structurally instead of trusting the explanation text. */
+  function describeOutcome(circuit, actionCount, circuitEdit, warnings) {
+    if (!actionCount) return { changed: null, warnings };
+    const changed = JSON.stringify(circuitEdit.parts) !== JSON.stringify(circuit.parts) || JSON.stringify(circuitEdit.wires) !== JSON.stringify(circuit.wires);
+    return { changed, warnings };
+  }
 
   const setStatus = (msg, busy = false) => { status.textContent = msg || ''; status.classList.toggle('busy', busy); };
   const hasKey = () => !!getStoredKey();
@@ -67,17 +75,31 @@ export function initAiPanel(editor, code) {
         setStatus(res.error || 'Something went wrong.');
         return;
       }
-      let circuitEdit = null, warnings = [];
+      let circuitEdit = null, warnings = [], changed = null;
       if (res.actions?.length) {
         const applied = applyCircuitActions(circuit, res.actions);
         circuitEdit = { parts: applied.parts, wires: applied.wires };
-        warnings = applied.warnings;
+        ({ changed, warnings } = describeOutcome(circuit, res.actions.length, circuitEdit, applied.warnings));
       }
-      pending = { code: res.code, circuitEdit };
-      const parts = [];
-      if (circuitEdit) parts.push(`${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'}`);
-      if (res.code) parts.push('new sketch');
-      explainEl.textContent = (res.explanation || 'Ready to apply.') + (parts.length ? `\n\nWill update: ${parts.join(' + ')}.` : '') + (warnings.length ? `\n\n⚠ ${warnings.join(' ')}` : '');
+      // A circuit edit that applies cleanly (no net change, and nothing it tried warned) is suspicious on its own —
+      // it asked to touch the board and nothing moved. Treat that as a failure to surface, not a quiet no-op.
+      const silentNoop = circuitEdit && changed === false && warnings.length === 0;
+      pending = { code: res.code, circuitEdit: changed ? circuitEdit : null };
+
+      const summary = [];
+      if (circuitEdit) summary.push(changed ? `${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'} applied` : 'no circuit change actually applied');
+      if (res.code) summary.push('new sketch ready');
+      summaryEl.textContent = summary.length ? `Will update: ${summary.join(' + ')}.` : '';
+      explainEl.textContent = res.explanation || 'Ready to apply.';
+
+      const allWarnings = silentNoop ? [...warnings, 'None of the requested circuit changes actually took effect — the AI may be describing an edit it did not really make.'] : warnings;
+      warningsEl.hidden = allWarnings.length === 0;
+      warningsEl.classList.toggle('fatal', circuitEdit != null && !changed);
+      warningsEl.innerHTML = '';
+      for (const w of allWarnings) { const li = document.createElement('li'); li.textContent = w; warningsEl.appendChild(li); }
+
+      applyBtn.disabled = !pending.code && !pending.circuitEdit;
+      applyBtn.textContent = applyBtn.disabled ? 'Nothing to apply' : 'Apply';
       resultRow.hidden = false; setStatus('');
     } catch (err) {
       setStatus(err?.message || 'Something went wrong.');
@@ -93,5 +115,5 @@ export function initAiPanel(editor, code) {
     editor.status(pending.circuitEdit && pending.code ? 'AI edit applied — circuit and sketch.ino both updated' : pending.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify to compile it');
     resultRow.hidden = true; promptEl.value = ''; pending = null; close();
   });
-  $('aiDiscard').addEventListener('click', () => { resultRow.hidden = true; pending = null; });
+  $('aiDiscard').addEventListener('click', () => { resultRow.hidden = true; pending = null; warningsEl.hidden = true; });
 }
