@@ -182,9 +182,9 @@ button { cursor: pointer; }
 #codeCollapse { padding: 0 8px; }
 
 .ai-menu { position: relative; }
-#aiBtn { background: #2a3a3f; border-color: #3f6f6a; }
+#aiBtn { height: 34px; padding: 0 13px; border: 1px solid #3f6f6a; border-radius: 8px; background: #2a3a3f; color: var(--ink-text); font-weight: 600; }
 #aiBtn:hover { border-color: #6fcf97; }
-.ai-panel { position: absolute; right: 0; top: 32px; width: 300px; padding: 10px; background: #fff; color: var(--text); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(10, 20, 25, .22); z-index: 40; font-size: 12px; }
+.ai-panel { position: absolute; right: 0; top: 40px; width: 300px; padding: 10px; background: #fff; color: var(--text); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(10, 20, 25, .22); z-index: 40; font-size: 12px; }
 .ai-panel[hidden] { display: none; }
 .ai-key-row p { margin: 0 0 7px; line-height: 1.4; color: #566670; }
 .ai-key-row a { color: #2468e8; }

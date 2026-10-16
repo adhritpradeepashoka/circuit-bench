@@ -95,6 +95,19 @@ test('generateCode: the groq provider parses its OpenAI-shaped response and hits
   assert.equal(seenAuth, 'Bearer gk');
 });
 
+test('generateCode: the prompt tells the model it directly controls the circuit, and must not decline a wiring/placement request as "physical" (regression: a model that believed otherwise replied with no actions and told the student to wire it themselves)', async () => {
+  let sentPrompt = null;
+  const ai = createAiService({
+    fetchImpl: async (url, opts) => {
+      sentPrompt = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n{"actions":[{"op":"add_wire","from":{"part":"uno-1","pin":"13"},"to":{"part":"led1","pin":"A"}}],"explanation":"Wired it."}\n```' }] } }] }) };
+    },
+  });
+  await ai.generateCode({ instruction: 'wire the LED to pin 13', userKey: 'k' });
+  assert.match(sentPrompt, /you directly control the circuit/i);
+  assert.match(sentPrompt, /never reply that this .can.t be done by you/i);
+});
+
 test('generateCode: an unknown provider name is rejected before any network call', async () => {
   let called = false;
   const ai = createAiService({ fetchImpl: async () => { called = true; } });

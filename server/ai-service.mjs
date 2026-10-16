@@ -25,7 +25,9 @@ const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add
 
 function buildPrompt({ instruction, circuit, code }) {
   const circuitText = JSON.stringify(circuit ?? { parts: [], wires: [] });
-  return `You are helping a student edit a circuit and its Arduino (C/C++, arduino-cli, ATmega328P/Uno) firmware inside a browser simulator called CircuitBench.
+  return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli, ATmega328P/Uno) firmware inside a browser simulator called CircuitBench, for a student.
+
+You directly control the circuit, not just the firmware. Placing a part, moving it, wiring two pins together, or removing something is not a physical act you are being asked to describe or hand off — it is a data edit you make yourself by emitting the matching action(s) below, and the simulator applies it immediately. When the instruction asks for a circuit change (add/move/rotate/wire/remove), you MUST do it via "actions" — never reply that this "can't be done by you", that it requires "physically" connecting something, or tell the student to do it themselves; any of those means you are refusing a request you are fully able to carry out. Only decline a circuit change (actions: [], explained why) when it is genuinely impossible with the real catalogue below — an unknown part, a pin that doesn't exist, or a truly ambiguous target with no reasonable reading — never because wiring "sounds physical".
 
 Parts you can place, and their real pin/property names (use these exact ids — nothing else exists):
 ${describeCatalog()}
