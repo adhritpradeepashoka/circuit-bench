@@ -8,6 +8,9 @@ import { createServer } from '../server/server.mjs';
 const fakeGeminiJson = obj => async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n' + JSON.stringify(obj) + '\n```' }] } }] }) });
 const fakeGeminiText = text => async () => ({ ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) });
 const fakeHttpError = (status, message) => async () => ({ ok: false, status, json: async () => ({ error: { message } }) });
+// The real-world shape: a ```json block with {actions, explanation} ONLY, and the sketch (if any) in its
+// own separate ```cpp block with real newlines — this is the contract that avoids the JSON-escaping bug below.
+const fakeGeminiSplit = (obj, code) => fakeGeminiText('```json\n' + JSON.stringify(obj) + '\n```' + (code != null ? '\n```cpp\n' + code + '\n```' : ''));
 
 test('generateCode: no key is refused with needsKey (no network call made)', async () => {
   let called = false;
@@ -21,13 +24,27 @@ test('generateCode: empty instruction is refused before any key check', async ()
   await assert.rejects(() => ai.generateCode({ instruction: '  ' }), RequestError);
 });
 
-test('generateCode: a firmware-only reply (code, no actions) round-trips', async () => {
-  const ai = createAiService({ fetchImpl: fakeGeminiJson({ actions: [], code: 'void setup(){}\nvoid loop(){}', explanation: 'Blinks faster.' }) });
+test('generateCode: a firmware-only reply — actions/explanation in the json block, the sketch in its own ```cpp block — round-trips', async () => {
+  const ai = createAiService({ fetchImpl: fakeGeminiSplit({ actions: [], explanation: 'Blinks faster.' }, 'void setup() {\n  pinMode(13, OUTPUT);\n}\nvoid loop() {}') });
   const res = await ai.generateCode({ instruction: 'blink faster', userKey: 'k', code: 'old', circuit: { parts: [], wires: [] } });
   assert.equal(res.ok, true);
   assert.deepEqual(res.actions, []);
-  assert.match(res.code, /void setup/);
+  assert.match(res.code, /pinMode/);
   assert.equal(res.explanation, 'Blinks faster.');
+});
+
+test('generateCode: regression — multi-line code with real (unescaped) newlines would break JSON.parse if it were put inside the json block; keeping it in a separate ```cpp block (the required contract) is unaffected', async () => {
+  // This is the exact failure mode that used to silently kill the whole response: a model embeds the
+  // sketch, with real newlines, as a JSON string value. Confirm that shape is genuinely invalid JSON...
+  const brokenJsonText = '```json\n{"actions":[],"code":"void setup() {\n  pinMode(13, OUTPUT);\n}","explanation":"x"}\n```';
+  assert.throws(() => JSON.parse(/```json\s*\n([\s\S]*?)```/i.exec(brokenJsonText)[1]));
+  // ...and confirm the real prompt/parse contract keeps the code out of the json block entirely, so this
+  // can't happen: actions+explanation parse from a small, code-free json object every time.
+  const ai = createAiService({ fetchImpl: fakeGeminiSplit({ actions: [{ op: 'add_wire', from: { part: 'uno-1', pin: '13' }, to: { part: 'led1', pin: 'A' } }], explanation: 'Wired it up.' }, 'void setup() {\n  pinMode(13, OUTPUT);\n}\nvoid loop() {}') });
+  const res = await ai.generateCode({ instruction: 'wire D13 to the LED', userKey: 'k' });
+  assert.equal(res.ok, true);
+  assert.equal(res.actions.length, 1);
+  assert.match(res.code, /pinMode/);
 });
 
 test('generateCode: a circuit-only reply (actions, code:null) round-trips without inventing code', async () => {

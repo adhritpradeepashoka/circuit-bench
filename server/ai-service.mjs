@@ -40,7 +40,7 @@ ${(code || '').slice(0, LIMITS.codeChars)}
 
 Instruction: ${String(instruction || '').slice(0, LIMITS.promptChars)}
 
-Reply with EXACTLY ONE fenced \`\`\`json block containing a single object:
+Reply with EXACTLY ONE fenced \`\`\`json block containing a single object — and NOTHING else in it, especially not firmware code (see below for why):
 {
   "actions": [ ... ],   // circuit edits needed, in order, [] if the instruction is firmware-only. Allowed "op" values: ${ACTION_OPS}.
                          //   add_part: {"op":"add_part","id":"<new short id>","type":"<part type>","x":<num optional>,"y":<num optional>,"rotate":<deg optional>,"props":{...}}
@@ -50,38 +50,54 @@ Reply with EXACTLY ONE fenced \`\`\`json block containing a single object:
                          //   remove_part: {"op":"remove_part","id":"<id>"}
                          //   add_wire: {"op":"add_wire","from":{"part":"<id>","pin":"<pin>"},"to":{"part":"<id>","pin":"<pin>"}}
                          //   remove_wire: {"op":"remove_wire","id":"<wire id from the circuit above>"}
-  "code": "<complete new sketch.ino, or null if firmware does not need to change>",
   "explanation": "<at most two short sentences on what you did>"
 }
+If the firmware/sketch needs to change, follow that json block with a SECOND fenced block, tagged \`\`\`cpp, containing the COMPLETE new sketch.ino (not a diff/snippet). If firmware does not need to change, do not include a \`\`\`cpp block at all.
+Never put firmware code inside the json block or inside any string field — a multi-line C/C++ program's own newlines break JSON parsing unless perfectly escaped, which models get wrong often enough that this feature breaks when they do; keeping code in its own plain \`\`\`cpp block avoids that entirely. Nothing is allowed outside these one or two fenced blocks.
 Use "id" values for new parts yourself (short, like "led2"); you can reference them in the same actions array before they exist in the circuit above. Only reference real part ids/pin names — never invent a pin that isn't listed for that part type.
 To "rewire" or "move a connection" you must emit BOTH steps as separate actions: remove_wire with the exact id of the wire being replaced (copy it from the circuit above — never guess one), then add_wire for the new connection. A new wire does not delete an old one by itself, so skipping the remove_wire leaves both connected.
-Your "explanation" must describe only what the "actions" array actually does — never claim a change (a rewire, a part added, a value changed) that has no matching action in the array; if you cannot find the exact id you need, say so in "explanation" and leave that part out of "actions" rather than guessing. Nothing outside that one fenced json block.`;
+Your "explanation" must describe only what the "actions" array (and the \`\`\`cpp block, if present) actually do — never claim a change (a rewire, a part added, a value changed) that has no matching action; if you cannot find the exact id you need, say so in "explanation" and leave that part out of "actions" rather than guessing.`;
 }
 
-function extractJson(text) {
-  const m = /```json\s*\n([\s\S]*?)```/i.exec(text || '') || /```\s*\n(\{[\s\S]*?\})\s*```/.exec(text || '');
-  if (!m) return null;
-  try { return JSON.parse(m[1]); } catch { return null; }
+/** Finds the one allowed ```json fence and returns the regex match (so callers can also strip exactly that span), or null. */
+function matchJsonFence(text) {
+  return /```json\s*\n([\s\S]*?)```/i.exec(text || '') || /```\s*\n(\{[\s\S]*?\})\s*```/.exec(text || '');
 }
 
-// Fallback for a reply that ignored the JSON instruction and just sent a ```cpp block — keeps the
-// feature working (code-only) even if a provider/model is stubborn about format.
+/** JSON.parse, with one repair pass for the trailing-comma mistake models make often enough to be worth tolerating. */
+function tryParseJson(str) {
+  try { return JSON.parse(str); } catch { /* fall through to repair */ }
+  try { return JSON.parse(str.replace(/,\s*([}\]])/g, '$1')); } catch { return null; }
+}
+
+// Fallback/companion extraction for a ```cpp (or untagged ```) block — either the model's real sketch
+// handed over outside the JSON (the normal path now), or, if the json block is missing/unparseable
+// entirely, the model having ignored the schema and just sent code.
 function extractBareCode(text) {
   const m = /```(?:cpp|c\+\+|ino|arduino)?\s*\n([\s\S]*?)```/i.exec(text || '');
   return m ? m[1].trim() : null;
 }
 
 function parseReply(text) {
-  const parsed = extractJson(text);
+  const t = text || '';
+  const jsonMatch = matchJsonFence(t);
+  const parsed = jsonMatch ? tryParseJson(jsonMatch[1]) : null;
+  // Strip exactly the matched json fence (not any ``` fence) before hunting for a separate code block,
+  // so the json block itself is never mistaken for "bare code" when it has no "json" language tag.
+  const withoutJson = jsonMatch ? t.slice(0, jsonMatch.index) + t.slice(jsonMatch.index + jsonMatch[0].length) : t;
+  const bareCode = extractBareCode(withoutJson);
+
   if (parsed && typeof parsed === 'object') {
     return {
       actions: Array.isArray(parsed.actions) ? parsed.actions : [],
-      code: typeof parsed.code === 'string' && parsed.code.trim() ? parsed.code : null,
+      // Prefer the dedicated cpp fence; fall back to a "code" field inside the json in case a model
+      // puts it there anyway and happens to escape it correctly.
+      code: bareCode || (typeof parsed.code === 'string' && parsed.code.trim() ? parsed.code : null),
       explanation: typeof parsed.explanation === 'string' ? parsed.explanation : '',
     };
   }
-  const bareCode = extractBareCode(text);
-  if (bareCode) return { actions: [], code: bareCode, explanation: text.replace(/```[\s\S]*?```/, '').trim() };
+  // No valid/parseable json at all — the model ignored the schema and just sent code.
+  if (bareCode) return { actions: [], code: bareCode, explanation: withoutJson.replace(/```[\s\S]*?```/g, '').trim() };
   return null;
 }
 
