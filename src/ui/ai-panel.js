@@ -12,13 +12,13 @@ const PROVIDER_HINTS = {
   groq: '<a href="https://console.groq.com/keys" target="_blank" rel="noopener">Get a free Groq key</a> at console.groq.com — no Google account step involved.',
 };
 
-/** parts/wires from applyCircuitActions use the live-state field names (rot, from/to→a/b happens inside importProject); shape them the way fromProjectFile expects. */
+// applyCircuitActions already works in — and returns — the project-file shape (parts use "rotate",
+// wires use from/to), the same shape editor.exportProject()/fromProjectFile() use, so no field remapping
+// is needed here. (A previous version of this remapped "rot" <-> "rotate" and, for any part the AI's
+// actions didn't touch, silently reset its rotation to 0 on every circuit edit — fixed by making
+// ai-actions.js use the project-file field name throughout instead of patching it up here.)
 function toProjectFileShape(parts, wires) {
-  return {
-    format: FORMAT, version: VERSION,
-    parts: parts.map(p => ({ ...p, rotate: p.rot })),
-    wires: wires.map(w => ({ id: w.id, from: w.from, to: w.to, style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag })),
-  };
+  return { format: FORMAT, version: VERSION, parts, wires };
 }
 
 export function initAiPanel(editor, code) {

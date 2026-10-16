@@ -70,7 +70,7 @@ export function applyCircuitActions(project, actions) {
           const x = hasXY ? a.x : bbox.maxX + 40;
           const y = hasXY ? a.y : bbox.minY + cascade * 70;
           if (!hasXY) cascade++;
-          parts.push({ id: finalId, type: a.type, x, y, rot: ((+a.rotate || 0) % 360 + 360) % 360, ...(def.props || {}), ...props });
+          parts.push({ id: finalId, type: a.type, x, y, rotate: ((+a.rotate || 0) % 360 + 360) % 360, ...(def.props || {}), ...props });
           break;
         }
         case 'move_part': {
@@ -83,7 +83,7 @@ export function applyCircuitActions(project, actions) {
         case 'rotate_part': {
           const p = partByFinalId(resolve(a.id));
           if (!p) { warnings.push(`rotate_part: no part "${a.id}".`); break; }
-          p.rot = ((+a.rotate || 0) % 360 + 360) % 360;
+          p.rotate = ((+a.rotate || 0) % 360 + 360) % 360;
           break;
         }
         case 'set_prop': {

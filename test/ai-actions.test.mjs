@@ -6,12 +6,18 @@ import { applyCircuitActions, describeCatalog } from '../src/core/ai-actions.js'
 import { compile } from '../src/core/netlist.js';
 import { fromProjectFile } from '../src/core/project.js';
 
-const BASE = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 40, y: 56, rot: 0 }, { id: 'bb-1', type: 'breadboard', x: 360, y: 78, rot: 0 }], wires: [] };
+// applyCircuitActions takes and returns the project-file shape — the same shape editor.exportProject()
+// produces and fromProjectFile()/editor.importProject() consume, parts' rotation included ("rotate",
+// not "rot" — a prior version of this fixture used "rot", which matched the old (buggy) implementation
+// but not what production actually sends it; a part the AI's actions never touched then had its real
+// rotation silently zeroed on import, since ai-panel.js's own "rotate: p.rot" remap turned it into
+// "rotate: undefined" for every untouched part).
+const BASE = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 40, y: 56, rotate: 0 }, { id: 'bb-1', type: 'breadboard', x: 360, y: 78, rotate: 0 }], wires: [] };
 
 /** applyCircuitActions returns project-file shape (wires use from/to); compile() wants live-state shape (a/b) — go through fromProjectFile like editor.importProject() really does. */
 const toLiveState = ({ parts, wires }) => fromProjectFile({
   format: 'virtual-lab', version: '0.1',
-  parts: parts.map(p => ({ ...p, rotate: p.rot })),
+  parts,
   wires: wires.map(w => ({ id: w.id, from: w.from, to: w.to, style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag })),
 });
 
@@ -42,7 +48,7 @@ test('a made-up part type or pin name is dropped with a warning, not applied', (
 });
 
 test('duplicate ids are deduped, and a later action in the same batch that reuses the requested id follows the rename (the AI meant "the part I just added")', () => {
-  const project = { parts: [...BASE.parts, { id: 'led1', type: 'led', x: 0, y: 0, rot: 0, color: 'red' }], wires: [] };
+  const project = { parts: [...BASE.parts, { id: 'led1', type: 'led', x: 0, y: 0, rotate: 0, color: 'red' }], wires: [] };
   const { parts } = applyCircuitActions(project, [
     { op: 'add_part', id: 'led1', type: 'led' },             // collides with the pre-existing led1 -> renamed to led1-2
     { op: 'set_prop', id: 'led1', key: 'color', value: 'green' }, // the AI still calls it "led1" — follows the remap to the part it just added
@@ -54,7 +60,7 @@ test('duplicate ids are deduped, and a later action in the same batch that reuse
 
 test('remove_part also removes any wire touching it', () => {
   const project = {
-    parts: [...BASE.parts, { id: 'led1', type: 'led', x: 0, y: 0, rot: 0 }],
+    parts: [...BASE.parts, { id: 'led1', type: 'led', x: 0, y: 0, rotate: 0 }],
     wires: [{ id: 'w1', from: { part: 'uno-1', pin: '13' }, to: { part: 'led1', pin: 'A' }, style: 'straight', color: '#000', width: 3, bend: .5, sag: null }],
   };
   const { parts, wires } = applyCircuitActions(project, [{ op: 'remove_part', id: 'led1' }]);
@@ -64,7 +70,7 @@ test('remove_part also removes any wire touching it', () => {
 
 test('move_part / rotate_part / remove_wire', () => {
   const project = {
-    parts: [...BASE.parts, { id: 'led1', type: 'led', x: 0, y: 0, rot: 0 }],
+    parts: [...BASE.parts, { id: 'led1', type: 'led', x: 0, y: 0, rotate: 0 }],
     wires: [{ id: 'w1', from: { part: 'uno-1', pin: '13' }, to: { part: 'led1', pin: 'A' }, style: 'straight', color: '#000', width: 3, bend: .5, sag: null }],
   };
   const { parts, wires } = applyCircuitActions(project, [
@@ -73,15 +79,23 @@ test('move_part / rotate_part / remove_wire', () => {
     { op: 'remove_wire', id: 'w1' },
   ]);
   const led = parts.find(p => p.id === 'led1');
-  assert.equal(led.x, 200); assert.equal(led.y, 150); assert.equal(led.rot, 90);
+  assert.equal(led.x, 200); assert.equal(led.y, 150); assert.equal(led.rotate, 90);
   assert.equal(wires.length, 0);
+});
+
+test('a part the actions never touch keeps its real rotation through the round trip (regression: used to silently zero it)', () => {
+  const project = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 40, y: 56, rotate: 90 }], wires: [] };
+  const { parts } = applyCircuitActions(project, [{ op: 'add_part', id: 'led1', type: 'led' }]);
+  assert.equal(parts.find(p => p.id === 'uno-1').rotate, 90);
+  const imported = fromProjectFile({ format: 'virtual-lab', version: '0.1', parts, wires: [] });
+  assert.equal(imported.parts.find(p => p.id === 'uno-1').rot, 90);
 });
 
 test('an add_part with no x/y does not collide with existing parts, and the result still imports cleanly through fromProjectFile', () => {
   const { parts, wires } = applyCircuitActions(BASE, [{ op: 'add_part', id: 'led1', type: 'led' }, { op: 'add_part', id: 'led2', type: 'led' }]);
   const led1 = parts.find(p => p.id === 'led1'), led2 = parts.find(p => p.id === 'led2');
   assert.notDeepEqual([led1.x, led1.y], [led2.x, led2.y]);
-  const imported = fromProjectFile({ format: 'virtual-lab', version: '0.1', parts: parts.map(p => ({ ...p, rotate: p.rot })), wires: wires.map(w => ({ id: w.id, from: w.from, to: w.to, style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag })) });
+  const imported = fromProjectFile({ format: 'virtual-lab', version: '0.1', parts, wires: wires.map(w => ({ id: w.id, from: w.from, to: w.to, style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag })) });
   assert.equal(imported.parts.length, parts.length);
 });
 
