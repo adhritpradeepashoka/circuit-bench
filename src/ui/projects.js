@@ -6,7 +6,10 @@ import { WORKSPACES, DEFAULT_WORKSPACE, newProject, uniqueName, cleanName, creat
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { fromProjectFile } from '../core/project.js';
 
-const CURRENT_KEY = 'circuitbench:current-project';
+// Which project is open is per *tab* (sessionStorage), so two tabs can work on different projects without
+// trading places; localStorage only remembers the last one opened, for the next new tab.
+const LAST_KEY = 'circuitbench:current-project';
+const TAB_KEY = 'circuitbench:tab-project';
 const SAVE_DELAY = 600;
 
 const ago = (t, now = Date.now()) => {
@@ -23,8 +26,10 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   const modal = $('projectsModal'), listEl = $('projList'), nameInput = $('projNewName'), wsSelect = $('projNewWorkspace');
   let current = null;          // the open project's record (without trusting its .data — the working copy is the truth)
   let timer = 0, suspended = false, confirmDelete = null, renaming = null;
-  const getCurrentId = () => { try { return localStorage.getItem(CURRENT_KEY); } catch { return null; } };
-  const setCurrentId = id => { try { localStorage.setItem(CURRENT_KEY, id); } catch { /* ignore */ } };
+  const getCurrentId = () => { try { return sessionStorage.getItem(TAB_KEY) || localStorage.getItem(LAST_KEY); } catch { return null; } };
+  const setCurrentId = id => { try { sessionStorage.setItem(TAB_KEY, id); localStorage.setItem(LAST_KEY, id); } catch { /* ignore */ } };
+  const switchListeners = [];
+  const announce = () => switchListeners.forEach(fn => fn(current));
   const workingData = () => ({ ...editor.exportProject(), ...code.exportState() });
 
   wsSelect.replaceChildren(...Object.entries(WORKSPACES).map(([id, w]) => {
@@ -55,15 +60,29 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     await saveNow();
     const p = await store.load(id);
     if (!p) { editor.status('That project could not be opened.'); return renderList(); }
+    show(p); close();
+    editor.status(`Opened “${p.name}”`);
+  }
+  /** Put a stored project on screen. The store is the truth — never the shared working copy, which another tab may have written. */
+  function show(p) {
     suspended = true;
     try {
       sim?.stop?.();
       editor.openProject(p.data);
       if (!code.importState(p.data || {})) code.importState({ sketch: DEFAULT_SKETCH });
     } finally { suspended = false; }
-    current = p; setCurrentId(p.id); paintName(); close();
-    editor.status(`Opened “${p.name}”`);
+    current = p; setCurrentId(p.id); paintName(); announce();
   }
+
+  // Another tab saved the project this tab has open. If we have nothing unsaved, follow it (both tabs then
+  // show the same thing); if we do, keep ours and say so, rather than silently overwriting either side.
+  window.addEventListener('storage', async e => {
+    if (!current || e.key !== `circuitbench:project:${current.id}` || !e.newValue) return;
+    let theirs; try { theirs = JSON.parse(e.newValue); } catch { return; }
+    if ((theirs.updatedAt || 0) <= (current.updatedAt || 0)) return;
+    if (timer) { editor.status(`“${current.name}” was also changed in another tab — your edits here will replace those when they save.`); return; }
+    show(theirs); editor.status(`“${theirs.name}” was updated in another tab — showing the latest.`);
+  });
 
   async function create({ name, workspace = DEFAULT_WORKSPACE, data = null } = {}) {
     await saveNow();
@@ -159,22 +178,22 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   const ready = (async () => {
     const list = await store.list();
     const id = getCurrentId();
-    if (id && list.some(m => m.id === id)) {
-      current = await store.load(id);                       // the working copy already holds this project's latest state
-    } else if (!list.length) {
+    if (!list.length) {
       current = newProject({ name: 'My first project', data: workingData() });   // first run, or an older single-workspace save
       await store.save(current).catch(() => {});
-      setCurrentId(current.id);
-    } else {
-      await open(list[0].id);
+      setCurrentId(current.id); paintName(); announce();
+      return current;
     }
-    setCurrentId(current.id); paintName();
+    const p = (id && list.some(m => m.id === id) && await store.load(id)) || await store.load(list[0].id);
+    if (p) show(p);
     return current;
   })();
 
   return {
     ready, open, create, duplicate, remove, rename, saveNow, openModal, close,
     get current() { return current; },
+    /** Called with the project whenever a different one is on screen (also once at start). */
+    onSwitch(fn) { switchListeners.push(fn); if (current) fn(current); },
     /** Bring in a project file as a new project (rather than overwriting the open one). */
     importFile: async (data, name) => { fromProjectFile(data); return create({ name: name || 'Imported project', data }); },   // validate first: a bad file must not leave an empty project behind
   };

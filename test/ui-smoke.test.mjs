@@ -1162,3 +1162,63 @@ test('ui: I²C end to end — wire an MPU-6050 and an OLED, run real firmware, t
   assert.equal(snap.i2c.find(d => d.id === 'mpu1').onBus, false);
   sim.stop();
 });
+
+test('ui: two tabs — each tab opens its own project, startup trusts the saved project over the shared working copy, and an idle tab follows saves from another tab instead of overwriting them', async () => {
+  // Tab A creates two projects and leaves "Alpha" with its own sketch.
+  const a = boot();
+  const pa = a.w.__lab.initProjects({ editor: a.editor, code: a.code, sim: a.sim });
+  await pa.ready;
+  await pa.rename(pa.current.id, 'Alpha');
+  a.code.source = '// alpha sketch\n'; await pa.saveNow();
+  const alpha = pa.current;
+  await pa.create({ name: 'Beta' });
+  a.code.source = '// beta sketch\n'; await pa.saveNow();
+  const beta = pa.current;
+  const storage = {}; for (let i = 0; i < a.w.localStorage.length; i++) { const k = a.w.localStorage.key(i); storage[k] = a.w.localStorage.getItem(k); }
+
+  // This is what went wrong: the shared working copy (last written by *some* tab) holds Beta's sketch, but this
+  // tab had Alpha open. It must come back as Alpha with Alpha's own sketch — from the store, not the working copy.
+  const b = boot(fixtureCompile, win => { for (const [k, v] of Object.entries(storage)) win.localStorage.setItem(k, v); win.sessionStorage.setItem('circuitbench:tab-project', alpha.id); });
+  const pb = b.w.__lab.initProjects({ editor: b.editor, code: b.code, sim: b.sim });
+  await pb.ready;
+  assert.equal(pb.current.name, 'Alpha', 'the tab reopens its own project, not the last one opened anywhere');
+  assert.match(b.code.source, /alpha sketch/, 'with that project\'s saved sketch, not the shared working copy');
+
+  // A new tab with no tab memory opens the last project opened anywhere.
+  const c = boot(fixtureCompile, win => { for (const [k, v] of Object.entries(storage)) win.localStorage.setItem(k, v); });
+  const pc = c.w.__lab.initProjects({ editor: c.editor, code: c.code, sim: c.sim });
+  await pc.ready;
+  assert.equal(pc.current.id, beta.id);
+
+  // Another tab saves Alpha: an idle tab B follows it…
+  const newer = { ...JSON.parse(storage[`circuitbench:project:${alpha.id}`]), updatedAt: Date.now() + 1000 };
+  newer.data = { ...newer.data, sketch: '// alpha edited elsewhere\n', files: [{ name: 'sketch.ino', content: '// alpha edited elsewhere\n' }] };
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: `circuitbench:project:${alpha.id}`, newValue: JSON.stringify(newer) }));
+  await flush();
+  assert.match(b.code.source, /alpha edited elsewhere/);
+  assert.match(b.w.document.getElementById('status').textContent, /updated in another tab/);
+  // …but a tab with unsaved edits keeps them and says so.
+  b.code.source = '// my unsaved edit\n';
+  const newest = { ...newer, updatedAt: Date.now() + 5000 };
+  b.w.dispatchEvent(new b.w.StorageEvent('storage', { key: `circuitbench:project:${alpha.id}`, newValue: JSON.stringify(newest) }));
+  await flush();
+  assert.match(b.code.source, /my unsaved edit/);
+  assert.match(b.w.document.getElementById('status').textContent, /also changed in another tab/);
+});
+
+test('ui: the AI chat belongs to its project — switching projects switches conversations', async () => {
+  const { w, editor, code, sim } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  w.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Answer.' }) });
+  const ai = w.__lab.initAiPanel(editor, code, sim);
+  const projects = w.__lab.initProjects({ editor, code, sim });
+  projects.onSwitch(p => ai.setScope(p.id));
+  await projects.ready;
+  const first = projects.current.id;
+  w.document.getElementById('aiPrompt').value = 'question about project one';
+  await ai.send(); await flush();
+  assert.equal(ai.messages.length, 2);
+  await projects.create({ name: 'Second' });
+  assert.equal(ai.messages.length, 0, 'a new project starts a fresh conversation');
+  await projects.open(first);
+  assert.equal(ai.messages[0].text, 'question about project one', 'and the first project\'s chat comes back');
+});

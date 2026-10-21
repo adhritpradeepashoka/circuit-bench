@@ -62,6 +62,7 @@ export function initAiPanel(editor, code, sim = null) {
   const keyRow = $('aiKeyRow'), keyInput = $('aiKeyInput');
   const providerTabs = keyRow.querySelectorAll('[data-provider]'), providerHint = $('aiProviderHint');
 
+  let chatKey = CHAT_STORE;     // one conversation per project once projects say which one is open (setScope)
   let messages = loadChat();     // { id, role: 'user'|'assistant'|'error', text, summary?, warnings?, fatal?, code?, codeLines?, hasEdit?, state? }
   const proposals = new Map();   // message id → { code, circuitEdit } (in memory only — never persisted)
   let busy = false, seq = Date.now();
@@ -69,14 +70,14 @@ export function initAiPanel(editor, code, sim = null) {
   /* ── persistence (per-viewer convenience; can come back empty) ── */
   function loadChat() {
     try {
-      const saved = JSON.parse(localStorage.getItem(CHAT_STORE) || '[]');
+      const saved = JSON.parse(localStorage.getItem(chatKey) || '[]');
       if (!Array.isArray(saved)) return [];
       // A proposal can't survive a reload (its edit lived in memory), so a pending one becomes "expired".
       return saved.filter(m => m && typeof m.text === 'string' && ['user', 'assistant', 'error'].includes(m.role)).map(m => (m.state === 'pending' ? { ...m, state: 'expired' } : m));
     } catch { return []; }
   }
   function saveChat() {
-    try { localStorage.setItem(CHAT_STORE, JSON.stringify(messages.slice(-MAX_SAVED).map(m => (m.code && m.code.length > MAX_SAVED_CODE ? { ...m, code: undefined } : m)))); } catch { /* full or blocked */ }
+    try { localStorage.setItem(chatKey, JSON.stringify(messages.slice(-MAX_SAVED).map(m => (m.code && m.code.length > MAX_SAVED_CODE ? { ...m, code: undefined } : m)))); } catch { /* full or blocked */ }
   }
 
   /* ── rendering ───────────────────────── */
@@ -240,6 +241,16 @@ export function initAiPanel(editor, code, sim = null) {
   }
   code.onAiFix?.(() => askAi('Fix the compile error(s) shown in the compiler output.', { send: true }));
 
+  /** Switch to the conversation that belongs to this project (the old single chat is adopted by the first project that asks). */
+  function setScope(projectId) {
+    const key = `${CHAT_STORE}:${projectId}`;
+    if (key === chatKey || busy) return;
+    try {
+      if (localStorage.getItem(key) === null && localStorage.getItem(CHAT_STORE) !== null) { localStorage.setItem(key, localStorage.getItem(CHAT_STORE)); localStorage.removeItem(CHAT_STORE); }
+    } catch { /* ignore */ }
+    chatKey = key; proposals.clear(); messages = loadChat(); render();
+  }
+
   paintProvider(); refreshKeyUi(); render();
-  return { askAi, send, get messages() { return messages; } };
+  return { askAi, send, setScope, get messages() { return messages; } };
 }

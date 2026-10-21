@@ -35,6 +35,7 @@ initValueEditor(editor);
 initMpuInspector(editor);
 const ai = initAiPanel(editor, code, sim);
 const projects = initProjects({ editor, code, sim });
+projects.onSwitch(p => ai.setScope(p.id));
 $('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });
 
 // The code dock starts on the lightweight editor; Monaco (a few hundred KB, loaded on demand) takes over the first time it's opened —
