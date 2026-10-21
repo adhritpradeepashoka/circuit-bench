@@ -29,7 +29,7 @@ function buildPrompt({ instruction, circuit, code }) {
 
 You directly control the circuit, not just the firmware. Placing a part, moving it, wiring two pins together, or removing something is not a physical act you are being asked to describe or hand off — it is a data edit you make yourself by emitting the matching action(s) below, and the simulator applies it immediately. When the instruction asks for a circuit change (add/move/rotate/wire/remove), you MUST do it via "actions" — never reply that this "can't be done by you", that it requires "physically" connecting something, or tell the student to do it themselves; any of those means you are refusing a request you are fully able to carry out. Only decline a circuit change (actions: [], explained why) when it is genuinely impossible with the real catalogue below — an unknown part, a pin that doesn't exist, or a truly ambiguous target with no reasonable reading — never because wiring "sounds physical".
 
-Parts you can place, and their real pin/property names (use these exact ids — nothing else exists):
+Parts you can place, and their real pin/property names (use these exact ids — nothing else exists). Where a part lists an electrical note after " — ", that note states its real analog behavior and OVERRIDES whatever direction you'd normally assume (e.g. most temperature/light sensors you've seen read HIGHER for MORE of the quantity — these may not; read each note literally and write comparisons that match it, not the usual assumption):
 ${describeCatalog()}
 
 Current circuit (parts with their id/type/position, and wires as {from:{part,pin}, to:{part,pin}}):

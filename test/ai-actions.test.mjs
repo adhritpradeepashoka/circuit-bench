@@ -105,6 +105,14 @@ test('describeCatalog mentions every part type and the breadboard rail/hole nami
   assert.match(text, /TP1-25/);
 });
 
+test('describeCatalog regression: the ntc-sensor and ldr-module entries state that their reading falls as the measured quantity rises — without this the model assumes the opposite direction and silently inverts any "turn on above/below X" firmware it writes (a user hit this: asked for "LED on above 50°C", got LED on below 25°C and off above it)', () => {
+  const text = describeCatalog();
+  const ntcLine = text.split('\n').find(l => l.startsWith('- ntc-sensor:'));
+  const ldrLine = text.split('\n').find(l => l.startsWith('- ldr-module:'));
+  assert.match(ntcLine, /falls as it gets hotter/);
+  assert.match(ldrLine, /falls as light rises/);
+});
+
 test('actions is tolerant of junk input instead of throwing', () => {
   assert.doesNotThrow(() => applyCircuitActions(BASE, null));
   assert.doesNotThrow(() => applyCircuitActions(BASE, [null, 42, { op: 'add_part' }, { op: 'nonsense' }]));

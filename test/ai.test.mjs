@@ -117,6 +117,19 @@ test('generateCode: the prompt tells the model it directly controls the circuit,
   assert.match(sentPrompt, /never reply that this .can.t be done by you/i);
 });
 
+test('generateCode: the prompt tells the model a part\'s electrical note overrides the usual higher-reading-means-more assumption, and that the catalogue text itself carries the NTC sensor\'s inverted direction (regression: "LED on above 50°C" came back on below 25°C and off above it, because the model assumed analogRead rises with temperature — it does not for this part)', async () => {
+  let sentPrompt = null;
+  const ai = createAiService({
+    fetchImpl: async (url, opts) => {
+      sentPrompt = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n{"actions":[],"explanation":"No change."}\n```' }] } }] }) };
+    },
+  });
+  await ai.generateCode({ instruction: 'turn the LED on above 50 degrees', userKey: 'k' });
+  assert.match(sentPrompt, /overrides whatever direction you.?d normally assume/i);
+  assert.match(sentPrompt, /ntc-sensor:.*falls as it gets hotter/i);
+});
+
 test('generateCode: an unknown provider name is rejected before any network call', async () => {
   let called = false;
   const ai = createAiService({ fetchImpl: async () => { called = true; } });

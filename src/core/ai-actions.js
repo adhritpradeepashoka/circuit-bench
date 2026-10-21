@@ -5,6 +5,7 @@
 // Deliberately pure and DOM-free: this runs both in the browser (to preview/apply) and on the server
 // (to validate before ever showing a result to the user), from the same PART_DEFS catalogue.
 import { PART_DEFS } from './parts.js';
+import { CONTROLS } from './controls.js';
 
 const uid = prefix => `${prefix}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -14,7 +15,13 @@ export function describeCatalog() {
     if (def.type === 'breadboard') return `- breadboard: holes A1..J40 (A-E and F-J are separate strips per column, like a real breadboard), rails TP1-25/TN1-25 (top +/-), BP1-25/BN1-25 (bottom +/-)`;
     const pins = def.pins.map(p => p.id).join(', ');
     const props = def.props ? ` props: ${Object.keys(def.props).join(', ')}` : '';
-    return `- ${def.type}: pins ${pins}${props}`;
+    // Carries the same electrical note shown on the part's own right-click control (e.g. "OUT falls as
+    // it gets hotter") into the prompt — without it the model assumes a sensor's analog reading rises
+    // with the quantity it measures, which is backwards for the NTC and LDR modules and silently
+    // inverts any firmware comparison it writes (regression: "LED on above 50°C" came out on below
+    // 25°C and off above it, because nothing told the model OUT falls as temperature rises).
+    const note = CONTROLS[def.type]?.note ? ` — ${CONTROLS[def.type].note}` : '';
+    return `- ${def.type}: pins ${pins}${props}${note}`;
   });
   return lines.join('\n');
 }
