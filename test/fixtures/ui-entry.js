@@ -9,4 +9,5 @@ import { initValueEditor } from '../../src/ui/value-editor.js';
 import { initAiPanel } from '../../src/ui/ai-panel.js';
 import { initProjects } from '../../src/ui/projects.js';
 import { initMpuInspector } from '../../src/ui/mpu-inspector.js';
-window.__lab = { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initAiPanel, initProjects, initMpuInspector };
+import { initTour } from '../../src/ui/tour.js';
+window.__lab = { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initAiPanel, initProjects, initMpuInspector, initTour };

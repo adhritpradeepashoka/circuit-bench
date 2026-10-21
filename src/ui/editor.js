@@ -345,7 +345,7 @@ export class Editor {
     $('selectTool').classList.toggle('active', tool === 'select'); $('selectTool').setAttribute('aria-pressed', tool === 'select');
     $('wireTool').classList.toggle('active', tool === 'wire'); $('wireTool').setAttribute('aria-pressed', tool === 'wire');
     this.canvas.classList.toggle('wire-mode', tool === 'wire');
-    this.status(tool === 'wire' ? 'Wire: drag from a connection point to another (or click, then click).' : 'Select: drag parts to move them, drag empty space to pan.');
+    this.status(tool === 'wire' ? 'Wire: drag from a connection point to another (or click, then click).' : 'Drag a part to move it · drag from any pin or hole to draw a wire · drag empty space to pan');
   }
   setRunning(on) {
     this.running = on;
@@ -444,6 +444,11 @@ export class Editor {
       if (wireEl) { this.select({ kind: 'wire', id: wireEl.dataset.wire }); return; }
       this.select(null); this.beginPan(e); return;
     }
+    // No tool switching to wire: in Select mode too, pressing right on a connection point (an Uno header pin,
+    // a breadboard hole, a component lead) starts a wire; pressing anywhere else on a part moves it.
+    // The radius is tight so a part's body — and the breadboard between holes — still drags normally.
+    const pin = this.pinAt(w, 6);
+    if (pin && !(pin.type === 'pushbutton' && this.running)) { this.beginWire(e, pin); return; }
     if (wireEl) { e.preventDefault(); this.select({ kind: 'wire', id: wireEl.dataset.wire }); return; }
     const partEl = e.target.closest?.('.part');
     if (partEl) { this.beginPartDrag(e, partEl.dataset.id); return; }

@@ -83,9 +83,10 @@ test('ui: build a blinking LED circuit purely through pointer input, then run it
   const target = (part, pinId, holeId) => { const h = pinWorld(bb, holeId), p = pinWorld(part, pinId); return { x: part.x + (h.x - p.x) + 4, y: part.y + (h.y - p.y) - 3 }; };
 
   const dragPart = (part, pinId, holeId) => {
-    const grab = { x: part.x + 6, y: part.y + 6 };
+    // grab the body, not a lead end — pressing a lead end starts a wire now
+    const off = part.type === 'resistor' ? (() => { const a = pinWorld(part, '1'), b = pinWorld(part, '2'); return { x: (a.x + b.x) / 2 - part.x, y: (a.y + b.y) / 2 - part.y }; })() : { x: 6, y: 6 };
     const t = target(part, pinId, holeId);
-    drag(grab, { x: t.x + 6, y: t.y + 6 }, editor.els.get(part.id));
+    drag({ x: part.x + off.x, y: part.y + off.y }, { x: t.x + off.x, y: t.y + off.y }, editor.els.get(part.id));
   };
   dragPart(led, 'A', 'E6');
   dragPart(res, '1', 'D5');
@@ -93,8 +94,8 @@ test('ui: build a blinking LED circuit purely through pointer input, then run it
   assert.equal(c.attachments.size, 4, 'every lead should be seated after the drops');
   assert.equal(c.netOf(led.id, 'A'), c.netOf('bb-1', 'A6'));
 
-  // Wire tool: D13 → A6 (anode strip), A11 (resistor far lead) → GND
-  editor.setTool('wire');
+  // Wiring works straight from Select mode: drag from a pin/hole to another — D13 → A6 (anode strip), A11 → GND
+  assert.equal(editor.tool, 'select');
   const uno = editor.partById('uno-1');
   const wireDrag = (aPart, aPin, bPart, bPin) => {
     const a = pinWorld(editor.partById(aPart), aPin), b = pinWorld(editor.partById(bPart), bPin);
@@ -1221,4 +1222,100 @@ test('ui: the AI chat belongs to its project — switching projects switches con
   assert.equal(ai.messages.length, 0, 'a new project starts a fresh conversation');
   await projects.open(first);
   assert.equal(ai.messages[0].text, 'question about project one', 'and the first project\'s chat comes back');
+});
+
+test('ui: no tool switching — in Select mode a pin starts a wire, a part body moves the part, and the breadboard still drags from between its holes', () => {
+  const { editor, drag, w } = boot();
+  assert.equal(editor.tool, 'select');
+  const uno = editor.partById('uno-1'), bb = editor.partById('bb-1');
+  drag(pinWorld(uno, '13'), pinWorld(bb, 'A10'), w.document.getElementById('canvas'));
+  assert.equal(editor.state.wires.length, 1, 'pin → hole made a wire');
+  assert.equal(editor.tool, 'select', 'and you are still in Select');
+  const unoX = uno.x;
+  drag({ x: uno.x + 120, y: uno.y + 120 }, { x: uno.x + 160, y: uno.y + 120 }, editor.els.get('uno-1'));
+  assert.ok(Math.abs(uno.x - (unoX + 40)) < 6, `the Uno body moved (${unoX} → ${uno.x})`);
+  // the middle trench of the breadboard has no holes: dragging there moves the board
+  const e = pinWorld(bb, 'E15'), f = pinWorld(bb, 'F15'), mid = { x: (e.x + f.x) / 2, y: (e.y + f.y) / 2 };
+  const bbX = bb.x;
+  drag(mid, { x: mid.x + 30, y: mid.y }, editor.els.get('bb-1'));
+  assert.ok(Math.abs(bb.x - (bbX + 30)) < 6, `breadboard moved (${bbX} → ${bb.x})`);
+  assert.equal(editor.state.wires.length, 1, 'no stray wire from the board drag');
+});
+
+test('ui: first-visit tour — "Welcome to CircuitBench!", one popup per button/area (every target exists), then what you need for a first project; shown once', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
+  const tour = w.__lab.initTour({ editor, sim, code, projects });
+  tour.maybeAutoStart();
+  assert.equal(tour.active, true, 'first visit → the tour opens by itself');
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Welcome to CircuitBench!');
+  const seen = [];
+  while (tour.step && tour.index < 40) {
+    const s = tour.step;
+    seen.push(s.title);
+    for (const t of (Array.isArray(s.spots) ? s.spots : [])) assert.ok(doc.querySelector(t), `"${s.title}" points at ${t}, which exists`);
+    if (/first project/.test(s.title)) break;
+    doc.getElementById('tourNext').click();
+  }
+  for (const t of ['Your workbench', 'Parts', 'Search parts', 'Rotate & delete', 'Undo & redo', 'Zoom', 'Code', 'Ask AI', 'Your project']) assert.ok(seen.includes(t), `covers ${t}`);
+  assert.ok(seen.some(t => /^Select/.test(t)) && seen.some(t => /^Run/.test(t)) && seen.some(t => /^Wire-only/.test(t)));
+  assert.match(doc.getElementById('tourBody').textContent, /1 LED.*1 resistor \(220 Ω\).*2 wires/s);
+  doc.getElementById('tourSkip').click();
+  assert.equal(tour.active, false);
+  tour.maybeAutoStart();
+  assert.equal(tour.active, false, 'not shown again once seen');
+  doc.getElementById('helpBtn').click();
+  assert.equal(tour.active, true, '? brings it back');
+  tour.end();
+});
+
+test('ui: "Build it with me" — points at each part, hole and pin in order, and advances only when the circuit is really wired that way, through to a running blink', async () => {
+  const { w, editor, code, sim, drag } = boot();
+  const doc = w.document;
+  const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
+  const tour = w.__lab.initTour({ editor, sim, code, projects });
+  const tick = () => new Promise(r => setTimeout(r, 380));
+  await tour.startGuide();
+  assert.equal(projects.current.name, 'First circuit: Blink', 'the guide works in a fresh project');
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Add an LED');
+  assert.equal(doc.getElementById('tourWait').hidden, false, 'it waits for you');
+  await tick();
+  assert.equal(tour.index, 0, 'and does not move on by itself');
+
+  [...doc.querySelectorAll('.part-card')].find(c => c.querySelector('b').textContent === 'LED').querySelector('.add').click();
+  await tick();
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Plug the LED into the breadboard');
+  const led = editor.state.parts.find(p => p.type === 'led'), bb = editor.partById('bb-1');
+  const seat = (part, pinId, holeId, grab) => { const h = pinWorld(bb, holeId), p = pinWorld(part, pinId), t = { x: part.x + (h.x - p.x) + 4, y: part.y + (h.y - p.y) - 3 }; drag({ x: part.x + grab.x, y: part.y + grab.y }, { x: t.x + grab.x, y: t.y + grab.y }, editor.els.get(part.id)); };
+  seat(led, 'A', 'E11', { x: 20, y: 8 });
+  await tick();
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Add a resistor');
+
+  [...doc.querySelectorAll('.part-card')].find(c => c.querySelector('b').textContent === 'Resistor').querySelector('.add').click();
+  await tick();
+  assert.match(doc.getElementById('tourBody').textContent, /column 11/, 'names the exact column of the LED\'s + leg');
+  const res = editor.state.parts.find(p => p.type === 'resistor');
+  const mid = () => { const a = pinWorld(res, '1'), b = pinWorld(res, '2'); return { x: (a.x + b.x) / 2 - res.x, y: (a.y + b.y) / 2 - res.y }; };
+  seat(res, '1', 'D11', mid());
+  await tick();
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Wire pin 13 to the resistor');
+  const far = /column (\d+)/.exec(doc.getElementById('tourBody').textContent)[1];
+  drag(pinWorld(editor.partById('uno-1'), '13'), pinWorld(bb, `A${far}`), doc.getElementById('canvas'));
+  await tick();
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Wire the LED\'s − leg to GND');
+  assert.match(doc.getElementById('tourBody').textContent, /column 10/);
+  drag(pinWorld(bb, 'A10'), pinWorld(editor.partById('uno-1'), 'GND.1'), doc.getElementById('canvas'));
+  await tick();
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Press Run');
+  await sim.start();
+  await tick();
+  assert.match(doc.getElementById('tourTitle').textContent, /blinking/);
+  const ledEl = editor.els.get(led.id).querySelector('wokwi-led'), seenOn = new Set();
+  for (let k = 0; k < 30; k++) { sim.mcu.run(0.05 * 16e6); sim.step(); seenOn.add(ledEl.value); }
+  assert.deepEqual([...seenOn].sort(), [false, true], 'and it really blinks');
+  sim.stop();
+  doc.getElementById('tourNext').click();
+  doc.getElementById('tourNext').click();
+  assert.equal(tour.active, false, 'Finish closes the guide');
 });

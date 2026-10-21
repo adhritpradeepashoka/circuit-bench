@@ -30,6 +30,7 @@
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
+    <button id="helpBtn" type="button" class="help-btn" title="Tour &amp; help: what everything does, or build your first circuit step by step" aria-label="Tour and help">?</button>
   </header>
 
   <main class="main" id="main">
@@ -100,7 +101,7 @@
         <div class="tip" id="tip" hidden></div>
         <div class="hint-card" id="hintCard">
           <b>Build your first circuit</b>
-          <span>Drag an LED and a resistor onto the breadboard (right-click the resistor to change its value) — the leads snap into holes. Choose <em>Wire</em> and draw D13 → resistor → LED → GND, then press <em>Run</em>. Open <em>Code</em> to change what the Arduino does.</span>
+          <span>Drag an LED and a resistor onto the breadboard (right-click the resistor to change its value) — the leads snap into holes. Then drag from any pin or hole to another to wire it — D13 → resistor → LED → GND — and press <em>Run</em>. Open <em>Code</em> to change what the Arduino does.</span>
         </div>
         <div class="sim-tray" id="simTray" hidden>
           <div class="sim-row">

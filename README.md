@@ -47,6 +47,17 @@ The single-file build (`npm run build:single`, ~5 MB because Monaco is inlined) 
 bundled examples all work; compiling your own sketch needs a service. Page served from elsewhere (for example that file)? Point it at the service with `?compiler=http://127.0.0.1:8787` and
 start the service with `VLAB_CORS_ORIGIN=*` (or your page's origin).
 
+### First visit: the tour and "Build it with me"
+
+A first-time visitor gets **Welcome to CircuitBench!**: what it is, then a popup pointing at each button and area (workbench,
+Parts, search, Select/Wire, rotate/delete, undo, zoom, hints line, Run, Code, Ask AI, projects, help), ending with what a first
+project needs. **Build it with me** then guides a first circuit (blink an LED) in a new project: it highlights the exact part to add,
+the exact breadboard holes and Arduino pins to use, in order, and only moves on once the circuit really is wired that way (checked on
+the live netlist). The **?** button in the top bar brings it back any time (`src/ui/tour.js`).
+
+Wiring needs no tool switching: in the normal Select mode, pressing on any pin, hole or lead and dragging to another draws a wire;
+pressing anywhere else on a part moves it. Wire-only mode (`W`) is still there for crowded spots.
+
 ### I²C parts: MPU-6050 and SSD1306 OLED
 
 The simulated ATmega328P now has a working I²C bus (`Wire`): `src/sim/i2c.js` answers for whatever is wired to A4/SDA and A5/SCL,
