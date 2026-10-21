@@ -126,3 +126,15 @@ test('service: concurrent requests are queued, not dropped', { skip }, async () 
     assert.equal(new Set(results.map(r => r.hex)).size, 4, 'four different programs');
   });
 });
+
+test('server: /api/config exposes only the public Google client ID (null when unset)', async () => {
+  const { createServer } = await import('../server/server.mjs');
+  for (const [cfg, want] of [[{}, null], [{ googleClientId: 'abc.apps.googleusercontent.com' }, 'abc.apps.googleusercontent.com']]) {
+    const server = createServer({ compiler: { version: async () => null }, publicConfig: cfg });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    try {
+      const r = await fetch(`http://127.0.0.1:${server.address().port}/api/config`);
+      assert.deepEqual(await r.json(), { googleClientId: want });
+    } finally { server.close(); }
+  }
+});

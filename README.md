@@ -47,6 +47,13 @@ The single-file build (`npm run build:single`, ~5 MB because Monaco is inlined) 
 bundled examples all work; compiling your own sketch needs a service. Page served from elsewhere (for example that file)? Point it at the service with `?compiler=http://127.0.0.1:8787` and
 start the service with `VLAB_CORS_ORIGIN=*` (or your page's origin).
 
+### Sign in with Google
+
+Set `GOOGLE_CLIENT_ID` (a Google OAuth *web* client ID, public by design) on the host and a **Sign in with Google** button appears
+in the top bar (`/api/config` hands it to the page; unset → no button). It is display-only for now: the signed-in name and picture
+are kept in that browser; nothing is sent to or stored on CircuitBench's server, and the token isn't used to authorize anything.
+Cloud-synced projects will verify it server-side when they arrive.
+
 ### First visit: the tour and "Build it with me"
 
 A first-time visitor gets **Welcome to CircuitBench!**: what it is, then a popup pointing at each button and area (workbench,

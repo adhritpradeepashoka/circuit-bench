@@ -30,6 +30,9 @@
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
+    <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
+      <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span></div><p class="account-note">Only your name and picture are shown here, in this browser. CircuitBench doesn't store your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
+    </div>
     <button id="helpBtn" type="button" class="help-btn" title="Tour &amp; help: what everything does, or build your first circuit step by step" aria-label="Tour and help">?</button>
   </header>
 

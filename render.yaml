@@ -7,4 +7,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: GOOGLE_CLIENT_ID      # public OAuth client ID for "Sign in with Google"; leave unset to hide the button
+        sync: false
     healthCheckPath: /api/health

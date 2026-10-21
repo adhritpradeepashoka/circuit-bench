@@ -1319,3 +1319,41 @@ test('ui: "Build it with me" — points at each part, hole and pin in order, and
   doc.getElementById('tourNext').click();
   assert.equal(tour.active, false, 'Finish closes the guide');
 });
+
+test('ui: Sign in with Google — hidden without a client ID; with one, Google\'s button renders, signing in shows your name and picture (kept only in this browser), sign out clears it', async () => {
+  const fakeJwt = p => `x.${Buffer.from(JSON.stringify(p)).toString('base64url')}.sig`;
+  const none = boot();
+  const a0 = none.w.__lab.initAccount({ fetchConfig: async () => ({ googleClientId: null }), load: async () => { throw new Error('must not load'); } });
+  await a0.ready;
+  assert.equal(none.w.document.getElementById('accountSlot').hidden, true);
+
+  const { w } = boot();
+  const doc = w.document;
+  let init = null, rendered = 0, disabled = 0;
+  w.google = { accounts: { id: { initialize: o => { init = o; }, renderButton: el => { rendered++; el.textContent = 'Sign in with Google'; }, disableAutoSelect: () => { disabled++; } } } };
+  const statuses = [];
+  const acc = w.__lab.initAccount({ fetchConfig: async () => ({ googleClientId: 'abc.apps.googleusercontent.com' }), load: async () => {}, status: t => statuses.push(t) });
+  await acc.ready;
+  assert.equal(init.client_id, 'abc.apps.googleusercontent.com');
+  assert.equal(doc.getElementById('accountSlot').hidden, false);
+  assert.ok(rendered >= 1 && /Sign in with Google/.test(doc.getElementById('accountSlot').textContent));
+
+  init.callback({ credential: fakeJwt({ sub: '123', name: 'Adhrit Pradeep', given_name: 'Adhrit', email: 'a@example.com', picture: 'https://example.com/p.png' }) });
+  assert.equal(acc.user.given, 'Adhrit');
+  assert.match(doc.getElementById('accountBtn').textContent, /Adhrit/);
+  assert.equal(doc.querySelector('#accountBtn img').getAttribute('src'), 'https://example.com/p.png');
+  assert.match(statuses.pop(), /Signed in as Adhrit Pradeep/);
+  assert.equal(JSON.parse(w.localStorage.getItem('circuitbench:account')).email, 'a@example.com');
+
+  doc.getElementById('accountBtn').click();
+  assert.equal(doc.getElementById('accountMenu').hidden, false);
+  assert.equal(doc.getElementById('accountEmail').textContent, 'a@example.com');
+  doc.getElementById('accountSignOut').click();
+  assert.equal(acc.user, null);
+  assert.equal(w.localStorage.getItem('circuitbench:account'), null);
+  assert.equal(disabled, 1);
+  assert.ok(/Sign in with Google/.test(doc.getElementById('accountSlot').textContent), 'back to the sign-in button');
+
+  init.callback({ credential: 'garbage' });
+  assert.equal(acc.user, null, 'a bad token signs nobody in');
+});

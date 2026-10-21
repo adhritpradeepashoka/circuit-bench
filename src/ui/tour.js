@@ -170,6 +170,8 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>New project, My projects, download your project as a file or import one.</p>` },
     { spots: ['#projectBtn'], title: 'Your project',
       body: `<p>The project you're working on. Everything saves automatically. Click here to rename it or switch to another.</p>` },
+    { spots: ['#accountSlot'], title: 'Sign in with Google', skip: () => $('accountSlot')?.hidden !== false,
+      body: `<p>Sign in so CircuitBench knows it's you. Your name and picture show up here. It's optional: everything works without it.</p>` },
     { spots: ['#helpBtn'], title: 'Help, any time',
       body: `<p>Click <b>?</b> to see this tour again, or to be guided through building a circuit.</p>` },
     { center: true, title: 'Your first project: blink an LED',
@@ -236,12 +238,13 @@ export function initTour({ editor, sim, code, projects }) {
     start(guide(), { guided: true });
   }
 
-  $('helpBtn')?.addEventListener('click', () => start(welcome()));
+  const tourSteps = () => welcome().filter(s => !s.skip?.());
+  $('helpBtn')?.addEventListener('click', () => start(tourSteps()));
   const firstVisit = () => { try { return !localStorage.getItem(SEEN_KEY); } catch { return false; } };
 
   return {
-    start: () => start(welcome()), startGuide, end,
-    maybeAutoStart() { if (firstVisit()) start(welcome()); },
+    start: () => start(tourSteps()), startGuide, end,
+    maybeAutoStart() { if (firstVisit()) start(tourSteps()); },
     get step() { return steps[i] || null; }, get index() { return i; }, get active() { return !root.hidden; },
   };
 }

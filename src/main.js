@@ -11,6 +11,7 @@ import { initAiPanel } from './ui/ai-panel.js';
 import { initProjects } from './ui/projects.js';
 import { initMpuInspector } from './ui/mpu-inspector.js';
 import { initTour } from './ui/tour.js';
+import { initAccount } from './ui/account.js';
 import { WOKWI_PINS } from './core/pins.generated.js';
 
 const $ = id => document.getElementById(id);
@@ -37,6 +38,7 @@ initMpuInspector(editor);
 const ai = initAiPanel(editor, code, sim);
 const projects = initProjects({ editor, code, sim });
 projects.onSwitch(p => ai.setScope(p.id));
+const account = initAccount({ status: t => editor.status(t) });
 const tour = initTour({ editor, sim, code, projects });
 projects.ready.then(() => tour.maybeAutoStart());
 $('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });
@@ -105,4 +107,4 @@ $('importFile').onchange = async e => {
 $('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
 $('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 
-window.__vlab = { editor, sim, code, projects, tour };   // handy in the browser console
+window.__vlab = { editor, sim, code, projects, tour, account };   // handy in the browser console

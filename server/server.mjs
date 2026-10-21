@@ -1,6 +1,7 @@
 // HTTP front for the compile service (and, when ./dist exists, the built web app).
 //   POST /api/compile   { sketch | files:[{name,content}], fqbn? }  →  { ok, hex, output, diagnostics, size, cached, ms }
 //   GET  /api/health    →  { ok, arduinoCli, boards }
+//   GET  /api/config    →  { googleClientId }   (public settings; GOOGLE_CLIENT_ID env)
 // Env: PORT (8787), HOST (127.0.0.1), VLAB_CORS_ORIGIN (e.g. * — only needed when the page is served from somewhere else),
 //      ARDUINO_CLI, AVR_GCC_DIR, ARDUINO_CTAGS_DIR, VLAB_BUILD_CACHE (see compile-service.mjs)
 import http from 'node:http';
@@ -12,7 +13,7 @@ import { createAiService } from './ai-service.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
-export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null } = {}) {
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {} } = {}) {
   const buckets = new Map();   // ip → recent request timestamps (small in-memory rate limit)
   const limited = ip => {
     const now = Date.now(), list = (buckets.get(ip) || []).filter(t => now - t < 60_000);
@@ -26,6 +27,9 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
     try {
       const url = new URL(req.url, 'http://x');
       if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/')) { res.writeHead(corsOrigin ? 204 : 403, cors); return res.end(); }
+      // Public, non-secret settings the page needs at run time (e.g. the Google OAuth *client* ID, which is
+      // meant to be visible). Lets them change on the host without a rebuild.
+      if (url.pathname === '/api/config') return send(res, 200, { googleClientId: publicConfig.googleClientId || null });
       if (url.pathname === '/api/health') {
         const v = await compiler.version();
         return send(res, 200, { ok: !!v, arduinoCli: v, boards: Object.fromEntries(Object.entries(BOARDS).map(([k, b]) => [k, b.name])) });
@@ -85,7 +89,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dist = fileURLToPath(new URL('../dist', import.meta.url));
   const staticDir = await stat(dist).then(() => dist, () => null);
   const compiler = createCompiler();
-  const server = createServer({ compiler, staticDir, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, log: m => console.log(`[vlab] ${m}`) });
+  const server = createServer({ compiler, staticDir, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: process.env.GOOGLE_CLIENT_ID || null }, log: m => console.log(`[vlab] ${m}`) });
   server.listen(port, host, async () => {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);
