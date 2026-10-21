@@ -23,14 +23,45 @@ import { describeCatalog } from '../src/core/ai-actions.js';
 const LIMITS = { promptChars: 4_000, codeChars: 20_000 };
 const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire';
 
+// A part's catalogue note (see describeCatalog) states its electrical behavior, but a model that reads
+// "OUT falls as it gets hotter" still has to correctly derive and apply the inverted comparison itself —
+// and in practice doesn't reliably: it wrote analogRead(A0) mapped straight to 0-100°C (higher reading =
+// hotter) for the NTC sensor despite the note saying the opposite, because nothing forced it to actually
+// use that fact instead of its own, much more common, prior. For a part listed here, give the model a
+// ready, verbatim-correct conversion function instead of a fact to reason from — it can drop the
+// function in and compare the returned real-world value normally, with no direction judgment call left
+// to get wrong. The constants below must match src/core/sensors.js's NTC model exactly (NTC.r25, NTC.beta,
+// FIXED_OHMS, 298.15 K reference) or the simulated and described behavior will again disagree.
+const SENSOR_RECIPES = [
+  {
+    type: 'ntc-sensor',
+    keywords: /ntc|thermistor|temperature|\bcelsius\b|°c|\bhot(ter)?\b|\bcold(er)?\b/i,
+    recipe: `- ntc-sensor (its OUT pin): analogRead on OUT is NOT proportional to temperature — it falls as temperature rises — so never compare the raw analogRead value against a threshold meant in °C (that silently inverts the logic, as "OUT > threshold" then means colder, not hotter). Instead use this exact helper to get a real °C value first (matches the simulated part precisely; only the pin argument should change), then compare its return value normally — e.g. "if (ntcCelsius(A0) > 50)" is correct and reads naturally:
+float ntcCelsius(int pin) {
+  float v = analogRead(pin) * 5.0 / 1023.0;          // ADC reading -> volts (5 V reference)
+  float rNtc = 10000.0 * v / (5.0 - v);               // volts -> thermistor resistance (10 kΩ fixed leg below it)
+  float kelvin = 1.0 / (1.0 / 298.15 + log(rNtc / 10000.0) / 3950.0); // Steinhart-Hart (β = 3950, 10 kΩ at 25 °C)
+  return kelvin - 273.15;
+}`,
+  },
+];
+
 function buildPrompt({ instruction, circuit, code }) {
   const circuitText = JSON.stringify(circuit ?? { parts: [], wires: [] });
+  const parts = circuit?.parts ?? [];
+  const recipes = SENSOR_RECIPES
+    .filter(r => parts.some(p => p.type === r.type) || r.keywords.test(instruction || ''))
+    .map(r => r.recipe);
+  const recipeBlock = recipes.length
+    ? `\n\nFor any of these parts in play, a ready, verified-correct conversion is given below — use it verbatim (only the pin argument may change) instead of writing your own analogRead comparison or formula for that part, even if your own would look reasonable; theirs accounts for a non-obvious inversion in the real part that a plausible-looking guess gets wrong:\n${recipes.join('\n')}`
+    : '';
+
   return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli, ATmega328P/Uno) firmware inside a browser simulator called CircuitBench, for a student.
 
 You directly control the circuit, not just the firmware. Placing a part, moving it, wiring two pins together, or removing something is not a physical act you are being asked to describe or hand off — it is a data edit you make yourself by emitting the matching action(s) below, and the simulator applies it immediately. When the instruction asks for a circuit change (add/move/rotate/wire/remove), you MUST do it via "actions" — never reply that this "can't be done by you", that it requires "physically" connecting something, or tell the student to do it themselves; any of those means you are refusing a request you are fully able to carry out. Only decline a circuit change (actions: [], explained why) when it is genuinely impossible with the real catalogue below — an unknown part, a pin that doesn't exist, or a truly ambiguous target with no reasonable reading — never because wiring "sounds physical".
 
 Parts you can place, and their real pin/property names (use these exact ids — nothing else exists). Where a part lists an electrical note after " — ", that note states its real analog behavior and OVERRIDES whatever direction you'd normally assume (e.g. most temperature/light sensors you've seen read HIGHER for MORE of the quantity — these may not; read each note literally and write comparisons that match it, not the usual assumption):
-${describeCatalog()}
+${describeCatalog()}${recipeBlock}
 
 Current circuit (parts with their id/type/position, and wires as {from:{part,pin}, to:{part,pin}}):
 ${circuitText}

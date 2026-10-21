@@ -130,6 +130,44 @@ test('generateCode: the prompt tells the model a part\'s electrical note overrid
   assert.match(sentPrompt, /ntc-sensor:.*falls as it gets hotter/i);
 });
 
+test('generateCode: regression — a catalogue note alone isn\'t enough (a live model read "OUT falls as it gets hotter" and still wrote a same-direction analogRead comparison), so the prompt also hands over a ready, verbatim-correct ntcCelsius() helper whenever an ntc-sensor is in the circuit or the instruction mentions temperature, and tells the model to use it instead of deriving its own comparison', async () => {
+  let sentPrompt = null;
+  const ai = createAiService({
+    fetchImpl: async (url, opts) => {
+      sentPrompt = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n{"actions":[],"explanation":"No change."}\n```' }] } }] }) };
+    },
+  });
+  const circuit = { parts: [{ id: 'ntc1', type: 'ntc-sensor', x: 0, y: 0, temp: 25 }], wires: [] };
+  await ai.generateCode({ instruction: 'the LED should only turn on above 50 degrees celsius', userKey: 'k', circuit });
+  assert.match(sentPrompt, /float ntcCelsius\(int pin\)/);
+  assert.match(sentPrompt, /298\.15/);
+  assert.match(sentPrompt, /instead of writing your own analogRead comparison/i);
+
+  // Also triggers from the wording alone, before the part is even placed (e.g. "add a temperature sensor
+  // and turn the LED on above 50°C" in one instruction).
+  let sentPrompt2 = null;
+  const ai2 = createAiService({
+    fetchImpl: async (url, opts) => {
+      sentPrompt2 = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n{"actions":[],"explanation":"No change."}\n```' }] } }] }) };
+    },
+  });
+  await ai2.generateCode({ instruction: 'add a thermistor and turn the LED on above 50 degrees celsius', userKey: 'k' });
+  assert.match(sentPrompt2, /float ntcCelsius\(int pin\)/);
+
+  // Stays out of the prompt entirely when nothing calls for it, to keep token cost down.
+  let sentPrompt3 = null;
+  const ai3 = createAiService({
+    fetchImpl: async (url, opts) => {
+      sentPrompt3 = JSON.parse(opts.body).contents[0].parts[0].text;
+      return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n{"actions":[],"explanation":"No change."}\n```' }] } }] }) };
+    },
+  });
+  await ai3.generateCode({ instruction: 'blink the LED twice as fast', userKey: 'k' });
+  assert.doesNotMatch(sentPrompt3, /ntcCelsius/);
+});
+
 test('generateCode: an unknown provider name is rejected before any network call', async () => {
   let called = false;
   const ai = createAiService({ fetchImpl: async () => { called = true; } });
