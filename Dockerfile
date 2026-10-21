@@ -35,6 +35,12 @@ RUN useradd --system --create-home --uid 10001 vlab \
 WORKDIR /srv/vlab
 COPY --from=web /app/dist ./dist
 COPY server ./server
+# server/ai-service.mjs imports src/core/ai-actions.js directly (not through the Vite bundle, which only
+# covers dist/) — src/core/* is plain, dependency-free JS shared between server and browser, so it has to
+# ship in the runtime image too, not just get built into dist/. Missing this made every deploy since
+# bd123fc crash on startup with ERR_MODULE_NOT_FOUND, while Render kept serving the last image that
+# built — so restarts looked like no-ops no matter how many commits actually fixed something.
+COPY src/core ./src/core
 COPY package.json ./package.json
 ENV HOST=0.0.0.0 PORT=8787 VLAB_BUILD_CACHE=/tmp/vlab/cache NODE_ENV=production
 USER vlab
