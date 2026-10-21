@@ -27,38 +27,7 @@
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
-    <span class="ai-menu">
-      <button id="aiBtn" type="button" title="Ask AI to edit the circuit and/or the sketch (beta)">✨ Ask AI</button>
-      <div class="ai-panel" id="aiPanel" hidden>
-        <div class="ai-key-row" id="aiKeyRow" hidden>
-          <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
-          <div class="ai-provider-tabs" role="tablist">
-            <button type="button" role="tab" id="aiProviderGemini" class="on" data-provider="gemini">Gemini</button>
-            <button type="button" role="tab" id="aiProviderGroq" data-provider="groq">Groq</button>
-          </div>
-          <p class="ai-provider-hint" id="aiProviderHint"><a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key</a> at Google AI Studio. If that page says "project creation failed" (a known Google-side bug on some accounts), switch to the Groq tab above instead.</p>
-          <input id="aiKeyInput" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
-          <button id="aiKeySave" type="button">Save key</button>
-        </div>
-        <div class="ai-ask-row" id="aiAskRow">
-          <textarea id="aiPrompt" placeholder="e.g. Make the LED blink twice as fast, or: wire this up to blink when the button is pressed" rows="2"></textarea>
-          <div class="ai-ask-actions">
-            <button id="aiForgetKey" type="button" class="ai-link" title="Remove the saved key">change key</button>
-            <button id="aiGenerate" type="button">Generate</button>
-          </div>
-        </div>
-        <div class="ai-result" id="aiResult" hidden>
-          <p id="aiExplain"></p>
-          <p class="ai-summary" id="aiSummary"></p>
-          <ul class="ai-warnings" id="aiWarnings" hidden></ul>
-          <div class="ai-result-actions">
-            <button id="aiDiscard" type="button">Discard</button>
-            <button id="aiApply" type="button">Apply</button>
-          </div>
-        </div>
-        <p class="ai-status" id="aiStatus" role="status"></p>
-      </div>
-    </span>
+    <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
   </header>
 
   <main class="main" id="main">
@@ -178,18 +147,48 @@
       </section>
     </section>
 
-    <aside class="parts" id="partsPanel" aria-label="Parts">
-      <div class="parts-head">
-        <span class="parts-title">Parts</span>
-        <button class="collapse" id="collapseBtn" title="Collapse parts panel" aria-expanded="true" aria-controls="partsBody"><svg viewBox="0 0 16 16" width="14" height="14"><path id="collapseChevron" d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-      </div>
-      <div class="parts-rail" aria-hidden="true">Parts</div>
-      <div class="parts-body" id="partsBody">
+    <aside class="side" id="sidePanel" aria-label="Side panel">
+      <section class="pane ai-pane" id="aiPane" aria-label="AI chat" hidden>
+        <div class="pane-head">
+          <span class="pane-title">✨ AI <span class="beta-tag">beta</span></span>
+          <span class="pane-actions">
+            <button type="button" class="pane-btn" id="aiNewChat" title="Clear this conversation and start over">New chat</button>
+            <button type="button" class="pane-x" id="aiClose" title="Close the AI chat" aria-label="Close the AI chat"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+          </span>
+        </div>
+        <div class="ai-key-row" id="aiKeyRow" hidden>
+          <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
+          <div class="ai-provider-tabs" role="tablist">
+            <button type="button" role="tab" id="aiProviderGemini" class="on" data-provider="gemini">Gemini</button>
+            <button type="button" role="tab" id="aiProviderGroq" data-provider="groq">Groq</button>
+          </div>
+          <p class="ai-provider-hint" id="aiProviderHint"></p>
+          <input id="aiKeyInput" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
+          <button id="aiKeySave" type="button">Save key</button>
+        </div>
+        <div class="ai-log" id="aiLog" role="log" aria-live="polite" aria-label="Conversation"></div>
+        <form class="ai-composer" id="aiComposer">
+          <textarea id="aiPrompt" rows="1" placeholder="Ask about your circuit, or describe a change…" aria-label="Message the AI"></textarea>
+          <button type="submit" id="aiGenerate" class="ai-send" title="Send (Enter) · new line: Shift+Enter" aria-label="Send"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </form>
+        <div class="ai-foot"><span class="ai-status" id="aiStatus" role="status"></span><button id="aiForgetKey" type="button" class="ai-link" title="Remove the saved key">change key</button></div>
+      </section>
+      <section class="pane parts" id="partsPanel" aria-label="Parts">
+        <div class="pane-head parts-head">
+          <span class="pane-title parts-title">Parts</span>
+          <button type="button" class="pane-x" id="collapseBtn" title="Close the parts panel" aria-label="Close the parts panel"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
+        </div>
+        <div class="parts-body" id="partsBody">
         <label class="search"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.6 10.6 3.2 3.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="partsSearch" placeholder="Search parts" autocomplete="off" spellcheck="false"></label>
         <div id="catalog"></div>
         <div class="workspace"><div class="group-title">In workspace</div><div id="workspaceList"></div></div>
         <p class="note">Drag a part onto the canvas, or press Add. Leads snap into breadboard holes.</p>
       </div>
+    </section>
+      <nav class="side-rail" id="sideRail" aria-label="Closed panels">
+        <button type="button" class="rail-btn" id="railAi" title="Open the AI chat">✨ AI</button>
+        <button type="button" class="rail-btn" id="railParts" title="Open the parts panel">Parts</button>
+      </nav>
     </aside>
   </main>
 </div>

@@ -2,6 +2,7 @@ import { PART_DEFS, CATALOG_ORDER } from '../core/parts.js';
 import { createModelElement, DRAG_MIME } from './editor.js';
 import { formatOhms } from '../core/resistance.js';
 import { LED_COLORS } from '../core/led-colors.js';
+import { sidePanes } from './side-panes.js';
 
 const $ = id => document.getElementById(id);
 const BLURB = {
@@ -83,15 +84,10 @@ export function initSidebar(editor) {
   $('topSearch').addEventListener('input', e => { setCollapsed(false); setQuery(e.target.value); });
   $('topSearch').addEventListener('focus', () => setCollapsed(false));
 
-  function setCollapsed(collapsed) {
-    $('main').classList.toggle('parts-collapsed', collapsed);
-    const b = $('collapseBtn');
-    b.setAttribute('aria-expanded', String(!collapsed));
-    b.title = collapsed ? 'Expand parts panel' : 'Collapse parts panel';
-    $('partsPanel').setAttribute('aria-label', collapsed ? 'Parts (collapsed)' : 'Parts');
-    editor.positionWireEditor();
-  }
-  $('collapseBtn').addEventListener('click', () => setCollapsed(!$('main').classList.contains('parts-collapsed')));
+  const panes = sidePanes(editor);
+  // Kept for callers that still think in "collapse the parts column": collapsed = Parts pane closed.
+  const setCollapsed = collapsed => (collapsed ? panes.close('parts') : panes.open('parts'));
+  $('collapseBtn').addEventListener('click', () => panes.close('parts'));
   $('main').addEventListener('transitionend', e => { if (e.propertyName.startsWith('grid-template-columns')) { editor.positionWireEditor(); } });
 
   editor.on('workspace', renderWorkspace);

@@ -19,12 +19,12 @@ function aiEndpoint(loc = globalThis.location, win = globalThis) {
 /**
  * @returns {Promise<{ok:boolean, code?:string, explanation?:string, error?:string, needsKey?:boolean}>}
  */
-export async function generateCode({ instruction, circuit, code, context = null, userKey = getStoredKey(), provider = getStoredProvider(), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(), signal } = {}) {
+export async function generateCode({ instruction, circuit, code, context = null, history = [], userKey = getStoredKey(), provider = getStoredProvider(), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(), signal } = {}) {
   if (!userKey) return { ok: false, needsKey: true, error: 'Add a free API key in Settings → AI to use this (beta, bring-your-own-key for now).' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask. Run the app from the server (npm run server) to use AI features.' };
   let res;
   try {
-    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instruction, circuit, code, context, userKey, provider }), signal });
+    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instruction, circuit, code, context, history, userKey, provider }), signal });
   } catch (err) {
     if (err?.name === 'AbortError') throw err;
     return { ok: false, error: `Could not reach ${endpoint}.` };

@@ -93,7 +93,19 @@ export function describeContext(context) {
   return out.join('\n');
 }
 
-function buildPrompt({ instruction, circuit, code, context }) {
+/** Earlier turns of the chat, oldest first — coerced and capped like describeContext, since they come from the client. */
+export function describeHistory(history) {
+  const lines = list(history, 8)
+    .filter(t => t && (t.role === 'user' || t.role === 'assistant') && String(t.text ?? '').trim())
+    .map(t => `${t.role === 'user' ? 'Student' : 'You'}: ${str(t.text, 800).trim()}`);
+  return lines.join('\n');
+}
+
+function buildPrompt({ instruction, circuit, code, context, history }) {
+  const past = describeHistory(history);
+  const historyBlock = past
+    ? `\n\nConversation so far (oldest first). The circuit and sketch above are the CURRENT state: edits marked "applied" are already in them; edits marked "not applied" were never made, so don't assume them. Use this to resolve follow-ups like "now make it faster" or "undo that":\n${past}`
+    : '';
   const diagnostics = describeContext(context);
   const diagnosticsBlock = diagnostics
     ? `\n\nLive diagnostics from the student's browser — this is what ACTUALLY happened, so treat it as ground truth over what the code or circuit "should" do. When the student asks why something doesn't work, find the cause in these readings (a pin that's LOW when it should be HIGH, an analogRead value on the wrong side of a threshold, a compile error, an open lead, a wiring problem) and name the specific reading in your explanation. If the last compile FAILED, fixing those errors comes first, whatever else was asked:\n${diagnostics}`
@@ -120,9 +132,11 @@ ${circuitText}
 Current sketch.ino:
 \`\`\`cpp
 ${(code || '').slice(0, LIMITS.codeChars)}
-\`\`\`${diagnosticsBlock}
+\`\`\`${diagnosticsBlock}${historyBlock}
 
-Instruction: ${String(instruction || '').slice(0, LIMITS.promptChars)}
+Student's latest message: ${String(instruction || '').slice(0, LIMITS.promptChars)}
+
+This is a chat. If that message only asks a question ("why…", "what does…", "how do I…") and doesn't ask for a change, answer it in "explanation" — plain text, a few short sentences, no markdown — with "actions": [] and no cpp block. Only propose an edit when one is asked for or is clearly needed to fix what they're asking about.
 
 Reply with EXACTLY ONE fenced \`\`\`json block containing a single object — and NOTHING else in it, especially not firmware code (see below for why):
 {
@@ -134,7 +148,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block containing a single object — an
                          //   remove_part: {"op":"remove_part","id":"<id>"}
                          //   add_wire: {"op":"add_wire","from":{"part":"<id>","pin":"<pin>"},"to":{"part":"<id>","pin":"<pin>"}}
                          //   remove_wire: {"op":"remove_wire","id":"<wire id from the circuit above>"}
-  "explanation": "<at most three short sentences: what was wrong (citing the reading or error that shows it, if any) and what you changed>"
+  "explanation": "<your reply to the student, plain text, no markdown. For an edit: what was wrong (citing the reading or error that shows it, if any) and what you changed, in at most three short sentences. For a question: the answer.>"
 }
 If the firmware/sketch needs to change, follow that json block with a SECOND fenced block, tagged \`\`\`cpp, containing the COMPLETE new sketch.ino (not a diff/snippet). If firmware does not need to change, do not include a \`\`\`cpp block at all.
 Never put firmware code inside the json block or inside any string field — a multi-line C/C++ program's own newlines break JSON parsing unless perfectly escaped, which models get wrong often enough that this feature breaks when they do; keeping code in its own plain \`\`\`cpp block avoids that entirely. Nothing is allowed outside these one or two fenced blocks.
@@ -212,7 +226,7 @@ const PROVIDERS = {
 };
 
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
-  async function generateCode({ instruction, circuit, code, context, userKey, provider = 'gemini' }) {
+  async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini' }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = PROVIDERS[provider];
     if (!p) throw new RequestError(`Unknown AI provider "${provider}".`);
@@ -221,7 +235,7 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
       err.needsKey = true;
       throw err;
     }
-    const prompt = buildPrompt({ instruction, circuit, code, context });
+    const prompt = buildPrompt({ instruction, circuit, code, context, history });
     let res;
     try {
       res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt) });

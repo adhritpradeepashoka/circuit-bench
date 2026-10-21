@@ -1,26 +1,26 @@
-// Wires the "✨ Ask AI" popover: shows the key prompt (beta, bring-your-own-key) when needed, sends the
-// instruction + circuit + current sketch + live diagnostics (last compile result, what the running
-// simulation is actually doing, Serial Monitor output) to the server, and lets the user apply or discard
-// the result — which can be a circuit edit (parts/wires), a firmware edit, or both.
-// See src/sim/ai-client.mjs for the BYOK rationale and request shape, and src/core/ai-actions.js for
-// how proposed circuit edits are validated against the real part/pin catalogue before anything renders.
+// The AI chat pane (top of the right-hand sidebar). A normal rolling conversation: your message goes in
+// as a bubble and the input clears; the reply comes back as a bubble with its own Apply / Discard when it
+// proposes a change (a circuit edit, a new sketch, or both). Earlier turns are sent along so follow-ups
+// like "now make it faster" work, and every request also carries live diagnostics (last compile, the
+// running sim, Serial Monitor output) — see gatherContext below and describeContext in
+// server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
+// validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
 import { generateCode, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { FORMAT, VERSION } from '../core/project.js';
+import { sidePanes } from './side-panes.js';
 
 const PROVIDER_HINTS = {
   gemini: '<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key</a> at Google AI Studio. If that page says "project creation failed" (a known Google-side bug on some accounts), switch to the Groq tab above instead.',
   groq: '<a href="https://console.groq.com/keys" target="_blank" rel="noopener">Get a free Groq key</a> at console.groq.com — no Google account step involved.',
 };
+const CHAT_STORE = 'virtual-lab:ai-chat';
+const MAX_SAVED = 40, MAX_HISTORY = 8, MAX_SAVED_CODE = 8000;
+const SUGGESTIONS = ['Make the LED blink twice as fast', 'Add a pushbutton on pin 2 that turns the LED on', 'Why isn\'t my circuit working?'];
 
 // applyCircuitActions already works in — and returns — the project-file shape (parts use "rotate",
-// wires use from/to), the same shape editor.exportProject()/fromProjectFile() use, so no field remapping
-// is needed here. (A previous version of this remapped "rot" <-> "rotate" and, for any part the AI's
-// actions didn't touch, silently reset its rotation to 0 on every circuit edit — fixed by making
-// ai-actions.js use the project-file field name throughout instead of patching it up here.)
-function toProjectFileShape(parts, wires) {
-  return { format: FORMAT, version: VERSION, parts, wires };
-}
+// wires use from/to), the same shape editor.exportProject()/fromProjectFile() use, so no remapping.
+const toProjectFileShape = (parts, wires) => ({ format: FORMAT, version: VERSION, parts, wires });
 
 const CAP = { output: 4000, serial: 2000, file: 6000, files: 12000 };
 
@@ -45,22 +45,109 @@ export function gatherContext(code, sim) {
   return { compile, sim: sim?.snapshot?.() ?? null, serial, otherFiles };
 }
 
+const STATE_NOTE = { applied: 'applied', discarded: 'not applied — the student discarded it', superseded: 'not applied', expired: 'not applied', pending: 'not applied yet' };
+
+/** The earlier turns, as the model should see them: what was asked, what it answered, and whether that edit is actually in the project now. */
+export function chatHistory(messages, max = MAX_HISTORY) {
+  return messages.filter(m => m.role === 'user' || m.role === 'assistant').slice(-max).map(m => (m.role === 'user'
+    ? { role: 'user', text: m.text }
+    : { role: 'assistant', text: `${m.text || ''}${m.hasEdit ? ` [proposed edit: ${STATE_NOTE[m.state] || 'not applied'}]` : ''}` }));
+}
+
 export function initAiPanel(editor, code, sim = null) {
   const $ = id => document.getElementById(id);
-  const btn = $('aiBtn'), panel = $('aiPanel'), keyRow = $('aiKeyRow'), askRow = $('aiAskRow'), resultRow = $('aiResult');
-  const keyInput = $('aiKeyInput'), status = $('aiStatus'), promptEl = $('aiPrompt'), explainEl = $('aiExplain');
-  const summaryEl = $('aiSummary'), warningsEl = $('aiWarnings'), applyBtn = $('aiApply');
-  const providerTabs = $('aiKeyRow').querySelectorAll('[data-provider]'), providerHint = $('aiProviderHint');
-  let pending = null; // { code, circuitEdit: {parts, wires} | null }
+  const panes = sidePanes(editor);
+  const log = $('aiLog'), promptEl = $('aiPrompt'), sendBtn = $('aiGenerate'), status = $('aiStatus');
+  const keyRow = $('aiKeyRow'), keyInput = $('aiKeyInput');
+  const providerTabs = keyRow.querySelectorAll('[data-provider]'), providerHint = $('aiProviderHint');
 
-  /** applyCircuitActions never throws away a change silently — but every op it can't do pushes a warning. A model that narrates a change it didn't actually request (no matching action, or every matching action warned) is the "it says it rewired but didn't" case — catch it structurally instead of trusting the explanation text. */
-  function describeOutcome(circuit, actionCount, circuitEdit, warnings) {
-    if (!actionCount) return { changed: null, warnings };
-    const changed = JSON.stringify(circuitEdit.parts) !== JSON.stringify(circuit.parts) || JSON.stringify(circuitEdit.wires) !== JSON.stringify(circuit.wires);
-    return { changed, warnings };
+  let messages = loadChat();     // { id, role: 'user'|'assistant'|'error', text, summary?, warnings?, fatal?, code?, codeLines?, hasEdit?, state? }
+  const proposals = new Map();   // message id → { code, circuitEdit } (in memory only — never persisted)
+  let busy = false, seq = Date.now();
+
+  /* ── persistence (per-viewer convenience; can come back empty) ── */
+  function loadChat() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CHAT_STORE) || '[]');
+      if (!Array.isArray(saved)) return [];
+      // A proposal can't survive a reload (its edit lived in memory), so a pending one becomes "expired".
+      return saved.filter(m => m && typeof m.text === 'string' && ['user', 'assistant', 'error'].includes(m.role)).map(m => (m.state === 'pending' ? { ...m, state: 'expired' } : m));
+    } catch { return []; }
+  }
+  function saveChat() {
+    try { localStorage.setItem(CHAT_STORE, JSON.stringify(messages.slice(-MAX_SAVED).map(m => (m.code && m.code.length > MAX_SAVED_CODE ? { ...m, code: undefined } : m)))); } catch { /* full or blocked */ }
   }
 
-  const setStatus = (msg, busy = false) => { status.textContent = msg || ''; status.classList.toggle('busy', busy); };
+  /* ── rendering ───────────────────────── */
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const STATE_LABEL = { applied: 'Applied ✓', discarded: 'Discarded', superseded: 'Not applied — a newer reply replaced it', expired: 'Not applied (page was reloaded)' };
+
+  function renderMessage(m) {
+    const row = el('div', `msg ${m.role === 'user' ? 'me' : 'ai'}${m.role === 'error' ? ' err' : ''}`);
+    row.dataset.id = m.id;
+    const bubble = el('div', 'bubble');
+    if (m.role === 'user') { bubble.textContent = m.text; row.append(bubble); return row; }
+    bubble.append(el('p', 'msg-text', m.text || (m.role === 'error' ? 'Something went wrong.' : 'Done.')));
+    if (m.summary) bubble.append(el('p', 'ai-summary', m.summary));
+    if (m.warnings?.length) {
+      const ul = el('ul', `ai-warnings${m.fatal ? ' fatal' : ''}`);
+      for (const w of m.warnings) ul.append(el('li', null, w));
+      bubble.append(ul);
+    }
+    if (m.code) {
+      const d = el('details', 'ai-code');
+      d.append(el('summary', null, `sketch.ino · ${m.codeLines} line${m.codeLines === 1 ? '' : 's'}`), el('pre', null, m.code));
+      bubble.append(d);
+    }
+    if (m.hasEdit) {
+      const actions = el('div', 'msg-actions');
+      if (m.state === 'pending' && proposals.has(m.id)) {
+        const apply = el('button', 'msg-apply', 'Apply'); apply.type = 'button'; apply.dataset.act = 'apply';
+        const discard = el('button', 'msg-discard', 'Discard'); discard.type = 'button'; discard.dataset.act = 'discard';
+        actions.append(discard, apply);
+      } else actions.append(el('span', `msg-state ${m.state}`, STATE_LABEL[m.state] || 'Not applied'));
+      bubble.append(actions);
+    }
+    row.append(bubble);
+    return row;
+  }
+
+  function renderEmpty() {
+    const box = el('div', 'ai-empty');
+    box.append(el('b', null, 'Ask about your circuit'), el('p', null, 'It sees your wiring and code, compile errors, and — while the simulation runs — the live pin readings. It can rewire the board and rewrite the sketch for you.'));
+    const chips = el('div', 'ai-chips');
+    for (const s of SUGGESTIONS) { const c = el('button', 'ai-chip', s); c.type = 'button'; c.addEventListener('click', () => { promptEl.value = s; send(); }); chips.append(c); }
+    box.append(chips);
+    return box;
+  }
+
+  function render() {
+    log.replaceChildren(...(messages.length ? messages.map(renderMessage) : [renderEmpty()]));
+    if (busy) {
+      const row = el('div', 'msg ai thinking'), bubble = el('div', 'bubble');
+      bubble.append(el('span', 'dots'), el('span', 'thinking-label', sim?.running ? 'Thinking — reading the live simulation…' : 'Thinking…'));
+      row.append(bubble); log.append(row);
+    }
+    log.scrollTop = log.scrollHeight;
+  }
+
+  log.addEventListener('click', e => {
+    const btn = e.target.closest('[data-act]'); if (!btn) return;
+    const id = btn.closest('.msg')?.dataset.id, m = messages.find(x => String(x.id) === id);
+    if (!m || m.state !== 'pending') return;
+    if (btn.dataset.act === 'apply') applyProposal(m); else { m.state = 'discarded'; proposals.delete(m.id); saveChat(); render(); }
+  });
+
+  function applyProposal(m) {
+    const p = proposals.get(m.id); if (!p) return;
+    if (p.circuitEdit) editor.importProject(toProjectFileShape(p.circuitEdit.parts, p.circuitEdit.wires));
+    if (p.code) { code.source = p.code; code.open(); }
+    editor.status(p.circuitEdit && p.code ? 'AI edit applied — circuit and sketch.ino both updated' : p.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify or Run to compile it');
+    m.state = 'applied'; proposals.delete(m.id); saveChat(); render();
+  }
+
+  /* ── key setup ───────────────────────── */
+  const setStatus = msg => { status.textContent = msg || ''; };
   const hasKey = () => !!getStoredKey();
   function refreshKeyUi() { keyRow.hidden = hasKey(); }
   function paintProvider() {
@@ -69,85 +156,89 @@ export function initAiPanel(editor, code, sim = null) {
     providerHint.innerHTML = PROVIDER_HINTS[p] || '';
   }
   providerTabs.forEach(b => b.addEventListener('click', () => { setStoredProvider(b.dataset.provider); paintProvider(); }));
-  paintProvider();
-
-  function open() { panel.hidden = false; refreshKeyUi(); setStatus(''); if (!hasKey()) keyInput.focus(); else promptEl.focus(); }
-  function close() { panel.hidden = true; }
-
-  btn.addEventListener('click', e => { e.stopPropagation(); panel.hidden ? open() : close(); });
-  document.addEventListener('click', e => { if (!panel.hidden && !e.target.closest('.ai-menu')) close(); });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !panel.hidden) close(); });
-
   $('aiKeySave').addEventListener('click', () => {
     const v = keyInput.value.trim();
     if (!v) return setStatus('Paste a key first.');
-    setStoredKey(v); keyInput.value = ''; refreshKeyUi(); setStatus(`${getStoredProvider() === 'groq' ? 'Groq' : 'Gemini'} key saved — only in this browser.`); promptEl.focus();
+    setStoredKey(v); keyInput.value = ''; refreshKeyUi();
+    setStatus(`${getStoredProvider() === 'groq' ? 'Groq' : 'Gemini'} key saved — only in this browser.`);
+    if (promptEl.value.trim()) send(); else promptEl.focus();
   });
   $('aiForgetKey').addEventListener('click', () => { setStoredKey(''); refreshKeyUi(); setStatus(''); paintProvider(); keyInput.focus(); });
 
-  async function ask() {
-    const instruction = promptEl.value.trim();
-    if (!instruction) return setStatus('Describe what you want first.');
-    if (!hasKey()) return refreshKeyUi();
-    const genBtn = $('aiGenerate');
-    genBtn.disabled = true; setStatus(sim?.running ? 'Asking the AI (with live sim readings)…' : 'Asking the AI…', true); resultRow.hidden = true;
+  /* ── composer ────────────────────────── */
+  const autosize = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${Math.min(promptEl.scrollHeight || 0, 150)}px`; };
+  promptEl.addEventListener('input', autosize);
+  promptEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  $('aiComposer').addEventListener('submit', e => { e.preventDefault(); send(); });
+  $('aiNewChat').addEventListener('click', () => { if (busy) return; messages = []; proposals.clear(); saveChat(); setStatus(''); render(); promptEl.focus(); });
+
+  /** A circuit edit that applied with no net change and no warnings asked to touch the board and nothing moved — say so instead of a quiet no-op. */
+  function outcome(circuit, res) {
+    let circuitEdit = null, warnings = [], changed = null;
+    if (res.actions?.length) {
+      const applied = applyCircuitActions(circuit, res.actions);
+      circuitEdit = { parts: applied.parts, wires: applied.wires };
+      warnings = applied.warnings;
+      changed = JSON.stringify(circuitEdit.parts) !== JSON.stringify(circuit.parts) || JSON.stringify(circuitEdit.wires) !== JSON.stringify(circuit.wires);
+    }
+    if (circuitEdit && changed === false && warnings.length === 0) warnings = [...warnings, 'None of the requested circuit changes actually took effect — the AI may be describing an edit it did not really make.'];
+    return { circuitEdit: changed ? circuitEdit : null, attempted: !!circuitEdit, changed, warnings };
+  }
+
+  async function send() {
+    const text = promptEl.value.trim();
+    if (!text) return;
+    if (busy) return setStatus('Wait for the current reply first.');
+    if (!hasKey()) { refreshKeyUi(); keyInput.focus(); return setStatus('Add a free API key above to start chatting.'); }
+    setStatus('');
+    const history = chatHistory(messages);
+    for (const m of messages) if (m.state === 'pending') { m.state = 'superseded'; proposals.delete(m.id); }   // an older edit no longer matches the board once you've moved on
+    messages.push({ id: ++seq, role: 'user', text });
+    promptEl.value = ''; autosize();
+    busy = true; sendBtn.disabled = true; saveChat(); render();
     try {
       const circuit = editor.exportProject();
-      const context = gatherContext(code, sim);
-      const res = await generateCode({ instruction, circuit, code: code.source, context });
+      const res = await generateCode({ instruction: text, circuit, code: code.source, context: gatherContext(code, sim), history });
       if (!res.ok) {
         if (res.needsKey) { setStoredKey(''); refreshKeyUi(); }
-        setStatus(res.error || 'Something went wrong.');
+        messages.push({ id: ++seq, role: 'error', text: res.error || 'Something went wrong.' });
         return;
       }
-      let circuitEdit = null, warnings = [], changed = null;
-      if (res.actions?.length) {
-        const applied = applyCircuitActions(circuit, res.actions);
-        circuitEdit = { parts: applied.parts, wires: applied.wires };
-        ({ changed, warnings } = describeOutcome(circuit, res.actions.length, circuitEdit, applied.warnings));
-      }
-      // A circuit edit that applies cleanly (no net change, and nothing it tried warned) is suspicious on its own —
-      // it asked to touch the board and nothing moved. Treat that as a failure to surface, not a quiet no-op.
-      const silentNoop = circuitEdit && changed === false && warnings.length === 0;
-      pending = { code: res.code, circuitEdit: changed ? circuitEdit : null };
-
+      const o = outcome(circuit, res);
+      const hasEdit = !!(res.code || o.circuitEdit);
       const summary = [];
-      if (circuitEdit) summary.push(changed ? `${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'} applied` : 'no circuit change actually applied');
-      if (res.code) summary.push('new sketch ready');
-      summaryEl.textContent = summary.length ? `Will update: ${summary.join(' + ')}.` : '';
-      explainEl.textContent = res.explanation || 'Ready to apply.';
-
-      const allWarnings = silentNoop ? [...warnings, 'None of the requested circuit changes actually took effect — the AI may be describing an edit it did not really make.'] : warnings;
-      warningsEl.hidden = allWarnings.length === 0;
-      warningsEl.classList.toggle('fatal', circuitEdit != null && !changed);
-      warningsEl.innerHTML = '';
-      for (const w of allWarnings) { const li = document.createElement('li'); li.textContent = w; warningsEl.appendChild(li); }
-
-      applyBtn.disabled = !pending.code && !pending.circuitEdit;
-      applyBtn.textContent = applyBtn.disabled ? 'Nothing to apply' : 'Apply';
-      resultRow.hidden = false; setStatus('');
+      if (o.attempted) summary.push(o.changed ? `${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'}` : 'no circuit change actually applied');
+      if (res.code) summary.push('a new sketch');
+      const m = {
+        id: ++seq, role: 'assistant', text: res.explanation || (hasEdit ? 'Here is the change.' : 'Done.'),
+        summary: summary.length ? `Proposes: ${summary.join(' + ')}.` : '', warnings: o.warnings, fatal: o.attempted && !o.changed,
+        code: res.code || undefined, codeLines: res.code ? res.code.split('\n').length : 0, hasEdit, state: hasEdit ? 'pending' : undefined,
+      };
+      if (hasEdit) proposals.set(m.id, { code: res.code || null, circuitEdit: o.circuitEdit });
+      messages.push(m);
     } catch (err) {
-      setStatus(err?.message || 'Something went wrong.');
+      messages.push({ id: ++seq, role: 'error', text: err?.message || 'Something went wrong.' });
     } finally {
-      genBtn.disabled = false;
+      busy = false; sendBtn.disabled = false; saveChat(); render();
+      if (panes.isOpen('ai')) promptEl.focus();
     }
   }
-  $('aiGenerate').addEventListener('click', () => ask());
 
-  $('aiApply').addEventListener('click', () => {
-    if (!pending) return;
-    if (pending.circuitEdit) editor.importProject(toProjectFileShape(pending.circuitEdit.parts, pending.circuitEdit.wires));
-    if (pending.code) { code.source = pending.code; code.open(); }
-    editor.status(pending.circuitEdit && pending.code ? 'AI edit applied — circuit and sketch.ino both updated' : pending.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify to compile it');
-    resultRow.hidden = true; promptEl.value = ''; pending = null; close();
-  });
-  $('aiDiscard').addEventListener('click', () => { resultRow.hidden = true; pending = null; warningsEl.hidden = true; });
+  /* ── opening / closing ───────────────── */
+  function focusInput() { refreshKeyUi(); (hasKey() ? promptEl : keyInput).focus(); }
+  $('aiBtn').addEventListener('click', () => { panes.toggle('ai'); if (panes.isOpen('ai')) focusInput(); });
+  $('aiClose').addEventListener('click', () => panes.close('ai'));
+  panes.onChange((name, open) => { if (name === 'ai' && open) { refreshKeyUi(); render(); } });
 
-  /** Open the panel pre-filled — and send straight away when the intent is unambiguous (e.g. "fix this compile error"). */
-  function askAi(instruction, { send = false } = {}) {
-    open(); promptEl.value = instruction; resultRow.hidden = true;
-    if (send && hasKey()) ask(); else { promptEl.focus(); promptEl.setSelectionRange(instruction.length, instruction.length); }
+  /** Open the chat with a message ready — and send it straight away when the intent is unambiguous (e.g. "fix this compile error"). */
+  function askAi(instruction, { send: now = false } = {}) {
+    panes.open('ai');
+    promptEl.value = instruction; autosize();
+    if (now && hasKey()) send();
+    else { focusInput(); promptEl.setSelectionRange?.(instruction.length, instruction.length); }
   }
   code.onAiFix?.(() => askAi('Fix the compile error(s) shown in the compiler output.', { send: true }));
-  return { askAi };
+
+  paintProvider(); refreshKeyUi(); render();
+  return { askAi, send, get messages() { return messages; } };
 }

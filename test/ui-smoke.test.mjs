@@ -902,7 +902,7 @@ test('ui: a failed compile offers "✨ Fix with AI" — it opens the AI panel an
   const fix = doc.getElementById('aiFixCompile');
   assert.ok(fix, 'Fix with AI button shown on the failed compile');
   fix.click();
-  assert.equal(doc.getElementById('aiPanel').hidden, false, 'the click opens the panel (and is not swallowed by the outside-click closer)');
+  assert.equal(doc.getElementById('aiPane').hidden, false, 'the click opens the AI chat pane');
   await new Promise(r => setTimeout(r, 0));
   assert.equal(sent.length, 1);
   assert.match(sent[0].body.instruction, /Fix the compile error/);
@@ -911,8 +911,120 @@ test('ui: a failed compile offers "✨ Fix with AI" — it opens the AI panel an
   assert.equal(ctx.compile.errors[0].line, 3);
   assert.match(ctx.compile.output, /expected ';' before 'undefinedThing'/);
   assert.equal(ctx.sim.running, false);
-  assert.match(doc.getElementById('aiExplain').textContent, /missing semicolon/);
+  assert.match([...doc.querySelectorAll('#aiLog .msg.ai .msg-text')].pop().textContent, /missing semicolon/);
 
   code.source = sketch('broken') + '\n// edited';
   assert.equal(code.lastBuild.stale, true, 'editing after a compile marks the result stale');
+});
+
+const flush = () => new Promise(r => setTimeout(r, 5));
+
+test('ui: the sidebar is a stack of closable panes — open AI shares the column with Parts, close one and the other fills it, close both and a rail brings them back', () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document, main = doc.getElementById('main');
+  w.__lab.initAiPanel(editor, code, sim);
+  const ai = doc.getElementById('aiPane'), parts = doc.getElementById('partsPanel'), rail = doc.getElementById('sideRail');
+  assert.equal(ai.hidden, true, 'AI chat starts closed');
+  assert.equal(parts.hidden, false);
+
+  doc.getElementById('aiBtn').click();
+  assert.equal(ai.hidden, false);
+  assert.ok(main.classList.contains('panes-both') && main.classList.contains('ai-open'));
+  assert.equal(doc.getElementById('aiBtn').getAttribute('aria-pressed'), 'true');
+
+  doc.getElementById('collapseBtn').click();                       // close Parts → AI takes the whole column
+  assert.equal(parts.hidden, true);
+  assert.ok(!main.classList.contains('panes-both') && !main.classList.contains('parts-collapsed'));
+  assert.ok(rail.classList.contains('strip'), 'a strip offers the closed pane back');
+  assert.equal(doc.getElementById('railParts').hidden, false);
+  assert.equal(doc.getElementById('railAi').hidden, true);
+
+  doc.getElementById('aiClose').click();                           // close both → rail
+  assert.ok(main.classList.contains('parts-collapsed'));
+  assert.ok(!rail.classList.contains('strip'));
+  doc.getElementById('railParts').click();
+  assert.equal(parts.hidden, false);
+  assert.ok(!main.classList.contains('parts-collapsed'));
+  assert.deepEqual(JSON.parse(w.localStorage.getItem('virtual-lab:side-panes')), { ai: false, parts: true }, 'the layout is remembered');
+
+  doc.getElementById('aiBtn').click(); doc.getElementById('aiBtn').click();   // the top-bar button toggles
+  assert.equal(ai.hidden, true);
+});
+
+test('ui: AI chat — the input clears, messages roll, each reply has its own Apply, earlier turns are sent as history, and older proposals are superseded', async () => {
+  const { w, editor, code, sim } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const doc = w.document;
+  const replies = [
+    { ok: true, actions: [], code: 'void setup(){ pinMode(13, OUTPUT); }\nvoid loop(){ digitalWrite(13, HIGH); delay(250); digitalWrite(13, LOW); delay(250); }\n', explanation: 'Halved both delays so it blinks twice as fast.' },
+    { ok: true, actions: [], code: null, explanation: 'delay() pauses the sketch for that many milliseconds.' },
+    { ok: true, actions: [], code: 'void setup(){}\nvoid loop(){}\n', explanation: 'Version A.' },
+    { ok: true, actions: [], code: 'void setup(){}\nvoid loop(){ }\n', explanation: 'Version B.' },
+  ];
+  const sent = [];
+  w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); const r = replies.shift(); return { ok: true, status: 200, json: async () => r }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  const prompt = doc.getElementById('aiPrompt'), logEl = doc.getElementById('aiLog');
+  assert.ok(logEl.querySelector('.ai-empty'), 'an empty chat shows suggestions');
+
+  const say = async text => { prompt.value = text; prompt.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush(); };
+
+  prompt.value = 'make it blink twice as fast';
+  prompt.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  assert.equal(prompt.value, '', 'the input clears as soon as you send');
+  assert.equal(logEl.querySelector('.msg.me .bubble').textContent, 'make it blink twice as fast');
+  assert.ok(logEl.querySelector('.msg.thinking'), 'a thinking bubble shows while waiting');
+  await flush();
+  assert.ok(!logEl.querySelector('.msg.thinking'));
+  let last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.match(last.textContent, /Halved both delays/);
+  assert.ok(last.querySelector('.ai-code pre').textContent.includes('delay(250)'), 'the proposed sketch can be inspected');
+  last.querySelector('[data-act="apply"]').click();
+  assert.match(code.source, /delay\(250\)/);
+  last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.match(last.querySelector('.msg-state').textContent, /Applied/);
+
+  await say('what does delay do?');                                 // a question: answered, nothing to apply
+  assert.deepEqual(sent[1].history.map(h => h.role), ['user', 'assistant']);
+  assert.equal(sent[1].history[0].text, 'make it blink twice as fast');
+  assert.match(sent[1].history[1].text, /\[proposed edit: applied\]/, 'the model is told the earlier edit is really in the sketch');
+  last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.match(last.textContent, /pauses the sketch/);
+  assert.equal(last.querySelector('.msg-actions'), null);
+
+  await say('try A');
+  await say('no, try B');                                          // A was never applied → superseded, B is pending
+  const ais = [...logEl.querySelectorAll('.msg.ai')];
+  assert.match(ais[ais.length - 2].querySelector('.msg-state').textContent, /newer reply/);
+  assert.ok(ais[ais.length - 1].querySelector('[data-act="apply"]'));
+  assert.match(sent[3].history.find(h => /Version A/.test(h.text)).text, /not applied/);
+  assert.equal(logEl.querySelectorAll('.msg.me').length, 4);
+
+  const saved = JSON.parse(w.localStorage.getItem('virtual-lab:ai-chat'));
+  assert.equal(saved.length, 8, 'the conversation survives a reload');
+  doc.getElementById('aiNewChat').click();
+  assert.ok(logEl.querySelector('.ai-empty'));
+  assert.deepEqual(JSON.parse(w.localStorage.getItem('virtual-lab:ai-chat')), []);
+});
+
+test('ui: AI chat without a key shows the key setup in the pane and keeps your message; saving the key sends it', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const sent = [];
+  w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Hi!' }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  assert.equal(doc.getElementById('aiKeyRow').hidden, false);
+  const prompt = doc.getElementById('aiPrompt');
+  prompt.value = 'hello';
+  doc.getElementById('aiGenerate').click();
+  assert.equal(sent.length, 0);
+  assert.equal(prompt.value, 'hello', 'nothing is lost');
+  doc.getElementById('aiKeyInput').value = 'my-key';
+  doc.getElementById('aiKeySave').click();
+  await flush();
+  assert.equal(doc.getElementById('aiKeyRow').hidden, true);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].userKey, 'my-key');
+  assert.match(doc.getElementById('aiLog').textContent, /Hi!/);
 });
