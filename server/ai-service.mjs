@@ -129,7 +129,7 @@ const PROVIDERS = {
   },
 };
 
-export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
+export function createAiService({ fetchImpl = globalThis.fetch, log = () => {} } = {}) {
   async function generateCode({ instruction, circuit, code, userKey, provider = 'gemini' }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = PROVIDERS[provider];
@@ -153,7 +153,13 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     }
     const text = p.text(body);
     const result = parseReply(text);
-    if (!result || (!result.code && !result.actions.length)) throw new RequestError('The AI did not return a usable edit — try rephrasing the instruction.', 502);
+    if (!result || (!result.code && !result.actions.length)) {
+      // Temporary diagnostic: this is the "no usable edit" path a few people have hit. Log a truncated,
+      // single-line copy of the raw reply so we can see *why* parseReply came back empty — remove once
+      // the cause is confirmed and handled properly (don't let this become permanent noise/cost).
+      log(`ai parse-fail provider=${provider} instruction=${JSON.stringify(String(instruction).slice(0, 120))} raw=${JSON.stringify((text || '').slice(0, 1500))}`);
+      throw new RequestError('The AI did not return a usable edit — try rephrasing the instruction.', 502);
+    }
     return { ok: true, ...result };
   }
 
