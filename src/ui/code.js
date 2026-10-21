@@ -133,6 +133,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     for (const line of (res.output || '').replace(/\n+$/, '').split('\n')) {
       const el = document.createElement('span'), m = DIAG_RE.exec(line);
       el.className = 'out-line'; el.textContent = line;
+      if (/^Memory: /.test(line)) { el.classList.add('note', /Only ~/.test(line) ? 'warning' : 'info'); ctx = false; outPane.append(el); continue; }
       if (m && fileByName(m[1])) { el.classList.add('diag', m[4] === 'fatal error' ? 'error' : m[4]); el.dataset.file = m[1]; el.dataset.line = m[2]; el.title = 'Go to line'; ctx = true; }
       else if (ctx && /^\s/.test(line)) el.classList.add('ctx');
       else ctx = false;

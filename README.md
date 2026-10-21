@@ -55,7 +55,11 @@ the **SSD1306 128×64 OLED** (0x3C, the full command set Adafruit_SSD1306 / U8g2
 `Adafruit_MPU6050` and `Adafruit_SSD1306` + `Adafruit_GFX` all run unmodified (the libraries are installed on the compile server).
 A part is only on the bus if it's really wired and powered; otherwise it NACKs like real hardware and the tray says which wire is
 missing. Right-click the MPU-6050 to tilt it in 3D (three.js, loaded only when that panel first opens) or with sliders/presets —
-the running sketch sees gravity move, and the gyro reads how fast you turn it.
+the running sketch sees gravity move, and the gyro reads how fast you turn it. The **Tilt meter** example shows both together.
+
+RAM is real too: Adafruit_SSD1306 mallocs a 1 KB screen buffer at run time, which the compiler's RAM figure doesn't count, so
+`Adafruit_MPU6050` + a 128×64 OLED leaves the next allocations failing on a 2 KB Uno — a blank display, exactly as on hardware. After a
+compile, the Output pane (and the AI) get a **Memory** note with the real budget whenever a sketch uses that buffer.
 
 ### Projects
 

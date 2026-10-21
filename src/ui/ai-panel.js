@@ -31,6 +31,7 @@ export function gatherContext(code, sim) {
     ok: !!b.ok, stale: !!b.stale, unreachable: !!b.unreachable,
     errors: (b.diagnostics || []).filter(d => d.severity === 'error').slice(0, 10).map(d => ({ file: d.file, line: d.line, message: d.message })),
     output: String(b.output || b.error || '').slice(-CAP.output),
+    ...(b.notes?.length ? { notes: b.notes.slice(0, 5) } : {}),
   } : null;
   const st = code.exportState?.() || { files: [], sketch: code.source };
   let budget = CAP.files;

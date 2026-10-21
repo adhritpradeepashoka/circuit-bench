@@ -67,6 +67,7 @@ export function describeContext(context) {
       const o = str(c.output, 4000).trim();
       if (o) out.push('Full compiler output:\n```\n' + o + '\n```');
     }
+    if (!c.unreachable) for (const n of list(c.notes, 5)) out.push(`  Compiler note: ${str(n, 600)}`);
   }
   const s = context.sim;
   if (s && typeof s === 'object') {

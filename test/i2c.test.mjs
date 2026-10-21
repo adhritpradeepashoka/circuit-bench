@@ -144,3 +144,71 @@ test('wiring: two devices on the same address are both flagged, not silently mer
   const ds = i2cParts(compile({ parts, wires: [...mpuWires, ...w2] }), parts);
   assert.ok(ds.every(d => !d.attached && d.problems.some(p => /shares address 0x68/.test(p))));
 });
+
+// ── memory: the official Arduino toolchain (what the compile server uses) ships avr-libc with
+// __malloc_margin = 128; Debian's avr-libc (what scripts/setup-toolchain.sh installs locally) uses 32.
+// Heap-hungry sketches can work locally and fail on a real board — so tests that care run with 128.
+import { PREBUILT } from '../src/sim/prebuilt.generated.js';
+import { EXAMPLES } from '../src/sim/examples.js';
+import { memoryNotes } from '../server/compile-service.mjs';
+
+/** Rewrite the .data initialiser of __malloc_margin (heap_end=0, heap_start=__heap_start, margin=32 → 128). */
+function officialMallocMargin(hex) {
+  const recs = hex.split(/\r?\n/).filter(l => l.startsWith(':')).map(l => ({ l, n: parseInt(l.slice(1, 3), 16), addr: parseInt(l.slice(3, 7), 16), type: l.slice(7, 9), data: l.slice(9, -2).match(/../g)?.map(h => parseInt(h, 16)) || [] }));
+  const flat = []; for (const r of recs) if (r.type === '00') r.data.forEach((b, i) => { flat[r.addr + i] = b; });
+  const hits = [];
+  for (let a = 0x100; a < flat.length - 6; a++) {
+    const [b0, b1, lo, hi, m0, m1] = flat.slice(a, a + 6), start = lo | (hi << 8);
+    if (b0 === 0 && b1 === 0 && start >= 0x100 && start < 0x900 && m0 === 0x20 && m1 === 0) hits.push(a + 4);
+  }
+  assert.equal(hits.length, 1, `exactly one __malloc_margin candidate (got ${hits.length})`);
+  flat[hits[0]] = 0x80;
+  return recs.map(r => {
+    if (r.type !== '00') return r.l;
+    const data = r.data.map((_, i) => flat[r.addr + i]), body = [r.n, r.addr >> 8, r.addr & 0xff, 0, ...data];
+    const sum = (-body.reduce((x, y) => x + y, 0)) & 0xff;
+    return ':' + body.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase() + sum.toString(16).padStart(2, '0').toUpperCase();
+  }).join('\n');
+}
+function bootHex(hex, devices) {
+  const mcu = new Mcu(hex), out = [];
+  mcu.onSerial = b => out.push(b); mcu.i2c.setDevices(new Map(devices));
+  return { mcu, text: () => Buffer.from(out).toString('latin1'), run: s => mcu.run(Math.round(s * CPU_HZ)) };
+}
+
+test('memory, like a real Uno: Adafruit_MPU6050 + a 128×64 SSD1306 runs out of heap with the official toolchain — the display stays blank', () => {
+  const hex = fixtures.sketches['oled-mpu-adafruit'].result.hex;
+  const lenient = new Ssd1306(), strict = new Ssd1306();
+  bootHex(hex, [[0x68, new Mpu6050()], [0x3c, lenient]]).run(2);
+  bootHex(officialMallocMargin(hex), [[0x68, new Mpu6050()], [0x3c, strict]]).run(2);
+  assert.ok(lenient.summary().litPixels > 300, 'with the lenient local libc it happens to draw');
+  assert.equal(strict.on, true, 'begin() still initialised the display…');
+  assert.equal(strict.summary().litPixels, 0, '…but nothing is ever drawn: the later allocations failed');
+});
+
+test('memory: the compiler notes say so up front, with the real numbers — and stay quiet when there is room', () => {
+  const src = fixtures.sketches['oled-mpu-adafruit'].source;
+  const [note] = memoryNotes([{ name: 'sketch.ino', content: src }], { ram: 693, ramMax: 2048 });
+  assert.match(note, /693 bytes of RAM for variables, plus 1024 bytes .* 128×64 screen .* 1717 of 2048 bytes/);
+  assert.match(note, /Only ~331 bytes are left/);
+  assert.match(note, /read the sensor with Wire directly/);
+  const defines = '#define SCREEN_WIDTH 128\n#define SCREEN_HEIGHT 32\nAdafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);';
+  assert.match(memoryNotes([{ name: 'a.ino', content: defines }], { ram: 400, ramMax: 2048 })[0], /plus 512 bytes .* 128×32 .* Plenty left/);
+  assert.deepEqual(memoryNotes([{ name: 'a.ino', content: 'void setup(){} void loop(){}' }], { ram: 9, ramMax: 2048 }), []);
+});
+
+test('example "Tilt meter": fits in memory with the official toolchain — the OLED shows the tilt and the bubble moves', () => {
+  const hex = officialMallocMargin(PREBUILT[EXAMPLES.tilt.code].hex);
+  const mpu = new Mpu6050(), oled = new Ssd1306();
+  const { text, run } = bootHex(hex, [[0x68, mpu], [0x3c, oled]]);
+  run(1.2);
+  assert.match(text().trim().split(/\r?\n/).pop(), /^roll 0\.0 {2}pitch 0\.0$/);
+  const flat = oled.summary().litPixels;
+  assert.ok(flat > 150, `drawn (${flat} px)`);
+  const bubbleAt = () => { let sx = 0, n = 0; for (let y = 40; y < 56; y++) for (let x = 50; x < 79; x++) if (oled.pixel(x, y) && (x - 64) ** 2 + (y - 47) ** 2 < 49) { sx += x; n++; } return sx / n; };
+  const centre = bubbleAt();
+  mpu.setPose({ roll: 30, pitch: 0, yaw: 0 }, 2);
+  run(0.4);
+  assert.match(text().trim().split(/\r?\n/).pop(), /^roll 30\.0 {2}pitch 0\.0$/);
+  assert.ok(bubbleAt() > centre + 5, `bubble moved right (${centre} → ${bubbleAt()})`);
+});

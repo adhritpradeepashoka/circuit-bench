@@ -334,6 +334,9 @@ button { cursor: pointer; }
 .out-ai-fix { margin-left: 10px; padding: 2px 9px; border: 1px solid #3f6f6a; border-radius: 6px; background: #2a3a3f; color: var(--ink-text); font: 600 11px var(--ui); cursor: pointer; }
 .out-ai-fix:hover { background: #33484e; }
 .sim-ai { font-weight: 600; }
+.out-line.note { display: block; margin-top: 8px; padding: 6px 8px; border-radius: 6px; white-space: pre-wrap; font-family: var(--ui); }
+.out-line.note.warning { background: rgba(242, 201, 76, .12); color: #f2d27a; }
+.out-line.note.info { color: #9fb3ab; }
 .out-head.ok { color: #6fcf97; } .out-head.bad { color: #ff8a80; } .out-head.busy { color: #f2c94c; }
 .out-line { display: block; }
 .out-line.diag { cursor: pointer; border-radius: 3px; }

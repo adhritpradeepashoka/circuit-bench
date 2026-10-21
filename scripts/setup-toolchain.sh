@@ -13,6 +13,10 @@
 #   • avr-gcc / avr-libc     – apt (Debian/Ubuntu)                    (GCC 7.3, same generation as the IDE's)
 #   • Arduino's ctags fork   – github.com/arduino/ctags, built here   (used for automatic function prototypes)
 # Then it prints the environment variables to export before `npm run server`.
+#
+# One known difference from the official toolchain: Debian's avr-libc sets __malloc_margin = 32, Arduino's = 128.
+# Heap-hungry sketches (e.g. Adafruit_SSD1306 128×64 + Adafruit_MPU6050) can run here and fail on a real board / on the
+# Docker image. test/i2c.test.mjs patches the margin to 128 (officialMallocMargin) where it matters.
 set -euo pipefail
 
 CLI_VERSION="${CLI_VERSION:-1.5.1}"

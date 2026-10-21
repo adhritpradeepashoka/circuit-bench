@@ -105,7 +105,7 @@ export function createCompiler(options = {}) {
     try { return JSON.parse(r.stdout).VersionString || null; } catch { return null; }
   }
 
-  /** @returns {Promise<{ok, hex?, output, diagnostics, size?, cached, ms}>} */
+  /** @returns {Promise<{ok, hex?, output, diagnostics, size?, notes?, cached, ms}>} */
   async function compile(body) {
     const { files, main, fqbn } = normaliseRequest(body);
     const key = createHash('sha256').update(JSON.stringify([fqbn, main, files.map(f => [f.name, f.content]).sort()])).digest('hex');
@@ -138,10 +138,9 @@ export function createCompiler(options = {}) {
       if (json?.success) {
         const hex = await readFile(join(outDir, 'sketch.ino.hex'), 'utf8');
         const sec = Object.fromEntries((json.builder_result?.executable_sections_size || []).map(s => [s.name, s]));
-        result = {
-          ok: true, hex, output: rename(text), diagnostics,
-          size: { flash: sec.text?.size ?? null, flashMax: sec.text?.max_size ?? null, ram: sec.data?.size ?? null, ramMax: sec.data?.max_size ?? null },
-        };
+        const size = { flash: sec.text?.size ?? null, flashMax: sec.text?.max_size ?? null, ram: sec.data?.size ?? null, ramMax: sec.data?.max_size ?? null };
+        const notes = memoryNotes(files, size);
+        result = { ok: true, hex, output: rename(text) + notes.map(n => `\n${n}`).join(''), diagnostics, size, ...(notes.length ? { notes } : {}) };
       } else {
         const failText = rename(text) || clean(json?.error || r.stderr || 'Compilation failed.');
         result = { ok: false, output: failText, diagnostics, error: json?.error || 'Compilation failed.' };
@@ -155,4 +154,30 @@ export function createCompiler(options = {}) {
     }
   }
   return { compile, version, config: cfg };
+}
+
+// The compiler's RAM figure only counts global variables. Some libraries grab big buffers at run time —
+// Adafruit_SSD1306 mallocs the whole screen in begin() — and on a 2 KB Uno that is the classic reason a
+// sketch compiles fine and then shows a blank display or fails to find a sensor: the next allocation
+// (often another library's) quietly fails. Say so up front, with the real numbers.
+const intConstants = src => {
+  const map = new Map();
+  for (const m of src.matchAll(/#\s*define\s+(\w+)\s+\(?\s*(\d+)\s*\)?/g)) map.set(m[1], +m[2]);
+  for (const m of src.matchAll(/\b(?:static\s+)?(?:const|constexpr)\s+(?:unsigned\s+)?(?:int|uint8_t|uint16_t|byte|long|short)\s+(\w+)\s*=\s*(\d+)\s*;/g)) map.set(m[1], +m[2]);
+  return map;
+};
+export function memoryNotes(files, size) {
+  if (!size?.ram || !size?.ramMax) return [];
+  const src = files.map(f => f.content).join('\n'), k = intConstants(src);
+  const val = t => (/^\d+$/.test(t) ? +t : k.get(t));
+  let buffer = 0; const screens = [];
+  for (const m of src.matchAll(/\bAdafruit_SSD1306\s+\w+\s*\(\s*(\w+)\s*,\s*(\w+)/g)) {
+    const w = val(m[1]), h = val(m[2]);
+    if (w && h) { buffer += w * Math.ceil(h / 8); screens.push(`${w}×${h}`); }
+  }
+  if (!buffer) return [];
+  const total = size.ram + buffer, left = size.ramMax - total;
+  const head = `Memory: ${size.ram} bytes of RAM for variables, plus ${buffer} bytes Adafruit_SSD1306 allocates for the ${screens.join(' + ')} screen when begin() runs — ${total} of ${size.ramMax} bytes.`;
+  if (left >= 512) return [`${head} Plenty left.`];
+  return [`${head} Only ~${Math.max(0, left)} bytes are left for the stack and anything else that allocates memory (Adafruit_MPU6050 and other sensor libraries do), so those allocations can fail on a real Uno: begin() returns false, a sensor "isn't found", or the display stays blank. Lighter options: read the sensor with Wire directly, use a 128×32 display (512 bytes), or show text only.`];
 }

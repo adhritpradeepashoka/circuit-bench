@@ -326,3 +326,9 @@ test('describeCatalog: I²C parts tell the model their address, wiring and which
   assert.match(t, /- mpu6050: pins .*SDA.*SCL.*— I²C at 0x68 .*Adafruit_MPU6050/);
   assert.match(t, /- ssd1306: pins .*— I²C at 0x3C.*Adafruit_SSD1306/);
 });
+
+test('describeContext: compiler notes (e.g. the OLED memory warning) reach the AI even when the compile succeeded', () => {
+  const t = describeContext({ compile: { ok: true, notes: ['Memory: 693 bytes … Only ~331 bytes are left'] } });
+  assert.match(t, /Last compile: SUCCEEDED/);
+  assert.match(t, /Compiler note: Memory: 693 bytes … Only ~331 bytes are left/);
+});

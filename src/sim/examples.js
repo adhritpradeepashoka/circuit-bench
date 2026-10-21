@@ -131,4 +131,61 @@ void loop() {
   delay(1200);
 }
 ` },
+  tilt: { name: 'Tilt meter (MPU-6050 + OLED)', code: `// Tilt meter: an MPU-6050 and a 128×64 OLED share the I²C bus.
+// Wire both: VCC/VIN → 5V, GND → GND, SDA/DATA → A4, SCL/CLK → A5. Then right-click the MPU-6050 to tilt it.
+// The MPU-6050 is read with Wire directly: Adafruit_MPU6050 plus the OLED's 1 KB screen buffer
+// would not fit in the Uno's 2 KB of RAM (the display would stay blank on a real board too).
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+const int MPU = 0x68;
+
+int16_t readWord() {
+  int16_t high = Wire.read();
+  return (high << 8) | Wire.read();
+}
+
+void setup() {
+  Serial.begin(9600);
+  Wire.begin();
+  Wire.beginTransmission(MPU);
+  Wire.write(0x6B);          // PWR_MGMT_1
+  Wire.write(0);             // wake up
+  Wire.endTransmission();
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println(F("OLED not found"));
+    while (true) {}
+  }
+  display.setTextColor(SSD1306_WHITE);
+}
+
+void loop() {
+  Wire.beginTransmission(MPU);
+  Wire.write(0x3B);          // ACCEL_XOUT_H: 6 bytes of X, Y, Z follow
+  Wire.endTransmission(false);
+  Wire.requestFrom(MPU, 6);
+  int16_t ax = readWord(), ay = readWord(), az = readWord();
+
+  float roll = atan2(ay, az) * 180.0 / PI;
+  float pitch = atan2(-ax, sqrt((float)ay * ay + (float)az * az)) * 180.0 / PI;
+
+  display.clearDisplay();
+  display.setTextSize(1);
+  display.setCursor(0, 0);  display.print(F("Roll"));
+  display.setCursor(70, 0); display.print(F("Pitch"));
+  display.setTextSize(2);
+  display.setCursor(0, 12);  display.print(roll, 0);
+  display.setCursor(70, 12); display.print(pitch, 0);
+  // A bubble level: the dot drifts the way the board leans.
+  display.drawCircle(64, 47, 15, SSD1306_WHITE);
+  display.fillCircle(64 + constrain(roll, -45, 45) / 3, 47 + constrain(pitch, -45, 45) / 3, 3, SSD1306_WHITE);
+  display.display();
+
+  Serial.print(F("roll "));  Serial.print(roll, 1);
+  Serial.print(F("  pitch ")); Serial.println(pitch, 1);
+  delay(100);
+}
+` },
 };
