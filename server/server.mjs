@@ -12,8 +12,7 @@ import { createAiService } from './ai-service.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
-export function createServer({ compiler = createCompiler(), ai, staticDir = null, log = () => {}, corsOrigin = null } = {}) {
-  const aiService = ai || createAiService({ log });
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null } = {}) {
   const buckets = new Map();   // ip → recent request timestamps (small in-memory rate limit)
   const limited = ip => {
     const now = Date.now(), list = (buckets.get(ip) || []).filter(t => now - t < 60_000);
@@ -57,7 +56,7 @@ export function createServer({ compiler = createCompiler(), ai, staticDir = null
         }
         if (tooBig) throw new RequestError('Request too large.', 413);
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
-        const result = await aiService.generateCode(body);
+        const result = await ai.generateCode(body);
         log(`ai generate-code ok`);
         return send(res, 200, result);
       }

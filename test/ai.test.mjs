@@ -56,9 +56,18 @@ test('generateCode: a circuit-only reply (actions, code:null) round-trips withou
   assert.equal(res.code, null);
 });
 
-test('generateCode: a reply with neither actions nor code is a clear error, not a crash', async () => {
-  const ai = createAiService({ fetchImpl: fakeGeminiJson({ actions: [], code: null, explanation: 'I am not sure.' }) });
+test('generateCode: a genuinely empty reply (no actions, no code, no explanation) is a clear error, not a crash', async () => {
+  const ai = createAiService({ fetchImpl: fakeGeminiJson({ actions: [], code: null, explanation: '' }) });
   await assert.rejects(() => ai.generateCode({ instruction: 'blink', userKey: 'k' }), e => e instanceof RequestError && e.status === 502);
+});
+
+test('generateCode: regression — actions:[] + code:null with a real explanation is a valid "nothing to change" answer, not an error (a user hit this: asked for temperature-gated behavior the sketch already had, and the model correctly said so instead of inventing a redundant edit)', async () => {
+  const ai = createAiService({ fetchImpl: fakeGeminiJson({ actions: [], explanation: 'No circuit changes needed; firmware already turns the LED on only above 50°C.' }) });
+  const res = await ai.generateCode({ instruction: 'the led should only turn on above 50 degrees', userKey: 'k' });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.actions, []);
+  assert.equal(res.code, null);
+  assert.match(res.explanation, /already turns the LED on/);
 });
 
 test('generateCode: falls back to a bare ```cpp block if the model ignores the JSON format', async () => {
