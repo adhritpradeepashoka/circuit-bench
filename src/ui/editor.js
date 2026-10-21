@@ -3,6 +3,7 @@ import { allPinsWorld, partBounds, pinWorld, partSize, placeFlex } from '../core
 import { findSnap, applySnap, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
 import { compile, pkey, splitKey } from '../core/netlist.js';
 import { wireGeometry, paramFromHandle } from '../core/wirepath.js';
+import { wireArt, resolveWireKind, DEFAULT_WIRE_KIND, LEGACY_WIRE_KIND, WIRE_KINDS, WIRE_KIND_ICONS, WIRE_KIND_ORDER } from '../core/wire-kinds.js';
 import { snapshot, restore, toProjectFile, fromProjectFile } from '../core/project.js';
 import { CONTROLS, partLabel } from '../core/controls.js';
 
@@ -409,6 +410,18 @@ export class Editor {
     $('wireColor').addEventListener('input', e => this.editWire(w => { w.color = e.target.value; }, false));
     $('wireColor').addEventListener('change', () => this.commit());
     $('wireWidth').addEventListener('change', e => this.editWire(w => { w.width = Number(e.target.value); }, true));
+    // Wire type menu (Normal / Hookup / Alligator / Automatic) — the electrical connection is identical; this is how it looks
+    const kindMenu = $('wireKindMenu'), kindBtn = $('wireKindBtn');
+    kindMenu.innerHTML = '<div class="wk-head">Wire type</div>' + WIRE_KIND_ORDER.map(k => `<button type="button" role="menuitemradio" data-kind="${k}" title="${WIRE_KINDS[k].blurb}"><span class="wk-ico">${WIRE_KIND_ICONS[k]}</span><span>${WIRE_KINDS[k].name}</span></button>`).join('');
+    const setMenu = open => { kindMenu.hidden = !open; kindBtn.setAttribute('aria-expanded', String(open)); };
+    kindBtn.addEventListener('click', e => { e.stopPropagation(); setMenu(kindMenu.hidden); });
+    kindMenu.addEventListener('click', e => {
+      const b = e.target.closest('[data-kind]'); if (!b) return;
+      this.editWire(w => { w.kind = b.dataset.kind; }, true);
+      setMenu(false); this.syncWireEditor();
+      const w = this.selectedWire(); if (w) this.status(`Wire type: ${WIRE_KINDS[b.dataset.kind].name}${b.dataset.kind === 'auto' ? ` (drawn as ${WIRE_KINDS[this.wireKindOf(w)].name.toLowerCase()} here)` : ''}`);
+    });
+    document.addEventListener('pointerdown', e => { if (!kindMenu.hidden && !e.target.closest('.we-kind')) setMenu(false); }, true);
     $('wireDelete').addEventListener('click', () => this.deleteSelected());
   }
 
@@ -591,7 +604,7 @@ export class Editor {
     if (this.state.wires.some(w => (same(w.a, a) && same(w.b, b)) || (same(w.a, b) && same(w.b, a)))) {
       this.renderOverlay(); this.status('Those two points are already wired together'); return;
     }
-    this.state.wires.push({ id: uid('w'), a, b, style: 'straight', color: this.autoColor(a, b), width: 3, bend: 0.5, sag: null });
+    this.state.wires.push({ id: uid('w'), a, b, style: 'straight', color: this.autoColor(a, b), width: 3, bend: 0.5, sag: null, kind: DEFAULT_WIRE_KIND });
     this.markDirty(); this.commit();
     const c = this.getCircuit(), net = c.nets[c.netOf(a.part, a.pin)];
     this.status(`Wire added: ${this.pinLabel(a)} → ${this.pinLabel(b)} (net ${net.name})`);
@@ -709,13 +722,10 @@ export class Editor {
       const a = this.endPos(wire, 'a'), b = this.endPos(wire, 'b');
       if (!a || !b) continue;
       const g = wireGeometry(a, b, wire), sw = wire.width || 3, col = wire.color || '#454d53', edge = shade(col, 0.55);
-      const on = selWire === wire;
-      out.push(`<g class="wire" data-wire="${wire.id}">`
+      const on = selWire === wire, kind = this.wireKindOf(wire);
+      out.push(`<g class="wire wire-${kind}" data-wire="${wire.id}">`
         + (on ? `<path class="wire-edge" d="${g.d}" stroke="#1d63ed" stroke-opacity=".32" stroke-width="${sw + 7}"/>` : '')
-        + `<path class="wire-edge" d="${g.d}" stroke="${edge}" stroke-width="${sw + 1.8}"/>`
-        + `<path class="wire-core" d="${g.d}" stroke="${col}" stroke-width="${sw}"/>`
-        + `<circle cx="${a.x}" cy="${a.y}" r="${sw / 2 + 1.3}" fill="${col}" stroke="${edge}" stroke-width="1"/>`
-        + `<circle cx="${b.x}" cy="${b.y}" r="${sw / 2 + 1.3}" fill="${col}" stroke="${edge}" stroke-width="1"/>`
+        + wireArt(kind, a, b, g, col, edge, sw)
         + `<path class="wire-hit" data-wire="${wire.id}" d="${g.d}" stroke-width="${Math.max(sw + 6, 12 / z)}"/></g>`);
     }
 
@@ -762,6 +772,11 @@ export class Editor {
     if (this.handleDrag && this.handleDrag.kind === which && this.handleDrag.pos && this.selectedWire() === wire) return this.handleDrag.pos;
     return this.anchor(wire[which]);
   }
+  /** How a wire is drawn right now (resolves Automatic from what its ends are attached to). */
+  wireKindOf(wire) {
+    const c = this.getCircuit();
+    return resolveWireKind(wire, id => this.partById(id)?.type, ep => c.attachments.has(pkey(ep.part, ep.pin)));
+  }
   syncWireEditor() {
     const w = this.selectedWire(), box = $('wireEditor');
     box.hidden = !w;
@@ -769,6 +784,11 @@ export class Editor {
     $('wireStyle').value = w.style || 'straight';
     $('wireColor').value = /^#[0-9a-f]{6}$/i.test(w.color) ? w.color : '#454d53';
     $('wireWidth').value = String(w.width || 3);
+    const chosen = w.kind || LEGACY_WIRE_KIND, shown = this.wireKindOf(w);
+    $('wireKindIco').innerHTML = WIRE_KIND_ICONS[chosen];
+    $('wireKindName').textContent = WIRE_KINDS[chosen].name;
+    $('wireKindBtn').title = chosen === 'auto' ? `Automatic: drawn as ${WIRE_KINDS[shown].name.toLowerCase()} here` : WIRE_KINDS[chosen].blurb;
+    for (const b of $('wireKindMenu').querySelectorAll('[data-kind]')) { const on = b.dataset.kind === chosen; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     this.positionWireEditor();
   }
   positionWireEditor() {

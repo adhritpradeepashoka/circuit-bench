@@ -3,6 +3,7 @@ import { compile } from './netlist.js';
 import { WOKWI_ELEMENTS_VERSION } from './pins.generated.js';
 import { DEFAULT_OHMS, MIN_OHMS, MAX_OHMS } from './resistance.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
+import { WIRE_KINDS, LEGACY_WIRE_KIND } from './wire-kinds.js';
 
 /** Per-part editable properties (ohms, LED colour, switch position) — the keys come from PART_DEFS[type].props. */
 const num = (lo, hi) => (v, d) => (Number.isFinite(+v) && v !== null && v !== '' ? Math.min(hi, Math.max(lo, +v)) : d);
@@ -41,7 +42,7 @@ export function toProjectFile(state) {
     parts: state.parts.map(p => ({ id: p.id, type: p.type, x: +p.x.toFixed(2), y: +p.y.toFixed(2), rotate: p.rot || 0, ...propsOf(p) })),
     wires: state.wires.map(w => ({
       id: w.id, from: { part: w.a.part, pin: w.a.pin }, to: { part: w.b.part, pin: w.b.pin },
-      style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag,
+      style: w.style, color: w.color, width: w.width, bend: w.bend, sag: w.sag, kind: w.kind || LEGACY_WIRE_KIND,
     })),
     // Derived, for humans / other tools. Ignored on import.
     seated: [...c.attachments].map(([lead, hole]) => ({ lead, hole })),
@@ -61,6 +62,7 @@ export function fromProjectFile(data) {
   const wires = data.wires.filter(w => ids.has(w.from?.part) && ids.has(w.to?.part)).map(w => ({
     id: String(w.id), a: { part: w.from.part, pin: String(w.from.pin) }, b: { part: w.to.part, pin: String(w.to.pin) },
     style: w.style || 'straight', color: w.color || '#454d53', width: +w.width || 3, bend: w.bend ?? 0.5, sag: w.sag ?? null,
+    kind: WIRE_KINDS[w.kind] ? w.kind : LEGACY_WIRE_KIND,
   }));
   return { parts, wires };
 }

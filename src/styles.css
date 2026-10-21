@@ -102,8 +102,8 @@ button { cursor: pointer; }
 .wire-editor select, .wire-editor input[type=color] { height: 26px; border: 1px solid #ccd5d0; border-radius: 6px; background: #fff; }
 .wire-editor input[type=color] { width: 30px; padding: 2px; }
 .wire-editor .we-title { font-weight: 700; }
-.wire-editor button { height: 26px; padding: 0 9px; border: 1px solid #e1c7c4; border-radius: 6px; background: #fff; color: var(--red); }
-.wire-editor button:hover { background: #fdf0ef; }
+#wireDelete { height: 26px; padding: 0 9px; border: 1px solid #e1c7c4; border-radius: 6px; background: #fff; color: var(--red); }
+#wireDelete:hover { background: #fdf0ef; }
 
 .hint-card { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); max-width: min(560px, calc(100% - 32px)); display: grid; gap: 3px; padding: 11px 15px; background: rgba(255, 255, 255, .94); border: 1px solid #c9d4ce; border-radius: 10px; box-shadow: 0 6px 20px rgba(20, 35, 28, .12); font-size: 12px; line-height: 1.5; color: #48564f; pointer-events: none; }
 .hint-card b { color: var(--text); }
@@ -488,3 +488,26 @@ button { cursor: pointer; }
 .account-who { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; }
 .account-who span { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
 .account-note { margin: 2px 10px 4px; font-size: 11.5px; line-height: 1.4; color: var(--muted); }
+
+/* ── wire types ──────────────────────────────────────── */
+.we-kind { position: relative; }
+.we-kind-btn { height: 26px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid #ccd5d0; border-radius: 6px; background: #fff; color: var(--text); font-size: 11.5px; font-weight: 600; }
+.we-kind-btn:hover { background: #f3f6f4; }
+.wk-ico { display: inline-flex; color: #2f6fe4; }
+.wk-menu { position: absolute; left: 0; top: 31px; z-index: 5; width: 168px; padding: 6px; background: #fff; border: 1px solid #c8d2cd; border-radius: 10px; box-shadow: 0 12px 28px rgba(20, 35, 28, .22); }
+.wk-menu[hidden] { display: none; }
+.wk-head { padding: 3px 8px 6px; font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #6d7a75; }
+.wk-menu button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; border-radius: 7px; background: none; color: var(--text); font-size: 12.5px; text-align: left; }
+.wk-menu button:hover { background: #f0f3f1; }
+.wk-menu button.on { background: var(--blue); color: #fff; }
+.wk-menu button.on .wk-ico { color: #fff; }
+.wk-menu button .wk-ico { width: 26px; justify-content: center; color: #3d4a45; }
+.wire-clip { pointer-events: none; }
+/* the tour's last word */
+.tour-card.outro { text-align: center; }
+.tour-card.outro h3 { margin-top: 10px; font-size: 26px; letter-spacing: -.01em; }
+.tour-card.outro .tour-actions { justify-content: center; }
+.tour-card.outro .tour-actions > span { display: none; }
+.tour-outro { margin: 0 0 14px !important; font-size: 20px; font-weight: 700; color: var(--blue); }
+.tour-outro-sub { color: #6d7a75; font-size: 12.5px; }
+.tour-actions button[hidden], .tour-skip[hidden] { display: none; }

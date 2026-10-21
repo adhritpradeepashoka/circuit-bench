@@ -61,6 +61,8 @@
         </div>
         <div class="wire-editor" id="wireEditor" hidden>
           <span class="we-title">Wire</span>
+          <div class="we-kind"><button type="button" id="wireKindBtn" class="we-kind-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="wireKindMenu"><span class="wk-ico" id="wireKindIco"></span><span id="wireKindName">Automatic</span><svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true"><path d="m2 3.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>
+            <div class="wk-menu" id="wireKindMenu" role="menu" aria-label="Wire type" hidden></div></div>
           <label>Style <select id="wireStyle"><option value="straight">Straight</option><option value="orthogonal">90°</option><option value="curve">Curve</option></select></label>
           <label>Color <input id="wireColor" type="color" value="#454d53"></label>
           <label>Width <select id="wireWidth"><option value="2">2</option><option value="3">3</option><option value="4">4</option><option value="5">5</option></select></label>

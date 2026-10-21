@@ -1261,7 +1261,12 @@ test('ui: first-visit tour — "Welcome to CircuitBench!", one popup per button/
   for (const t of ['Your workbench', 'Parts', 'Search parts', 'Rotate & delete', 'Undo & redo', 'Zoom', 'Code', 'Ask AI', 'Your project']) assert.ok(seen.includes(t), `covers ${t}`);
   assert.ok(seen.some(t => /^Select/.test(t)) && seen.some(t => /^Run/.test(t)) && seen.some(t => /^Wire-only/.test(t)));
   assert.match(doc.getElementById('tourBody').textContent, /1 LED.*1 resistor \(220 Ω\).*2 wires/s);
-  doc.getElementById('tourSkip').click();
+  doc.getElementById('tourSkip').click();                  // "I'll explore on my own"
+  assert.equal(doc.getElementById('tourTitle').textContent, 'The world is yours to build.');
+  assert.match(doc.getElementById('tourBody').textContent, /Start creating\./);
+  assert.equal(doc.getElementById('tourSkip').hidden, true, 'the last word has nothing to skip');
+  assert.equal(doc.getElementById('tourNext').textContent, 'Start creating');
+  doc.getElementById('tourNext').click();
   assert.equal(tour.active, false);
   tour.maybeAutoStart();
   assert.equal(tour.active, false, 'not shown again once seen');
@@ -1316,8 +1321,10 @@ test('ui: "Build it with me" — points at each part, hole and pin in order, and
   assert.deepEqual([...seenOn].sort(), [false, true], 'and it really blinks');
   sim.stop();
   doc.getElementById('tourNext').click();
+  doc.getElementById('tourNext').click();                  // Finish
+  assert.equal(doc.getElementById('tourTitle').textContent, 'The world is yours to build.', 'the guide ends on the same last word');
   doc.getElementById('tourNext').click();
-  assert.equal(tour.active, false, 'Finish closes the guide');
+  assert.equal(tour.active, false, 'Start creating closes it');
 });
 
 test('ui: Sign in with Google — hidden without a client ID; with one, Google\'s button renders, signing in shows your name and picture (kept only in this browser), sign out clears it', async () => {
@@ -1356,4 +1363,52 @@ test('ui: Sign in with Google — hidden without a client ID; with one, Google\'
 
   init.callback({ credential: 'garbage' });
   assert.equal(acc.user, null, 'a bad token signs nobody in');
+});
+
+test('ui: wire types — a Normal / Hookup / Alligator / Automatic menu on the selected wire; Automatic draws a hookup between holes, a jumper to a header, a clip on a bare leg, and stops clipping once that leg is plugged in', () => {
+  const { w, editor, drag } = boot();
+  const doc = w.document, bb = editor.partById('bb-1'), uno = editor.partById('uno-1');
+  const canvas = doc.getElementById('canvas');
+  drag(pinWorld(bb, 'A3'), pinWorld(bb, 'A9'), canvas);                     // hole → hole
+  drag(pinWorld(uno, '13'), pinWorld(bb, 'J3'), canvas);                    // header → hole
+  const [hh, hdr] = editor.state.wires;
+  assert.equal(hh.kind, 'auto', 'new wires are Automatic');
+  assert.equal(editor.wireKindOf(hh), 'hookup');
+  assert.equal(editor.wireKindOf(hdr), 'normal');
+  assert.ok(doc.querySelector(`.wire-hookup[data-wire="${hh.id}"]`), 'drawn as hookup wire');
+
+  // a resistor lying loose on the bench: a wire to its leg is a clip lead
+  editor.addPart('resistor', { x: 120, y: 420 });
+  const res = editor.state.parts.find(p => p.type === 'resistor');
+  drag(pinWorld(uno, '12'), pinWorld(res, '1'), canvas);
+  const clip = editor.state.wires[2];
+  assert.equal(editor.wireKindOf(clip), 'alligator');
+  assert.ok(doc.querySelector(`[data-wire="${clip.id}"] .wire-clip`), 'with crocodile clips drawn on');
+  // plug that leg into the breadboard: now it's just a breadboard wire
+  const h = pinWorld(bb, 'C20'), p = pinWorld(res, '1');
+  editor.state.parts.find(x => x.id === res.id).x += h.x - p.x; editor.state.parts.find(x => x.id === res.id).y += h.y - p.y;
+  editor.syncParts(); editor.markDirty();
+  assert.equal(editor.wireKindOf(clip), 'normal', 'a seated leg is treated like the hole it sits in');
+
+  // choose a type from the menu
+  editor.select({ kind: 'wire', id: hdr.id });
+  doc.getElementById('wireKindBtn').click();
+  const menu = doc.getElementById('wireKindMenu');
+  assert.equal(menu.hidden, false);
+  assert.deepEqual([...menu.querySelectorAll('[data-kind] span:last-child')].map(e => e.textContent), ['Normal', 'Hookup', 'Alligator', 'Automatic']);
+  assert.ok(menu.querySelector('[data-kind="auto"]').classList.contains('on'));
+  menu.querySelector('[data-kind="alligator"]').click();
+  assert.equal(hdr.kind, 'alligator');
+  assert.equal(menu.hidden, true);
+  assert.equal(doc.getElementById('wireKindName').textContent, 'Alligator');
+  assert.ok(doc.querySelector(`.wire-alligator[data-wire="${hdr.id}"]`));
+  editor.undo();
+  assert.equal(editor.state.wires.find(x => x.id === hdr.id).kind, 'auto', 'undoable');
+
+  // saved with the project; files from before wire types keep their old look
+  const file = editor.exportProject();
+  assert.equal(file.wires.find(x => x.id === hh.id).kind, 'auto');
+  delete file.wires[0].kind;
+  editor.importProject(file);
+  assert.equal(editor.state.wires[0].kind, 'normal');
 });

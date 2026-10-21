@@ -4,17 +4,27 @@
 //   curve       – cubic Bézier that sags like a real jumper; `sag` (px) is editable
 const f = n => +n.toFixed(2);
 
+/** Unit vector from p towards q (or `fallback` if they coincide). */
+const dir = (p, q, fallback) => { const dx = q.x - p.x, dy = q.y - p.y, L = Math.hypot(dx, dy); return L > 1e-6 ? { x: dx / L, y: dy / L } : fallback; };
+
+/**
+ * Path + handle info for a wire. `ends.a` / `ends.b` are unit vectors pointing from each end *into* the wire —
+ * what a clip, plug or stripped end at that end lines up with.
+ */
 export function wireGeometry(a, b, wire) {
   const style = wire.style || 'straight';
+  const chord = dir(a, b, { x: 1, y: 0 }), back = { x: -chord.x, y: -chord.y };
   if (style === 'orthogonal') {
     const bend = wire.bend ?? 0.5;
     const dx = b.x - a.x, dy = b.y - a.y;
     if (Math.abs(dx) >= Math.abs(dy)) {
       const mx = a.x + dx * bend;
-      return { d: `M${f(a.x)} ${f(a.y)}L${f(mx)} ${f(a.y)}L${f(mx)} ${f(b.y)}L${f(b.x)} ${f(b.y)}`, mid: { x: mx, y: (a.y + b.y) / 2 }, axis: 'x' };
+      return { d: `M${f(a.x)} ${f(a.y)}L${f(mx)} ${f(a.y)}L${f(mx)} ${f(b.y)}L${f(b.x)} ${f(b.y)}`, mid: { x: mx, y: (a.y + b.y) / 2 }, axis: 'x',
+        ends: { a: dir(a, { x: mx, y: a.y }, chord), b: dir(b, { x: mx, y: b.y }, back) } };
     }
     const my = a.y + dy * bend;
-    return { d: `M${f(a.x)} ${f(a.y)}L${f(a.x)} ${f(my)}L${f(b.x)} ${f(my)}L${f(b.x)} ${f(b.y)}`, mid: { x: (a.x + b.x) / 2, y: my }, axis: 'y' };
+    return { d: `M${f(a.x)} ${f(a.y)}L${f(a.x)} ${f(my)}L${f(b.x)} ${f(my)}L${f(b.x)} ${f(b.y)}`, mid: { x: (a.x + b.x) / 2, y: my }, axis: 'y',
+      ends: { a: dir(a, { x: a.x, y: my }, chord), b: dir(b, { x: b.x, y: my }, back) } };
   }
   if (style === 'curve') {
     const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1;
@@ -26,9 +36,10 @@ export function wireGeometry(a, b, wire) {
     return {
       d: `M${f(a.x)} ${f(a.y)}C${f(c1.x)} ${f(c1.y)} ${f(c2.x)} ${f(c2.y)} ${f(b.x)} ${f(b.y)}`,
       mid: { x: m.x + n.x * s * 0.75, y: m.y + n.y * s * 0.75 }, axis: 'n', normal: n, chordMid: m,
+      ends: { a: dir(a, c1, chord), b: dir(b, c2, back) },
     };
   }
-  return { d: `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, axis: null };
+  return { d: `M${f(a.x)} ${f(a.y)}L${f(b.x)} ${f(b.y)}`, mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, axis: null, ends: { a: chord, b: back } };
 }
 
 /** Turn a dragged handle position into the wire parameter it controls. */

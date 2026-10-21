@@ -102,7 +102,9 @@ export function initTour({ editor, sim, code, projects }) {
     $('tourNext').hidden = waiting && !s.nextLabel;
     $('tourNext').textContent = s.nextLabel || (i === steps.length - 1 ? 'Done' : 'Next');
     $('tourSkip').textContent = s.skipLabel || (ctx.guided ? 'Stop guide' : 'Skip tour');
+    $('tourSkip').hidden = !!s.noSkip;
     card.classList.toggle('wide', !!s.center);
+    card.classList.toggle('outro', !!s.outro);
     s.extra?.(card);
     layout();
     ($('tourNext').hidden ? card : $('tourNext')).focus?.({ preventScroll: true });
@@ -128,7 +130,13 @@ export function initTour({ editor, sim, code, projects }) {
 
   $('tourNext').addEventListener('click', () => { const s = steps[i]; if (s.onNext) s.onNext(); else go(i + 1); });
   $('tourBack').addEventListener('click', () => go(i - 1));
-  $('tourSkip').addEventListener('click', () => end(false));
+  $('tourSkip').addEventListener('click', () => { const s = steps[i]; if (s?.onSkip) s.onSkip(); else end(false); });
+
+  /** The last word, however the tour ends. */
+  const outro = () => ({ center: true, label: 'Ready', noBack: true, title: 'The world is yours to build.',
+    body: `<p class="tour-outro">Start creating.</p><p class="tour-outro-sub">Press <b>?</b> in the top bar whenever you want the tour or a guided build again.</p>`,
+    nextLabel: 'Start creating', noSkip: true, outro: true });
+  const showOutro = () => { const g = ctx.guided; start([outro()], { guided: g }); };
   document.addEventListener('keydown', e => {
     if (root.hidden || e.target.matches?.('input, textarea, select, [contenteditable]')) return;
     if (e.key === 'Escape') { e.preventDefault(); end(false); }
@@ -151,7 +159,7 @@ export function initTour({ editor, sim, code, projects }) {
     { spots: ['#selectTool'], title: `Select ${kbd('V')}`,
       body: `<p>The normal mode, and the one you'll use most:</p><ul><li><b>Drag a part</b> to move it. Its legs click into breadboard holes.</li><li><b>Drag from any pin or hole</b> to another to draw a wire. No need to switch tools.</li><li><b>Right-click a part</b> to change it: resistor value, LED colour, sensor readings.</li></ul>` },
     { spots: ['#wireTool'], title: `Wire-only mode ${kbd('W')}`,
-      body: `<p>A mode where clicks only draw wires (click a pin, then another), handy when lots of parts are close together. Click a wire to change its colour or shape, or drag its ends.</p>` },
+      body: `<p>A mode where clicks only draw wires (click a pin, then another), handy when lots of parts are close together.</p><p><b>Click any wire</b> to change it: its <b>type</b> (a jumper, flat hookup wire with stripped ends, or an alligator clip lead for grabbing a bare leg; Automatic picks for you), its colour or its shape. Drag its ends to move them.</p>` },
     { spots: ['#rotateTool', '#deleteTool'], title: 'Rotate & delete',
       body: `<p><b>Rotate</b> ${kbd('R')} turns the selected part 90°. <b>Delete</b> ${kbd('Del')} removes the selected part or wire.</p>` },
     { spots: ['#undoTool', '#redoTool'], title: 'Undo & redo',
@@ -176,7 +184,7 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>Click <b>?</b> to see this tour again, or to be guided through building a circuit.</p>` },
     { center: true, title: 'Your first project: blink an LED',
       body: `<p>The "hello world" of electronics. You'll need:</p><ul class="tour-needs"><li><b>Arduino Uno</b> (already on the bench)</li><li><b>Breadboard</b> (already on the bench)</li><li><b>1 LED</b>, the light</li><li><b>1 resistor (220 Ω)</b>, which stops too much current from burning out the LED</li><li><b>2 wires</b>, one from pin 13 and one to GND (ground)</li></ul><p>I'll point to each part and hole as you go. It takes about 3 minutes, in a new project so nothing you've made is touched.</p>`,
-      nextLabel: 'Build it with me', skipLabel: 'I\'ll explore on my own', onNext: () => startGuide() },
+      nextLabel: 'Build it with me', skipLabel: 'I\'ll explore on my own', onNext: () => startGuide(), onSkip: () => showOutro() },
   ];
 
   /* ── part 2: build it with me ───────── */
@@ -228,7 +236,7 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>It turns on and off every half second, because the code sets pin 13 <b>HIGH</b> (on) for 500 ms, then <b>LOW</b> (off) for 500 ms, forever.</p>` },
     { label: 'Try this', title: 'Change the code', spots: ['#codeToggle'],
       body: `<p>Open <b>Code</b>, change both <code>500</code>s to <code>100</code>, then press <b>Stop</b> and <b>Run</b>. It blinks five times faster.</p><p>Next, try the <b>Examples</b> menu in Code, or ask the AI to "add a button that turns the LED on".</p>`,
-      nextLabel: 'Finish' },
+      nextLabel: 'Finish', onNext: () => showOutro() },
   ];
 
   async function startGuide() {
