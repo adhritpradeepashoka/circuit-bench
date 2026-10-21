@@ -47,6 +47,14 @@ The single-file build (`npm run build:single`, ~5 MB because Monaco is inlined) 
 bundled examples all work; compiling your own sketch needs a service. Page served from elsewhere (for example that file)? Point it at the service with `?compiler=http://127.0.0.1:8787` and
 start the service with `VLAB_CORS_ORIGIN=*` (or your page's origin).
 
+### Projects
+
+The name under **CircuitBench** in the top bar opens **My projects**: create, open, rename, duplicate and delete projects, each with
+its own circuit and code, autosaved as you work (in this browser for now; Google sign-in with cloud sync is next). Every project records
+its **workspace** — the environment it was made in. Today that is *Arduino Uno + breadboard*; PCB/KiCad, 3D/CAD assembly and robotics
+workspaces are listed as coming soon and will be added as new workspace types (`src/core/projects.js`), not as a change to how projects
+are stored. Importing a project file now creates a new project instead of overwriting the open one.
+
 ### AI "Ask AI" (beta, bring-your-own-key)
 
 The ✨ Ask AI button in the code dock turns a plain-English instruction + the circuit you've built + the current sketch into an edit —

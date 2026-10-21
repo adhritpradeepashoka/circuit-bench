@@ -1028,3 +1028,77 @@ test('ui: AI chat without a key shows the key setup in the pane and keeps your m
   assert.equal(sent[0].userKey, 'my-key');
   assert.match(doc.getElementById('aiLog').textContent, /Hi!/);
 });
+
+test('ui: My projects — first run adopts your existing work, new projects start clean, switching restores each one’s circuit and code, and it all survives a reload', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  [...doc.querySelectorAll('.part-card')].find(c => c.textContent.includes('LED')).click();
+  code.source = '// my blink\nvoid setup(){}\nvoid loop(){}\n';
+  const projects = w.__lab.initProjects({ editor, code, sim });
+  await projects.ready;
+  assert.equal(projects.current.name, 'My first project');
+  assert.equal(doc.getElementById('projectName').textContent, 'My first project');
+  assert.equal(projects.current.workspace, 'arduino-uno');
+
+  doc.getElementById('projectBtn').click();
+  assert.equal(doc.getElementById('projectsModal').hidden, false);
+  doc.getElementById('projNewName').value = 'Traffic light';
+  doc.getElementById('projNewForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  await flush(); await flush();
+  assert.equal(projects.current.name, 'Traffic light');
+  assert.equal(doc.getElementById('projectsModal').hidden, true);
+  assert.equal(editor.state.parts.length, 2, 'a new project starts from the default Uno + breadboard');
+  assert.match(code.source, /Blink/, 'and the default sketch');
+  code.source = '// traffic\n';
+  await projects.saveNow();
+
+  const first = (await projects.ready, [...JSON.parse(w.localStorage.getItem('circuitbench:projects'))].find(m => m.name === 'My first project'));
+  await projects.open(first.id);
+  assert.equal(editor.state.parts.filter(p => p.type === 'led').length, 1, 'the LED came back with its project');
+  assert.match(code.source, /my blink/);
+  assert.equal(editor.hi, 0, 'switching starts a fresh undo history');
+
+  // rename, duplicate, delete from the dialog
+  projects.openModal();
+  await flush();
+  const row = name => [...doc.querySelectorAll('.proj-row')].find(r => r.querySelector('.proj-open, .proj-rename')?.textContent === name || r.querySelector('.proj-rename')?.value === name);
+  row('My first project').querySelector('[data-act="rename"]').click(); await flush();
+  const input = doc.querySelector('.proj-rename');
+  input.value = 'Blinky'; input.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await flush();
+  assert.equal(projects.current.name, 'Blinky');
+  assert.equal(doc.getElementById('projectName').textContent, 'Blinky');
+  row('Traffic light').querySelector('[data-act="duplicate"]').click(); await flush();
+  assert.ok(row('Traffic light copy'), 'duplicate appears');
+  row('Traffic light copy').querySelector('[data-act="delete"]').click(); await flush();
+  row('Traffic light copy').querySelector('[data-act="delete-yes"]').click(); await flush();
+  assert.equal(doc.querySelectorAll('.proj-row').length, 2);
+
+  // reload: same storage, new page — the open project and its work come back
+  const saved = {}; for (let i = 0; i < w.localStorage.length; i++) { const k = w.localStorage.key(i); saved[k] = w.localStorage.getItem(k); }
+  const again = boot(fixtureCompile, win => { for (const [k, v] of Object.entries(saved)) win.localStorage.setItem(k, v); });
+  const p2 = again.w.__lab.initProjects({ editor: again.editor, code: again.code, sim: again.sim });
+  await p2.ready;
+  assert.equal(p2.current.name, 'Blinky');
+  assert.match(again.code.source, /my blink/);
+  assert.equal(again.editor.state.parts.filter(p => p.type === 'led').length, 1);
+});
+
+test('ui: My projects — deleting the open project opens another; importing a file makes a new project and a bad file leaves nothing behind', async () => {
+  const { w, editor, code, sim } = boot();
+  const projects = w.__lab.initProjects({ editor, code, sim });
+  await projects.ready;
+  const firstId = projects.current.id;
+  const file = { ...editor.exportProject(), sketch: '// imported\n' };
+  file.parts = [...file.parts, { id: 'led-x', type: 'led', x: 500, y: 60, rotate: 0 }];
+  await projects.importFile(file, 'From a friend');
+  assert.equal(projects.current.name, 'From a friend');
+  assert.match(code.source, /imported/);
+  assert.ok(editor.partById('led-x'));
+  await assert.rejects(() => projects.importFile({ nope: 1 }, 'Broken'), /not a Virtual Lab project/);
+  assert.equal(JSON.parse(w.localStorage.getItem('circuitbench:projects')).length, 2, 'no empty project left behind');
+  await projects.remove(projects.current.id);
+  assert.equal(projects.current.id, firstId, 'the remaining project opens');
+  await projects.remove(firstId);
+  assert.equal(projects.current.name, 'My first project', 'deleting the last one gives you a fresh project, never nothing');
+});

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Virtual Lab — V0.1</title>
+  <title>CircuitBench</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314191c'/%3E%3Crect x='7' y='9' width='3.5' height='14' fill='%23c9853c'/%3E%3Crect x='14' y='9' width='3.5' height='14' fill='%23d64b3d'/%3E%3Crect x='21' y='9' width='3.5' height='14' fill='%23f0b429'/%3E%3C/svg%3E">
 </head>
 <body>
@@ -11,7 +11,7 @@
   <header class="topbar">
     <div class="brand">
       <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#232b30"/><rect x="6" y="8" width="3.2" height="12" fill="#c9853c"/><rect x="12.4" y="8" width="3.2" height="12" fill="#d64b3d"/><rect x="18.8" y="8" width="3.2" height="12" fill="#f0b429"/></svg>
-      <div><div class="brand-name">Virtual Lab</div><div class="brand-sub">V0.1 circuit editor</div></div>
+      <div class="brand-text"><div class="brand-name">CircuitBench</div><button type="button" class="project-btn" id="projectBtn" title="My projects" aria-haspopup="dialog"><span id="projectName">My first project</span><svg viewBox="0 0 10 10" width="9" height="9" aria-hidden="true"><path d="m2 3.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
     </div>
     <button class="run" id="runBtn" title="Run simulation (Ctrl+Enter)"><span class="run-icon" id="runIcon">▶</span><span id="runLabel">Run</span></button>
     <button class="code-toggle" id="codeToggle" aria-pressed="false" title="Show / hide the sketch editor"><svg viewBox="0 0 20 20" width="15" height="15" aria-hidden="true"><path d="m7 6-4 4 4 4M13 6l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>Code</button>
@@ -19,11 +19,13 @@
     <div class="project-menu">
       <button id="exportBtn" aria-haspopup="true" aria-expanded="false">Export ▾</button>
       <div class="menu" id="exportMenu" hidden>
+        <button id="openProjects">My projects…</button>
+        <button id="newProject">New project…</button>
+        <hr>
         <button id="exportJson">Download project (.json)</button>
         <button id="copyJson">Copy project JSON</button>
         <hr>
-        <button id="importJson">Open project file…</button>
-        <button id="newProject">New workspace</button>
+        <button id="importJson">Import project file…</button>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
     </div>
@@ -191,6 +193,18 @@
       </nav>
     </aside>
   </main>
+</div>
+<div class="modal" id="projectsModal" role="dialog" aria-modal="true" aria-labelledby="projectsTitle" hidden>
+  <div class="modal-card">
+    <div class="modal-head"><h2 id="projectsTitle">My projects</h2><button type="button" class="pane-x" id="projectsClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <form class="proj-new" id="projNewForm">
+      <input id="projNewName" placeholder="New project name" autocomplete="off" maxlength="80" aria-label="New project name">
+      <select id="projNewWorkspace" aria-label="Workspace"></select>
+      <button type="submit" id="projNewCreate">Create</button>
+    </form>
+    <ul class="proj-list" id="projList"></ul>
+    <p class="proj-note" id="projNote">Projects are saved in this browser automatically.</p>
+  </div>
 </div>
 <script type="module" src="/src/main.js"></script>
 </body>

@@ -8,6 +8,7 @@ import { initResistorEditor } from './ui/resistor-editor.js';
 import { initLedEditor } from './ui/led-editor.js';
 import { initValueEditor } from './ui/value-editor.js';
 import { initAiPanel } from './ui/ai-panel.js';
+import { initProjects } from './ui/projects.js';
 import { WOKWI_PINS } from './core/pins.generated.js';
 
 const $ = id => document.getElementById(id);
@@ -31,6 +32,7 @@ initResistorEditor(editor);
 initLedEditor(editor);
 initValueEditor(editor);
 const ai = initAiPanel(editor, code, sim);
+const projects = initProjects({ editor, code, sim });
 $('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });
 
 // The code dock starts on the lightweight editor; Monaco (a few hundred KB, loaded on demand) takes over the first time it's opened —
@@ -79,7 +81,7 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(fals
 $('exportJson').onclick = () => {
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify({ ...editor.exportProject(), ...code.exportState() }, null, 2)], { type: 'application/json' }));
-  a.download = 'virtual-lab-project.json'; a.click(); URL.revokeObjectURL(a.href);
+  a.download = `${(projects.current?.name || 'circuitbench-project').replace(/[^\w\- ]+/g, '').trim() || 'circuitbench-project'}.json`; a.click(); URL.revokeObjectURL(a.href);
   setMenu(false); editor.status('Project downloaded');
 };
 $('copyJson').onclick = async () => {
@@ -91,9 +93,10 @@ $('importJson').onclick = () => { setMenu(false); $('importFile').click(); };
 $('importFile').onchange = async e => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
-  try { sim.stop(); const data = JSON.parse(await file.text()); editor.importProject(data); code.importState(data); }
+  try { const data = JSON.parse(await file.text()); await projects.importFile(data, file.name.replace(/\.json$/i, '')); }
   catch (err) { editor.status(`Could not open that file: ${err.message}`); }
 };
-$('newProject').onclick = () => { setMenu(false); sim.stop(); editor.newWorkspace(); };
+$('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
+$('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 
-window.__vlab = { editor, sim, code };   // handy in the browser console
+window.__vlab = { editor, sim, code, projects };   // handy in the browser console

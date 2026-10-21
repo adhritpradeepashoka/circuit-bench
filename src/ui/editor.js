@@ -121,6 +121,11 @@ export class Editor {
   }
 
   exportProject() { return toProjectFile(this.state); }
+  /** Switch to another saved project: its circuit (or the default Uno + breadboard if it has none yet), with a fresh undo history. */
+  openProject(data) {
+    if (data && Array.isArray(data.parts)) this.importProject(data); else this.newWorkspace();
+    this.hist = [snapshot(this.state)]; this.hi = 0; this.afterStructureChange();
+  }
   importProject(data) {
     const next = fromProjectFile(data);
     this.state.parts = next.parts; this.state.wires = next.wires; this.sel = null;
