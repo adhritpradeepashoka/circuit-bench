@@ -6,4 +6,5 @@ import { initCode } from '../../src/ui/code.js';
 import { initResistorEditor } from '../../src/ui/resistor-editor.js';
 import { initLedEditor } from '../../src/ui/led-editor.js';
 import { initValueEditor } from '../../src/ui/value-editor.js';
-window.__lab = { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor };
+import { initAiPanel } from '../../src/ui/ai-panel.js';
+window.__lab = { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initAiPanel };

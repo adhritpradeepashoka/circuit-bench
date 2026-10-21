@@ -54,6 +54,12 @@ via Gemini or Groq, your choice. The AI can now change the **circuit itself**, n
 parts, wire them up, and tweak properties (resistor value, LED color, and so on), in the same request as a sketch rewrite. A reply
 like "add a pushbutton on pin 2 with a pull-down resistor" lands on the board, wired, with the matching code — all in one step.
 
+It also **diagnoses from what actually happened**, not just what the code says should happen. Every request carries the last
+compile result (errors, full compiler output, and whether you've edited since), a snapshot of the running simulation (each Uno pin's
+mode and voltage, what `analogRead` returns on A0–A5, every LED's on/off state and current, held buttons, electrical warnings,
+wiring problems), the recent Serial Monitor output and any other project files. A failed compile shows **✨ Fix with AI**; the
+simulator tray has **✨ Ask AI why** for "it runs but does the wrong thing".
+
 Under the hood the model only ever proposes a JSON list of actions (`add_part`, `move_part`, `rotate_part`, `set_prop`,
 `remove_part`, `add_wire`, `remove_wire`); `src/core/ai-actions.js` — plain, DOM-free JS shared verbatim between the server and the
 browser — is the sole gatekeeper that validates every action against the real part/pin catalogue before anything touches your

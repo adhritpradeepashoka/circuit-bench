@@ -853,3 +853,66 @@ test('ui: swapping editors is safe — a failing editor is rejected and the simp
   let toggled = 0; code.onEditorToggle(() => toggled++);
   btn.click(); assert.equal(toggled, 1, 'the dock button asks the app to switch editors');
 });
+
+test('ui: the AI gets the truth — sim.snapshot() reports real pin states and LED currents while running, wiring problems when stopped', async () => {
+  const { w, editor, sim, code, drag } = boot();
+  const doc = w.document;
+  [...doc.querySelectorAll('.part-card')].find(c => c.textContent.includes('LED')).click();
+  const led = editor.state.parts.find(p => p.type === 'led');
+  const bb = editor.partById('bb-1');
+  const seat = (part, pinId, holeId) => { const h = pinWorld(bb, holeId), p = pinWorld(part, pinId); return { x: part.x + (h.x - p.x) + 4, y: part.y + (h.y - p.y) - 3 }; };
+  const t = seat(led, 'A', 'E6');
+  drag({ x: led.x + 6, y: led.y + 6 }, { x: t.x + 6, y: t.y + 6 }, editor.els.get(led.id));
+  editor.setTool('wire');
+  const wireDrag = (aPart, aPin, bPart, bPin) => drag(pinWorld(editor.partById(aPart), aPin), pinWorld(editor.partById(bPart), bPin), doc.getElementById('canvas'));
+  wireDrag('uno-1', '12', 'bb-1', 'A6');
+  wireDrag('bb-1', 'A5', 'uno-1', 'GND.1');
+  editor.setTool('select');
+
+  assert.equal(sim.snapshot().running, false);
+  code.source = sketch('d12-blink');
+  await sim.start();
+  assert.ok(sim.running);
+  let sawOn = false, sawOff = false;
+  for (let i = 0; i < 40; i++) {
+    sim.mcu.run(0.05 * 16e6); sim.step();
+    const s = sim.snapshot();
+    const d12 = s.pins.find(p => p.pin === 'D12'), l = s.leds.find(x => x.id === led.id);
+    assert.ok(d12, 'D12 is reported — it is wired and driven');
+    assert.ok(/OUTPUT (HIGH|LOW)/.test(d12.mode));
+    if (d12.mode === 'OUTPUT HIGH') { assert.ok(l.on && l.mA > 1, 'LED current matches the pin'); sawOn = true; } else { assert.equal(l.on, false); sawOff = true; }
+    assert.ok(!s.pins.some(p => p.pin === 'D7'), 'unused, unwired pins are left out');
+  }
+  assert.ok(sawOn && sawOff);
+  assert.ok(sim.snapshot().seconds > 1);
+  sim.stop();
+});
+
+test('ui: a failed compile offers "✨ Fix with AI" — it opens the AI panel and sends the compiler errors, flagged stale once edited', async () => {
+  const { w, editor, sim, code } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'test-key'));
+  const doc = w.document;
+  const sent = [];
+  w.fetch = async (url, opts) => { sent.push({ url, body: JSON.parse(opts.body) }); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: 'void setup(){}\nvoid loop(){}\n', explanation: 'Added the missing semicolon on line 3.' }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+
+  code.source = sketch('broken');
+  await code.compile();
+  assert.equal(code.lastBuild.ok, false);
+  assert.equal(code.lastBuild.stale, false);
+  const fix = doc.getElementById('aiFixCompile');
+  assert.ok(fix, 'Fix with AI button shown on the failed compile');
+  fix.click();
+  assert.equal(doc.getElementById('aiPanel').hidden, false, 'the click opens the panel (and is not swallowed by the outside-click closer)');
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(sent.length, 1);
+  assert.match(sent[0].body.instruction, /Fix the compile error/);
+  const ctx = sent[0].body.context;
+  assert.equal(ctx.compile.ok, false);
+  assert.equal(ctx.compile.errors[0].line, 3);
+  assert.match(ctx.compile.output, /expected ';' before 'undefinedThing'/);
+  assert.equal(ctx.sim.running, false);
+  assert.match(doc.getElementById('aiExplain').textContent, /missing semicolon/);
+
+  code.source = sketch('broken') + '\n// edited';
+  assert.equal(code.lastBuild.stale, true, 'editing after a compile marks the result stale');
+});

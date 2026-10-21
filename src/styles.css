@@ -289,6 +289,9 @@ button { cursor: pointer; }
 #outputPane { padding: 8px 12px; white-space: pre-wrap; word-break: break-word; }
 .out-empty { color: #6f8791; font-family: var(--ui); font-size: 12px; line-height: 1.6; }
 .out-head { font-family: var(--ui); font-weight: 700; font-size: 12px; margin-bottom: 6px; }
+.out-ai-fix { margin-left: 10px; padding: 2px 9px; border: 1px solid #3f6f6a; border-radius: 6px; background: #2a3a3f; color: var(--ink-text); font: 600 11px var(--ui); cursor: pointer; }
+.out-ai-fix:hover { background: #33484e; }
+.sim-ai { font-weight: 600; }
 .out-head.ok { color: #6fcf97; } .out-head.bad { color: #ff8a80; } .out-head.busy { color: #f2c94c; }
 .out-line { display: block; }
 .out-line.diag { cursor: pointer; border-radius: 3px; }

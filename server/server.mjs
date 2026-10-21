@@ -51,8 +51,8 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         let raw = '', seen = 0, tooBig = false;
         for await (const chunk of req) {
           seen += chunk.length;
-          if (seen > 200_000) { req.destroy(); return; }
-          if (!tooBig) { raw += chunk; if (raw.length > 40_000) { tooBig = true; raw = ''; } }
+          if (seen > 400_000) { req.destroy(); return; }
+          if (!tooBig) { raw += chunk; if (raw.length > 120_000) { tooBig = true; raw = ''; } }
         }
         if (tooBig) throw new RequestError('Request too large.', 413);
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }

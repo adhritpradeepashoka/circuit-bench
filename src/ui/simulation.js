@@ -189,6 +189,36 @@ export class Simulation {
     }
   }
 
+  /**
+   * Plain-data picture of what the circuit is actually doing right now, for the AI to reason from instead
+   * of guessing runtime behaviour from the code. Static wiring problems are included even when stopped.
+   */
+  snapshot() {
+    const circuit = this.editor.getCircuit();
+    const issues = [...new Set([...circuit.issues.map(i => i.text), ...(circuit.openLeads || []).map(o => o.text)])];
+    if (!this.running || !this.mcu || !this.result) return { running: false, issues, error: this.error };
+    const r2 = v => Math.round(v * 100) / 100;
+    const MODE = { H: 'OUTPUT HIGH', L: 'OUTPUT LOW', U: 'INPUT_PULLUP', Z: 'INPUT' };
+    const pins = [];
+    for (const pin of circuit.uno.pins) {
+      const m = this.modes?.get(pin.name), v = this.result.voltage(pin.net), analog = /^A\d$/.test(pin.name);
+      if (v == null && (m === 'Z' || !m)) continue;                       // nothing attached, firmware not using it
+      const entry = { pin: analog ? pin.name : `D${pin.name}`, mode: m === 'P' ? `PWM ${Math.round((this.duty?.get(pin.name) || 0) * 100)}%` : MODE[m] || m, volts: v == null ? null : r2(v) };
+      if (analog && v != null) entry.adc = Math.round(Math.max(0, Math.min(5, v)) / 5 * 1023);   // what analogRead() returns
+      pins.push(entry);
+    }
+    const leds = [];
+    for (const part of this.editor.state.parts) {
+      if (part.type === 'led') { const i = this.result.ledCurrent.get(part.id) || 0; leds.push({ id: part.id, mA: r2(i * 1000), on: i > 5e-5 }); }
+      else if (part.type === 'rgb-led') for (const ch of ['R', 'G', 'B']) { const i = this.result.ledCurrent.get(`${part.id}:${ch}`) || 0; leds.push({ id: `${part.id}:${ch}`, mA: r2(i * 1000), on: i > 5e-5 }); }
+    }
+    return {
+      running: true, paused: this.paused, seconds: r2(this.mcu.seconds),
+      pins, leds, pressed: [...this.pressed],
+      warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
+    };
+  }
+
   scheduleIdleRefresh() {
     if (this.idleTimer) return;
     this.idleTimer = requestAnimationFrame(() => { this.idleTimer = 0; this.refreshTray(); });

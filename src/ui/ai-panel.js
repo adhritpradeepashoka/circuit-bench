@@ -1,6 +1,7 @@
-// Wires the "✨ Ask AI" popover in the code dock: shows the key prompt (beta, bring-your-own-key) when
-// needed, sends the instruction + circuit + current sketch to the server, and lets the user apply or
-// discard the result — which can now be a circuit edit (parts/wires), a firmware edit, or both.
+// Wires the "✨ Ask AI" popover: shows the key prompt (beta, bring-your-own-key) when needed, sends the
+// instruction + circuit + current sketch + live diagnostics (last compile result, what the running
+// simulation is actually doing, Serial Monitor output) to the server, and lets the user apply or discard
+// the result — which can be a circuit edit (parts/wires), a firmware edit, or both.
 // See src/sim/ai-client.mjs for the BYOK rationale and request shape, and src/core/ai-actions.js for
 // how proposed circuit edits are validated against the real part/pin catalogue before anything renders.
 import { generateCode, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider } from '../sim/ai-client.mjs';
@@ -21,7 +22,30 @@ function toProjectFileShape(parts, wires) {
   return { format: FORMAT, version: VERSION, parts, wires };
 }
 
-export function initAiPanel(editor, code) {
+const CAP = { output: 4000, serial: 2000, file: 6000, files: 12000 };
+
+/** Everything the AI needs to diagnose instead of guess: the compiler's verdict, the live sim, the serial log, other project files. */
+export function gatherContext(code, sim) {
+  const b = code.lastBuild;
+  const compile = b ? {
+    ok: !!b.ok, stale: !!b.stale, unreachable: !!b.unreachable,
+    errors: (b.diagnostics || []).filter(d => d.severity === 'error').slice(0, 10).map(d => ({ file: d.file, line: d.line, message: d.message })),
+    output: String(b.output || b.error || '').slice(-CAP.output),
+  } : null;
+  const st = code.exportState?.() || { files: [], sketch: code.source };
+  let budget = CAP.files;
+  const otherFiles = [];
+  for (const f of st.files || []) {
+    if (f.name.endsWith('.ino') && f.content === st.sketch) continue;          // the main sketch is sent separately
+    const content = f.content.slice(0, Math.min(CAP.file, budget)); budget -= content.length;
+    otherFiles.push({ name: f.name, content });
+    if (budget <= 0) break;
+  }
+  const serial = String(code.serial?.text || '').slice(-CAP.serial);
+  return { compile, sim: sim?.snapshot?.() ?? null, serial, otherFiles };
+}
+
+export function initAiPanel(editor, code, sim = null) {
   const $ = id => document.getElementById(id);
   const btn = $('aiBtn'), panel = $('aiPanel'), keyRow = $('aiKeyRow'), askRow = $('aiAskRow'), resultRow = $('aiResult');
   const keyInput = $('aiKeyInput'), status = $('aiStatus'), promptEl = $('aiPrompt'), explainEl = $('aiExplain');
@@ -61,15 +85,16 @@ export function initAiPanel(editor, code) {
   });
   $('aiForgetKey').addEventListener('click', () => { setStoredKey(''); refreshKeyUi(); setStatus(''); paintProvider(); keyInput.focus(); });
 
-  $('aiGenerate').addEventListener('click', async () => {
+  async function ask() {
     const instruction = promptEl.value.trim();
     if (!instruction) return setStatus('Describe what you want first.');
     if (!hasKey()) return refreshKeyUi();
     const genBtn = $('aiGenerate');
-    genBtn.disabled = true; setStatus('Asking the AI…', true); resultRow.hidden = true;
+    genBtn.disabled = true; setStatus(sim?.running ? 'Asking the AI (with live sim readings)…' : 'Asking the AI…', true); resultRow.hidden = true;
     try {
       const circuit = editor.exportProject();
-      const res = await generateCode({ instruction, circuit, code: code.source });
+      const context = gatherContext(code, sim);
+      const res = await generateCode({ instruction, circuit, code: code.source, context });
       if (!res.ok) {
         if (res.needsKey) { setStoredKey(''); refreshKeyUi(); }
         setStatus(res.error || 'Something went wrong.');
@@ -106,7 +131,8 @@ export function initAiPanel(editor, code) {
     } finally {
       genBtn.disabled = false;
     }
-  });
+  }
+  $('aiGenerate').addEventListener('click', () => ask());
 
   $('aiApply').addEventListener('click', () => {
     if (!pending) return;
@@ -116,4 +142,12 @@ export function initAiPanel(editor, code) {
     resultRow.hidden = true; promptEl.value = ''; pending = null; close();
   });
   $('aiDiscard').addEventListener('click', () => { resultRow.hidden = true; pending = null; warningsEl.hidden = true; });
+
+  /** Open the panel pre-filled — and send straight away when the intent is unambiguous (e.g. "fix this compile error"). */
+  function askAi(instruction, { send = false } = {}) {
+    open(); promptEl.value = instruction; resultRow.hidden = true;
+    if (send && hasKey()) ask(); else { promptEl.focus(); promptEl.setSelectionRange(instruction.length, instruction.length); }
+  }
+  code.onAiFix?.(() => askAi('Fix the compile error(s) shown in the compiler output.', { send: true }));
+  return { askAi };
 }

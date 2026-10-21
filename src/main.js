@@ -30,7 +30,8 @@ editor.init();
 initResistorEditor(editor);
 initLedEditor(editor);
 initValueEditor(editor);
-initAiPanel(editor, code);
+const ai = initAiPanel(editor, code, sim);
+$('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });
 
 // The code dock starts on the lightweight editor; Monaco (a few hundred KB, loaded on demand) takes over the first time it's opened —
 // unless you chose the simple editor, or Monaco fails to show your code (then we fall back automatically and remember that).

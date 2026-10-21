@@ -196,3 +196,84 @@ test('server: POST /api/ai/generate-code round-trips through the HTTP layer', as
     server.close();
   }
 });
+
+// ── Live diagnostics: the AI sees the compile result, the running sim, the serial log and other files ──
+import { describeContext } from '../server/ai-service.mjs';
+import { gatherContext } from '../src/ui/ai-panel.js';
+
+const promptSpy = () => {
+  const seen = { prompt: null };
+  const fetchImpl = async (url, opts) => {
+    seen.prompt = JSON.parse(opts.body).contents[0].parts[0].text;
+    return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text: '```json\n{"actions":[],"explanation":"ok"}\n```' }] } }] }) };
+  };
+  return { seen, fetchImpl };
+};
+
+test('describeContext: a failed compile lists each error with file:line and the raw compiler output', () => {
+  const text = describeContext({ compile: { ok: false, stale: false, errors: [{ file: 'sketch.ino', line: 7, message: "'ledPn' was not declared in this scope" }], output: "sketch.ino:7:3: error: 'ledPn' was not declared" } });
+  assert.match(text, /Last compile: FAILED/);
+  assert.match(text, /sketch\.ino:7 — 'ledPn' was not declared in this scope/);
+  assert.match(text, /Full compiler output/);
+});
+
+test('describeContext: a running sim reports pin modes, voltages, analogRead values, LED currents, held buttons and electrical warnings', () => {
+  const text = describeContext({ sim: {
+    running: true, seconds: 3.2,
+    pins: [{ pin: 'D13', mode: 'OUTPUT LOW', volts: 0 }, { pin: 'A0', mode: 'INPUT', volts: 2.5, adc: 512 }],
+    leds: [{ id: 'led1', on: false, mA: 0 }], pressed: ['btn1'], warnings: ['An LED is carrying 60 mA'], issues: ['LED: Anode is not connected to anything'],
+  } });
+  assert.match(text, /Simulation: RUNNING, 3\.2 s/);
+  assert.match(text, /D13=OUTPUT LOW 0 V/);
+  assert.match(text, /A0=INPUT 2\.5 V \(analogRead≈512\)/);
+  assert.match(text, /led1 off 0 mA/);
+  assert.match(text, /Buttons held down right now: btn1/);
+  assert.match(text, /Electrical warning: An LED is carrying 60 mA/);
+  assert.match(text, /Wiring problem detected: LED: Anode is not connected/);
+});
+
+test('describeContext: a stopped sim says there are no live readings; serial output and other files are included', () => {
+  const text = describeContext({ sim: { running: false, issues: [] }, serial: 'temp=31.2\n', otherFiles: [{ name: 'pins.h', content: '#define LED 13' }] });
+  assert.match(text, /NOT running — there are no live readings/);
+  assert.match(text, /Serial Monitor[\s\S]*temp=31\.2/);
+  assert.match(text, /Other project file pins\.h[\s\S]*#define LED 13/);
+});
+
+test('describeContext: junk or hostile shapes never throw and are size-capped', () => {
+  for (const junk of [null, 42, 'x', [], { compile: 'x' }, { sim: { running: true, pins: 'no', leds: [null, 5] } }, { otherFiles: [null, { name: 3 }] }]) assert.doesNotThrow(() => describeContext(junk));
+  const huge = describeContext({ serial: 'x'.repeat(50_000) });
+  assert.ok(huge.length < 2_200);
+});
+
+test('generateCode: the live diagnostics reach the prompt as ground truth (and are absent when the browser sent none)', async () => {
+  const a = promptSpy();
+  await createAiService({ fetchImpl: a.fetchImpl }).generateCode({ instruction: 'why is my LED off?', userKey: 'k', context: { sim: { running: true, seconds: 1, pins: [{ pin: 'D13', mode: 'OUTPUT LOW', volts: 0 }] } } });
+  assert.match(a.seen.prompt, /Live diagnostics from the student's browser/);
+  assert.match(a.seen.prompt, /treat it as ground truth/);
+  assert.match(a.seen.prompt, /D13=OUTPUT LOW/);
+  const b = promptSpy();
+  await createAiService({ fetchImpl: b.fetchImpl }).generateCode({ instruction: 'blink', userKey: 'k' });
+  assert.doesNotMatch(b.seen.prompt, /Live diagnostics/);
+});
+
+test('gatherContext: collects the last compile (with staleness), the sim snapshot, the serial tail and non-main files — capped', () => {
+  const code = {
+    source: 'void setup(){} void loop(){}',
+    lastBuild: { ok: false, stale: true, diagnostics: [{ severity: 'error', file: 'sketch.ino', line: 3, message: 'boom' }, { severity: 'warning', file: 'sketch.ino', line: 1, message: 'meh' }], output: 'y'.repeat(10_000) },
+    exportState: () => ({ sketch: 'void setup(){} void loop(){}', files: [{ name: 'sketch.ino', content: 'void setup(){} void loop(){}' }, { name: 'util.h', content: '#pragma once' }] }),
+    serial: { text: 'z'.repeat(5_000) + 'END' },
+  };
+  const sim = { snapshot: () => ({ running: true, pins: [] }) };
+  const ctx = gatherContext(code, sim);
+  assert.equal(ctx.compile.ok, false);
+  assert.equal(ctx.compile.stale, true);
+  assert.deepEqual(ctx.compile.errors, [{ file: 'sketch.ino', line: 3, message: 'boom' }]);
+  assert.equal(ctx.compile.output.length, 4000);
+  assert.deepEqual(ctx.sim, { running: true, pins: [] });
+  assert.ok(ctx.serial.endsWith('END') && ctx.serial.length === 2000);
+  assert.deepEqual(ctx.otherFiles, [{ name: 'util.h', content: '#pragma once' }]);
+  // nothing compiled yet, no sim: still a valid, small context
+  const empty = gatherContext({ source: '', lastBuild: null, serial: null }, null);
+  assert.equal(empty.compile, null);
+  assert.equal(empty.sim, null);
+});

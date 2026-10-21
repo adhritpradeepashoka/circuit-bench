@@ -46,7 +46,58 @@ float ntcCelsius(int pin) {
   },
 ];
 
-function buildPrompt({ instruction, circuit, code }) {
+const str = (v, max) => String(v ?? '').slice(0, max);
+const list = (v, max) => (Array.isArray(v) ? v.slice(0, max) : []);
+
+/**
+ * Renders the browser's live diagnostics (last compile, running-sim snapshot, Serial Monitor tail, other
+ * project files) as plain prompt text. Everything is coerced and size-capped here: it comes from the
+ * client, so nothing about its shape is trusted. Returns '' when there is nothing useful to say.
+ */
+export function describeContext(context) {
+  if (!context || typeof context !== 'object') return '';
+  const out = [];
+  const c = context.compile;
+  if (c && typeof c === 'object') {
+    if (c.unreachable) out.push('Last compile: the compile service could not be reached (not a code problem).');
+    else if (c.ok) out.push(`Last compile: SUCCEEDED${c.stale ? ' (but the sketch has been edited since, so it may no longer match the code below)' : ''}.`);
+    else {
+      out.push(`Last compile: FAILED${c.stale ? ' (the sketch has been edited since, so line numbers may have shifted)' : ''}.`);
+      for (const e of list(c.errors, 10)) out.push(`  error ${str(e?.file, 80)}:${Number(e?.line) || '?'} — ${str(e?.message, 300)}`);
+      const o = str(c.output, 4000).trim();
+      if (o) out.push('Full compiler output:\n```\n' + o + '\n```');
+    }
+  }
+  const s = context.sim;
+  if (s && typeof s === 'object') {
+    if (!s.running) out.push('Simulation: NOT running — there are no live readings; reason from the circuit and code only.');
+    else {
+      out.push(`Simulation: RUNNING${s.paused ? ' (paused)' : ''}, ${Number(s.seconds) || 0} s of simulated time on the ATmega328P.`);
+      const pins = list(s.pins, 30).map(p => `${str(p?.pin, 6)}=${str(p?.mode, 20)}${p?.volts != null ? ` ${Number(p.volts)} V` : ''}${p?.adc != null ? ` (analogRead≈${Number(p.adc)})` : ''}`);
+      out.push(`  Uno pins in use: ${pins.length ? pins.join('; ') : 'none'}`);
+      const leds = list(s.leds, 30).map(l => `${str(l?.id, 30)} ${l?.on ? 'ON' : 'off'} ${Number(l?.mA) || 0} mA`);
+      if (leds.length) out.push(`  LEDs: ${leds.join('; ')}`);
+      const pressed = list(s.pressed, 10).map(p => str(p, 30));
+      if (pressed.length) out.push(`  Buttons held down right now: ${pressed.join(', ')}`);
+      for (const w of list(s.warnings, 10)) out.push(`  Electrical warning: ${str(w, 300)}`);
+    }
+    if (s.error) out.push(`  Simulator error: ${str(s.error, 300)}`);
+    for (const i of list(s.issues, 10)) out.push(`Wiring problem detected: ${str(i, 300)}`);
+  }
+  const serial = str(context.serial, 2000).trim();
+  if (serial) out.push('Serial Monitor (most recent output):\n```\n' + serial + '\n```');
+  for (const f of list(context.otherFiles, 8)) {
+    const name = str(f?.name, 64), content = str(f?.content, 6000);
+    if (name) out.push(`Other project file ${name} (read-only for you — you can only rewrite sketch.ino; if a fix belongs here, say exactly what to change in "explanation"):\n\`\`\`cpp\n${content}\n\`\`\``);
+  }
+  return out.join('\n');
+}
+
+function buildPrompt({ instruction, circuit, code, context }) {
+  const diagnostics = describeContext(context);
+  const diagnosticsBlock = diagnostics
+    ? `\n\nLive diagnostics from the student's browser — this is what ACTUALLY happened, so treat it as ground truth over what the code or circuit "should" do. When the student asks why something doesn't work, find the cause in these readings (a pin that's LOW when it should be HIGH, an analogRead value on the wrong side of a threshold, a compile error, an open lead, a wiring problem) and name the specific reading in your explanation. If the last compile FAILED, fixing those errors comes first, whatever else was asked:\n${diagnostics}`
+    : '';
   const circuitText = JSON.stringify(circuit ?? { parts: [], wires: [] });
   const parts = circuit?.parts ?? [];
   const recipes = SENSOR_RECIPES
@@ -69,7 +120,7 @@ ${circuitText}
 Current sketch.ino:
 \`\`\`cpp
 ${(code || '').slice(0, LIMITS.codeChars)}
-\`\`\`
+\`\`\`${diagnosticsBlock}
 
 Instruction: ${String(instruction || '').slice(0, LIMITS.promptChars)}
 
@@ -83,7 +134,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block containing a single object — an
                          //   remove_part: {"op":"remove_part","id":"<id>"}
                          //   add_wire: {"op":"add_wire","from":{"part":"<id>","pin":"<pin>"},"to":{"part":"<id>","pin":"<pin>"}}
                          //   remove_wire: {"op":"remove_wire","id":"<wire id from the circuit above>"}
-  "explanation": "<at most two short sentences on what you did>"
+  "explanation": "<at most three short sentences: what was wrong (citing the reading or error that shows it, if any) and what you changed>"
 }
 If the firmware/sketch needs to change, follow that json block with a SECOND fenced block, tagged \`\`\`cpp, containing the COMPLETE new sketch.ino (not a diff/snippet). If firmware does not need to change, do not include a \`\`\`cpp block at all.
 Never put firmware code inside the json block or inside any string field — a multi-line C/C++ program's own newlines break JSON parsing unless perfectly escaped, which models get wrong often enough that this feature breaks when they do; keeping code in its own plain \`\`\`cpp block avoids that entirely. Nothing is allowed outside these one or two fenced blocks.
@@ -161,7 +212,7 @@ const PROVIDERS = {
 };
 
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
-  async function generateCode({ instruction, circuit, code, userKey, provider = 'gemini' }) {
+  async function generateCode({ instruction, circuit, code, context, userKey, provider = 'gemini' }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = PROVIDERS[provider];
     if (!p) throw new RequestError(`Unknown AI provider "${provider}".`);
@@ -170,7 +221,7 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
       err.needsKey = true;
       throw err;
     }
-    const prompt = buildPrompt({ instruction, circuit, code });
+    const prompt = buildPrompt({ instruction, circuit, code, context });
     let res;
     try {
       res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt) });

@@ -28,7 +28,8 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
   const simpleEditor = editor;                              // always kept: the fallback if Monaco can't be used
   let files = [], active = MAIN;                         // the project: [{ name, content }] — first .ino is the main sketch
   let diagnostics = [];
-  let running = false, runSnapshot = null, last = null, buildId = 0, controller = null;
+  let running = false, runSnapshot = null, last = null, lastBuiltFrom = null, buildId = 0, controller = null;
+  let onAiFix = null;                                      // set by the AI panel: "✨ Fix with AI" on a failed compile
 
   /* ── project state ────────────────────── */
   function loadProject() {
@@ -119,7 +120,15 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     if (!res) { const e = document.createElement('div'); e.className = 'out-empty'; e.textContent = 'Compiler output appears here. Press Verify to compile with Arduino CLI, or Run to compile and run.'; outPane.append(e); return; }
     const errors = res.diagnostics.filter(d => d.severity === 'error').length, warns = res.diagnostics.filter(d => d.severity === 'warning').length;
     if (res.ok) outPane.append(head(`Compiled successfully${res.prebuilt ? ' (prebuilt example)' : res.cached ? ' (cached)' : res.ms ? ` in ${(res.ms / 1000).toFixed(1)} s` : ''}${warns ? ` · ${warns} warning${warns > 1 ? 's' : ''}` : ''}`, 'ok'));
-    else outPane.append(head(res.unreachable ? 'Compile service not reachable' : `Compilation failed · ${errors || 1} error${errors === 1 ? '' : 's'}${warns ? ` · ${warns} warning${warns > 1 ? 's' : ''}` : ''}`, 'bad'));
+    else {
+      const h = head(res.unreachable ? 'Compile service not reachable' : `Compilation failed · ${errors || 1} error${errors === 1 ? '' : 's'}${warns ? ` · ${warns} warning${warns > 1 ? 's' : ''}` : ''}`, 'bad');
+      if (!res.unreachable && onAiFix) {
+        const fix = document.createElement('button'); fix.type = 'button'; fix.className = 'out-ai-fix'; fix.id = 'aiFixCompile'; fix.textContent = '✨ Fix with AI';
+        fix.addEventListener('click', e => { e.stopPropagation(); onAiFix(); });
+        h.append(fix);
+      }
+      outPane.append(h);
+    }
     let ctx = false;
     for (const line of (res.output || '').replace(/\n+$/, '').split('\n')) {
       const el = document.createElement('span'), m = DIAG_RE.exec(line);
@@ -152,12 +161,13 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     const id = ++buildId; controller?.abort(); controller = new AbortController();
     dock.classList.add('compiling'); $('codeCompile').disabled = true;
     setStatus('Compiling…', 'busy'); renderOutput(null, 'Compiling with Arduino CLI…');
-    let res;
+    let res; const sent = snapshot();
     try { res = await compile(files.map(f => ({ name: f.name, content: f.content })), { signal: controller.signal }); }
     catch (err) { if (err?.name === 'AbortError') res = null; else res = { ok: false, diagnostics: [], output: String(err?.message || err), error: String(err?.message || err) }; }
     if (id !== buildId) return null;
     dock.classList.remove('compiling'); $('codeCompile').disabled = false;
     if (!res) return null;
+    lastBuiltFrom = sent;
     showResult(res);
     return res;
   }
@@ -318,6 +328,10 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     useSimpleEditor() { if (ed === simpleEditor) return true; const monaco = ed; monaco.dispose?.(); ed = simpleEditor; mountProject(); renderEditorKind(); return true; },
     onEditorToggle: fn => { listeners.toggle = fn; },
     get editor() { return ed; },
+    /** The most recent compile result (or null), and whether the files have been edited since it ran. */
+    get lastBuild() { return last ? { ...last, stale: lastBuiltFrom !== snapshot() } : null; },
+    /** Registers the "✨ Fix with AI" handler shown on a failed compile (re-renders the current output so it appears). */
+    onAiFix(fn) { onAiFix = fn; if (last && !last.ok) renderOutput(last); },
     setRunning(on) { running = on; runSnapshot = on ? snapshot() : null; if (last && !on) showResult(last); },
     serial,
   };
