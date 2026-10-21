@@ -47,6 +47,16 @@ The single-file build (`npm run build:single`, ~5 MB because Monaco is inlined) 
 bundled examples all work; compiling your own sketch needs a service. Page served from elsewhere (for example that file)? Point it at the service with `?compiler=http://127.0.0.1:8787` and
 start the service with `VLAB_CORS_ORIGIN=*` (or your page's origin).
 
+### I²C parts: MPU-6050 and SSD1306 OLED
+
+The simulated ATmega328P now has a working I²C bus (`Wire`): `src/sim/i2c.js` answers for whatever is wired to A4/SDA and A5/SCL,
+using register-level device models in `src/parts/` — the **MPU-6050** (accelerometer + gyro + temperature, 0x68 / 0x69 via AD0) and
+the **SSD1306 128×64 OLED** (0x3C, the full command set Adafruit_SSD1306 / U8g2 use, drawn pixel for pixel). Raw `Wire` code,
+`Adafruit_MPU6050` and `Adafruit_SSD1306` + `Adafruit_GFX` all run unmodified (the libraries are installed on the compile server).
+A part is only on the bus if it's really wired and powered; otherwise it NACKs like real hardware and the tray says which wire is
+missing. Right-click the MPU-6050 to tilt it in 3D (three.js, loaded only when that panel first opens) or with sliders/presets —
+the running sketch sees gravity move, and the gyro reads how fast you turn it.
+
 ### Projects
 
 The name under **CircuitBench** in the top bar opens **My projects**: create, open, rename, duplicate and delete projects, each with

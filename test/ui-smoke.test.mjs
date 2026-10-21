@@ -31,6 +31,8 @@ function boot(compile = fixtureCompile, before = null) {
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
   const w = dom.window;
   before?.(w);
+  // jsdom has no ImageData; the OLED element allocates one in its constructor
+  w.ImageData ||= class ImageData { constructor(width, height) { this.width = width; this.height = height; this.data = new Uint8ClampedArray(width * height * 4); } };
   w.eval(out.outputFiles[0].text);
   const { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor } = w.__lab;
   const editor = new Editor();
@@ -262,8 +264,8 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
   assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
-  for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor']) assert.ok(names.includes(n), `${n} in catalogue`);
-  for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor']) {
+  for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro', 'OLED Display 128×64 (SSD1306)']) assert.ok(names.includes(n), `${n} in catalogue`);
+  for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306']) {
     editor.addPart(type);
     assert.ok(editor.state.parts.some(p => p.type === type));
     assert.ok(editor.els.get(editor.state.parts.find(p => p.type === type).id).querySelector(PART_DEFS[type].tag), `${type} renders ${PART_DEFS[type].tag}`);
@@ -271,6 +273,8 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   // searching finds them by what people call them
   const search = doc.getElementById('partsSearch');
   search.value = 'motion'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.deepEqual([...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent), ['PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro']);
+  search.value = 'gy-521'; search.dispatchEvent(new w.Event('input', { bubbles: true }));
   assert.equal(doc.querySelectorAll('#catalog .part-card').length, 1);
 });
 
@@ -1101,4 +1105,60 @@ test('ui: My projects — deleting the open project opens another; importing a f
   assert.equal(projects.current.id, firstId, 'the remaining project opens');
   await projects.remove(firstId);
   assert.equal(projects.current.name, 'My first project', 'deleting the last one gives you a fresh project, never nothing');
+});
+
+test('ui: I²C end to end — wire an MPU-6050 and an OLED, run real firmware, tilt it from the inspector, see the OLED pixels and the AI snapshot; a missing wire is named in the tray', async () => {
+  const { w, editor, sim, code } = boot();
+  const doc = w.document;
+  w.__lab.initMpuInspector(editor);
+  const file = editor.exportProject();
+  const W = (id, a, ap, b, bp) => ({ id, from: { part: a, pin: ap }, to: { part: b, pin: bp }, style: 'straight', color: '#2f6cf0', width: 2 });
+  file.parts.push({ id: 'mpu1', type: 'mpu6050', x: 700, y: 40, rotate: 0 }, { id: 'oled1', type: 'ssd1306', x: 700, y: 200, rotate: 0 });
+  file.wires = [W('w1', 'uno-1', 'A4', 'mpu1', 'SDA'), W('w2', 'uno-1', 'A5', 'mpu1', 'SCL'), W('w3', 'uno-1', '5V', 'mpu1', 'VCC'), W('w4', 'uno-1', 'GND.1', 'mpu1', 'GND'),
+    W('w5', 'uno-1', 'A4.2', 'oled1', 'DATA'), W('w6', 'uno-1', 'A5.2', 'oled1', 'CLK'), W('w7', 'mpu1', 'VCC', 'oled1', 'VIN'), W('w8', 'mpu1', 'GND', 'oled1', 'GND')];
+  editor.importProject(file);
+  const tick = s => { for (let t = 0; t < s; t += 0.05) { sim.i2cPrepare(); sim.mcu.run(0.05 * 16e6); sim.step(); } code.serial.flush(); };
+
+  code.source = sketch('i2c-mpu-adafruit');
+  await sim.start(); assert.ok(sim.running);
+  tick(0.6);
+  assert.match(code.serial.text, /mpu ok/);
+  let snap = sim.snapshot();
+  const m = snap.i2c.find(d => d.id === 'mpu1');
+  assert.equal(m.onBus, true); assert.equal(m.address, '0x68'); assert.equal(m.asleep, false);
+  assert.equal(m.accelG.z, 1);
+  assert.ok(editor.els.get('mpu1').querySelector('wokwi-mpu6050').led1, 'power LED on');
+
+  // right-click → inspector; a preset tilts it and the running firmware sees it
+  editor.emit('part-context', { part: editor.partById('mpu1'), clientX: 300, clientY: 200 });
+  assert.equal(doc.getElementById('mpuEditor').hidden, false);
+  [...doc.querySelectorAll('#mpuPresets button')].find(b => b.textContent === 'On its side').click();
+  assert.equal(editor.partById('mpu1').roll, 90);
+  assert.match(doc.getElementById('mpuRead').textContent, /y 1\.00/);
+  tick(0.3);
+  assert.match(code.serial.text.trim().split(/\r?\n/).pop(), /^z:0\.0 x:0\.0/);
+  assert.equal(sim.snapshot().i2c.find(d => d.id === 'mpu1').accelG.y, 1);
+  const pitch = doc.getElementById('mpuPitch');
+  pitch.value = '-30'; pitch.dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal(editor.partById('mpu1').pitch, -30);
+  sim.stop();
+
+  code.source = sketch('i2c-oled');
+  await sim.start(); tick(1.2);
+  assert.match(code.serial.text, /drawn/);
+  const px = (x, y) => editor.els.get('oled1').querySelector('wokwi-ssd1306').imageData.data[(y * 128 + x) * 4];
+  assert.ok(px(0, 0) > 100 && px(9, 9) > 100 && px(127, 63) > 100, 'drawn pixels are lit on the element');
+  assert.ok(px(64, 32) < 50, 'the rest is dark');
+  assert.equal(sim.snapshot().i2c.find(d => d.id === 'oled1').litPixels, 101);
+  sim.stop();
+
+  // pull SCL off the MPU: it drops off the bus, the tray says why, the sketch reports it
+  const cut = editor.exportProject(); cut.wires = cut.wires.filter(x => x.id !== 'w2'); editor.importProject(cut);
+  code.source = sketch('i2c-mpu-adafruit');
+  await sim.start(); tick(0.4);
+  assert.match(code.serial.text, /no mpu/);
+  assert.match(doc.getElementById('simNotes').textContent, /SCL is not connected to A5/);
+  snap = sim.snapshot();
+  assert.equal(snap.i2c.find(d => d.id === 'mpu1').onBus, false);
+  sim.stop();
 });

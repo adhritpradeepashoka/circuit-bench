@@ -395,7 +395,7 @@ export class Editor {
       if (this.draft) { e.preventDefault(); return; }
       if (e.target.closest?.('.part-editor')) return;
       const partEl = e.target.closest?.('.part'), part = partEl && this.partById(partEl.dataset.id);
-      if (part && (part.type === 'resistor' || part.type === 'led' || CONTROLS[part.type])) {          // right-click → edit value / colour
+      if (part && (part.type === 'resistor' || part.type === 'led' || CONTROLS[part.type] || PART_DEFS[part.type]?.inspector)) {          // right-click → edit value / colour
         e.preventDefault();
         this.select({ kind: 'part', id: part.id });
         this.emit('part-context', { part, clientX: e.clientX, clientY: e.clientY });

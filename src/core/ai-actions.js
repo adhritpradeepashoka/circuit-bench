@@ -20,7 +20,7 @@ export function describeCatalog() {
     // with the quantity it measures, which is backwards for the NTC and LDR modules and silently
     // inverts any firmware comparison it writes (regression: "LED on above 50°C" came out on below
     // 25°C and off above it, because nothing told the model OUT falls as temperature rises).
-    const note = CONTROLS[def.type]?.note ? ` — ${CONTROLS[def.type].note}` : '';
+    const note = [CONTROLS[def.type]?.note, def.aiNote].filter(Boolean).map(n => ` — ${n}`).join('');
     return `- ${def.type}: pins ${pins}${props}${note}`;
   });
   return lines.join('\n');

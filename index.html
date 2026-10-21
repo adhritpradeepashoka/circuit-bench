@@ -83,6 +83,20 @@
           <div class="pe-msg" id="valNote"></div>
           <div class="pe-presets ve-presets" id="valPresets"></div>
         </div>
+        <div class="part-editor mpu-editor" id="mpuEditor" hidden role="dialog" aria-label="Tilt the MPU-6050">
+          <div class="pe-head"><span class="pe-title">MPU-6050 orientation</span><button type="button" class="pane-x" id="mpuClose" aria-label="Close"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+          <div class="mpu-view" id="mpuView"><span class="mpu-hint" id="mpuHint">Loading 3D view…</span></div>
+          <div class="mpu-legend"><i class="ax-x"></i>X <i class="ax-y"></i>Y <i class="ax-z"></i>Z <span>drag to turn · Shift = roll</span></div>
+          <label class="pe-field mpu-field"><span>Roll (about X) <b id="mpuRollV">0°</b></span><input type="range" id="mpuRoll" min="-180" max="180" step="1" value="0"></label>
+          <label class="pe-field mpu-field"><span>Pitch (about Y) <b id="mpuPitchV">0°</b></span><input type="range" id="mpuPitch" min="-90" max="90" step="1" value="0"></label>
+          <label class="pe-field mpu-field"><span>Yaw (about Z) <b id="mpuYawV">0°</b></span><input type="range" id="mpuYaw" min="-180" max="180" step="1" value="0"></label>
+          <label class="pe-field mpu-field"><span>Chip temperature <b id="mpuTempV">25 °C</b></span><input type="range" id="mpuTemp" min="-24" max="80" step="1" value="25"></label>
+          <div class="pe-presets mpu-presets" id="mpuPresets">
+            <button type="button" data-pose="0,0,0">Flat</button><button type="button" data-pose="0,-45,0">Nose up 45°</button><button type="button" data-pose="45,0,0">Right 45°</button>
+            <button type="button" data-pose="90,0,0">On its side</button><button type="button" data-pose="180,0,0">Upside down</button><button type="button" data-pose="0,0,90">Turned 90°</button>
+          </div>
+          <div class="pe-msg mpu-read" id="mpuRead"></div>
+        </div>
         <div class="tip" id="tip" hidden></div>
         <div class="hint-card" id="hintCard">
           <b>Build your first circuit</b>

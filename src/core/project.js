@@ -14,6 +14,7 @@ const clean = {
   lux: num(0.1, 1e5),      // photoresistor
   temp: num(-24, 80),      // NTC, °C
   len: num(38.4, 600),     // resistor lead spacing (world px)
+  roll: num(-180, 180), pitch: num(-90, 90), yaw: num(-180, 180),   // MPU-6050 orientation, degrees
 };
 export const propsOf = part => Object.fromEntries(Object.keys(PART_DEFS[part.type]?.props || {}).map(k => { const d = PART_DEFS[part.type].props[k]; return [k, clean[k](part[k] ?? d, d)]; }));
 

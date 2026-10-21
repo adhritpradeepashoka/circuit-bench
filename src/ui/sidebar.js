@@ -18,8 +18,10 @@ const BLURB = {
   potentiometer: '10 kΩ, right-click to turn',
   'ldr-module': 'AO + DO, right-click for light level',
   'ntc-sensor': 'β 3950, right-click for temperature',
+  mpu6050: 'I²C, right-click to tilt it in 3D',
+  ssd1306: 'I²C graphics display, 0x3C',
 };
-const KEYWORDS = { led: 'diode light', resistor: 'ohm resistance value 220 pullup', pushbutton: 'switch button input', 'rgb-led': 'rgb colour multicolor tricolor light', 'slide-switch': 'switch toggle spdt input', 'seven-segment': 'display digit number 7 segment 7seg numeric', 'pir-sensor': 'motion sensor pir hc-sr501 presence detector', potentiometer: 'pot knob dial trimmer analog variable resistor volume', 'ldr-module': 'ldr light sensor photoresistor brightness lux analog', 'ntc-sensor': 'temperature thermistor ntc sensor heat analog', breadboard: 'protoboard solderless', 'arduino-uno': 'mcu atmega328p microcontroller' };
+const KEYWORDS = { led: 'diode light', resistor: 'ohm resistance value 220 pullup', pushbutton: 'switch button input', 'rgb-led': 'rgb colour multicolor tricolor light', 'slide-switch': 'switch toggle spdt input', 'seven-segment': 'display digit number 7 segment 7seg numeric', 'pir-sensor': 'motion sensor pir hc-sr501 presence detector', potentiometer: 'pot knob dial trimmer analog variable resistor volume', 'ldr-module': 'ldr light sensor photoresistor brightness lux analog', 'ntc-sensor': 'temperature thermistor ntc sensor heat analog', breadboard: 'protoboard solderless', 'arduino-uno': 'mcu atmega328p microcontroller', mpu6050: 'mpu6050 mpu-6050 gy-521 accelerometer gyroscope gyro imu tilt motion orientation i2c', ssd1306: 'oled display screen ssd1306 128x64 graphics lcd i2c' };
 
 export function initSidebar(editor) {
   let query = '';

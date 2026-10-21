@@ -127,6 +127,11 @@ export function compile(state) {
       const vcc = netOf(part.id, 'VCC'), gnd = netOf(part.id, 'GND'), out = netOf(part.id, 'OUT');
       elements.push({ kind: 'R', partId: part.id, a: vcc, b: out, ohms: FIXED_OHMS });
       elements.push({ kind: 'R', partId: part.id, a: out, b: gnd, ohms: ntcOhms(part.temp ?? 25) });
+    } else if (PART_DEFS[part.type].i2c) {
+      // I²C breakout boards carry pull-ups on SDA/SCL to their supply, so an idle bus reads HIGH
+      const { sda, scl, vcc } = PART_DEFS[part.type].i2c, v = netOf(part.id, vcc[0]);
+      elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, sda), b: v, ohms: 4700 });
+      elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, scl), b: v, ohms: 4700 });
     } else if (part.type === 'pir-sensor') {
       elements.push({ kind: 'PIR', partId: part.id, vcc: netOf(part.id, 'VCC'), out: netOf(part.id, 'OUT'), gnd: netOf(part.id, 'GND') });
     }

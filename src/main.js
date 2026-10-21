@@ -9,12 +9,13 @@ import { initLedEditor } from './ui/led-editor.js';
 import { initValueEditor } from './ui/value-editor.js';
 import { initAiPanel } from './ui/ai-panel.js';
 import { initProjects } from './ui/projects.js';
+import { initMpuInspector } from './ui/mpu-inspector.js';
 import { WOKWI_PINS } from './core/pins.generated.js';
 
 const $ = id => document.getElementById(id);
 
 // Wait until the web components are defined so their geometry can be sanity-checked and they render immediately.
-await Promise.all(['wokwi-arduino-uno', 'wokwi-led', 'wokwi-resistor', 'wokwi-pushbutton'].map(t => customElements.whenDefined(t)));
+await Promise.all(['wokwi-arduino-uno', 'wokwi-led', 'wokwi-resistor', 'wokwi-pushbutton', 'wokwi-mpu6050', 'wokwi-ssd1306'].map(t => customElements.whenDefined(t)));
 
 // Dev safety net: the generated pin tables must match what the installed library reports.
 for (const [tag, pins] of Object.entries(WOKWI_PINS)) {
@@ -31,6 +32,7 @@ editor.init();
 initResistorEditor(editor);
 initLedEditor(editor);
 initValueEditor(editor);
+initMpuInspector(editor);
 const ai = initAiPanel(editor, code, sim);
 const projects = initProjects({ editor, code, sim });
 $('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });

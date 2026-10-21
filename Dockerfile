@@ -27,6 +27,8 @@ ENV ARDUINO_DIRECTORIES_DATA=/opt/arduino/data \
 RUN curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh \
  && arduino-cli core update-index \
  && arduino-cli core install arduino:avr@1.8.6 \
+ && arduino-cli lib install "Adafruit MPU6050@2.2.6" "Adafruit Unified Sensor@1.1.15" "Adafruit BusIO@1.17.0" \
+                            "Adafruit SSD1306@2.5.13" "Adafruit GFX Library@1.12.1" \
  && arduino-cli version
 
 # Unprivileged user; the toolchain stays read-only at run time, builds happen in /tmp

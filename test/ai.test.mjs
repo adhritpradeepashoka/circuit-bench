@@ -308,3 +308,21 @@ test('describeHistory / chatHistory: earlier turns reach the prompt oldest-first
   await createAiService({ fetchImpl: b.fetchImpl }).generateCode({ instruction: 'blink', userKey: 'k' });
   assert.doesNotMatch(b.seen.prompt, /Conversation so far/);
 });
+
+test('describeContext: I²C devices — on/off the bus with the reason, live MPU readings, OLED state, and addresses nothing answers', () => {
+  const text = describeContext({ sim: { running: true, seconds: 1, pins: [], i2c: [
+    { id: 'mpu1', type: 'mpu6050', address: '0x68', onBus: true, asleep: false, accelG: { x: 0, y: 1, z: 0 }, gyroDps: { x: 0, y: 0, z: 12.5 }, tempC: 25 },
+    { id: 'oled1', type: 'ssd1306', address: '0x3C', onBus: false, problems: ['OLED: CLK is not connected to A5 (SCL), so the Arduino can\'t reach it'], on: false },
+  ], i2cUnanswered: ['0x3D'] } });
+  assert.match(text, /mpu1 \(mpu6050\) at 0x68: answering on the I²C bus; accel x=0 g y=1 g z=0 g; gyro x=0 °\/s y=0 °\/s z=12\.5 °\/s; temp 25 °C/);
+  assert.match(text, /oled1 \(ssd1306\) at 0x3C: NOT on the bus; display off/);
+  assert.match(text, /problem: OLED: CLK is not connected to A5/);
+  assert.match(text, /the sketch addressed 0x3D, and nothing on the bus has that address/);
+});
+
+test('describeCatalog: I²C parts tell the model their address, wiring and which libraries exist', async () => {
+  const { describeCatalog } = await import('../src/core/ai-actions.js');
+  const t = describeCatalog();
+  assert.match(t, /- mpu6050: pins .*SDA.*SCL.*— I²C at 0x68 .*Adafruit_MPU6050/);
+  assert.match(t, /- ssd1306: pins .*— I²C at 0x3C.*Adafruit_SSD1306/);
+});

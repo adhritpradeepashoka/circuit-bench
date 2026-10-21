@@ -1,7 +1,8 @@
 import {
   CPU, AVRIOPort, AVRTimer, PinState, avrInstruction,
-  portBConfig, portCConfig, portDConfig, timer0Config, timer1Config, timer2Config, AVRADC, adcConfig, AVRUSART, usart0Config,
+  portBConfig, portCConfig, portDConfig, timer0Config, timer1Config, timer2Config, AVRADC, adcConfig, AVRUSART, usart0Config, AVRTWI, twiConfig,
 } from 'avr8js';
+import { I2CBus } from './i2c.js';
 
 export const CPU_HZ = 16_000_000;
 
@@ -47,6 +48,9 @@ export class Mcu {
     this.rxQueue = [];
     this.usart.onByteTransmit = byte => this.onSerial?.(byte);
     this.usart.onRxComplete = () => this.pumpRx();
+    // TWI (Wire / I²C on A4 = SDA, A5 = SCL): the bus answers for whatever devices are wired up
+    this.twi = new AVRTWI(this.cpu, twiConfig, CPU_HZ);
+    this.i2c = new I2CBus(this.twi);
   }
   /** Send text (or bytes) to the firmware's Serial input. */
   serialWrite(data) {

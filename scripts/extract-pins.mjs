@@ -22,6 +22,8 @@ const files = {
   'wokwi-potentiometer': 'potentiometer-element.js',
   'wokwi-photoresistor-sensor': 'photoresistor-sensor-element.js',
   'wokwi-ntc-temperature-sensor': 'ntc-temperature-sensor-element.js',
+  'wokwi-mpu6050': 'mpu6050-element.js',
+  'wokwi-ssd1306': 'ssd1306-element.js',
 };
 const out = {};
 for (const [tag, file] of Object.entries(files)) {

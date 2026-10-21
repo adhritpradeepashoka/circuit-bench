@@ -88,9 +88,25 @@ export const PART_DEFS = {
     w: 135.391, h: 74.797, pins: fromWokwi('wokwi-ntc-temperature-sensor', n => ({ GND: 'GND', VCC: 'VCC', OUT: 'OUT (analog)' }[n])),
     groups: [], insertable: true, layer: 2, props: { temp: 25 },
   },
+  // I²C parts: `i2c` says which pins are the bus and power, and the address (src/core/i2c.js decides whether
+  // a part is really on the bus; src/parts/* hold the device models the simulated chip talks to).
+  mpu6050: {
+    type: 'mpu6050', name: 'MPU-6050 Accelerometer + Gyro', category: 'Sensors', tag: 'wokwi-mpu6050',
+    w: 21.6 * MM, h: 16.2 * MM, pins: fromWokwi('wokwi-mpu6050', n => ({ INT: 'INT (interrupt)', AD0: 'AD0 (address: GND → 0x68, VCC → 0x69)', XCL: 'XCL (aux I²C, unused)', XDA: 'XDA (aux I²C, unused)', SDA: 'SDA (I²C data → A4)', SCL: 'SCL (I²C clock → A5)', GND: 'GND', VCC: 'VCC' }[n])),
+    groups: [], insertable: true, layer: 2, props: { roll: 0, pitch: 0, yaw: 0, temp: 25 }, inspector: true,
+    i2c: { sda: 'SDA', scl: 'SCL', vcc: ['VCC'], gnd: ['GND'], address: 0x68, addressPin: 'AD0', addressHigh: 0x69 },
+    aiNote: 'I²C at 0x68 (0x69 if AD0 is wired to VCC). Wire VCC→5V, GND→GND, SDA→A4, SCL→A5. Libraries available: Wire, Adafruit_MPU6050 (+ Adafruit_Sensor). Accel reads +1 g on Z when flat. The student tilts it by right-clicking it (roll/pitch/yaw).',
+  },
+  ssd1306: {
+    type: 'ssd1306', name: 'OLED Display 128×64 (SSD1306)', category: 'Displays', tag: 'wokwi-ssd1306',
+    w: 150, h: 116, pins: fromWokwi('wokwi-ssd1306', n => ({ DATA: 'DATA (SDA → A4)', CLK: 'CLK (SCL → A5)', DC: 'DC (SPI only)', RST: 'RST (optional)', CS: 'CS (SPI only)', '3V3': '3.3 V out', VIN: 'VIN (5 V in)', GND: 'GND' }[n])),
+    groups: [], insertable: false, layer: 2,
+    i2c: { sda: 'DATA', scl: 'CLK', vcc: ['VIN', '3V3'], gnd: ['GND'], address: 0x3c },
+    aiNote: 'I²C at 0x3C. Wire VIN→5V, GND→GND, DATA→A4 (SDA), CLK→A5 (SCL). Libraries available: Wire, Adafruit_SSD1306 + Adafruit_GFX (use display.begin(SSD1306_SWITCHCAPVCC, 0x3C), and call display.display() after drawing).',
+  },
 };
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor'];
+export const CATALOG_ORDER = ['arduino-uno', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'mpu6050', 'ssd1306'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

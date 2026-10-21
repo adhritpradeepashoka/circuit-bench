@@ -80,6 +80,19 @@ export function describeContext(context) {
       const pressed = list(s.pressed, 10).map(p => str(p, 30));
       if (pressed.length) out.push(`  Buttons held down right now: ${pressed.join(', ')}`);
       for (const w of list(s.warnings, 10)) out.push(`  Electrical warning: ${str(w, 300)}`);
+      for (const d of list(s.i2c, 8)) {
+        if (!d || typeof d !== 'object') continue;
+        const bits = [`${str(d.id, 30)} (${str(d.type, 20)}) at ${str(d.address, 6)}: ${d.onBus ? 'answering on the I²C bus' : 'NOT on the bus'}`];
+        if (d.asleep) bits.push('still asleep (the sketch has not woken it: PWR_MGMT_1 / begin())');
+        if (d.accelG) bits.push(`accel ${['x', 'y', 'z'].map(k => `${k}=${Number(d.accelG[k]) || 0} g`).join(' ')}`);
+        if (d.gyroDps) bits.push(`gyro ${['x', 'y', 'z'].map(k => `${k}=${Number(d.gyroDps[k]) || 0} °/s`).join(' ')}`);
+        if (d.tempC != null) bits.push(`temp ${Number(d.tempC)} °C`);
+        if (d.on != null) bits.push(d.on ? `display on, ${Number(d.litPixels) || 0} pixels lit${d.inverted ? ', inverted' : ''}` : 'display off / never initialised');
+        out.push(`  I²C: ${bits.join('; ')}`);
+        for (const p of list(d.problems, 5)) out.push(`    problem: ${str(p, 200)}`);
+      }
+      const ua = list(s.i2cUnanswered, 8).map(a => str(a, 6));
+      if (ua.length) out.push(`  I²C: the sketch addressed ${ua.join(', ')}, and nothing on the bus has that address`);
     }
     if (s.error) out.push(`  Simulator error: ${str(s.error, 300)}`);
     for (const i of list(s.issues, 10)) out.push(`Wiring problem detected: ${str(i, 300)}`);

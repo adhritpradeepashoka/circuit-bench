@@ -3,6 +3,11 @@ import { solveDrive } from '../core/solver.js';
 import { PART_DEFS } from '../core/parts.js';
 import { compileSketch } from '../sim/compile-client.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
+import { i2cParts, i2cHex } from '../core/i2c.js';
+import { Mpu6050 } from '../parts/mpu6050.js';
+import { Ssd1306, OLED_W, OLED_H } from '../parts/ssd1306.js';
+
+const I2C_MODELS = { mpu6050: () => new Mpu6050(), ssd1306: () => new Ssd1306() };
 
 const $ = id => document.getElementById(id);
 const LED_FULL_A = 0.010;   // ≈ full brightness at 10 mA
@@ -63,6 +68,8 @@ export class Simulation {
       this.mcu.usart.onConfigurationChange = () => serial.setBaud(Math.round(this.mcu.baud));
     }
     this.code.setRunning?.(true);
+    this.models = new Map(); this.i2cInfo = []; this.i2cVersion = -1;
+    this.i2cPrepare();                                  // attach I²C devices before setup() runs its Wire.begin()/begin() calls
     this.running = true; this.paused = false; this.error = null; this.lastSig = ''; this.result = null;
     this.editor.setRunning(true);
     this.editor.probe = net => (this.result ? this.result.voltage(net) : null);
@@ -110,6 +117,7 @@ export class Simulation {
     try {
       if (!this.paused) {
         const dt = Math.min(0.05, (ts - this.last) / 1000);
+        this.i2cPrepare();                         // devices see this frame's wiring + tilt before the firmware runs
         this.mcu.run(dt * CPU_HZ);
         this.step();
       }
@@ -129,6 +137,7 @@ export class Simulation {
     }
     this.duty = duty;
     const sig = `${circuit.version}|${[...modes].join(',')}|${[...duty].map(([n, d]) => `${n}:${d.toFixed(3)}`).join(',')}|${[...this.pressed].join(',')}`;
+    this.i2cPrepare(); this.i2cVisuals();               // an OLED redraws whenever the firmware changed its RAM, even if no pin did
     if (sig === this.lastSig && this.result) return;
     this.lastSig = sig;
     this.modes = modes;
@@ -146,6 +155,34 @@ export class Simulation {
       this.mcu.setAnalog(ch, v == null ? 0 : v);
     }
     this.applyVisuals(circuit);
+  }
+
+  /** Which I²C parts are on the bus (re-checked when the wiring changes), and feed them the user's inputs (e.g. the MPU-6050's tilt). */
+  i2cPrepare() {
+    const circuit = this.editor.getCircuit();
+    if (circuit.version !== this.i2cVersion) {
+      this.i2cVersion = circuit.version;
+      this.i2cInfo = i2cParts(circuit, this.editor.state.parts);
+      for (const id of [...this.models.keys()]) if (!this.i2cInfo.some(d => d.partId === id)) this.models.delete(id);
+      for (const d of this.i2cInfo) if (!this.models.has(d.partId)) this.models.set(d.partId, I2C_MODELS[d.type]());
+      this.mcu.i2c.setDevices(new Map(this.i2cInfo.filter(d => d.attached).map(d => [d.address, this.models.get(d.partId)])));
+    }
+    for (const d of this.i2cInfo) {
+      const m = this.models.get(d.partId);
+      if (m instanceof Mpu6050) m.setPose(this.editor.partById(d.partId) || {}, this.mcu.seconds);
+    }
+  }
+
+  i2cVisuals() {
+    for (const d of this.i2cInfo) {
+      const root = this.editor.els.get(d.partId), m = this.models.get(d.partId);
+      if (!root || !m) continue;
+      if (d.type === 'mpu6050') { const el = root.querySelector('wokwi-mpu6050'); const on = !d.problems.some(p => /power|GND/.test(p)); if (el && el.led1 !== on) el.led1 = on; }
+      else if (d.type === 'ssd1306') {
+        const el = root.querySelector('wokwi-ssd1306');
+        if (el?.imageData && el._drawn !== m.version) { el._drawn = m.version; m.renderRGBA(el.imageData.data); el.redraw?.(); }
+      }
+    }
   }
 
   applyVisuals(circuit) {
@@ -186,6 +223,8 @@ export class Simulation {
       if (part.type === 'seven-segment') { const el = root?.querySelector('wokwi-7segment'); if (el) el.values = [0, 0, 0, 0, 0, 0, 0, 0]; }
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
       if (part.type === 'arduino-uno') { const el = root?.querySelector('wokwi-arduino-uno'); if (el) { el.ledPower = false; el.led13 = false; } }
+      if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
+      if (part.type === 'ssd1306') { const el = root?.querySelector('wokwi-ssd1306'); if (el?.imageData) { el.imageData.data.fill(0); for (let i = 3; i < el.imageData.data.length; i += 4) el.imageData.data[i] = 255; el._drawn = null; el.redraw?.(); } }
     }
   }
 
@@ -212,11 +251,26 @@ export class Simulation {
       if (part.type === 'led') { const i = this.result.ledCurrent.get(part.id) || 0; leds.push({ id: part.id, mA: r2(i * 1000), on: i > 5e-5 }); }
       else if (part.type === 'rgb-led') for (const ch of ['R', 'G', 'B']) { const i = this.result.ledCurrent.get(`${part.id}:${ch}`) || 0; leds.push({ id: `${part.id}:${ch}`, mA: r2(i * 1000), on: i > 5e-5 }); }
     }
+    const i2c = (this.i2cInfo || []).map(d => {
+      const m = this.models.get(d.partId), e = { id: d.partId, type: d.type, address: i2cHex(d.address), onBus: d.attached };
+      if (d.problems.length) e.problems = d.problems;
+      if (m instanceof Mpu6050) { const r = m.readings(); e.asleep = m.asleep; e.accelG = Object.fromEntries(Object.entries(r.accel).map(([k, v]) => [k, r2(v)])); e.gyroDps = Object.fromEntries(Object.entries(r.gyro).map(([k, v]) => [k, r2(v)])); e.tempC = r2(r.tempC); }
+      if (m instanceof Ssd1306) Object.assign(e, m.summary());
+      return e;
+    });
+    const unanswered = this.i2cUnanswered();
     return {
       running: true, paused: this.paused, seconds: r2(this.mcu.seconds),
-      pins, leds, pressed: [...this.pressed],
+      pins, leds, pressed: [...this.pressed], i2c, ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
       warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
     };
+  }
+
+  /** Addresses the sketch tried that no part could ever answer (e.g. 0x3D when the display is at 0x3C). */
+  i2cUnanswered() {
+    if (!this.mcu) return [];
+    const own = new Set((this.i2cInfo || []).map(d => d.address));
+    return this.mcu.i2c.unanswered().filter(a => !own.has(a)).map(i2cHex);
   }
 
   scheduleIdleRefresh() {
@@ -226,7 +280,8 @@ export class Simulation {
 
   refreshTray() {
     const tray = $('simTray'), circuit = this.editor.getCircuit();
-    const notes = [...circuit.issues.map(i => i.text), ...(this.running ? (circuit.openLeads || []).map(o => o.text) : []), ...(this.running && this.result ? this.result.warnings.map(w => w.text) : [])];
+    const notes = [...circuit.issues.map(i => i.text), ...(this.running ? (circuit.openLeads || []).map(o => o.text) : []), ...(this.running && this.result ? this.result.warnings.map(w => w.text) : []),
+      ...(this.running ? (this.i2cInfo || []).flatMap(d => d.problems) : []), ...(this.running ? this.i2cUnanswered().map(a => `The sketch is looking for an I²C device at ${a}, but nothing on the bus has that address`) : [])];
     if (this.error) notes.unshift(`Simulator error: ${this.error}`);
     const uniq = [...new Set(notes)];
     tray.hidden = !this.running && !uniq.length;
