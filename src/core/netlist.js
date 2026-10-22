@@ -163,7 +163,10 @@ export function compile(state) {
         if (under) {
           const bs = PART_DEFS[under.type].spec.board, M = 6;
           const taps = tapsUnder(bs, (x, y) => localToWorld(under, x * BOARD_SCALE + M, y * BOARD_SCALE + M), mid, part.rot, pin => netOf(under.id, pin)).filter(t => t.net != null);
-          if (taps.length) elements.push({ kind: 'SLIME', partId: part.id, ref: r('ref'), taps, rs: 2000 + 1000 * Math.max(1, part.mcontact ?? 5) });
+          if (taps.length) {      // the board's common net (the pin with the most pads) is the bath: everything else is measured against it
+            let refIdx = 0; taps.forEach((t, i) => { if (t.pads.length > taps[refIdx].pads.length) refIdx = i; });
+            elements.push({ kind: 'SLIME', partId: part.id, ref: taps[refIdx].net, refIdx, taps, rs: 2000 + 1000 * Math.max(1, part.mcontact ?? 5) });
+          }
         }
       }
       else if (kind === 'signal-source') {

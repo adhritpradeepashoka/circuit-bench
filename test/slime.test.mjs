@@ -30,10 +30,12 @@ test('covered pads oscillate with the wave and the stimulus; uncovered pads only
 test('an organism laid over an imported board feeds the board’s electrode pins, and a BioAmp Pill reads the difference between two of them', () => {
   const v = validatePartSpec({
     id: 'custom-test-grid', name: 'Grid', package: 'board', breadboard: false,
-    pins: [{ id: 'A', x: 5, y: 5 }, { id: 'B', x: 5, y: 15 }, { id: 'C', x: 5, y: 25 }],
+    pins: [{ id: 'A', x: 5, y: 5 }, { id: 'B', x: 5, y: 15 }, { id: 'C', x: 5, y: 25 }],      // C: the board's common net (two pads)
     board: { w: 80, h: 80, shape: 'rect', cx: 40, cy: 40, r: 40, pads: [
       { x: 40, y: 40, w: 8, h: 8, shape: 'rect', hole: 0, pin: 'A', side: 'F' },      // under the organism's centre
       { x: 70, y: 70, w: 8, h: 8, shape: 'rect', hole: 0, pin: 'B', side: 'F' },      // far corner: uncovered
+      { x: 28, y: 52, w: 8, h: 8, shape: 'rect', hole: 0, pin: 'C', side: 'F' },      // the common net has the most pads: it becomes the bath reference
+      { x: 52, y: 28, w: 8, h: 8, shape: 'rect', hole: 0, pin: 'C', side: 'F' },
       { x: 5, y: 5, w: 1.7, h: 1.7, shape: 'rect', hole: 1, pin: 'A', side: 'F' },    // a header hole: ignored
     ], tracks: [] },
     behaviour: { kind: 'none', roles: {} },
@@ -47,10 +49,12 @@ test('an organism laid over an imported board feeds the board’s electrode pins
   const bat = { id: 'b', type: 'battery', x: 900, y: 0, rot: 0, volts: 5 };
   const W = (a, ap, b, bp) => ({ id: `${a}${ap}${b}${bp}`, a: { part: a, pin: ap }, b: { part: b, pin: bp }, style: 'straight', color: '#000', width: 2 });
   const c = compile({ parts: [{ id: 'uno', type: 'arduino-uno', x: 1500, y: 0, rot: 0 }, bat, grid, mold, pill],
-    wires: [W('b', '+', 'p', 'VCC'), W('b', '-', 'p', 'GND'), W('b', '-', 'uno', 'GND.1'), W('g', 'A', 'p', 'IN+'), W('g', 'B', 'p', 'IN-'), W('m', 'REF', 'p', 'REF')] });
+    wires: [W('b', '+', 'p', 'VCC'), W('b', '-', 'p', 'GND'), W('b', '-', 'uno', 'GND.1'), W('g', 'A', 'p', 'IN+'), W('g', 'B', 'p', 'IN-'), W('g', 'C', 'p', 'REF')] });
   const e = c.elements.find(x => x.kind === 'SLIME');
   assert.ok(e, 'the organism found the board under it');
-  assert.deepEqual(e.taps.map(t => t.pin).sort(), ['A', 'B'], 'one tap per electrode net; the header hole is not an electrode');
+  assert.deepEqual(e.taps.map(t => t.pin).sort(), ['A', 'B', 'C'], 'one tap per electrode net; the header hole is not an electrode');
+  assert.equal(e.taps[e.refIdx].pin, 'C', 'the board’s common net is the reference — the organism itself has no wiring');
+  assert.deepEqual(PART_DEFS['custom-slime-mold'].pins, [], 'the organism has no pins');
   const t = 37, vs = slimePotentials(e.taps, mold, t);
   const r = solveDrive(c, { pins: new Map(), pressed: new Set(), duty: new Map(), signals: new Map([['m', vs]]) });
   near(r.voltage(c.netOf('p', 'OUT')), 2.5 + 1000 * (vs[0] - vs[1]), 0.08, 'the Pill amplifies A − B');

@@ -214,7 +214,7 @@ export const EXTRA_BEHAVIOURS = {
   },
   'slime-mold': {
     label: 'Slime mold (Physarum) on an electrode grid',
-    ...roles({ ref: 'Bath / reference electrode (REF)' }),
+    ...roles({}),
     props: { mperiod: 60, mamp: 1.2, mspeed: 1, mstim: 0, mnoise: 40, mcontact: 5 },
     settings: [
       { key: 'mperiod', label: 'Oscillation period', kind: 'range', min: 10, max: 180, step: 1, fmt: v => `${Math.round(v)} s` },
@@ -224,7 +224,7 @@ export const EXTRA_BEHAVIOURS = {
       { key: 'mnoise', label: 'Electrode noise', kind: 'range', min: 0, max: 300, step: 5, fmt: v => `${Math.round(v)} µV` },
       { key: 'mcontact', label: 'Electrode contact resistance', kind: 'range', min: 1, max: 100, step: 1, fmt: v => `${Math.round(v)} kΩ` },
     ],
-    note: 'Lay this over an imported electrode board (drag it on top). Each of the board’s electrode pads that the organism covers picks up its slow electrical rhythm — a wave that travels out from the pacemaker lobe — and passes it to that pad’s pin, measured against REF. Wire a pin and a reference pin to a BioAmp Pill, then read the Pill with the Arduino. A modelled, illustrative signal — not data from a real culture.',
+    note: 'No wiring on the organism itself: lay it over an imported electrode board and the BOARD senses it. Each electrode pad the organism covers picks up its slow electrical rhythm — a wave travelling out from the pacemaker lobe — and passes it to that pad’s pin. The board’s common net (the pin with the most pads, e.g. P3 on a 17-pad grid) is the bath reference; every other pin is measured against it. Wire pins and the common pin to your BioAmp Pills as on the real board. A modelled, illustrative signal — not data from a real culture.',
   },
   'signal-source': {
     label: 'Biosignal source (electrodes on a body: ECG, EMG, EEG, EOG)',

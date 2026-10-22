@@ -219,7 +219,7 @@ export function solve(circuit, drive) {
       }
       else if (e.kind === 'SLIME') {      // each electrode net: a Thevenin source (the organism's potential there, through the agar/electrode contact) against the bath
         const vs = drive.signals?.get(e.partId) || [], gc = 1 / e.rs;
-        e.taps.forEach((t, i) => { const v = vs[i] ?? 0; stamp(t.net, e.ref, gc); b[idx.get(t.net)] += gc * v; b[idx.get(e.ref)] -= gc * v; });
+        e.taps.forEach((t, i) => { if (i === e.refIdx || t.net === e.ref) return; const v = (vs[i] ?? 0) - (vs[e.refIdx] ?? 0); stamp(t.net, e.ref, gc); b[idx.get(t.net)] += gc * v; b[idx.get(e.ref)] -= gc * v; });
       }
       else if (e.kind === 'OA') {
         const st = oaState.get(e.partId), o = idx.get(e.out), g = G_OA;

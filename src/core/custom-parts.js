@@ -84,7 +84,7 @@ export function validatePartSpec(raw, { id } = {}) {
   const name = str(raw.name, 40);
   if (!name) errors.push('Give the part a name.');
   const pinsIn = Array.isArray(raw.pins) ? raw.pins.slice(0, MAX_PINS + 1) : [];
-  if (!pinsIn.length) errors.push('A part needs at least one pin.');
+  if (!pinsIn.length && raw.behaviour?.kind !== 'slime-mold') errors.push('A part needs at least one pin.');      // a slime mold is sensed by the board under it, so it has no wiring of its own
   if (pinsIn.length > MAX_PINS) errors.push(`At most ${MAX_PINS} pins.`);
   const pins = [], seen = new Set();
   for (const p of pinsIn.slice(0, MAX_PINS)) {

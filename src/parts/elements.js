@@ -256,8 +256,6 @@ function spriteSVG(spec, w, h, pins) {
       ${veins}
       <circle cx="${(cx + LOBES[0].x * S).toFixed(1)}" cy="${(cy + LOBES[0].y * S).toFixed(1)}" r="4.2" fill="#c9961a"/>
       <text x="${cx}" y="${cy + 3}" text-anchor="middle" font-size="9" font-weight="700" font-family="sans-serif" fill="#6b4f00">Physarum</text>
-      <rect x="${w / 2 - 1.8}" y="${h - 22}" width="3.6" height="15" fill="#c9ccd1" stroke="#8b9096" stroke-width=".5"/>
-      <text x="${w / 2 + 7}" y="${h - 10}" font-size="7" font-family="monospace" fill="#6b4f00">REF</text>
     </svg>`;
   }
   return '';
