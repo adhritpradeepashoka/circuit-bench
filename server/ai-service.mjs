@@ -250,6 +250,10 @@ function statusFor(httpStatus, message) {
 }
 
 /** Is this provider error "that model isn't there (for you)" — so try the next model on the list? */
+/** A hiccup at the host, not a problem with the request: worth trying the next model. */
+const transient = (status, msg) => status >= 500 || status === 429 || /provider returned error|overloaded|temporarily|rate.?limit|upstream|capacity|busy/i.test(String(msg));
+/** A short "safe"/"unsafe" verdict is what a moderation model returns, not an answer to the question — skip to the next model. */
+export const looksLikeVerdict = text => { const t = String(text || '').trim(); return t.length < 80 && /^(?:(?:user|assistant|content) )?(?:safety|moderation)?\s*:?\s*(?:safe|unsafe)\b/i.test(t); };
 const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
 
 /** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
@@ -300,7 +304,7 @@ export const PROVIDERS = {
   nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], anyChat: true, prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
   // openrouter/free is OpenRouter's own router: it hands the request to whichever free model is up right now, so it survives retirements.
-  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free'], effort: 'reasoning', onlyFree: true, anyFree: true, prefer: [/^openrouter\/free$/, /^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^(?:openai\/gpt-oss-(\d+)b|qwen\/qwen[\d.]*-(\d+)b[\w.-]*|deepseek\/deepseek-(?:chat|v)[\w.-]*|mistralai\/mistral[\w.-]*|google\/gemma-(\d+)[\w.-]*):free$/] }),
+  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'openrouter/free'], effort: 'reasoning', onlyFree: true, anyFree: true, prefer: [/^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^(?:openai\/gpt-oss-(\d+)b|qwen\/qwen[\d.]*-(\d+)b[\w.-]*|deepseek\/deepseek-(?:chat|v)[\w.-]*|mistralai\/mistral[\w.-]*|google\/gemma-(\d+)[\w.-]*):free$/, /^openrouter\/free$/] }),
 };
 /** What the browser needs to draw the provider picker. */
 export const PROVIDER_LIST = Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, models: p.models }));
@@ -436,14 +440,14 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
       }
       try { body = await res.json(); } catch { body = null; }
       if (res.ok) {
-        if (!String(p.text(body) || '').trim() && i < wanted.length - 1) { tried.push(wanted[i]); continue; }   // an empty answer (a reasoning model that ran out of room): try the next model
+        if ((!String(p.text(body) || '').trim() || looksLikeVerdict(p.text(body))) && i < wanted.length - 1) { tried.push(wanted[i]); continue; }   // an empty answer (a reasoning model that ran out of room) or a moderation verdict: try the next model
         break;
       }
       msg = p.errorMessage(body) || `HTTP ${res.status}`;
       if (fast && res.status === 400 && /reason|thinking|effort|unknown (field|param)|unrecognized|unexpected|extra inputs|invalid json payload/i.test(msg) && !/key/i.test(msg)) { fast = false; i--; continue; }   // this model doesn't take the speed-up hint: same model, plain request
       tried.push(wanted[i]);
       if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model });
-      if (i < wanted.length - 1 && modelGone(res.status, msg)) continue;            // that model isn't available to this key — try the next one
+      if (i < wanted.length - 1 && (modelGone(res.status, msg) || transient(res.status, msg))) continue;            // that model isn't available to this key — try the next one
       throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ` — none of ${tried.length > 1 ? `the ${tried.length} models I tried (${tried.slice(0, 4).join(', ')}${tried.length > 4 ? '…' : ''})` : `“${tried[0]}”`} is open to this key. Type a model your account can use in the AI settings, or pick another provider.` : ''}`, statusFor(res.status, msg));
     }
     if (!typed) works.set(keyId(p, userKey), wanted[Math.min(tried.length, wanted.length - 1)]);

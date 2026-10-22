@@ -337,7 +337,7 @@ const oaiReply = text => ({ ok: true, status: 200, json: async () => ({ choices:
 const okJson = '```json\n{"actions":[],"code":"void setup(){} void loop(){}","explanation":"ok"}\n```';
 
 test('providers: NVIDIA, Meta Llama and OpenRouter each hit their own OpenAI-compatible endpoint with the right model and bearer key', async () => {
-  for (const [provider, host, model] of [['nvidia', 'integrate.api.nvidia.com', 'meta/llama-3.3-70b-instruct'], ['meta', 'api.llama.com', 'Llama-4-Maverick-17B-128E-Instruct-FP8'], ['openrouter', 'openrouter.ai', 'openrouter/free']]) {
+  for (const [provider, host, model] of [['nvidia', 'integrate.api.nvidia.com', 'meta/llama-3.3-70b-instruct'], ['meta', 'api.llama.com', 'Llama-4-Maverick-17B-128E-Instruct-FP8'], ['openrouter', 'openrouter.ai', 'meta-llama/llama-3.3-70b-instruct:free']]) {
     let url, auth, sent;
     const ai = createAiService({ fetchImpl: async (u, o) => { url = u; auth = o.headers.authorization; sent = JSON.parse(o.body); return oaiReply(okJson); } });
     const res = await ai.generateCode({ instruction: 'blink', userKey: 'k-' + provider, provider });
@@ -394,10 +394,22 @@ test('models: OpenAI-style hosts list /models too; OpenRouter only ever uses :fr
   await mk(['meta-llama/llama-4-maverick', 'meta-llama/llama-3.3-70b-instruct', 'meta-llama/llama-3.3-70b-instruct:free', 'meta-llama/llama-3.1-70b-instruct:free']).generateCode({ instruction: 'x', userKey: 'k3', provider: 'openrouter' });
   assert.equal(chosen, 'meta-llama/llama-3.3-70b-instruct:free');
   await mk(['google/gemini-2.0-flash-exp:free', 'openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free']).generateCode({ instruction: 'x', userKey: 'k5', provider: 'openrouter' });
-  assert.equal(chosen, 'openrouter/free', 'the router that always picks a live free model goes first; experimental models are skipped');
+  assert.equal(chosen, 'meta-llama/llama-3.3-70b-instruct:free', 'a named chat model goes first (the free router can hand the request to a moderation model); experimental models are skipped');
   const down = createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') throw new Error('offline'); chosen = JSON.parse(o.body).model; return oaiReply(okJson); } });
   await down.generateCode({ instruction: 'x', userKey: 'k4', provider: 'groq' });
   assert.equal(chosen, 'openai/gpt-oss-120b');
+});
+
+test('OpenRouter: a bare moderation verdict, or a host hiccup, is not an answer — the next model is tried', async () => {
+  const seen = [];
+  const replies = [oaiReply('safe'), { ok: false, status: 502, json: async () => ({ error: { message: 'Provider returned error' } }) }, oaiReply(okJson)];
+  const ai = createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') return { ok: true, status: 200, json: async () => ({ data: ['meta-llama/llama-3.3-70b-instruct:free', 'mistralai/mistral-small-3.1-24b-instruct:free', 'qwen/qwen3-32b:free'].map(id => ({ id })) }) }; seen.push(JSON.parse(o.body).model); return replies[seen.length - 1]; } });
+  const res = await ai.generateCode({ instruction: 'blink', userKey: 'k-or', provider: 'openrouter' });
+  assert.equal(res.ok, true);
+  assert.equal(seen.length, 3, 'walked down the list instead of stopping at the first reply');
+  const { looksLikeVerdict } = await import('../server/ai-service.mjs');
+  assert.ok(looksLikeVerdict('safe') && looksLikeVerdict('unsafe\nS1'));
+  assert.ok(!looksLikeVerdict('The safe way to wire this: P1 to IN−') && !looksLikeVerdict(okJson));
 });
 
 test('models: NVIDIA lists models an account cannot call ("Not found for account") — walk down the list to one that works, then remember it', async () => {
