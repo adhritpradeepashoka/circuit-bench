@@ -316,16 +316,19 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
   "description": "<one sentence: what it is and how to wire it>",
   "color": "<#rrggbb body colour that looks like the real part>",
   "textColor": "<#rrggbb, readable on that colour>",
-  "package": "dip" | "module",
+  "package": "dip" | "dip-wide" | "quad" | "module",
   "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
   "breadboard": <"module" only: true if the real part plugs into a breadboard; then every pin must be on "bottom">,
   "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <resistor only>, "color": "<led only>", "select": [<mux only>], "channels": [<mux only>], "vars": {<logic only>}, "rules": [<logic only>], "outputs": {<logic only>}, "analog": [<logic only>] },
   "note": "<anything the simulator can't reproduce about the real part — timing, drive current, analog detail — else empty>"
 }
-PACKAGE — get this right or the part will be unusable on a breadboard:
-  - "dip" for any through-hole chip in a DIP package (a 4051, a 74HC595, a 555, an op-amp…). Then list the pins in DATASHEET ORDER, pin 1 first, going all the way round the chip — pin 1, 2, 3 … down one side and back up the other, exactly as the datasheet numbers them. Leave "side" out: the simulator lays them out as two rows 0.3" apart that straddle the breadboard's centre trench, with the notch and pin 1 at the left. An even number of pins is required. Never put all of a chip's pins on one side.
-  - "module" for a breakout board or anything with its own header: then "side" places each pin, and "breadboard": true means a single row of pins along the bottom edge.
-1–32 pins.`;
+PACKAGE — get this right or the part will be the wrong shape and unusable:
+  For every chip package ("dip", "dip-wide", "quad") list the pins in DATASHEET ORDER, pin 1 first, all the way round the chip, and leave "side" out entirely — the simulator places each leg from its pin number, exactly as the datasheet numbers them. Never put all of a chip's pins on one side.
+  - "dip": a through-hole chip 0.3" wide — 8 to 20 pins (555, 4051, 74HC595, an op-amp…). Two rows that straddle a breadboard's centre trench; notch and pin 1 at the left; numbering runs down the bottom row and back along the top. Needs an even number of pins.
+  - "dip-wide": the same but 0.6" wide, for the big through-hole chips — 24 to 40 pins (ATmega328P, 8051, a 68000…). Needs an even number of pins.
+  - "quad": a quad flat pack (QFP/QFN/PLCC) — pins on all FOUR sides, which is how most microprocessors, microcontrollers and FPGAs are actually packaged. Numbering is the QFP standard: anticlockwise seen from above, starting at the TOP of the LEFT side, so pin 1 runs down the left side, then along the bottom left→right, then up the right side, then back along the top right→left. The total must divide by 4 (the same number of pins on each side), minimum 8. Surface mount, so it does not plug into a breadboard — that's expected, wire to it directly.
+  - "module" for a breakout board or anything with its own header: then "side" places each pin ("left" | "right" | "top" | "bottom"), and "breadboard": true means a single row of pins along the bottom edge.
+1–64 pins.`;
 }
 
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {

@@ -12,8 +12,21 @@ import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
-const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 32;
+const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 64;
 const DIP_PAD = 13;
+
+/**
+ * The shapes a part can come in. `auto` means the datasheet's pin numbering decides where every leg goes, so
+ * the student lists pins from pin 1 and never picks sides; `rows` is the spacing between the two rows of a
+ * through-hole chip, in 0.1" units, which is what lets it straddle a breadboard.
+ */
+export const PACKAGES = {
+  module: { label: 'Module / breakout board', auto: false, hint: 'you place each pin' },
+  dip: { label: 'DIP chip, 0.3" (8–20 pins: 555, 4051, 74HC595…)', auto: true, rows: 3, step: 2, insert: true, hint: 'in datasheet order, pin 1 first' },
+  'dip-wide': { label: 'DIP chip, 0.6" wide (28–40 pins: ATmega328P, 8051…)', auto: true, rows: 6, step: 2, insert: true, hint: 'in datasheet order, pin 1 first' },
+  quad: { label: 'Quad flat pack — pins on all four sides (QFP/QFN: a microprocessor)', auto: true, step: 4, insert: false, hint: 'in datasheet order from pin 1, anticlockwise' },
+};
+export const DEFAULT_PACKAGE = 'module';
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const PIN_ID_RE = /^[A-Za-z0-9+\-_.]{1,12}$/;
 
@@ -111,11 +124,21 @@ export function validatePartSpec(raw, { id } = {}) {
       else errors.push(...v.errors);
     }
   }
-  const pkg = raw.package === 'dip' ? 'dip' : 'module';
-  const breadboard = pkg === 'dip' ? true : !!raw.breadboard;          // a DIP always straddles the trench
-  if (pkg === 'dip' && pins.length < 4) errors.push('A DIP chip needs at least 4 pins.');
-  if (pkg === 'dip' && pins.length % 2) errors.push('A DIP chip has the same number of pins on each side, so the total has to be even.');
-  if (pkg === 'module' && breadboard && pins.some(p => p.side !== 'bottom')) errors.push('To plug into a breadboard, every pin of a module has to be on the bottom edge (or make it a DIP chip).');
+  const pkg = PACKAGES[raw.package] ? raw.package : DEFAULT_PACKAGE;
+  const shape = PACKAGES[pkg];
+  // A through-hole chip always straddles the trench; a surface-mount one can never plug in at all.
+  const breadboard = shape.auto ? !!shape.insert : !!raw.breadboard;
+  if (shape.auto) {
+    const min = shape.step === 4 ? 8 : 4;
+    if (pins.length < min) errors.push(`A ${shape.label.split(/[,—(]/)[0].trim()} needs at least ${min} pins.`);
+    else if (pins.length % shape.step) {
+      errors.push(shape.step === 4
+        ? `A quad flat pack has the same number of pins on each of its four sides, so the total has to divide by 4 (you have ${pins.length}).`
+        : `A DIP chip has the same number of pins on each side, so the total has to be even (you have ${pins.length}).`);
+    }
+  } else if (breadboard && pins.some(p => p.side !== 'bottom')) {
+    errors.push('To plug into a breadboard, every pin of a module has to be on the bottom edge (or choose a chip package).');
+  }
   if (errors.length) return { ok: false, errors };
   const spec = {
     id: /^custom-[a-z0-9-]{3,40}$/.test(String(raw.id)) ? raw.id : (id || newCustomId()),
@@ -130,7 +153,8 @@ export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.rando
 
 /** Box size and pin positions (CSS px, local to the part) from a spec: pins sit on a 0.1" grid along their side. */
 export function layoutSpec(spec) {
-  if (spec.package === 'dip') return layoutDip(spec);
+  if (spec.package === 'quad') return layoutQuad(spec);
+  if (PACKAGES[spec.package]?.rows) return layoutDip(spec, PACKAGES[spec.package].rows * PITCH);
   const by = s => spec.pins.filter(p => p.side === s);
   const horiz = Math.max(by('top').length, by('bottom').length), vert = Math.max(by('left').length, by('right').length);
   // side pins print their names inside the body, so leave room for them either side of the part's own label
@@ -158,18 +182,39 @@ export function layoutSpec(spec) {
  * numbering running anticlockwise (along the bottom, then back along the top), notch on the left.
  */
 export const DIP_ROWS = 3 * PITCH;       // 0.3 inch between the two rows of legs
-function layoutDip(spec) {
+function layoutDip(spec, rows = DIP_ROWS) {
   const n = spec.pins.length, half = Math.ceil(n / 2);
   const w = Math.max(MIN_W, Math.round((half - 1) * PITCH + DIP_PAD * 2));
-  const h = Math.round(DIP_ROWS + DIP_PAD * 2);
+  const h = Math.round(rows + DIP_PAD * 2);
   const x0 = (w - (half - 1) * PITCH) / 2;
-  const yBot = (h + DIP_ROWS) / 2, yTop = (h - DIP_ROWS) / 2;
+  const yBot = (h + rows) / 2, yTop = (h - rows) / 2;
   const pins = spec.pins.map((p, i) => {
     const bottom = i < half;
     const col = bottom ? i : n - 1 - i;                       // top row runs back from the right
     return { id: p.id, label: p.label, x: +(x0 + col * PITCH).toFixed(2), y: bottom ? yBot : yTop, kind: 'pin', side: bottom ? 'bottom' : 'top', number: i + 1 };
   });
   return { w, h, pins };
+}
+
+/**
+ * A quad flat pack — the microprocessor shape: pins on all four sides, numbered the way every QFP datasheet
+ * numbers them, anticlockwise seen from above starting at the top of the left side. Surface mount, so unlike a
+ * DIP it doesn't plug into a breadboard; on a real bench it would sit on a breakout board.
+ */
+function layoutQuad(spec) {
+  const n = spec.pins.length, k = n / 4, span = (k - 1) * PITCH;
+  const longest = Math.max(0, ...spec.pins.map(p => String(p.id).length));
+  const pad = Math.max(20, Math.ceil(longest * 2.5) + 14);     // room for the pin names printed inside the body
+  const size = Math.max(MIN_W, Math.ceil(span + pad * 2));
+  const at = i => +((size - span) / 2 + i * PITCH).toFixed(2);
+  const pins = spec.pins.map((p, i) => {
+    const side = ['left', 'bottom', 'right', 'top'][Math.floor(i / k)];
+    const j = i % k;
+    const t = at(side === 'right' || side === 'top' ? k - 1 - j : j);   // the right side runs upward, the top runs back to the left
+    const [x, y] = { left: [3, t], bottom: [t, size - 3], right: [size - 3, t], top: [t, 3] }[side];
+    return { id: p.id, label: p.label, x, y, kind: 'pin', side, number: i + 1 };
+  });
+  return { w: size, h: size, pins };
 }
 
 /** The PART_DEFS entry for a spec. */

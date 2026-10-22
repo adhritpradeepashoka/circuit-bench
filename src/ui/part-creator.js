@@ -2,7 +2,7 @@
 // AI, which fills in the same form. Either way the result is a declarative spec checked by validatePartSpec()
 // (src/core/custom-parts.js): it can only describe a part, never run code. Saved parts live in "My parts"
 // (this browser) and travel inside any project that uses them.
-import { BEHAVIOURS, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
+import { BEHAVIOURS, PACKAGES, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
 import { FUNCTIONS } from '../core/expr.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
@@ -32,6 +32,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   // Everything in the library is part of the catalogue from the start.
   for (const raw of loadLibrary()) { const v = validatePartSpec(raw); if (v.ok) registerCustomPart(v.spec); }
 
+  $('pcPackage').replaceChildren(...Object.entries(PACKAGES).map(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; return o; }));
   kindSel.replaceChildren(...Object.entries(BEHAVIOURS).map(([k, b]) => { const o = document.createElement('option'); o.value = k; o.textContent = b.label; return o; }));
 
   const el = (tag, props = {}) => Object.assign(document.createElement(tag), props);
@@ -41,10 +42,10 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       const row = el('div', { className: 'pc-pin' });
       const id = el('input', { value: p.id, maxLength: 12, placeholder: 'Name', ariaLabel: `Pin ${i + 1} name` });
       const label = el('input', { value: p.label === p.id ? '' : p.label, maxLength: 40, placeholder: 'What it is for', ariaLabel: `Pin ${i + 1} purpose` });
-      const dip = draft.package === 'dip';
+      const dip = !!PACKAGES[draft.package]?.auto;
       // On a DIP the datasheet's pin number decides where a leg goes, so the side is shown, not chosen.
       const side = dip
-        ? el('span', { className: 'pc-pin-no', textContent: `pin ${i + 1}`, title: `${i < Math.ceil(draft.pins.length / 2) ? 'Bottom' : 'Top'} row — this is where the datasheet puts it` })
+        ? el('span', { className: 'pc-pin-no', textContent: `pin ${i + 1}`, title: 'The datasheet numbering decides which side this leg is on' })
         : el('select', { ariaLabel: `Pin ${i + 1} side` });
       if (!dip) {
         for (const [v, t] of SIDES) side.append(el('option', { value: v, textContent: t }));
@@ -203,11 +204,12 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   function paintForm() {
     $('pcName').value = draft.name; $('pcLabel').value = draft.label === draft.name.slice(0, 16) ? '' : draft.label;
     $('pcColor').value = draft.color; $('pcTextColor').value = draft.textColor; $('pcDesc').value = draft.description || '';
-    const dip = draft.package === 'dip';
-    $('pcPackage').value = dip ? 'dip' : 'module';
+    const shape = PACKAGES[draft.package] || PACKAGES.module;
+    $('pcPackage').value = PACKAGES[draft.package] ? draft.package : 'module';
     $('pcBreadboard').checked = !!draft.breadboard;
-    $('pcBreadboard').closest('.pc-check').hidden = dip;          // a DIP always plugs in; it has nowhere else to go
-    $('pcPinsHint').textContent = dip ? `in datasheet order, pin 1 first${draft.pins.length % 2 ? ' — needs an even number' : ''}` : '';
+    $('pcBreadboard').closest('.pc-check').hidden = shape.auto;   // a chip's package already decides this
+    const short = shape.step && draft.pins.length % shape.step ? ` — needs a multiple of ${shape.step}` : '';
+    $('pcPinsHint').textContent = shape.auto ? `${shape.hint}${short}` : '';
     paintPins(); paintRoles(); preview();
   }
 
@@ -290,8 +292,9 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   $('pcTextColor').addEventListener('input', e => { draft.textColor = e.target.value; preview(); });
   $('pcDesc').addEventListener('input', e => { draft.description = e.target.value; preview(); });
   $('pcPackage').addEventListener('change', e => {
-    draft.package = e.target.value === 'dip' ? 'dip' : 'module';
-    if (draft.package === 'dip') { draft.breadboard = true; for (const p of draft.pins) p.side = 'bottom'; }
+    const shape = PACKAGES[e.target.value] ? e.target.value : 'module';
+    draft.package = shape;
+    if (PACKAGES[shape].auto) { draft.breadboard = !!PACKAGES[shape].insert; for (const p of draft.pins) p.side = 'bottom'; }
     paintForm();
   });
   $('pcBreadboard').addEventListener('change', e => {

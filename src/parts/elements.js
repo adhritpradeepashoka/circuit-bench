@@ -119,18 +119,24 @@ for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-ba
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export function customPartSVG(spec, { lit = 0 } = {}) {
   const { w, h, pins } = layoutSpec(spec);
-  if (spec.package === 'dip') return dipSVG(spec, w, h, pins);
+  if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
   const kind = spec.behaviour.kind;
   const leads = pins.map(p => {
     const end = { left: [inset, p.y], right: [w - inset, p.y], top: [p.x, inset], bottom: [p.x, h - inset] }[p.side];
     return `<line x1="${p.x}" y1="${p.y}" x2="${end[0]}" y2="${end[1]}" stroke="#9aa3ab" stroke-width="2.2"/><rect x="${p.x - 2.4}" y="${p.y - 2.4}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"/>`;
   }).join('');
+  // A rotated label grows upward from its anchor, so a top-edge pin anchors a band's height below the body
+  // edge — otherwise long names ran up out of the chip. Quad packages print smaller: four sides of names.
+  const quad = spec.package === 'quad';
+  const size = quad ? 4.4 : 5.6, band = quad ? 16 : 14;
   const labels = pins.map(p => {
-    const pos = { left: [inset + 3, p.y + 2.2, 'start'], right: [w - inset - 3, p.y + 2.2, 'end'], top: [p.x, inset + 8, 'middle'], bottom: [p.x, h - inset - 3.5, 'middle'] }[p.side];
+    const pos = { left: [inset + 3, p.y + size * 0.4, 'start'], right: [w - inset - 3, p.y + size * 0.4, 'end'], top: [p.x, inset + band, 'start'], bottom: [p.x, h - inset - 3.5, 'start'] }[p.side];
     const vertical = p.side === 'top' || p.side === 'bottom';
-    return `<text x="${pos[0]}" y="${pos[1]}" text-anchor="${vertical ? 'start' : pos[2]}" font-size="5.6" font-family="monospace" fill="${spec.textColor}" opacity=".85"${vertical ? ` transform="rotate(-90 ${pos[0]} ${pos[1]})" dx="0"` : ''}>${esc(p.id)}</text>`;
+    return `<text x="${pos[0]}" y="${pos[1]}" text-anchor="${pos[2]}" font-size="${size}" font-family="monospace" fill="${spec.textColor}" opacity=".85"${vertical ? ` transform="rotate(-90 ${pos[0]} ${pos[1]})"` : ''}>${esc(p.id)}</text>`;
   }).join('');
+  // Pin 1 marker: every real quad package has one, and without it the numbering is unreadable.
+  const pin1 = quad ? `<circle cx="${(inset + 5).toFixed(2)}" cy="${(inset + 5).toFixed(2)}" r="2.2" fill="${spec.textColor}" opacity=".7"><title>pin 1: ${esc(pins[0]?.id || '')}</title></circle>` : '';
   const color = { red: '#ff3b30', green: '#34c759', blue: '#3b82f6', yellow: '#ffd60a', orange: '#ff9f0a', white: '#ffffff' }[spec.behaviour.color] || '#ff3b30';
   const extra = kind === 'led'
     ? `<circle class="cp-led" cx="${w / 2}" cy="${h / 2 - 7}" r="6" fill="${color}" opacity="${0.25 + 0.75 * lit}" stroke="#0003"/>${lit ? `<circle cx="${w / 2}" cy="${h / 2 - 7}" r="11" fill="${color}" opacity="${0.35 * lit}"/>` : ''}`
@@ -139,9 +145,10 @@ export function customPartSVG(spec, { lit = 0 } = {}) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     ${leads}
     <rect x="${inset}" y="${inset}" width="${bw}" height="${bh}" rx="5" fill="${spec.color}" stroke="#0005"/>
-    ${extra}
-    <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}">${esc(spec.label)}</text>
+    ${extra}${pin1}
     ${labels}
+    <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
+      stroke="${spec.color}" stroke-width="${quad ? 2.2 : 0}" paint-order="stroke">${esc(spec.label)}</text>
   </svg>`;
 }
 /**
@@ -162,7 +169,7 @@ function dipSVG(spec, w, h, pins) {
   // upwards from its anchor, so the anchor goes at the BOTTOM of the band each row gets: just inside the body
   // edge for the bottom row, a band's height below the body edge for the top row. The part number is drawn
   // last, with a halo, so it stays readable where a long pin name reaches the middle.
-  const band = 12;
+  const band = Math.min(16, Math.max(9, (bodyB - bodyT) / 2 - 3));
   const names = pins.map(p => {
     const y = +(p.side === 'top' ? bodyT + band : bodyB - 2.4).toFixed(2);
     return `<text x="${p.x}" y="${y}" text-anchor="start" font-size="3.4" font-family="monospace" fill="${spec.textColor}" opacity=".85" transform="rotate(-90 ${p.x} ${y})" dy="1.2">${esc(p.id)}</text>`;

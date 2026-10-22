@@ -1612,7 +1612,7 @@ test('ui: the Package dropdown turns a part into a DIP chip — two rows of legs
   assert.equal($('pcPins').querySelector('select'), null, 'no per-pin side chooser on a DIP');
   assert.match($('pcPins').textContent, /pin 1/);
   // three pins is odd, and the part can't be saved until it's a real package shape
-  assert.match($('pcErrors').textContent, /even/);
+  assert.match($('pcErrors').textContent, /even|at least 4 pins/);
   assert.equal($('pcSave').disabled, true);
   $('pcAddPin').click();
   const names = [...$('pcPins').querySelectorAll('.pc-pin input:first-child')];

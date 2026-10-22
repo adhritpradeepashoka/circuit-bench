@@ -67,12 +67,20 @@ pressing anywhere else on a part moves it. Wire-only mode (`W`) is still there f
 
 ### Part Creator: make your own parts
 
-Parts → My parts → **Create a part**. Give it a name, colour and pins, then say what it does. **Package** decides
-the shape: a *module / breakout* places each pin on a side you choose (or a single header row along the bottom, to
-plug into a breadboard), while a *DIP chip* is laid out from the datasheet's own pin numbering — list the pins in
-order from pin 1 and they come out as two rows 0.3" apart, which is exactly the width of the breadboard's centre
-trench, with the notch and pin 1 at the left. Never put a chip's pins all in one row; that is what the package
-setting is for. Simple parts pick a ready-made behaviour: just connections, a
+Parts → My parts → **Create a part**. Give it a name, colour and pins, then say what it does.
+
+**Package** decides the shape. For every chip package you list the pins in the datasheet's own order, from pin 1,
+and the simulator places each leg from its pin number — you never pick sides:
+
+| Package | Shape | Pins |
+|---|---|---|
+| Module / breakout | you place each pin on any side; with *breadboard* ticked, one header row along the bottom | any |
+| DIP, 0.3" | two rows 0.3" apart — the width of the breadboard trench — notch and pin 1 at the left, numbering down the bottom row and back along the top | even, 4+ |
+| DIP, 0.6" wide | the same for the big through-hole chips (ATmega328P, 8051) | even, 4+ |
+| Quad flat pack | QFP/QFN — pins on all four sides, the way microprocessors and FPGAs are really packaged. Numbered anticlockwise from the top of the left side: down the left, along the bottom, up the right, back along the top. Surface mount, so it doesn't plug into a breadboard | multiple of 4, 8+ |
+
+The shape is enforced, not suggested: a 16-pin chip cannot come back as one long comb of pins, and a quad package
+cannot come back lopsided. Simple parts pick a ready-made behaviour: just connections, a
 resistor/load, an LED, a push button, an analog sensor (a slider sets OUT = VCC × position), a digital sensor
 (click to trigger), or a multiplexer (select pins pick which channel reaches the common pin).
 

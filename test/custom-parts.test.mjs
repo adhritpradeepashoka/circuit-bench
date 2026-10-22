@@ -245,3 +245,34 @@ test('DIP packages: pins land in two rows 0.3" apart in datasheet order, so a ch
   assert.equal(mod.spec.package, 'module');
   assert.ok(layoutSpec(mod.spec).pins.every(p => p.side === 'bottom'));
 });
+
+test('quad flat packs: pins run anticlockwise from the top of the left side, on all four sides, and never plug in', () => {
+  const ids = Array.from({ length: 32 }, (_, i) => `P${i + 1}`);
+  const v = validatePartSpec({ name: 'MPU', package: 'quad', pins: ids.map(id => ({ id })), behaviour: { kind: 'none' } });
+  assert.ok(v.ok, v.errors?.join());
+  assert.equal(v.spec.breadboard, false, 'surface mount: it has no legs to push into a board');
+  const { pins, w, h } = layoutSpec(v.spec);
+  assert.equal(w, h, 'a quad package is square');
+  const at = n => pins[n - 1];
+  assert.deepEqual([1, 8, 9, 16, 17, 24, 25, 32].map(n => at(n).side), ['left', 'left', 'bottom', 'bottom', 'right', 'right', 'top', 'top']);
+  assert.ok(at(1).y < at(8).y, 'pin 1 at the top of the left side, running down');
+  assert.ok(at(9).x < at(16).x, 'the bottom runs left to right');
+  assert.ok(at(17).y > at(24).y, 'the right side runs back up');
+  assert.ok(at(25).x > at(32).x, 'the top runs right to left');
+  assert.ok(Math.abs(at(1).x - at(8).x) < 1e-9 && Math.abs(at(2).y - at(1).y - PITCH) < 1e-9, 'one side is a straight 0.1" column');
+  assert.equal(at(1).x, 3); assert.equal(at(9).y, h - 3);                      // legs sit on the edges
+  // the shape is enforced, so a processor can't come back as a comb or a lopsided chip
+  assert.match(validatePartSpec({ name: 'x', package: 'quad', pins: ids.slice(0, 30).map(id => ({ id })), behaviour: { kind: 'none' } }).errors.join(), /divide by 4/);
+  assert.match(validatePartSpec({ name: 'x', package: 'quad', pins: ids.slice(0, 4).map(id => ({ id })), behaviour: { kind: 'none' } }).errors.join(), /at least 8 pins/);
+});
+
+test('wide DIPs: a 40-pin chip gets 0.6" between its rows, so it still lands on breadboard holes', () => {
+  const v = validatePartSpec({ name: 'ATmega328P', package: 'dip-wide', pins: Array.from({ length: 40 }, (_, i) => ({ id: `P${i + 1}` })), behaviour: { kind: 'none' } });
+  assert.ok(v.ok, v.errors?.join());
+  assert.equal(v.spec.breadboard, true);
+  const { pins } = layoutSpec(v.spec);
+  assert.ok(Math.abs(pins[0].y - pins[39].y - 6 * PITCH) < 1e-6, '0.6 inch between the rows');
+  assert.equal(pins[0].side, 'bottom'); assert.equal(pins[39].side, 'top');
+  const gaps = (pins[0].y - pins[39].y) / PITCH;
+  assert.ok(Math.abs(gaps - Math.round(gaps)) < 1e-9, 'a whole number of hole pitches apart, so both rows land on holes');
+});
