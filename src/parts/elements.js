@@ -188,6 +188,7 @@ function iconSVG(spec, st, cx, cy, fg) {
 
 export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   const { w, h, pins } = layoutSpec(spec);
+  if (spec.package === 'board' && spec.board) return boardSVG(spec, w, h, pins);
   if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
   const kind = spec.behaviour.kind;
@@ -220,6 +221,24 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
     <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
       stroke="${spec.color}" stroke-width="${quad ? 2.2 : 0}" paint-order="stroke">${esc(spec.label)}</text>
   </svg>`;
+}
+/** An imported KiCad board, drawn at true size: the outline, the copper tracks, the pads (square SMD electrodes, round header holes) and a pin lead on each connection point. */
+function boardSVG(spec, w, h, pins) {
+  const S = 96 / 25.4, m = 6, b = spec.board, X = v => +(v * S + m).toFixed(2);
+  const body = b.shape === 'circle'
+    ? `<circle cx="${X(b.cx)}" cy="${X(b.cy)}" r="${+(b.r * S).toFixed(2)}" fill="${spec.color}" fill-opacity=".16" stroke="${spec.color}" stroke-width="1.6"/>`
+    : `<rect x="${m}" y="${m}" width="${+(b.w * S).toFixed(2)}" height="${+(b.h * S).toFixed(2)}" rx="3" fill="${spec.color}" fill-opacity=".16" stroke="${spec.color}" stroke-width="1.6"/>`;
+  const tracks = b.tracks.map(t => `<line x1="${X(t.x1)}" y1="${X(t.y1)}" x2="${X(t.x2)}" y2="${X(t.y2)}" stroke="#c9a227" stroke-width="${Math.max(1, +(t.w * S).toFixed(2))}" stroke-linecap="round"/>`).join('');
+  const pads = b.pads.map(p => {
+    const cx = X(p.x), cy = X(p.y), pw = +(p.w * S).toFixed(2), ph = +(p.h * S).toFixed(2);
+    const gold = p.hole ? '#d9b44a' : '#e0c15a';
+    const shape = p.shape === 'circle' || p.shape === 'oval' ? `<ellipse cx="${cx}" cy="${cy}" rx="${pw / 2}" ry="${ph / 2}" fill="${gold}" stroke="#8a6d1d" stroke-width=".6"/>`
+      : `<rect x="${(cx - pw / 2).toFixed(2)}" y="${(cy - ph / 2).toFixed(2)}" width="${pw}" height="${ph}" rx="${p.shape === 'roundrect' ? Math.min(pw, ph) * 0.15 : 0.6}" fill="${gold}" stroke="#8a6d1d" stroke-width=".6"/>`;
+    return shape + (p.hole ? `<circle cx="${cx}" cy="${cy}" r="${+(p.hole * S / 2).toFixed(2)}" fill="#14201a"/>` : '');
+  }).join('');
+  const marks = pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.4" fill="none" stroke="#ffffff" stroke-width="1" opacity=".9"/><text x="${p.x + 5}" y="${p.y - 4}" font-size="6" font-family="monospace" fill="${spec.color}" stroke="#fff" stroke-width="2" paint-order="stroke">${esc(p.id)}</text>`).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}${tracks}${pads}${marks}
+    <text x="${w / 2}" y="${h - m - 3}" text-anchor="middle" font-size="8" font-weight="700" font-family="sans-serif" fill="${spec.color}" stroke="#fff" stroke-width="2.4" paint-order="stroke">${esc(spec.label)}</text></svg>`;
 }
 /**
  * A DIP chip, drawn the way the real package looks: two rows of legs 0.3" apart (so it straddles the

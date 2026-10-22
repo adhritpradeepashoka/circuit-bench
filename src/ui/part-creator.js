@@ -19,6 +19,12 @@ export function loadLibrary(storage = globalThis.localStorage) {
 }
 function saveLibrary(list, storage = globalThis.localStorage) { try { storage.setItem(LIBRARY, JSON.stringify(list)); } catch { /* full / blocked */ } }
 
+/** Put a finished spec in My parts (this browser) and in the live catalogue. Used by the PCB importer. */
+export function addToLibrary(spec) {
+  registerCustomPart(spec);
+  saveLibrary(loadLibrary().filter(s => s.id !== spec.id).concat([spec]));
+}
+
 const blank = () => ({
   id: newCustomId(), package: 'module', name: '', label: '', description: '', color: '#2b6cb0', textColor: '#ffffff', breadboard: false,
   pins: [{ id: 'VCC', label: 'Power', side: 'bottom' }, { id: 'GND', label: 'Ground', side: 'bottom' }, { id: 'OUT', label: 'Signal out', side: 'bottom' }],
@@ -35,7 +41,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   // Everything in the library is part of the catalogue from the start.
   for (const raw of loadLibrary()) { const v = validatePartSpec(raw); if (v.ok) registerCustomPart(v.spec); }
 
-  $('pcPackage').replaceChildren(...Object.entries(PACKAGES).map(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; return o; }));
+  $('pcPackage').replaceChildren(...Object.entries(PACKAGES).filter(([, v]) => !v.hidden).map(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; return o; }));
   const KIND_GROUPS = [
     ['Basics', ['none', 'resistor', 'variable-resistor', 'led', 'led-array', 'switch', 'button']],
     ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'relay', 'capacitor', 'inductor']],

@@ -1868,3 +1868,30 @@ test('ui: the real Wokwi keypad, DIP switch, joystick, gas and flame sensors are
   assert.ok(editor.els.get('kp').querySelector('wokwi-membrane-keypad'));
   assert.deepEqual([...editor.els.get('dp').querySelector('wokwi-dip-switch-8').values], [1, 0, 1, 0, 0, 0, 0, 0], 'saved switch positions are drawn');
 });
+
+test('ui: a KiCad board imported as a part travels in the project, is drawn as the round board, and its electrode pins can be wired', async () => {
+  const { editor } = boot();
+  const { boardToSpec } = await import('../src/core/kicad-import.js');
+  const { validatePartSpec } = await import('../src/core/custom-parts.js');
+  const pcb = `(kicad_pcb (version 20260206)
+    (footprint "Library:electrodes" (layer "F.Cu") (at 100 100)
+      (property "Reference" "REF**") (property "Value" "electrodes")
+      (pad "1" smd roundrect (at 0 -10) (size 8 8) (layers "F.Cu" "F.Mask"))
+      (pad "1" thru_hole rect (at 20 0) (size 1.7 1.7) (drill 1) (layers "*.Cu" "*.Mask"))
+      (pad "2" smd roundrect (at 0 10) (size 8 8) (layers "F.Cu" "F.Mask"))
+      (pad "2" thru_hole rect (at 20 5) (size 1.7 1.7) (drill 1) (layers "*.Cu" "*.Mask")))
+    (gr_circle (center 100 100) (end 130 100) (stroke (width 0.05) (type default)) (fill no) (layer "Edge.Cuts"))
+    (segment (start 100 90) (end 120 100) (width 0.2) (layer "F.Cu") (net ""))
+    (segment (start 100 110) (end 120 105) (width 0.2) (layer "F.Cu") (net "")))`;
+  const v = validatePartSpec({ ...boardToSpec(pcb, { name: 'petri test' }).spec, id: 'custom-petri-test' });
+  assert.ok(v.ok, v.errors?.join('; '));
+  assert.deepEqual(v.spec.pins.map(p => p.id), ['P1', 'P2'], 'the two electrodes were found by tracing copper');
+  const file = editor.exportProject();
+  file.customParts = [...(file.customParts || []), v.spec];
+  file.parts.push({ id: 'pb', type: 'custom-petri-test', x: 700, y: 40, rotate: 0 });
+  file.wires = [wire('a', 'uno-1', '5V', 'pb', 'P1'), wire('b', 'uno-1', 'GND.1', 'pb', 'P2')];
+  editor.importProject(file);
+  const svg = editor.els.get('pb').innerHTML;
+  assert.ok(svg.includes('<circle') && svg.includes('P1'), 'drawn as the round board with its pins');
+  assert.equal(editor.exportProject().wires.length, 2, 'wires to the board survive a save');
+});

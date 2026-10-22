@@ -26,8 +26,10 @@
         <button id="copyJson">Copy project JSON</button>
         <hr>
         <button id="importJson">Import project file…</button>
+        <button id="importPcb" title="Bring in a circuit board you designed in KiCad as a part you can wire up">Import PCB (KiCad .kicad_pcb)…</button>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <input type="file" id="importPcbFile" accept=".kicad_pcb" hidden>
     </div>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>

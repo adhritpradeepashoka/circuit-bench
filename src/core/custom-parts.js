@@ -27,6 +27,7 @@ export const PACKAGES = {
   module: { label: 'Module / breakout board', auto: false, hint: 'you place each pin' },
   dip: { label: 'DIP chip, 0.3" (8–20 pins: 555, 4051, 74HC595…)', auto: true, rows: 3, step: 2, insert: true, hint: 'in datasheet order, pin 1 first' },
   'dip-wide': { label: 'DIP chip, 0.6" wide (28–40 pins: ATmega328P, 8051…)', auto: true, rows: 6, step: 2, insert: true, hint: 'in datasheet order, pin 1 first' },
+  board: { label: 'Imported circuit board (KiCad)', auto: false, hidden: true, hint: 'drawn from the board file; pins sit where the header pads are' },
   quad: { label: 'Quad flat pack — pins on all four sides (QFP/QFN: a microprocessor)', auto: true, step: 4, insert: false, hint: 'in datasheet order from pin 1, anticlockwise' },
 };
 export const DEFAULT_PACKAGE = 'module';
@@ -64,6 +65,7 @@ export const BEHAVIOURS = {
 
 Object.assign(BEHAVIOURS, EXTRA_BEHAVIOURS);
 
+const clampN = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? +Math.min(hi, Math.max(lo, n)).toFixed(2) : lo; };
 const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
 const hexColor = (v, d) => {
   const t = String(v).trim().toLowerCase();
@@ -89,7 +91,7 @@ export function validatePartSpec(raw, { id } = {}) {
     if (!PIN_ID_RE.test(pid)) { errors.push(`Pin name "${pid || '(empty)'}" — use letters, digits, + - _ . (max 12).`); continue; }
     if (seen.has(pid.toLowerCase())) { errors.push(`Two pins are called "${pid}".`); continue; }
     seen.add(pid.toLowerCase());
-    pins.push({ id: pid, label: str(p?.label, 40) || pid, side: SIDES.includes(p?.side) ? p.side : 'bottom' });
+    pins.push({ id: pid, label: str(p?.label, 40) || pid, side: SIDES.includes(p?.side) ? p.side : 'bottom', ...(raw.package === 'board' ? { x: clampN(p?.x, 0, 600), y: clampN(p?.y, 0, 600) } : {}) });
   }
   const b = raw.behaviour && typeof raw.behaviour === 'object' ? raw.behaviour : { kind: 'none' };
   const kind = BEHAVIOURS[b.kind] ? b.kind : null;
@@ -184,14 +186,33 @@ export function validatePartSpec(raw, { id } = {}) {
     name, label: str(raw.label, 16) || name.slice(0, 16), description: str(raw.description, 200),
     color: hexColor(raw.color, '#2b6cb0'), textColor: hexColor(raw.textColor, '#ffffff'),
     pins, behaviour, breadboard, package: pkg,
+    ...(pkg === 'board' ? { board: cleanBoard(raw.board) } : {}),
   };
   return { ok: true, spec };
+}
+
+/** The drawing of an imported board: sizes in millimetres, every number clamped, shapes limited to a few known kinds. */
+function cleanBoard(b) {
+  const o = b && typeof b === 'object' ? b : {};
+  const list = (a, max) => (Array.isArray(a) ? a.slice(0, max) : []);
+  const PADSHAPES = ['rect', 'roundrect', 'circle', 'oval'];
+  return {
+    w: clampN(o.w, 1, 600), h: clampN(o.h, 1, 600), shape: o.shape === 'circle' ? 'circle' : 'rect',
+    ...(o.shape === 'circle' ? { cx: clampN(o.cx, 0, 600), cy: clampN(o.cy, 0, 600), r: clampN(o.r, 1, 300) } : {}),
+    pads: list(o.pads, 400).map(p => ({ x: clampN(p?.x, 0, 600), y: clampN(p?.y, 0, 600), w: clampN(p?.w, 0.1, 100), h: clampN(p?.h, 0.1, 100), shape: PADSHAPES.includes(p?.shape) ? p.shape : 'rect', hole: clampN(p?.hole, 0, 20), pin: str(p?.pin, 12), side: p?.side === 'B' ? 'B' : 'F' })),
+    tracks: list(o.tracks, 1500).map(t => ({ x1: clampN(t?.x1, 0, 600), y1: clampN(t?.y1, 0, 600), x2: clampN(t?.x2, 0, 600), y2: clampN(t?.y2, 0, 600), w: clampN(t?.w, 0.05, 10) })),
+  };
 }
 
 export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /** Box size and pin positions (CSS px, local to the part) from a spec: pins sit on a 0.1" grid along their side. */
+export const BOARD_SCALE = 96 / 25.4;      // an imported board is drawn at true size: 1 mm = 3.78 px, like the Wokwi parts
 export function layoutSpec(spec) {
+  if (spec.package === 'board' && spec.board) {
+    const S = BOARD_SCALE, m = 6;
+    return { w: Math.ceil(spec.board.w * S + m * 2), h: Math.ceil(spec.board.h * S + m * 2), pins: spec.pins.map(p => ({ id: p.id, label: p.label, x: +((p.x ?? 0) * S + m).toFixed(2), y: +((p.y ?? 0) * S + m).toFixed(2), kind: 'pin', side: 'bottom' })) };
+  }
   if (spec.package === 'quad') return layoutQuad(spec);
   if (PACKAGES[spec.package]?.rows) return layoutDip(spec, PACKAGES[spec.package].rows * PITCH);
   const by = s => spec.pins.filter(p => p.side === s);

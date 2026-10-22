@@ -15,6 +15,7 @@ import { initProjects } from './ui/projects.js';
 import { initMpuInspector } from './ui/mpu-inspector.js';
 import { initTour } from './ui/tour.js';
 import { initAccount } from './ui/account.js';
+import { importPcbFile } from './ui/pcb-import.js';
 import { WOKWI_PINS } from './core/pins.generated.js';
 
 const $ = id => document.getElementById(id);
@@ -110,6 +111,8 @@ $('importFile').onchange = async e => {
   try { const data = JSON.parse(await file.text()); await projects.importFile(data, file.name.replace(/\.json$/i, '')); }
   catch (err) { editor.status(`Could not open that file: ${err.message}`); }
 };
+$('importPcb').onclick = () => { setMenu(false); $('importPcbFile').click(); };
+$('importPcbFile').onchange = async e => { const file = e.target.files[0]; e.target.value = ''; if (file) await importPcbFile(editor, file); };
 $('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
 $('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 

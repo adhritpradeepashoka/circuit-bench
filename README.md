@@ -298,3 +298,12 @@ element for (diodes, transistors, regulators, capacitors, the 28BYJ-48 stepper, 
 CircuitBench; everything else is a template in the Part Creator. Keypad keys, DIP switches and the joystick are operated by
 clicking the element while the simulation runs (hit-testing in `beginPartInput`, `src/ui/editor.js`); the analog sensors
 also drive a DOUT pin that flips at a threshold, like the comparator on the real module.
+
+## Importing a circuit board (KiCad)
+
+Export ▾ → **Import PCB (KiCad .kicad_pcb)…** turns a board you designed in KiCad into a part: drawn at true size from the
+real outline, pads and copper tracks, with a connection point on every node that reaches a header pad. Connectivity
+comes from net names when the file has them and otherwise from the copper itself (pads and track ends that touch are one
+node — `src/core/kicad-import.js`), so boards drawn without a schematic, like electrode arrays, import too. The board is
+one part (package `board`, saved in My parts and inside projects). Splitting a board's components out into separately
+simulated parts is the next step.
