@@ -285,7 +285,7 @@ export const PROVIDERS = {
   },
   // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
   groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
-  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
+  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
   openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'], onlyFree: true, prefer: [/^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^google\/gemini-(\d+(?:\.\d+)?)-flash.*:free$/, /^(?:openai\/gpt-oss-\d+b|qwen\/[\w.-]+):free$/] }),
 };
@@ -362,7 +362,7 @@ PACKAGE — get this right or the part will be the wrong shape and unusable:
 /** Model ids a provider offers, best first: for each "prefer" pattern, the newest version (highest number in the id) first. */
 export function rankModels(p, ids) {
   const seen = new Set(), out = [];
-  const pool = ids.filter(id => !/preview|exp(erimental)?\b|image|tts|audio|live|embed|guard|whisper|vision|moderation|robotics|thinking|-8b|-1b|-3b/i.test(id) || (p.onlyFree && /:free$/.test(id)));
+  const pool = ids.filter(id => !/preview|exp(erimental)?\b|image|tts|audio|live|embed|guard|whisper|vision|moderation|robotics|thinking|-1b|-3b/i.test(id) || (p.onlyFree && /:free$/.test(id)));
   for (const re of p.prefer || []) {
     const hit = pool.filter(id => re.test(id) && (!p.onlyFree || /:free$/.test(id))).map(id => ({ id, v: parseFloat(id.match(re)?.[1] ?? '0') || 0 }));
     hit.sort((a, b) => b.v - a.v || a.id.length - b.id.length);
