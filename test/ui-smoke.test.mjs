@@ -265,12 +265,13 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Passives', 'Sound', 'Chips', 'My parts']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Passives', 'Chips', 'Sound', 'My parts']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
-  for (const n of ['Servo SG90', 'Ultrasonic sensor HC-SR04', 'Stepper 28BYJ-48 + ULN2003', 'Rotary encoder KY-040', 'NPN transistor 2N2222', 'Active buzzer']) assert.ok(names.includes(n), `${n} ships in the default catalogue`);
+  for (const n of ['Servo Motor', 'Ultrasonic Sensor HC-SR04', 'Stepper 28BYJ-48 + ULN2003', 'Rotary Encoder (KY-040)', 'NPN transistor 2N2222', 'Buzzer', 'LED Bar Graph (10 segments)', 'Relay (KS2E-M-DC5)']) assert.ok(names.includes(n), `${n} ships in the default catalogue`);
   assert.equal(doc.querySelectorAll('#catalog .part-card .edit-part').length, 0, 'built-in parts have no edit button');
-  editor.addPart('custom-servo-sg90');
-  assert.ok(editor.state.parts.some(p => p.type === 'custom-servo-sg90'));
+  editor.addPart('servo');
+  assert.ok(editor.state.parts.some(p => p.type === 'servo'));
+  assert.ok(editor.els.get(editor.state.parts.find(p => p.type === 'servo').id).querySelector('wokwi-servo'), 'the servo is the real wokwi-servo element');
   assert.ok(![...doc.querySelectorAll('#pcTemplate option')].some(o => o.value === 'servo-sg90'), 'popular parts are not in the template list');
   for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro', 'OLED Display 128×64 (SSD1306)']) assert.ok(names.includes(n), `${n} in catalogue`);
   for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306', 'arduino-nano', 'arduino-mega', 'dht', 'lcd1602', 'dc-motor', 'l298n', 'battery']) {
@@ -1812,5 +1813,46 @@ test('ui: a servo follows the Servo library’s pulses and an ultrasonic sensor 
   editor.setPartProp('us', 'dist', 120);
   tick(0.6);
   assert.equal(sim.snapshot().library.find(x => x.id === 'us').distanceCm, 120);
+  sim.stop();
+});
+
+test('ui: the catalogue’s real Wokwi parts — a wokwi-servo follows the Servo library, a wokwi-hc-sr04 answers pulseIn(), a wokwi-led-bar-graph lights per-LED, a DPDT relay switches both poles', async () => {
+  const { editor, sim, code } = boot();
+  const file = editor.exportProject();
+  assert.ok(PART_DEFS.servo.native && PART_DEFS['led-bar-graph'].native);
+  assert.equal(PART_DEFS.servo.tag, 'wokwi-servo');
+  assert.deepEqual(PART_DEFS.servo.pins.map(p => p.id), ['GND', 'V+', 'PWM']);
+  assert.equal(file.customParts?.length || 0, 0);
+  file.parts.push({ id: 'sv', type: 'servo', x: 700, y: 40, rotate: 0 }, { id: 'us', type: 'hc-sr04', x: 900, y: 40, rotate: 0, dist: 80 });
+  file.wires = [wire('a', 'uno-1', '9', 'sv', 'PWM'), wire('b', 'uno-1', '5V', 'sv', 'V+'), wire('c', 'uno-1', 'GND.1', 'sv', 'GND'),
+    wire('d', 'uno-1', '7', 'us', 'TRIG'), wire('e', 'uno-1', '8', 'us', 'ECHO'), wire('f', 'uno-1', '5V', 'us', 'VCC'), wire('g', 'uno-1', 'GND.1', 'us', 'GND')];
+  editor.importProject(file);
+  assert.ok(editor.els.get('sv').querySelector('wokwi-servo') && editor.els.get('us').querySelector('wokwi-hc-sr04'));
+  const tick = s => { for (let t = 0; t < s; t += 0.05) { sim.mcu.run(0.05 * 16e6); sim.step(); sim.animate(0.05); } };
+  code.source = sketch('servo-cmd');
+  await sim.start();
+  tick(0.8);
+  const horn = () => editor.els.get('sv').querySelector('wokwi-servo').angle;
+  assert.ok(Math.abs(horn() - 90) < 3, `centred: ${horn()}`);
+  sim.mcu.serialWrite('c'); tick(0.8);
+  assert.ok(horn() > 170, `swung to 180: ${horn()}`);
+  sim.stop();
+  code.source = sketch('ultrasonic-read');
+  await sim.start(); tick(1);
+  assert.equal(sim.snapshot().library.find(x => x.id === 'us').distanceCm, 80);
+  sim.stop();
+  // the project file carries only the part's name, not a copy of its spec
+  assert.ok(!editor.exportProject().customParts?.length);
+
+  // LED bar: each LED has its own two pins
+  const f2 = editor.exportProject();
+  f2.parts = f2.parts.filter(p => p.id !== 'sv' && p.id !== 'us');
+  f2.parts.push({ id: 'bar', type: 'led-bar-graph', x: 700, y: 40, rotate: 0 }, { id: 'r1', type: 'resistor', x: 700, y: 300, rotate: 0, ohms: 220 });
+  f2.wires = [wire('a', 'uno-1', '13', 'r1', '1'), wire('b', 'r1', '2', 'bar', 'A3'), wire('c', 'bar', 'C3', 'uno-1', 'GND.1')];
+  editor.importProject(f2);
+  code.source = EXAMPLES.blink.code;
+  await sim.start(); 
+  let lit = 0; for (let i = 0; i < 24; i++) { tick(0.05); const v = editor.els.get('bar').querySelector('wokwi-led-bar-graph').values; if (v?.[2]) lit++; assert.ok(!v || !v.some((x, k) => x && k !== 2), 'only segment 3 can light'); }
+  assert.ok(lit > 3, `segment 3 lit ${lit} times`);
   sim.stop();
 });

@@ -4,7 +4,7 @@
 // (this browser) and travel inside any project that uses them.
 import { BEHAVIOURS, PACKAGES, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
 import { FUNCTIONS } from '../core/expr.js';
-import { TEMPLATES as ALL_TEMPLATES, TEMPLATE_GROUPS, POPULAR } from '../core/part-templates.js';
+import { TEMPLATES as ALL_TEMPLATES, TEMPLATE_GROUPS, POPULAR, HAS_WOKWI_PART } from '../core/part-templates.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { customPartSVG } from '../parts/elements.js';
@@ -25,7 +25,7 @@ const blank = () => ({
   behaviour: { kind: 'analog-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'OUT' } },
 });
 
-const TEMPLATES = ALL_TEMPLATES.filter(t => !POPULAR[t.id]);   // the popular ones are in the sidebar catalogue
+const TEMPLATES = ALL_TEMPLATES.filter(t => !POPULAR[t.id] && !HAS_WOKWI_PART.has(t.id));   // the popular ones are in the sidebar catalogue
 
 export function initPartCreator(editor, { createPart = defaultCreatePart } = {}) {
   const $ = id => document.getElementById(id);

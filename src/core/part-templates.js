@@ -106,11 +106,11 @@ function chipCounter() {
 
 /** Common parts that ship in the default catalogue (sidebar) instead of the Part Creator's template list: template id → sidebar category. */
 export const POPULAR = {
-  'servo-sg90': 'Motors', 'stepper': 'Motors', 'fan': 'Motors', 'relay-5v': 'Motors',
-  'hcsr04': 'Sensors', 'hall': 'Sensors', 'ir-dist': 'Sensors',
-  'ky040': 'Input', 'pot-trimmer': 'Input',
-  'buzzer-active': 'Sound', 'buzzer-passive': 'Sound',
+  'stepper': 'Motors', 'fan': 'Motors',
+  'hall': 'Sensors',
   'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors',
   'reg-7805': 'Power', 'cap-100n': 'Passives', 'cap-100u': 'Passives', 'ind-10mh': 'Passives',
-  'led-bar': 'Displays', 'ic-74hc595': 'Chips',
+  'ic-74hc595': 'Chips',
 };
+/** Templates that have a real @wokwi/elements equivalent in the catalogue (src/core/native-parts.js), so they are not offered as templates any more. */
+export const HAS_WOKWI_PART = new Set(['servo-sg90', 'hcsr04', 'ky040', 'buzzer-active', 'buzzer-passive', 'led-bar', 'relay-5v', 'pot-trimmer', 'sound']);

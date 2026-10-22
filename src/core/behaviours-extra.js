@@ -24,7 +24,7 @@ export const EXTRA_BEHAVIOURS = {
   },
   relay: {
     label: 'Relay (a coil closes a contact)',
-    ...roles({ coilA: 'Coil +', coilB: 'Coil −', common: 'Contact COM', no: 'Contact NO (normally open)' }, { nc: 'Contact NC (normally closed — optional)' }),
+    ...roles({ coilA: 'Coil +', coilB: 'Coil −', common: 'Contact COM', no: 'Contact NO (normally open)' }, { nc: 'Contact NC (normally closed — optional)', common2: 'Second pole COM (optional — a DPDT relay)', no2: 'Second pole NO (optional)', nc2: 'Second pole NC (optional)' }),
     params: [
       { key: 'ohms', label: 'Coil resistance', unit: 'Ω', min: 20, max: 5000, step: 10, def: 70 },
       { key: 'pick', label: 'Pulls in at', unit: 'V', min: 1, max: 30, step: 0.5, def: 3.5 },
@@ -122,7 +122,7 @@ export const EXTRA_BEHAVIOURS = {
     params: [
       { key: 'ohms', label: 'Coil / load resistance', unit: 'Ω', min: 8, max: 10000, step: 10, def: 150 },
       { key: 'vmin', label: 'Sounds from', unit: 'V', min: 0.5, max: 12, step: 0.5, def: 2 },
-      { key: 'mode', label: 'Type', options: [['active', 'Active (beeps by itself when powered)'], ['passive', 'Passive (plays the tone() the sketch sends)']], def: 'active' },
+      { key: 'mode', label: 'Type', options: [['active', 'Active (beeps by itself when powered)'], ['passive', 'Passive (plays the tone() the sketch sends)'], ['auto', 'Either (beeps when powered, or plays tone())']], def: 'active' },
     ],
     note: 'Active: a steady beep while the voltage across it is high enough. Passive: plays whatever frequency the sketch makes on the pin (tone()). The sound plays through your speakers while the simulation runs.',
   },
@@ -134,8 +134,9 @@ export const EXTRA_BEHAVIOURS = {
   },
   'led-array': {
     label: 'LED array (bar graph, matrix row, multi-segment display)',
-    roles: ['common'], roleLabels: { common: 'Common pin (shared by every LED)' }, optional: [],
+    roles: [], roleLabels: { common: 'Common pin (shared by every LED — leave empty if each LED has its own second pin)' }, optional: ['common'],
     lists: { segments: 'LED pins, first to last' },
+    optionalLists: { cathodes: 'Second pin of each LED, in the same order (only when the LEDs do not share a common pin)' },
     params: [
       { key: 'common', label: 'Common is the', options: [['cathode', 'Cathode (−): drive segments HIGH'], ['anode', 'Anode (+): drive segments LOW']], def: 'cathode' },
     ],

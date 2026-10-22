@@ -13,6 +13,7 @@ import { Dht } from '../parts/dht.js';
 import { dhtParts, timedParts } from '../core/digital.js';
 import { Servo, Ultrasonic, Stepper, FreqProbe } from '../parts/timed.js';
 import { Sound } from './audio.js';
+import { visualTarget } from '../parts/skins.js';
 import { motorRpm } from '../core/solver.js';
 import { createLogicState, tickLogic, MIN_SUPPLY } from '../core/logic.js';
 
@@ -246,7 +247,7 @@ export class Simulation {
     const seen = new Set();
     for (const part of this.editor.state.parts) {
       const def = PART_DEFS[part.type];
-      if (!def?.custom || def.spec.behaviour.kind !== 'buzzer' || def.spec.behaviour.mode !== 'passive') continue;
+      if (!def?.custom || def.spec.behaviour.kind !== 'buzzer' || def.spec.behaviour.mode === 'active') continue;
       seen.add(part.id);
       const { a, b } = def.spec.behaviour.roles;
       const pin = circuit.uno.pins.find(p => p.port && (p.net === circuit.netOf(part.id, a) || p.net === circuit.netOf(part.id, b)));
@@ -268,7 +269,7 @@ export class Simulation {
     const supply = (net1, net2) => { const a = r?.voltage(net1), b = r?.voltage(net2); return a == null || b == null ? 0 : a - b; };
     const circuit = this.editor.getCircuit();
     for (const t of this.timedInfo) {
-      const e = this.timed.get(t.partId), root = this.editor.els.get(t.partId), el = root?.querySelector('cb-custom-part');
+      const e = this.timed.get(t.partId), root = this.editor.els.get(t.partId), el = visualTarget(root, PART_DEFS[this.editor.partById(t.partId)?.type]);
       if (!e || !el) continue;
       const roles = t.spec.behaviour.roles, powered = supply(circuit.netOf(t.partId, roles.vcc), circuit.netOf(t.partId, roles.gnd)) >= 3.5;
       if (t.kind === 'servo') { e.model.update(dt, powered); el.aux = e.model.angle; el.lit = powered && t.attached ? 1 : 0; }
@@ -277,10 +278,10 @@ export class Simulation {
     for (const part of this.editor.state.parts) {
       const def = PART_DEFS[part.type];
       if (!def?.custom || def.spec.behaviour.kind !== 'buzzer') continue;
-      const b = def.spec.behaviour, root = this.editor.els.get(part.id), el = root?.querySelector('cb-custom-part');
+      const b = def.spec.behaviour, root = this.editor.els.get(part.id), el = visualTarget(root, def);
       let freq = 0;
-      if (b.mode === 'passive') freq = this.probes.get(part.id)?.update() || 0;
-      else if ((r?.loadVolts?.get(part.id) ?? 0) >= b.vmin) freq = 2700;
+      if (b.mode !== 'active') freq = this.probes.get(part.id)?.update() || 0;
+      if (freq === 0 && b.mode !== 'passive' && (r?.loadVolts?.get(part.id) ?? 0) >= b.vmin) freq = 2700;
       if (el) el.lit = freq > 0 ? 1 : 0;
       this.sound.tone(part.id, freq);
     }
@@ -374,13 +375,14 @@ export class Simulation {
         const el = root.querySelector('wokwi-photoresistor-sensor'), m = result.modules?.get(part.id);
         if (el && m) { if (el.ledPower !== m.powered) el.ledPower = m.powered; if (el.ledDO !== m.out) el.ledDO = m.out; }
       } else if (PART_DEFS[part.type]?.custom) {
-        const el = root.querySelector('cb-custom-part'), b = PART_DEFS[part.type].spec.behaviour;
+        const el = visualTarget(root, PART_DEFS[part.type]), b = PART_DEFS[part.type].spec.behaviour;
         if (!el) continue;
         if (b.kind === 'led') el.lit = Math.min(1, (result.ledCurrent.get(part.id) || 0) / LED_FULL_A);
         else if (b.kind === 'relay') el.lit = result.relays?.get(part.id) ? 1 : 0;
         else if (b.kind === 'motor') el.aux = motorRpm(result.loadVolts?.get(part.id) || 0);
         else if (b.kind === 'led-array') el.levels = b.segments.map(seg => Math.min(1, (result.ledCurrent.get(`${part.id}:${seg}`) || 0) / LED_FULL_A));
         else if (b.kind === 'encoder') el.lit = this.pressed.has(part.id) ? 1 : 0;
+        else if (b.kind === 'analog-sensor' || b.kind === 'digital-sensor') { const c = this.editor.getCircuit(), v = a => result.voltage(c.netOf(part.id, a)); el.aux = 0; el.powered = (v(b.roles.vcc) ?? 0) - (v(b.roles.gnd) ?? 0) >= 3; }
       } else if (part.type === 'dc-motor') {
         const el = root.matches?.('cb-dc-motor') ? root : root.querySelector('cb-dc-motor');
         if (el) el.rpm = motorRpm(result.motorVolts?.get(part.id) || 0);
@@ -407,7 +409,7 @@ export class Simulation {
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
       if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; } }
       if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
-      if (PART_DEFS[part.type]?.custom) { const el = root?.querySelector('cb-custom-part'); if (el) { el.lit = 0; el.aux = 0; el.levels = null; } }
+      if (PART_DEFS[part.type]?.custom) { const el = visualTarget(root, PART_DEFS[part.type]); if (el) { el.lit = 0; el.aux = 0; el.levels = null; } }
       if (part.type === 'dc-motor') { const el = root?.matches?.('cb-dc-motor') ? root : root?.querySelector('cb-dc-motor'); if (el) el.rpm = 0; }
       if (part.type === 'l298n') { const el = root?.matches?.('cb-l298n') ? root : root?.querySelector('cb-l298n'); if (el) { el.ledPower = false; el.channels = ['', '']; } }
       if (part.type === 'lcd1602') { const el = root?.querySelector('wokwi-lcd1602'); if (el) { el.characters = new Uint8Array(32).fill(32); el.backlight = false; el.cursor = false; el.blink = false; el._drawn = null; } }
@@ -484,7 +486,7 @@ export class Simulation {
         case 'regulator': { const g = r.regulators?.get(part.id); if (g) Object.assign(e, { outputVolts: r2(g.volts), outputMA: r2(g.amps * 1000), regulating: g.regulating }); break; }
         case 'capacitor': e.volts = r2(r.reactive?.get(part.id)?.v ?? 0); break;
         case 'inductor': e.mA = r2((r.reactive?.get(part.id)?.i ?? 0) * 1000); break;
-        case 'buzzer': e.sounding = (r.loadVolts?.get(part.id) ?? 0) >= b.vmin || (b.mode === 'passive' && (this.probes.get(part.id)?.freq || 0) > 0); if (b.mode === 'passive') e.hz = Math.round(this.probes.get(part.id)?.freq || 0); break;
+        case 'buzzer': e.sounding = (r.loadVolts?.get(part.id) ?? 0) >= b.vmin || (b.mode !== 'active' && (this.probes.get(part.id)?.freq || 0) > 0); if (b.mode !== 'active') e.hz = Math.round(this.probes.get(part.id)?.freq || 0); break;
         case 'motor': e.volts = r2(r.loadVolts?.get(part.id) ?? 0); e.rpm = motorRpm(e.volts); break;
         case 'servo': case 'ultrasonic': case 'stepper': { const m = this.timed.get(part.id)?.model; if (m) Object.assign(e, m.summary()); const info = this.timedInfo.find(t => t.partId === part.id); if (info?.problems.length) e.problems = info.problems; break; }
         case 'encoder': e.phase = part.phase ?? 0; break;

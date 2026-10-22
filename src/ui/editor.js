@@ -2,6 +2,7 @@ import { PART_DEFS, boardSVGMarkup } from '../core/parts.js';
 import { allPinsWorld, partBounds, pinWorld, partSize, placeFlex } from '../core/geometry.js';
 import { findSnap, applySnap, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
 import { compile, pkey, splitKey } from '../core/netlist.js';
+import { SKINS, visualTarget } from '../parts/skins.js';
 import { isMcuBoard, boardPowerPin } from '../core/boards.js';
 import { wireGeometry, paramFromHandle } from '../core/wirepath.js';
 import { wireArt, resolveWireKind, DEFAULT_WIRE_KIND, LEGACY_WIRE_KIND, WIRE_KINDS, WIRE_KIND_ICONS, WIRE_KIND_ORDER } from '../core/wire-kinds.js';
@@ -55,6 +56,7 @@ export function createModelElement(type, part = null) {
   }
   if (type === 'resistor') return buildResistor(part);
   const el = document.createElement(def.tag);
+  if (def.skin) { el.classList.add('model'); SKINS[def.skin]?.init?.(el, part); return el; }       // a real @wokwi/elements part (native-parts.js)
   if (def.custom) { el.classList.add('model'); el.spec = def.spec; return el; }
   el.classList.add('model');
   if (type === 'led') el.setAttribute('color', part?.color || 'red');
@@ -239,7 +241,7 @@ export class Editor {
         const model = root.querySelector('wokwi-slide-switch');
         if (model && model.value !== p.pos) model.value = p.pos;
       } else if (PART_DEFS[p.type]?.custom) {
-        const kind = PART_DEFS[p.type].spec.behaviour.kind, model = root.querySelector('cb-custom-part');
+        const kind = PART_DEFS[p.type].spec.behaviour.kind, model = visualTarget(root, PART_DEFS[p.type]);
         if (model && kind === 'switch') model.lit = p.pos ? 1 : 0;                           // the lever shows which way it is flipped
         else if (model && kind === 'encoder' && !this.running) model.aux = this.encAngle?.get(p.id) ?? 0;
       } else if (p.type === 'potentiometer') {
@@ -271,7 +273,7 @@ export class Editor {
       for (let i = 0; i < 4; i++) {
         const p = this.partById(partId); if (!p) return;
         p.phase = ((((p.phase ?? 0) + dir) % 4) + 4) % 4;
-        const m = this.els.get(partId)?.querySelector('cb-custom-part'); if (m) m.aux = this.encAngle.get(partId);
+        const m = visualTarget(this.els.get(partId), PART_DEFS[this.partById(partId)?.type]); if (m) m.aux = this.encAngle.get(partId);
         this.markDirty();
         await new Promise(r => setTimeout(r, 25));
       }

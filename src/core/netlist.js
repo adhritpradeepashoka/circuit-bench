@@ -155,7 +155,7 @@ export function compile(state) {
         if (r('common') === r('throw1') && !roles.throw2) issues.push({ partId: part.id, text: `${PART_DEFS[part.type].name}: both contacts are on the same strip, so the switch does nothing` });
       } else if (kind === 'relay') {
         const bh = PART_DEFS[part.type].spec.behaviour;
-        elements.push({ kind: 'RLY', partId: part.id, ca: r('coilA'), cb: r('coilB'), com: r('common'), no: r('no'), nc: roles.nc ? r('nc') : null, ohms: bh.ohms, pick: bh.pick });
+        elements.push({ kind: 'RLY', partId: part.id, ca: r('coilA'), cb: r('coilB'), com: r('common'), no: r('no'), nc: roles.nc ? r('nc') : null, ohms: bh.ohms, pick: bh.pick, ...(roles.common2 && roles.no2 ? { pole2: { com: r('common2'), no: r('no2'), nc: roles.nc2 ? r('nc2') : null } } : {}) });
       } else if (kind === 'variable-resistor') {
         const bh = PART_DEFS[part.type].spec.behaviour, f = Math.min(1, Math.max(0, (part.level ?? 50) / 100));
         if (roles.wiper) {
@@ -187,11 +187,13 @@ export function compile(state) {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'LOAD', partId: part.id, a: r('a'), b: r('b'), ohms: bh.ohms, heavy: true });
       } else if (kind === 'led-array') {
-        const bh = PART_DEFS[part.type].spec.behaviour, com = r('common'), cat = bh.common !== 'anode';
-        for (const seg of bh.segments) {
+        const bh = PART_DEFS[part.type].spec.behaviour, cat = bh.common !== 'anode', pairs = bh.cathodes?.length === bh.segments.length && bh.cathodes.length > 0;
+        const com = pairs ? null : r('common');
+        bh.segments.forEach((seg, i) => {
           const n = netOf(part.id, seg);
-          elements.push({ kind: 'LED', id: `${part.id}:${seg}`, partId: part.id, channel: seg, a: cat ? n : com, k: cat ? com : n, vf: ledVf(bh.color || 'red'), rd: ledRd(bh.color || 'red') });
-        }
+          if (pairs) elements.push({ kind: 'LED', id: `${part.id}:${seg}`, partId: part.id, channel: seg, a: n, k: netOf(part.id, bh.cathodes[i]), vf: ledVf(bh.color || 'red'), rd: ledRd(bh.color || 'red') });   // each LED has its own two pins (anode, cathode)
+          else elements.push({ kind: 'LED', id: `${part.id}:${seg}`, partId: part.id, channel: seg, a: cat ? n : com, k: cat ? com : n, vf: ledVf(bh.color || 'red'), rd: ledRd(bh.color || 'red') });
+        });
       } else if (kind === 'encoder') {
         // A and B each pull to the common pin through a contact; the phase (0–3) walks the Gray code 00 → 01 → 11 → 10
         const ph = part.phase ?? 0, closedA = ph === 1 || ph === 2, closedB = ph === 2 || ph === 3;

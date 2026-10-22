@@ -11,6 +11,7 @@
     "build:single": "SINGLE=1 vite build",
     "test": "node --test test/core.test.mjs test/firmware.test.mjs test/compile-client.test.mjs test/server.test.mjs test/doctor.test.mjs test/ui-smoke.test.mjs test/ai.test.mjs test/ai-actions.test.mjs test/projects.test.mjs test/i2c.test.mjs test/boards.test.mjs test/components.test.mjs test/custom-parts.test.mjs test/library-parts.test.mjs",
     "extract-pins": "node scripts/extract-pins.mjs",
+    "extract-native-pins": "node scripts/extract-native-pins.mjs",
     "build-firmware": "node scripts/build-firmware.mjs",
     "doctor": "node scripts/doctor.mjs"
   },

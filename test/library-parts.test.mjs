@@ -244,3 +244,18 @@ test('buzzer tone(): the frequency probe reads the note the sketch plays', () =>
   near(f, 440, 12);
   p.detach();
 });
+
+test('native Wokwi parts: the DPDT relay switches both poles together; the bar graph lights only the LEDs whose own two pins are driven; a pair-less bar graph is rejected', () => {
+  const r = (id, ohms) => res(id, ohms);
+  const build = volts => run([bat('b', 12), bat('k', volts), r('ra', 1000), r('rb', 1000), { id: 'k1', type: 'relay-dpdt', x: 0, y: 0, rot: 0 }],
+    [W('k', '+', 'k1', 'COIL1'), W('k', '-', 'k1', 'COIL2'), W('b', '+', 'k1', 'P1'), W('b', '+', 'k1', 'P2'), W('k1', 'NO1', 'ra', '1'), W('ra', '2', 'b', '-'), W('k1', 'NO2', 'rb', '1'), W('rb', '2', 'b', '-')]);
+  // (battery k is the coil supply; its − must share the reference — tie it through the Arduino GND)
+  const off = build(0), on = build(5);
+  near(off.v('ra', '1'), 0, 0.2); near(off.v('rb', '1'), 0, 0.2);
+  near(on.v('ra', '1'), 12, 0.3); near(on.v('rb', '1'), 12, 0.3, 'pole 2 follows the same coil');
+  const bar = run([bat('b', 5), r('r3', 220), { id: 'bar', type: 'led-bar-graph', x: 0, y: 0, rot: 0 }], [W('b', '+', 'r3', '1'), W('r3', '2', 'bar', 'A3'), W('bar', 'C3', 'b', '-')]);
+  assert.ok((bar.r.ledCurrent.get('bar:A3') || 0) > 0.005, 'LED 3 lights');
+  assert.ok(!bar.r.ledCurrent.get('bar:A4'), 'LED 4 does not');
+  const bad = validatePartSpec({ name: 'B', pins: [{ id: 'A1' }, { id: 'A2' }], behaviour: { kind: 'led-array', roles: {}, segments: ['A1', 'A2'] } });
+  assert.equal(bad.ok, false); assert.ok(bad.errors.some(e => /common pin|second pin/.test(e)));
+});

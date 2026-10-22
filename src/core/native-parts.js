@@ -1,0 +1,53 @@
+// Catalogue parts that are the REAL @wokwi/elements components (the same ones Wokwi uses) — servo, HC-SR04, KY-040,
+// buzzer, LED bar graph, relay, tilt switch, sound sensor, slide pot. They look and are wired exactly like Wokwi's
+// (pin names and positions come from the library, see src/core/pins.native.generated.js); what they DO is described
+// with the same behaviours the Part Creator offers (src/core/behaviours-extra.js), so the simulator needs no special case.
+// `skin` says how the simulation's state (angle, lit, levels) is shown on the element: see src/parts/skins.js.
+import { WOKWI_NATIVE_PINS } from './pins.native.generated.js';
+
+const MM = 96 / 25.4;
+const mm = (w, h) => ({ w: Math.round(w * MM * 100) / 100, h: Math.round(h * MM * 100) / 100 });
+
+export const NATIVE_PARTS = [
+  { id: 'servo', name: 'Servo Motor', tag: 'wokwi-servo', category: 'Motors', ...mm(45, 31.63), insertable: false,
+    blurb: 'SG90-style hobby servo — Servo library',
+    labels: { GND: 'GND (brown)', 'V+': 'V+ (red, 5 V)', PWM: 'PWM signal (orange)' },
+    behaviour: { kind: 'servo', roles: { gnd: 'GND', vcc: 'V+', signal: 'PWM' }, range: 180, minUs: 544, maxUs: 2400 },
+    note: 'Use the Servo library (#include <Servo.h>; myServo.attach(pin); myServo.write(angle)). Power it from 5V and share GND with the Arduino.' },
+  { id: 'hc-sr04', name: 'Ultrasonic Sensor HC-SR04', tag: 'wokwi-hc-sr04', category: 'Sensors', ...mm(45, 25), insertable: true,
+    blurb: 'Distance sensor — right-click to set the distance',
+    labels: { VCC: 'VCC (5 V)', TRIG: 'TRIG (trigger in)', ECHO: 'ECHO (pulse out)', GND: 'GND' },
+    behaviour: { kind: 'ultrasonic', roles: { vcc: 'VCC', trig: 'TRIG', echo: 'ECHO', gnd: 'GND' } } },
+  { id: 'ky-040', name: 'Rotary Encoder (KY-040)', tag: 'wokwi-ky-040', category: 'Input', ...mm(30.815, 18.63), insertable: false,
+    blurb: 'Click left/right of the knob to turn, middle to press',
+    labels: { CLK: 'CLK (A)', DT: 'DT (B)', SW: 'SW (button)', VCC: 'VCC', GND: 'GND' },
+    behaviour: { kind: 'encoder', roles: { a: 'CLK', b: 'DT', common: 'GND', sw: 'SW' } },
+    note: 'Wire CLK, DT and SW to digital pins and use INPUT_PULLUP.' },
+  { id: 'buzzer', name: 'Buzzer', tag: 'wokwi-buzzer', category: 'Sound', ...mm(17, 20), insertable: true,
+    blurb: 'Beeps when powered, or plays tone()',
+    labels: { 1: '− (short leg)', 2: '+ (long leg)' },
+    behaviour: { kind: 'buzzer', roles: { a: '2', b: '1' }, mode: 'auto', ohms: 150, vmin: 2 } },
+  { id: 'led-bar-graph', name: 'LED Bar Graph (10 segments)', tag: 'wokwi-led-bar-graph', category: 'Displays', ...mm(10.1, 25.5), insertable: false,
+    blurb: '10 LEDs, each with its own anode and cathode',
+    labels: {},
+    behaviour: { kind: 'led-array', roles: {}, segments: Array.from({ length: 10 }, (_, i) => `A${i + 1}`), cathodes: Array.from({ length: 10 }, (_, i) => `C${i + 1}`), color: 'green' },
+    note: 'Each LED needs its own series resistor.' },
+  { id: 'relay-dpdt', name: 'Relay (KS2E-M-DC5)', tag: 'wokwi-ks2e-m-dc5', category: 'Motors', ...mm(21, 10), insertable: true,
+    blurb: '5 V double-pole relay',
+    labels: { COIL1: 'Coil +', COIL2: 'Coil −', P1: 'Pole 1 COM', NO1: 'Pole 1 NO', NC1: 'Pole 1 NC', P2: 'Pole 2 COM', NO2: 'Pole 2 NO', NC2: 'Pole 2 NC' },
+    behaviour: { kind: 'relay', roles: { coilA: 'COIL1', coilB: 'COIL2', common: 'P1', no: 'NO1', nc: 'NC1', common2: 'P2', no2: 'NO2', nc2: 'NC2' }, ohms: 70, pick: 3.5 },
+    note: 'The coil needs a transistor from an Arduino pin (and a flyback diode).' },
+  { id: 'tilt-switch', name: 'Tilt Switch', tag: 'wokwi-tilt-switch', category: 'Sensors', ...mm(23.4, 14.7), insertable: true,
+    blurb: 'Click it while running to tilt it',
+    labels: { GND: 'GND', VCC: 'VCC', OUT: 'OUT (digital)' },
+    behaviour: { kind: 'digital-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'OUT' } } },
+  { id: 'sound-sensor', name: 'Sound Sensor', tag: 'wokwi-small-sound-sensor', category: 'Sensors', ...mm(35.211, 13.346), insertable: true,
+    blurb: 'Microphone module — right-click to set the level',
+    labels: { AOUT: 'AOUT (analog)', GND: 'GND', VCC: 'VCC', DOUT: 'DOUT (not simulated)' },
+    behaviour: { kind: 'analog-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'AOUT' } },
+    note: 'Read the level with analogRead on AOUT; DOUT is not simulated.' },
+  { id: 'slide-pot', name: 'Slide Potentiometer', tag: 'wokwi-slide-potentiometer', category: 'Input', ...mm(55, 29), insertable: false,
+    blurb: '10 kΩ slider — right-click to move it',
+    labels: { VCC: 'VCC', SIG: 'SIG (wiper)', GND: 'GND' },
+    behaviour: { kind: 'variable-resistor', roles: { a: 'GND', b: 'VCC', wiper: 'SIG' }, ohms: 10000 } },
+].map(n => ({ ...n, pins: (WOKWI_NATIVE_PINS[n.tag] || []).map(p => ({ id: p.name, label: n.labels[p.name] || p.name, x: p.x, y: p.y, kind: 'pin' })) }));

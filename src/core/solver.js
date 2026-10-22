@@ -89,7 +89,7 @@ export function solve(circuit, drive) {
     else if (e.kind === 'LOGIC') { for (const n of Object.values(e.nets)) use(n); }
     else if (e.kind === 'MUX') { for (const k of [e.vcc, e.gnd, e.common, ...e.sel, ...e.ch]) use(k); if (e.en != null) use(e.en); }
     else if (e.kind === 'Q') { for (const n of [e.b, e.c, e.e, e.g, e.d, e.s]) if (n != null) use(n); }
-    else if (e.kind === 'RLY') { for (const n of [e.ca, e.cb, e.com, e.no, e.nc]) if (n != null) use(n); }
+    else if (e.kind === 'RLY') { for (const n of [e.ca, e.cb, e.com, e.no, e.nc, e.pole2?.com, e.pole2?.no, e.pole2?.nc]) if (n != null) use(n); }
     else if (e.kind === 'REG') { use(e.vin); use(e.gnd); use(e.out); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
@@ -188,6 +188,7 @@ export function solve(circuit, drive) {
       } else if (e.kind === 'RLY') {
         stamp(e.ca, e.cb, 1 / e.ohms);
         if (rlyOn.get(e.partId)) stamp(e.com, e.no, G_RLY_CONTACT); else if (e.nc != null) stamp(e.com, e.nc, G_RLY_CONTACT);
+        if (e.pole2) { if (rlyOn.get(e.partId)) stamp(e.pole2.com, e.pole2.no, G_RLY_CONTACT); else if (e.pole2.nc != null) stamp(e.pole2.com, e.pole2.nc, G_RLY_CONTACT); }
       } else if (e.kind === 'REG') {
         const r = regState.get(e.partId), ig = idx.get(e.gnd);
         if (r.v > 0) {

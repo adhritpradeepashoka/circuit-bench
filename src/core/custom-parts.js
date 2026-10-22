@@ -12,6 +12,7 @@ import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
 import { EXTRA_BEHAVIOURS, ICON_KINDS, cleanParams } from './behaviours-extra.js';
 import { TEMPLATES, POPULAR } from './part-templates.js';
+import { NATIVE_PARTS } from './native-parts.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
 const PAD = 14, MIN_W = 76, MIN_H = 56, ICON_MIN_H = 76, MAX_PINS = 64;
@@ -114,6 +115,17 @@ export function validatePartSpec(raw, { id } = {}) {
       }
       behaviour[list] = out;
     }
+    for (const [list, what] of Object.entries(BEHAVIOURS[kind].optionalLists || {})) {
+      const ids = (Array.isArray(b[list]) ? b[list] : String(b[list] ?? '').split(/[\s,]+/)).map(v => String(v).trim()).filter(Boolean);
+      const out = [];
+      for (const want of ids.slice(0, 16)) {
+        const pin = pins.find(p => p.id === want);
+        if (!pin) { errors.push(`${what}: there is no pin "${want}".`); continue; }
+        if (used.has(pin.id)) { errors.push(`Pin ${pin.id} already has another job.`); continue; }
+        used.add(pin.id); out.push(pin.id);
+      }
+      behaviour[list] = out;
+    }
     if (kind === 'mux') {
       const s = behaviour.select.length, c = behaviour.channels.length;
       if (s < 1 || s > 4) errors.push('A multiplexer needs 1–4 select pins.');
@@ -130,7 +142,10 @@ export function validatePartSpec(raw, { id } = {}) {
       Object.assign(behaviour, cleanParams(BEHAVIOURS[kind], b));
       if (kind === 'variable-resistor') behaviour.min = Math.min(behaviour.min, behaviour.ohms);
     }
-    if (kind === 'led-array' && behaviour.segments.length < 1) errors.push('An LED array needs at least one LED pin.');
+    if (kind === 'led-array') {
+      if (behaviour.segments.length < 1) errors.push('An LED array needs at least one LED pin.');
+      if (behaviour.cathodes.length ? behaviour.cathodes.length !== behaviour.segments.length : !behaviour.roles.common) errors.push(behaviour.cathodes.length ? 'Give each LED its own second pin (the lists must be the same length).' : 'An LED array needs a common pin, or a second pin for every LED.');
+    }
     if (kind === 'stepper' && behaviour.coils.length !== 4) errors.push('A stepper motor needs exactly 4 coil input pins (IN1…IN4).');
     if (kind === 'logic') {
       const v = validateLogicBehaviour(b, pins.map(p => p.id), behaviour.roles);
@@ -238,7 +253,8 @@ export function partDefFromSpec(spec) {
   const props = k === 'analog-sensor' ? { level: 50 } : B.props ? { ...B.props } : undefined;
   const logic = k === 'logic' ? compileLogic(spec) : null;
   const roleText = [...Object.entries(spec.behaviour.roles).map(([r, p]) => `${p} = ${B.roleLabels[r]}`),
-    ...Object.keys(B.lists || {}).map(l => `${B.lists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
+    ...Object.keys(B.lists || {}).map(l => `${B.lists[l]}: ${spec.behaviour[l].join(', ')}`),
+    ...Object.keys(B.optionalLists || {}).filter(l => spec.behaviour[l]?.length).map(l => `${B.optionalLists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
   const paramText = (B.params || []).map(p => `${p.label} ${spec.behaviour[p.key]}${p.unit ? ` ${p.unit}` : ''}`).join(', ');
   return {
     type: spec.id, name: spec.name, category: BUILTIN_CATEGORY.get(spec.id) || 'My parts', tag: 'cb-custom-part', custom: true, spec, ...(BUILTIN_CATEGORY.has(spec.id) ? { builtin: true } : {}),
@@ -248,7 +264,7 @@ export function partDefFromSpec(spec) {
   };
 }
 
-const BUILTIN_CATEGORY = new Map(TEMPLATES.filter(t => POPULAR[t.id]).map(t => [`custom-${t.id}`, POPULAR[t.id]]));
+const BUILTIN_CATEGORY = new Map([...TEMPLATES.filter(t => POPULAR[t.id]).map(t => [`custom-${t.id}`, POPULAR[t.id]]), ...NATIVE_PARTS.map(n => [n.id, n.category])]);
 
 /** Add (or update) a custom part in the live catalogue. Returns its def. */
 export function registerCustomPart(spec) {
@@ -265,9 +281,9 @@ export function registerCustomPart(spec) {
 
 export const customTypes = () => Object.keys(PART_DEFS).filter(isCustomType).filter(t => !PART_DEFS[t].builtin);
 export const builtinTypes = () => Object.keys(PART_DEFS).filter(t => PART_DEFS[t].builtin);
-export const isCustomType = type => /^custom-/.test(String(type)) && !!PART_DEFS[type]?.custom;
+export const isCustomType = type => !!PART_DEFS[type]?.custom && (/^custom-/.test(String(type)) || !!PART_DEFS[type].builtin);
 /** The specs a project uses, for saving them inside the project file. */
-export const specsUsed = parts => [...new Set(parts.map(p => p.type))].filter(isCustomType).map(t => PART_DEFS[t].spec);
+export const specsUsed = parts => [...new Set(parts.map(p => p.type))].filter(t => isCustomType(t) && !PART_DEFS[t].builtin).map(t => PART_DEFS[t].spec);
 
 /** One catalogue line per custom part, in the same shape describeCatalog() uses — for the AI prompt. */
 export function describeCustomSpecs(specs) {
@@ -286,4 +302,16 @@ for (const t of TEMPLATES) {
   const { id: _i, group: _g, ...raw } = t;
   const v = validatePartSpec({ ...raw, id: `custom-${t.id}` });
   if (v.ok) registerCustomPart(v.spec);
+}
+
+// Parts that are the real @wokwi/elements components: the behaviour is a spec like any other, but the picture, size and
+// pin positions are the library's (and the editor draws the element itself instead of the generic part body).
+for (const n of NATIVE_PARTS) {
+  const v = validatePartSpec({ name: n.name, label: n.name, description: n.blurb, pins: n.pins.map(p => ({ id: p.id, label: p.label })), behaviour: n.behaviour, breadboard: false, id: 'custom-native-part' });
+  if (!v.ok) throw new Error(`native part ${n.id}: ${v.errors.join(' ')}`);
+  const spec = { ...v.spec, id: n.id };
+  const def = registerCustomPart(spec);
+  Object.assign(def, { tag: n.tag, skin: n.tag, native: true, w: n.w, h: n.h, pins: n.pins.map(p => ({ ...p })), insertable: n.insertable });
+  def.pinById = new Map(def.pins.map(p => [p.id, p]));
+  if (n.note) def.aiNote = `${n.name}: ${n.note} ${def.aiNote}`;
 }
