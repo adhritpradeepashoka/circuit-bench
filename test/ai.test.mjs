@@ -397,3 +397,21 @@ test('models: OpenAI-style hosts list /models too; OpenRouter only ever uses :fr
   await down.generateCode({ instruction: 'x', userKey: 'k4', provider: 'groq' });
   assert.equal(chosen, 'openai/gpt-oss-120b');
 });
+
+test('models: NVIDIA lists models an account cannot call ("Not found for account") — walk down the list to one that works, then remember it', async () => {
+  const listed = ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'];
+  const asked = [];
+  const ai = createAiService({ fetchImpl: async (u, o) => {
+    if (o.method === 'GET') return { ok: true, status: 200, json: async () => ({ data: listed.map(id => ({ id })) }) };
+    const m = JSON.parse(o.body).model; asked.push(m);
+    return m === 'meta/llama-3.1-8b-instruct' ? oaiReply(okJson) : { ok: false, status: 404, json: async () => ({ error: { message: `Function 'abc': Not found for account '985-x'` } }) };
+  } });
+  const r = await ai.generateCode({ instruction: 'blink', userKey: 'nvapi-abcdefgh', provider: 'nvidia' });
+  assert.equal(r.ok, true);
+  assert.equal(asked.at(-1), 'meta/llama-3.1-8b-instruct');
+  asked.length = 0;
+  await ai.generateCode({ instruction: 'blink', userKey: 'nvapi-abcdefgh', provider: 'nvidia' });
+  assert.deepEqual(asked, ['meta/llama-3.1-8b-instruct'], 'the model that worked is tried first next time');
+  const none = createAiService({ fetchImpl: async (u, o) => (o.method === 'GET' ? { ok: false, status: 500, json: async () => ({}) } : { ok: false, status: 404, json: async () => ({ error: { message: 'Not found for account' } }) }) });
+  await assert.rejects(() => none.generateCode({ instruction: 'x', userKey: 'nvapi-zzzzzzzz', provider: 'nvidia' }), e => /models I tried/.test(e.message) && /open to this key/.test(e.message));
+});

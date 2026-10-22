@@ -285,7 +285,7 @@ export const PROVIDERS = {
   },
   // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
   groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
-  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/] }),
+  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
   openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'], onlyFree: true, prefer: [/^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^google\/gemini-(\d+(?:\.\d+)?)-flash.*:free$/, /^(?:openai\/gpt-oss-\d+b|qwen\/[\w.-]+):free$/] }),
 };
@@ -374,10 +374,11 @@ export function rankModels(p, ids) {
 export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
   // Free models come and go (Google closed gemini-2.5-flash to new keys; Groq retires models) — so ask the provider
   // which models THIS key can use, newest first, and remember the answer for a while. The built-in list is the fallback.
-  const found = new Map();
+  const found = new Map(), works = new Map();   // works: the model that last answered for this key (listed ≠ usable: NVIDIA lists models an account can't call)
+  const keyId = (p, userKey) => `${p.label}:${userKey.slice(-6)}:${userKey.length}`;
   async function discover(p, userKey) {
     if (!p.prefer || !p.listUrl) return [];
-    const ck = `${p.label}:${userKey.slice(-6)}:${userKey.length}`, hit = found.get(ck);
+    const ck = keyId(p, userKey), hit = found.get(ck);
     if (hit && now() - hit.at < 30 * 60 * 1000) return hit.ids;
     let ids = [];
     try {
@@ -404,7 +405,8 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
    */
   async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
     const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
-    const wanted = typed ? [typed] : [...new Set([...(await discover(p, userKey)).slice(0, 4), ...p.models])];   // a model the student typed is the only one tried
+    const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, 8), ...p.models].filter(Boolean))].slice(0, 10);   // a model the student typed is the only one tried
+    const tried = [];
     let res, body, msg;
     for (let i = 0; i < wanted.length; i++) {
       try {
@@ -414,11 +416,12 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
       }
       try { body = await res.json(); } catch { body = null; }
       if (res.ok) break;
-      msg = p.errorMessage(body) || `HTTP ${res.status}`;
+      msg = p.errorMessage(body) || `HTTP ${res.status}`; tried.push(wanted[i]);
       if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model });
       if (i < wanted.length - 1 && modelGone(res.status, msg)) continue;            // that model isn't available to this key — try the next one
-      throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ' — try another model in the AI settings, or another provider.' : ''}`, statusFor(res.status, msg));
+      throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ` — none of ${tried.length > 1 ? `the ${tried.length} models I tried (${tried.slice(0, 4).join(', ')}${tried.length > 4 ? '…' : ''})` : `“${tried[0]}”`} is open to this key. Type a model your account can use in the AI settings, or pick another provider.` : ''}`, statusFor(res.status, msg));
     }
+    if (!typed) works.set(keyId(p, userKey), wanted[tried.length]);
     const sources = [];
     for (const s of p.sources?.(body) || []) if (s?.url && !sources.some(x => x.url === s.url)) sources.push({ title: String(s.title || s.url).slice(0, 120), url: String(s.url).slice(0, 500) });
     return { text: p.text(body), sources: sources.slice(0, 6), searched: search && sources.length > 0 };
