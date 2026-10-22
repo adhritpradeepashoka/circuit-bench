@@ -68,7 +68,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     suspended = true;
     try {
       sim?.stop?.();
-      editor.openProject(p.data);
+      editor.openProject(p.data, { board: p.board });
       if (!code.importState(p.data || {})) code.importState({ sketch: DEFAULT_SKETCH });
     } finally { suspended = false; }
     current = p; setCurrentId(p.id); paintName(); announce();
@@ -84,11 +84,11 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     show(theirs); editor.status(`“${theirs.name}” was updated in another tab — showing the latest.`);
   });
 
-  async function create({ name, workspace = DEFAULT_WORKSPACE, data = null } = {}) {
+  async function create({ name, workspace = DEFAULT_WORKSPACE, data = null, board } = {}) {
     await saveNow();
     const taken = (await store.list()).map(m => m.name);
     const p = newProject({ name: uniqueName(cleanName(name), taken), workspace, data });
-    if (!data) p.data = null;
+    if (!data) { p.data = null; if (board) p.board = board; }
     await store.save(p);
     current = null;                  // open() should not re-save the project we're leaving twice
     await open(p.id);
@@ -171,7 +171,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   $('projNewForm').addEventListener('submit', async e => {
     e.preventDefault();
     const name = nameInput.value; nameInput.value = '';
-    await create({ name: name.trim() || 'Untitled project', workspace: wsSelect.value });
+    await create({ name: name.trim() || 'Untitled project', workspace: wsSelect.value, board: $('projNewBoard').value });
   });
 
   /* ── start: attach the working copy to a project ── */

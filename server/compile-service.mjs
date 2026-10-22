@@ -9,7 +9,11 @@ import { join } from 'node:path';
 export class RequestError extends Error { constructor(message, status = 400) { super(message); this.status = status; } }
 
 /** Boards the service will build for. The map is the extension point for Phase 6 (more MCU families). */
-export const BOARDS = { 'arduino:avr:uno': { name: 'Arduino Uno', mcu: 'atmega328p', hexFile: 'ino.hex' } };
+export const BOARDS = {
+  'arduino:avr:uno': { name: 'Arduino Uno', mcu: 'atmega328p', hexFile: 'ino.hex' },
+  'arduino:avr:nano': { name: 'Arduino Nano', mcu: 'atmega328p', hexFile: 'ino.hex' },
+  'arduino:avr:mega': { name: 'Arduino Mega 2560', mcu: 'atmega2560', hexFile: 'ino.hex' },
+};
 export const DEFAULT_FQBN = 'arduino:avr:uno';
 
 const NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.-]{0,63}\.(ino|h|hpp|c|cpp)$/;

@@ -17,6 +17,7 @@
 // src/core/ai-actions.js (imported client-side, DOM-free so it also unit-tests here) validates each
 // action against the real part/pin catalogue and applies it to the live project; a made-up part type or
 // pin name is silently dropped with a warning there, never trusted blindly from the model's output.
+import { BOARD_SPECS, DEFAULT_BOARD } from '../src/core/boards.js';
 import { RequestError } from './compile-service.mjs';
 import { describeCatalog } from '../src/core/ai-actions.js';
 
@@ -73,9 +74,9 @@ export function describeContext(context) {
   if (s && typeof s === 'object') {
     if (!s.running) out.push('Simulation: NOT running — there are no live readings; reason from the circuit and code only.');
     else {
-      out.push(`Simulation: RUNNING${s.paused ? ' (paused)' : ''}, ${Number(s.seconds) || 0} s of simulated time on the ATmega328P.`);
+      out.push(`Simulation: RUNNING${s.paused ? ' (paused)' : ''}, ${Number(s.seconds) || 0} s of simulated time on the ${s.board || 'Arduino Uno'} (${s.chip || 'ATmega328P'}).`);
       const pins = list(s.pins, 30).map(p => `${str(p?.pin, 6)}=${str(p?.mode, 20)}${p?.volts != null ? ` ${Number(p.volts)} V` : ''}${p?.adc != null ? ` (analogRead≈${Number(p.adc)})` : ''}`);
-      out.push(`  Uno pins in use: ${pins.length ? pins.join('; ') : 'none'}`);
+      out.push(`  Board pins in use: ${pins.length ? pins.join('; ') : 'none'}`);
       const leds = list(s.leds, 30).map(l => `${str(l?.id, 30)} ${l?.on ? 'ON' : 'off'} ${Number(l?.mA) || 0} mA`);
       if (leds.length) out.push(`  LEDs: ${leds.join('; ')}`);
       const pressed = list(s.pressed, 10).map(p => str(p, 30));
@@ -133,7 +134,10 @@ function buildPrompt({ instruction, circuit, code, context, history }) {
     ? `\n\nFor any of these parts in play, a ready, verified-correct conversion is given below — use it verbatim (only the pin argument may change) instead of writing your own analogRead comparison or formula for that part, even if your own would look reasonable; theirs accounts for a non-obvious inversion in the real part that a plausible-looking guess gets wrong:\n${recipes.join('\n')}`
     : '';
 
-  return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli, ATmega328P/Uno) firmware inside a browser simulator called CircuitBench, for a student.
+  const board = BOARD_SPECS[parts.find(p => BOARD_SPECS[p.type])?.type] || BOARD_SPECS[DEFAULT_BOARD];
+  return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli) firmware inside a browser simulator called CircuitBench, for a student.
+
+The circuit's board is the ${board.name} (${board.chip === 'atmega2560' ? 'ATmega2560' : 'ATmega328P'}); the sketch is compiled for it. Its I²C pins are SDA = ${/^\d+$/.test(board.i2c.sda) ? `D${board.i2c.sda}` : board.i2c.sda} and SCL = ${/^\d+$/.test(board.i2c.scl) ? `D${board.i2c.scl}` : board.i2c.scl}${board.chip === 'atmega2560' ? '; PWM (analogWrite) works on D2–D13 and D44–D46; analog inputs are A0–A15' : '; PWM (analogWrite) works on D3, D5, D6, D9, D10, D11'}${board.pins.A6 && !board.pins.A6.port ? '; A6 and A7 are analog-input only (analogRead, never digitalRead/digitalWrite)' : ''}. Only one board runs at a time — don't add a second one.
 
 You directly control the circuit, not just the firmware. Placing a part, moving it, wiring two pins together, or removing something is not a physical act you are being asked to describe or hand off — it is a data edit you make yourself by emitting the matching action(s) below, and the simulator applies it immediately. When the instruction asks for a circuit change (add/move/rotate/wire/remove), you MUST do it via "actions" — never reply that this "can't be done by you", that it requires "physically" connecting something, or tell the student to do it themselves; any of those means you are refusing a request you are fully able to carry out. Only decline a circuit change (actions: [], explained why) when it is genuinely impossible with the real catalogue below — an unknown part, a pin that doesn't exist, or a truly ambiguous target with no reasonable reading — never because wiring "sounds physical".
 

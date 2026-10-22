@@ -2,6 +2,7 @@ import { PART_DEFS, boardSVGMarkup } from '../core/parts.js';
 import { allPinsWorld, partBounds, pinWorld, partSize, placeFlex } from '../core/geometry.js';
 import { findSnap, applySnap, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
 import { compile, pkey, splitKey } from '../core/netlist.js';
+import { isMcuBoard, boardPowerPin } from '../core/boards.js';
 import { wireGeometry, paramFromHandle } from '../core/wirepath.js';
 import { wireArt, resolveWireKind, DEFAULT_WIRE_KIND, LEGACY_WIRE_KIND, WIRE_KINDS, WIRE_KIND_ICONS, WIRE_KIND_ORDER } from '../core/wire-kinds.js';
 import { snapshot, restore, toProjectFile, fromProjectFile } from '../core/project.js';
@@ -105,26 +106,29 @@ export class Editor {
     this.fit();
     this.markDirty();
     this.afterStructureChange();
-    this.status('Add an LED and a resistor from Parts, then wire them to the Uno.');
+    this.status('Add an LED and a resistor from Parts, then wire them to the Arduino.');
   }
 
-  defaultWorkspace() {
+  /** A fresh canvas: the chosen board with a breadboard beside it. */
+  defaultWorkspace(board = 'arduino-uno') {
+    const type = PART_DEFS[board] && isMcuBoard(board) ? board : 'arduino-uno';
+    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470 }[type];
     this.state.parts = [
-      { id: 'uno-1', type: 'arduino-uno', x: 40, y: 56, rot: 0 },
-      { id: 'bb-1', type: 'breadboard', x: 360, y: 78, rot: 0 },
+      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1' }[type], type, x: 40, y: 56, rot: 0 },
+      { id: 'bb-1', type: 'breadboard', x: bbX, y: 78, rot: 0 },
     ];
     this.state.wires = [];
   }
 
-  newWorkspace() {
-    this.sel = null; this.defaultWorkspace(); this.syncParts();
+  newWorkspace(board) {
+    this.sel = null; this.defaultWorkspace(board); this.syncParts();
     this.markDirty(); this.commit(); this.fit(); this.status('New workspace');
   }
 
   exportProject() { return toProjectFile(this.state); }
   /** Switch to another saved project: its circuit (or the default Uno + breadboard if it has none yet), with a fresh undo history. */
-  openProject(data) {
-    if (data && Array.isArray(data.parts)) this.importProject(data); else this.newWorkspace();
+  openProject(data, { board } = {}) {
+    if (data && Array.isArray(data.parts)) this.importProject(data); else this.newWorkspace(board);
     this.hist = [snapshot(this.state)]; this.hi = 0; this.afterStructureChange();
   }
   importProject(data) {
@@ -299,7 +303,7 @@ export class Editor {
     const count = this.state.parts.filter(p => p.type === type).length;
     const c = at || this.viewCenterWorld();
     const off = at ? 0 : (count % 6) * 14;
-    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
+    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
       x: Math.round((c.x - def.w / 2 + off) / GRID) * GRID, y: Math.round((c.y - def.h / 2 + off) / GRID) * GRID };
     this.state.parts.push(part);
     const s = findSnap(this.state.parts, part);
@@ -559,7 +563,7 @@ export class Editor {
   autoColor(a, b) {
     const cls = ep => {
       const part = this.partById(ep.part);
-      if (part.type === 'arduino-uno') { if (ep.pin.startsWith('GND')) return 'gnd'; if (['5V', '3.3V', 'VIN', 'IOREF'].includes(ep.pin)) return 'pwr'; }
+      if (isMcuBoard(part.type)) { const pw = boardPowerPin(ep.pin); if (pw === 'gnd') return 'gnd'; if (pw) return 'pwr'; }
       if (part.type === 'breadboard') { if (/^(TN|BN)/.test(ep.pin)) return 'gnd'; if (/^(TP|BP)/.test(ep.pin)) return 'pwr'; }
       return null;
     };

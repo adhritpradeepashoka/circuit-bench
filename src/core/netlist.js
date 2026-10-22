@@ -20,11 +20,7 @@ class UnionFind {
   union(a, b) { const ra = this.find(a), rb = this.find(b); if (ra !== rb) this.p.set(rb, ra); }
 }
 
-// Uno pin → AVR port/bit (ATmega328P)
-const UNO_MCU = {};
-for (let i = 0; i <= 7; i++) UNO_MCU[String(i)] = { port: 'D', bit: i };
-for (let i = 8; i <= 13; i++) UNO_MCU[String(i)] = { port: 'B', bit: i - 8 };
-for (let i = 0; i <= 5; i++) UNO_MCU[`A${i}`] = { port: 'C', bit: i };
+import { BOARD_SPECS, boardPowerPin, mainBoard } from './boards.js';
 
 /**
  * Build the electrical model from the editor state:
@@ -51,7 +47,7 @@ export function compile(state) {
   const attachments = new Map(); // component pin key → hole key
   for (const part of parts) {
     if (!PART_DEFS[part.type].insertable) continue;
-    for (const p of allPinsWorld(part)) {
+    for (const p of allPinsWorld(part).filter(q => !q.pin.noInsert)) {
       const h = holeAt(holes, p.x, p.y);
       if (!h) continue;
       const a = pkey(part.id, p.pin.id), b = pkey(h.partId, h.pinId);
@@ -81,16 +77,18 @@ export function compile(state) {
   // Elements + sources
   const elements = [];
   const issues = [];
-  const uno = { pins: [], gnd: new Set(), v5: new Set(), v33: new Set(), vin: new Set() };
+  // The microcontroller board (Uno / Nano / Mega). `uno` keeps its historical name: it is "the board that runs the firmware".
+  const uno = { pins: [], gnd: new Set(), v5: new Set(), v33: new Set(), vin: new Set(), board: null, spec: null };
+  const main = mainBoard(parts);
   for (const part of parts) {
-    if (part.type === 'arduino-uno') {
+    if (BOARD_SPECS[part.type]) {
+      if (part !== main) { issues.push({ partId: part.id, text: `Only one microcontroller board runs at a time: the ${BOARD_SPECS[part.type].name} isn't running (the ${BOARD_SPECS[main.type].name} is)` }); continue; }
+      const spec = BOARD_SPECS[part.type];
+      uno.board = part; uno.spec = spec;
       for (const pin of PART_DEFS[part.type].pins) {
-        const n = netOf(part.id, pin.id);
-        if (pin.id.startsWith('GND')) uno.gnd.add(n);
-        else if (pin.id === '5V' || pin.id === 'IOREF') uno.v5.add(n);
-        else if (pin.id === '3.3V') uno.v33.add(n);
-        else if (pin.id === 'VIN') uno.vin.add(n);
-        else if (UNO_MCU[pin.id]) uno.pins.push({ name: pin.id, label: pin.label, net: n, partId: part.id, ...UNO_MCU[pin.id] });
+        const n = netOf(part.id, pin.id), power = boardPowerPin(pin.id);
+        if (power) uno[power].add(n);
+        else if (spec.pins[pin.id]) uno.pins.push({ name: pin.id, label: pin.label, net: n, partId: part.id, ...spec.pins[pin.id] });
       }
     } else if (part.type === 'resistor') {
       const a = netOf(part.id, '1'), b = netOf(part.id, '2');
@@ -141,7 +139,7 @@ export function compile(state) {
   for (const net of nets) {
     const named = net.keys.map(splitKey).map(({ partId, pinId }) => {
       const part = byId.get(partId);
-      return part?.type === 'arduino-uno' ? PART_DEFS['arduino-uno'].pinById.get(pinId).label : null;
+      return BOARD_SPECS[part?.type] ? PART_DEFS[part.type].pinById.get(pinId).label : null;
     }).filter(Boolean);
     net.name = named.length ? named.filter((v, i, a) => a.indexOf(v) === i)[0] : `N${net.index + 1}`;
     net.pinCount = net.keys.length;

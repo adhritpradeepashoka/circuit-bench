@@ -12,6 +12,17 @@ const prettyUnoLabel = n => {
   return n.replace(/^GND\.\d$/, 'GND');
 };
 
+// Nano / Mega pin labels: D-numbers, plain GND / 5V for the duplicates
+const prettyBoardLabel = n => {
+  if (/^\d+(\.2)?$/.test(n)) return `D${n.replace('.2', '')}${n.endsWith('.2') ? ' (ICSP)' : ''}`;
+  if (n === 'SDA') return 'SDA (= D20)';
+  if (n === 'SCL') return 'SCL (= D21)';
+  if (n === '20') return 'D20 / SDA';
+  if (n === '21') return 'D21 / SCL';
+  return n.replace(/^(GND|5V|RESET)\.\d$/, '$1');
+};
+const ICSP = new Set(['12.2', '5V.2', '13.2', '11.2', 'RESET.3', 'GND.3']);
+
 const fromWokwi = (tag, labeler = n => n) =>
   WOKWI_PINS[tag].map(p => ({ id: p.name, label: labeler(p.name), x: p.x, y: p.y, kind: 'pin' }));
 
@@ -27,6 +38,21 @@ export const PART_DEFS = {
     type: 'arduino-uno', name: 'Arduino Uno R3', category: 'Boards', tag: 'wokwi-arduino-uno',
     w: 72.58 * MM, h: 53.34 * MM, pins: fromWokwi('wokwi-arduino-uno', prettyUnoLabel),
     groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'a4', pins: ['A4', 'A4.2'] }, { id: 'a5', pins: ['A5', 'A5.2'] }],
+    insertable: false, layer: 1,
+  },
+  'arduino-nano': {
+    type: 'arduino-nano', name: 'Arduino Nano', category: 'Boards', tag: 'wokwi-arduino-nano',
+    w: 44.9 * MM, h: 17.8 * MM,
+    // the ICSP header points up off the board, so it never drops into breadboard holes
+    pins: fromWokwi('wokwi-arduino-nano', n => ({ A4: 'A4 / SDA', A5: 'A5 / SCL', A6: 'A6 (analog in only)', A7: 'A7 (analog in only)' }[n] || prettyBoardLabel(n))).map(p => (ICSP.has(p.id) ? { ...p, noInsert: true } : p)),
+    groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'v5', pins: ['5V', '5V.2'] }, { id: 'reset', pins: ['RESET', 'RESET.2', 'RESET.3'] },
+      { id: 'd11', pins: ['11', '11.2'] }, { id: 'd12', pins: ['12', '12.2'] }, { id: 'd13', pins: ['13', '13.2'] }],
+    insertable: true, layer: 1,
+  },
+  'arduino-mega': {
+    type: 'arduino-mega', name: 'Arduino Mega 2560', category: 'Boards', tag: 'wokwi-arduino-mega',
+    w: 102.66 * MM, h: 50.8 * MM, pins: fromWokwi('wokwi-arduino-mega', prettyBoardLabel),
+    groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3', 'GND.4', 'GND.5'] }, { id: 'v5', pins: ['5V', '5V.1', '5V.2'] }, { id: 'sda', pins: ['SDA', '20'] }, { id: 'scl', pins: ['SCL', '21'] }],
     insertable: false, layer: 1,
   },
   breadboard: {
@@ -108,5 +134,5 @@ export const PART_DEFS = {
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'mpu6050', 'ssd1306'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'mpu6050', 'ssd1306'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

@@ -111,7 +111,7 @@
         <div class="sim-tray" id="simTray" hidden>
           <div class="sim-row">
             <span class="sim-state"><i class="sim-dot" id="simDot"></i><span id="simStatus">Stopped</span></span>
-            <span class="sim-readout">ATmega328P <b id="simTime">0.00 s</b></span>
+            <span class="sim-readout"><span id="simChip">ATmega328P</span> <b id="simTime">0.00 s</b></span>
             <span class="sim-readout">High pins <b id="simPin">–</b></span>
             <span class="sim-actions"><button id="simAskAi" class="sim-ai" title="Ask the AI, with these live readings">✨ Ask AI why</button><button id="simPause">Pause</button><button id="simStop">Stop</button></span>
           </div>
@@ -220,6 +220,9 @@
     <form class="proj-new" id="projNewForm">
       <input id="projNewName" placeholder="New project name" autocomplete="off" maxlength="80" aria-label="New project name">
       <select id="projNewWorkspace" aria-label="Workspace"></select>
+      <select id="projNewBoard" aria-label="Board" title="Which Arduino the new project starts with">
+        <option value="arduino-uno">Uno</option><option value="arduino-nano">Nano</option><option value="arduino-mega">Mega 2560</option>
+      </select>
       <button type="submit" id="projNewCreate">Create</button>
     </form>
     <ul class="proj-list" id="projList"></ul>

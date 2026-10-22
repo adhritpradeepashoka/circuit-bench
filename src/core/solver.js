@@ -144,7 +144,7 @@ export function solve(circuit, drive) {
     const i = s.g * (s.v - x[idx.get(s.net)]);
     if (s.power) {
       if (s.v > 0) { const e = supplyNets.get(s.net) || { tag: s.tag, v: s.v, i: 0, limitA: s.limitA, r: 1 / s.g }; e.i += i; supplyNets.set(s.net, e); }
-    } else if (!s.pullup && Math.abs(i) > LIMITS.pinA) warnings.push({ text: `${s.tag} is sourcing/sinking ${fmt(Math.abs(i))} (Uno pin rating: 40 mA)` });
+    } else if (!s.pullup && Math.abs(i) > LIMITS.pinA) warnings.push({ text: `${s.tag} is sourcing/sinking ${fmt(Math.abs(i))} (Arduino pin rating: 40 mA)` });
   }
   const powerTag = new Map(sources.filter(s => s.power).map(s => [s.net, s.tag]));
   for (const e of supplyNets.values()) {

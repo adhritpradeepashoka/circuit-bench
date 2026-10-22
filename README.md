@@ -65,6 +65,13 @@ the live netlist). The **?** button in the top bar brings it back any time (`src
 Wiring needs no tool switching: in the normal Select mode, pressing on any pin, hole or lead and dragging to another draws a wire;
 pressing anywhere else on a part moves it. Wire-only mode (`W`) is still there for crowded spots.
 
+### Boards: Uno, Nano, Mega 2560
+
+Pick the board when you make a new project (or add one from Parts). Everything board-specific — pin → port/bit, ADC
+channels, power pins, I²C pins, the arduino-cli FQBN — lives in `src/core/boards.js`; the chips themselves (vector tables,
+timers, ports, PWM map) are in `src/sim/chips.js`. The sketch is compiled for whichever board is on the canvas, and the Mega runs
+on a real ATmega2560 model (22-bit PC, extended I/O, timers 3–5, 16-channel ADC). Only one board runs at a time; a second is flagged.
+
 ### I²C parts: MPU-6050 and SSD1306 OLED
 
 The simulated ATmega328P now has a working I²C bus (`Wire`): `src/sim/i2c.js` answers for whatever is wired to A4/SDA and A5/SCL,
@@ -128,6 +135,8 @@ autosave, JSON export/import. Breadboard topology is real (A–E and F–J per c
 | Part | Notes |
 |---|---|
 | Arduino Uno R3, solderless breadboard | real ATmega328P |
+| Arduino Nano | same chip as the Uno; plugs into the breadboard; A6/A7 are analog-input only |
+| Arduino Mega 2560 | real ATmega2560: 54 digital pins, A0–A15, timers 0–5 (PWM on D2–D13, D44–D46), I²C on D20/D21 |
 | LED | right-click → colour (red, yellow, orange, green, blue, white); colour sets forward voltage (≈1.9 V … 3.1 V) |
 | RGB LED | common cathode; each colour is its own diode |
 | Resistor | **bendable legs**: it stretches and turns to fit exactly between any two holes (minimum 4 pitches, the body length) — drop it and both leads snap dead-centre into the nearest free holes; select it and drag either lead handle to move just that leg (Alt = no hole snapping). Right-click → value (`220`, `4.7k`, `4k7`, `1M`, `330 ohm`; colour bands follow; 1 Ω – 10 MΩ) |

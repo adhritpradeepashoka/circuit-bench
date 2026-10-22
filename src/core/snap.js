@@ -28,7 +28,7 @@ export function occupiedHoles(parts, holes, ignoreIds = new Set()) {
   const taken = new Set();
   for (const part of parts) {
     if (ignoreIds.has(part.id) || !PART_DEFS[part.type].insertable) continue;
-    for (const p of allPinsWorld(part)) {
+    for (const p of allPinsWorld(part).filter(q => !q.pin.noInsert)) {
       const h = holeAt(holes, p.x, p.y);
       if (h) taken.add(`${h.partId}|${h.pinId}`);
     }
@@ -47,7 +47,7 @@ export function findSnap(parts, part, ignoreIds = new Set([part.id]), radius = S
   const holes = boardHoles(parts);
   if (!holes.length) return null;
   const taken = occupiedHoles(parts, holes, ignoreIds);
-  const pins = allPinsWorld(part);
+  const pins = allPinsWorld(part).filter(q => !q.pin.noInsert);
   if (PART_DEFS[part.type].flex) { const s = snapFlex(part, pins, holes, taken, radius); if (s) return s; }
   let best = null;
   for (const p of pins) {

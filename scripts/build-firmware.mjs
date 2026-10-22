@@ -17,9 +17,11 @@ console.log(`Arduino CLI ${version}`);
 // 1) test fixtures
 const dir = join(root, 'test/firmware'), fixtures = {};
 for (const file of readdirSync(dir).filter(f => f.endsWith('.ino')).sort()) {
-  const source = readFileSync(join(dir, file), 'utf8'), r = await compiler.compile({ sketch: source });
+  const source = readFileSync(join(dir, file), 'utf8');
+  const fqbn = file.startsWith('mega-') ? 'arduino:avr:mega' : file.startsWith('nano-') ? 'arduino:avr:nano' : 'arduino:avr:uno';   // board from the file name
+  const r = await compiler.compile({ sketch: source, fqbn });
   const { hex, size, output, diagnostics, ok, error } = r;
-  fixtures[file.replace(/\.ino$/, '')] = { source, result: ok ? { ok, hex, size, output, diagnostics } : { ok, error, output, diagnostics } };
+  fixtures[file.replace(/\.ino$/, '')] = { source, fqbn, result: ok ? { ok, hex, size, output, diagnostics } : { ok, error, output, diagnostics } };
   console.log(`  fixture ${file.padEnd(22)} ${ok ? `${size.flash} B flash, ${size.ram} B RAM` : 'error (expected for broken.ino)'}`);
 }
 mkdirSync(join(root, 'test/fixtures'), { recursive: true });

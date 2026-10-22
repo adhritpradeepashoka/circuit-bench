@@ -1,3 +1,4 @@
+import { mainBoard } from '../core/boards.js';
 // First-visit tour + "Build it with me".
 //
 // Part 1 — the welcome tour: what CircuitBench is, then a popup pointing at each button and area in turn,
@@ -45,7 +46,7 @@ export function initTour({ editor, sim, code, projects }) {
     return { x: Math.min(...sx) - pad, y: Math.min(...sy) - pad, w: Math.max(...sx) - Math.min(...sx) + pad * 2, h: Math.max(...sy) - Math.min(...sy) + pad * 2 };
   };
   const bb = () => editor.state.parts.find(p => p.type === 'breadboard');
-  const uno = () => editor.state.parts.find(p => p.type === 'arduino-uno');
+  const uno = () => mainBoard(editor.state.parts);
   const holes = (col, rows = 'ABCDE') => { const b = bb(); return b ? [...rows].map(r => pinWorld(b, `${r}${col}`)) : []; };
   const pinPt = (part, pin) => (part ? [pinWorld(part, pin)] : []);
   /** The breadboard column a part's lead is seated in, if any. */

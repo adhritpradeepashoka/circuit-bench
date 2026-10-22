@@ -1,4 +1,4 @@
-// Which I²C parts are really on the Uno's bus, at which address — and, if not, the plain reason why
+// Which I²C parts are really on the board's bus, at which address — and, if not, the plain reason why
 // (shown in the simulator tray and handed to the AI). Topological, like a continuity check: SDA must
 // share a net with A4/SDA, SCL with A5/SCL, VCC with 5 V or 3.3 V, GND with GND. Pure; tests run in Node.
 import { PART_DEFS } from './parts.js';
@@ -9,7 +9,9 @@ const hex = a => `0x${a.toString(16).toUpperCase()}`;
 export function i2cParts(circuit, parts) {
   const out = [];
   const pinNet = name => circuit.uno.pins.find(p => p.name === name)?.net;
-  const sda = pinNet('A4'), scl = pinNet('A5');
+  const bus = circuit.uno.spec?.i2c || { sda: 'A4', scl: 'A5' };          // Uno/Nano: A4/A5 · Mega: 20/21
+  const sda = pinNet(bus.sda), scl = pinNet(bus.scl);
+  const pinName = p => (/^\d+$/.test(p) ? `D${p}` : p);
   const hasUno = circuit.uno.pins.length > 0;
   for (const part of parts) {
     const spec = PART_DEFS[part.type]?.i2c;
@@ -19,8 +21,8 @@ export function i2cParts(circuit, parts) {
     const problems = [];
     if (!hasUno) problems.push(`${name}: there is no Arduino for it to talk to`);
     else {
-      if (net(spec.sda) == null || net(spec.sda) !== sda) problems.push(`${name}: ${spec.sda} is not connected to A4 (SDA), so the Arduino can't reach it`);
-      if (net(spec.scl) == null || net(spec.scl) !== scl) problems.push(`${name}: ${spec.scl} is not connected to A5 (SCL), so the Arduino can't reach it`);
+      if (net(spec.sda) == null || net(spec.sda) !== sda) problems.push(`${name}: ${spec.sda} is not connected to ${pinName(bus.sda)} (SDA), so the Arduino can't reach it`);
+      if (net(spec.scl) == null || net(spec.scl) !== scl) problems.push(`${name}: ${spec.scl} is not connected to ${pinName(bus.scl)} (SCL), so the Arduino can't reach it`);
       const powered = spec.vcc.some(p => { const n = net(p); return n != null && (circuit.uno.v5.has(n) || circuit.uno.v33.has(n)); });
       const grounded = spec.gnd.some(p => { const n = net(p); return n != null && circuit.uno.gnd.has(n); });
       if (!powered) problems.push(`${name}: ${spec.vcc[0]} has no power — connect it to 5V`);

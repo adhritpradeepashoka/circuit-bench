@@ -10,7 +10,7 @@ const $ = id => document.getElementById(id);
 
 const KEYWORDS = new Set(['void', 'int', 'byte', 'bool', 'boolean', 'char', 'short', 'word', 'unsigned', 'signed', 'const', 'static', 'volatile', 'uint8_t', 'uint16_t', 'int8_t', 'int16_t', 'if', 'else', 'for', 'while', 'do', 'break', 'continue', 'return', 'sizeof']);
 const BUILTINS = new Set(['pinMode', 'digitalWrite', 'digitalRead', 'analogRead', 'analogWrite', 'delay', 'delayMicroseconds', 'map', 'min', 'max', 'abs', 'constrain', 'setup', 'loop']);
-const CONSTS = new Set(['HIGH', 'LOW', 'INPUT', 'OUTPUT', 'INPUT_PULLUP', 'LED_BUILTIN', 'true', 'false', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5']);
+const CONSTS = new Set(['HIGH', 'LOW', 'INPUT', 'OUTPUT', 'INPUT_PULLUP', 'LED_BUILTIN', 'true', 'false', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', 'A6', 'A7', 'A8', 'A9', 'A10', 'A11', 'A12', 'A13', 'A14', 'A15']);
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Highlight one line; `state.block` carries an open /* comment across lines. */

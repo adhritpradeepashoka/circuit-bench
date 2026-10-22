@@ -10,7 +10,7 @@
 // expose the same five methods, so the UI never cares where a project lives. DOM-free; tests run in Node.
 
 export const WORKSPACES = {
-  'arduino-uno': { name: 'Arduino Uno + breadboard', blurb: 'Microcontroller, breadboard, parts and real firmware', available: true },
+  'arduino-uno': { name: 'Arduino + breadboard', blurb: 'Microcontroller, breadboard, parts and real firmware', available: true },
   pcb: { name: 'PCB design', blurb: 'Import KiCad, lay out boards', available: false },
   cad: { name: '3D / CAD assembly', blurb: 'Import CAD parts, mount and view in 3D', available: false },
   robotics: { name: 'Robotics', blurb: 'Motors, sensors and mechanisms', available: false },

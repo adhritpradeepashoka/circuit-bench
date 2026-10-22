@@ -1,55 +1,51 @@
-import {
-  CPU, AVRIOPort, AVRTimer, PinState, avrInstruction,
-  portBConfig, portCConfig, portDConfig, timer0Config, timer1Config, timer2Config, AVRADC, adcConfig, AVRUSART, usart0Config, AVRTWI, twiConfig,
-} from 'avr8js';
+import { CPU, AVRIOPort, AVRTimer, PinState, avrInstruction, AVRADC, AVRUSART, AVRTWI } from 'avr8js';
 import { I2CBus } from './i2c.js';
+import { CHIPS } from './chips.js';
 
 export const CPU_HZ = 16_000_000;
 
-export function parseIntelHex(hex) {
-  const bytes = new Uint8Array(0x8000).fill(0xff);   // 32 KB flash
+/** Intel HEX → flash image. Handles extended segment/linear address records, so >64 KB firmware (Mega) loads too. */
+export function parseIntelHex(hex, size = 0x8000) {
+  const bytes = new Uint8Array(size).fill(0xff);
+  let base = 0;
   for (const line of hex.split(/\r?\n/)) {
     if (!line.startsWith(':')) continue;
     const count = parseInt(line.slice(1, 3), 16), addr = parseInt(line.slice(3, 7), 16), type = parseInt(line.slice(7, 9), 16);
+    const byte = i => parseInt(line.slice(9 + i * 2, 11 + i * 2), 16);
     if (type === 1) break;
+    if (type === 2) { base = ((byte(0) << 8) | byte(1)) << 4; continue; }    // extended segment address
+    if (type === 4) { base = ((byte(0) << 8) | byte(1)) << 16; continue; }   // extended linear address
     if (type !== 0) continue;
-    for (let i = 0; i < count; i++) if (addr + i < bytes.length) bytes[addr + i] = parseInt(line.slice(9 + i * 2, 11 + i * 2), 16);
+    for (let i = 0; i < count; i++) if (base + addr + i < bytes.length) bytes[base + addr + i] = byte(i);
   }
   return bytes;
 }
 
-// PWM-capable pins: which timer-compare register + control bits drive them (ATmega328P datasheet §14–§17)
-const PWM_PINS = {
-  3:  { port: 'D', bit: 3, tccrA: 0xb0, tccrB: 0xb1, com1: 0x20, com0: 0x10, ocr: 0xb4 },   // OC2B
-  5:  { port: 'D', bit: 5, tccrA: 0x44, tccrB: 0x45, com1: 0x20, com0: 0x10, ocr: 0x48 },   // OC0B
-  6:  { port: 'D', bit: 6, tccrA: 0x44, tccrB: 0x45, com1: 0x80, com0: 0x40, ocr: 0x47 },   // OC0A
-  9:  { port: 'B', bit: 1, tccrA: 0x80, tccrB: 0x81, com1: 0x80, com0: 0x40, ocr: 0x88 },   // OC1A
-  10: { port: 'B', bit: 2, tccrA: 0x80, tccrB: 0x81, com1: 0x20, com0: 0x10, ocr: 0x8a },   // OC1B
-  11: { port: 'B', bit: 3, tccrA: 0xb0, tccrB: 0xb1, com1: 0x80, com0: 0x40, ocr: 0xb3 },   // OC2A
-};
-const DDR = { B: 0x24, C: 0x27, D: 0x2a };
-
-/** ATmega328P: CPU + 3 timers + ADC + GPIO ports B/C/D, exactly the avr8js reference wiring. */
+/** An AVR microcontroller (ATmega328P by default, or ATmega2560): CPU + timers + ADC + GPIO + UART0 + TWI, from src/sim/chips.js. */
 export class Mcu {
-  /** @param {string} hex Intel HEX firmware — the output of a real Arduino build. */
-  constructor(hex) {
+  /** @param {string} hex Intel HEX firmware — the output of a real Arduino build. @param {string} chip 'atmega328p' | 'atmega2560' */
+  constructor(hex, chip = 'atmega328p') {
     if (typeof hex !== 'string' || !hex.includes(':')) throw new Error('Mcu needs Intel HEX firmware');
-    const bytes = parseIntelHex(hex);
+    const spec = CHIPS[chip];
+    if (!spec) throw new Error(`Unknown chip ${chip}`);
+    this.chip = spec;
+    const bytes = parseIntelHex(hex, spec.flashBytes);
     const program = new Uint16Array(bytes.length / 2);
     new Uint8Array(program.buffer).set(bytes);
-    this.cpu = new CPU(program, 2048);
-    this.timers = [timer0Config, timer1Config, timer2Config].map(cfg => new AVRTimer(this.cpu, cfg));
-    this.ports = { B: new AVRIOPort(this.cpu, portBConfig), C: new AVRIOPort(this.cpu, portCConfig), D: new AVRIOPort(this.cpu, portDConfig) };
-    this.adc = new AVRADC(this.cpu, adcConfig);
+    // avr8js data space = sramBytes + 0x100 register/IO bytes; the 2560's extended I/O (0x100–0x1FF) sits below its RAM, so add it
+    this.cpu = new CPU(program, spec.sramBytes + (spec.ports.L ? 0x100 : 0));
+    this.timers = spec.timers.map(cfg => new AVRTimer(this.cpu, cfg));
+    this.ports = Object.fromEntries(Object.entries(spec.ports).map(([k, cfg]) => [k, new AVRIOPort(this.cpu, cfg)]));
+    this.adc = new AVRADC(this.cpu, spec.adc);
     this.adc.channelValues.fill(0);
     // UART0 (Serial): the firmware's own UBRR/UCSR writes set the baud rate; bytes leave via onSerial
-    this.usart = new AVRUSART(this.cpu, usart0Config, CPU_HZ);
+    this.usart = new AVRUSART(this.cpu, spec.usart, CPU_HZ);
     this.onSerial = null;                       // (byte) => void
     this.rxQueue = [];
     this.usart.onByteTransmit = byte => this.onSerial?.(byte);
     this.usart.onRxComplete = () => this.pumpRx();
-    // TWI (Wire / I²C on A4 = SDA, A5 = SCL): the bus answers for whatever devices are wired up
-    this.twi = new AVRTWI(this.cpu, twiConfig, CPU_HZ);
+    // TWI (Wire / I²C): the bus answers for whatever devices are wired to the board's SDA/SCL
+    this.twi = new AVRTWI(this.cpu, spec.twi, CPU_HZ);
     this.i2c = new I2CBus(this.twi);
   }
   /** Send text (or bytes) to the firmware's Serial input. */
@@ -65,19 +61,19 @@ export class Mcu {
     }
   }
   get baud() { return this.usart.baudRate || 0; }
-  /** Volts (0–5) presented to ADC channel 0–5 (pins A0–A5). */
-  setAnalog(channel, volts) { this.adc.channelValues[channel] = Math.max(0, Math.min(5, volts)); }
+  /** Volts (0–5) presented to ADC channel n (A0 = 0 …). */
+  setAnalog(channel, volts) { if (channel < this.adc.channelValues.length) this.adc.channelValues[channel] = Math.max(0, Math.min(5, volts)); }
   /**
    * If `pin` (Arduino number) is currently producing PWM (analogWrite), the duty cycle 0–1; otherwise null.
    * Read from the timer registers, not sampled from the fast waveform — the DC solver uses the average.
    */
   pwmDuty(pin) {
-    const p = PWM_PINS[pin];
+    const p = this.chip.pwm[pin];
     if (!p) return null;
     const d = this.cpu.data;
     if (!(d[p.tccrA] & p.com1)) return null;                  // compare output not connected
     if (!(d[p.tccrB] & 0x07)) return null;                    // timer stopped
-    if (!(d[DDR[p.port]] & (1 << p.bit))) return null;        // pin is not an output
+    if (!(d[this.chip.ports[p.port].DDR] & (1 << p.bit))) return null;   // pin is not an output
     const duty = Math.min(255, d[p.ocr]) / 255;
     return d[p.tccrA] & p.com0 ? 1 - duty : duty;             // COMx0 set → inverting mode
   }
@@ -88,6 +84,7 @@ export class Mcu {
   }
   /** What the firmware is doing to one pin: 'H' | 'L' | 'U' (input, pull-up) | 'Z' (input). */
   pinMode({ port, bit }) {
+    if (!port || !this.ports[port]) return 'Z';                  // analog-only pins (Nano A6/A7)
     switch (this.ports[port].pinState(bit)) {
       case PinState.High: return 'H';
       case PinState.Low: return 'L';
@@ -96,5 +93,5 @@ export class Mcu {
     }
   }
   /** Feed the outside world back into an input pin. */
-  setInput({ port, bit }, high) { this.ports[port].setPin(bit, high); }
+  setInput({ port, bit }, high) { if (port && this.ports[port]) this.ports[port].setPin(bit, high); }
 }

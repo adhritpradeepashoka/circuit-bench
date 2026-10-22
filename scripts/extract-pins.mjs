@@ -24,6 +24,8 @@ const files = {
   'wokwi-ntc-temperature-sensor': 'ntc-temperature-sensor-element.js',
   'wokwi-mpu6050': 'mpu6050-element.js',
   'wokwi-ssd1306': 'ssd1306-element.js',
+  'wokwi-arduino-nano': 'arduino-nano-element.js',
+  'wokwi-arduino-mega': 'arduino-mega-element.js',
 };
 const out = {};
 for (const [tag, file] of Object.entries(files)) {

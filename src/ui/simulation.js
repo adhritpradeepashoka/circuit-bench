@@ -2,6 +2,8 @@ import { Mcu, CPU_HZ } from '../sim/mcu.js';
 import { solveDrive } from '../core/solver.js';
 import { PART_DEFS } from '../core/parts.js';
 import { compileSketch } from '../sim/compile-client.js';
+import { BOARD_SPECS, DEFAULT_BOARD } from '../core/boards.js';
+import { CHIPS } from '../sim/chips.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { i2cParts, i2cHex } from '../core/i2c.js';
 import { Mpu6050 } from '../parts/mpu6050.js';
@@ -44,7 +46,7 @@ export class Simulation {
     $('runLabel').textContent = state === 'running' ? 'Stop' : state === 'compiling' ? 'Compiling' : 'Run';
   }
 
-  /** Compile the sketch with Arduino CLI, then boot the resulting firmware on the simulated ATmega328P. */
+  /** Compile the sketch with Arduino CLI for the board on the canvas, then boot the firmware on that board's simulated chip. */
   async start() {
     if (this.running || this.compiling) return;
     this.compiling = true; this.setRunButton('compiling');
@@ -60,7 +62,12 @@ export class Simulation {
       if (errors.length) this.code.goToLine?.(errors[0].line);
       return;
     }
-    try { this.mcu = new Mcu(build.hex); } catch (err) { this.fail(err); return; }
+    const spec = this.editor.getCircuit().uno.spec || BOARD_SPECS[DEFAULT_BOARD];
+    const builtFor = Object.values(BOARD_SPECS).find(b => b.fqbn === build.fqbn);
+    if (builtFor && builtFor.chip !== spec.chip) { this.editor.status(`This firmware was built for the ${builtFor.name}, but the board is a ${spec.name} — press Run again to rebuild`); return; }
+    this.chipName = CHIPS[spec.chip].name; this.boardName = spec.name;
+    try { this.mcu = new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
+    $('simChip').textContent = this.chipName;
     const serial = this.code.serial;
     if (serial) {
       serial.clear(); serial.setBaud(0);
@@ -76,7 +83,7 @@ export class Simulation {
     this.last = performance.now();
     this.setRunButton('running');
     $('simPause').textContent = 'Pause';
-    this.editor.status(`Running — real firmware (${build.size?.flash ?? '?'} bytes) on the simulated ATmega328P`);
+    this.editor.status(`Running — real firmware (${build.size?.flash ?? '?'} bytes) on the simulated ${this.boardName} (${this.chipName})`);
     this.raf = requestAnimationFrame(t => this.frame(t));
     this.refreshTray();
   }
@@ -132,6 +139,7 @@ export class Simulation {
     const circuit = this.editor.getCircuit();
     const modes = new Map(), duty = new Map();
     for (const pin of circuit.uno.pins) {
+      if (!pin.port) continue;                                                              // analog-only input (Nano A6/A7)
       const d = /^\d+$/.test(pin.name) ? this.mcu.pwmDuty(Number(pin.name)) : null;       // analogWrite → average duty, not the fast waveform
       if (d !== null) { duty.set(pin.name, d); modes.set(pin.name, 'P'); } else modes.set(pin.name, this.mcu.pinMode(pin));
     }
@@ -144,15 +152,15 @@ export class Simulation {
     this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty });
     for (const pin of circuit.uno.pins) {
       const m = modes.get(pin.name);
-      if (m === 'Z' || m === 'U') {
+      if (pin.port && (m === 'Z' || m === 'U')) {
         const v = this.result.voltage(pin.net);
         this.mcu.setInput(pin, v == null ? m === 'U' : v > 2.5);
       }
     }
-    for (let ch = 0; ch < 6; ch++) {                       // ADC: every analog pin sees the solved net voltage
-      const pin = circuit.uno.pins.find(p => p.name === `A${ch}`);
-      const v = pin ? this.result.voltage(pin.net) : null;
-      this.mcu.setAnalog(ch, v == null ? 0 : v);
+    for (const pin of circuit.uno.pins) {                 // ADC: every analog pin sees the solved net voltage
+      if (pin.adc == null) continue;
+      const v = this.result.voltage(pin.net);
+      this.mcu.setAnalog(pin.adc, v == null ? 0 : v);
     }
     this.applyVisuals(circuit);
   }
@@ -206,10 +214,12 @@ export class Simulation {
       } else if (part.type === 'ldr-module') {
         const el = root.querySelector('wokwi-photoresistor-sensor'), m = result.modules?.get(part.id);
         if (el && m) { if (el.ledPower !== m.powered) el.ledPower = m.powered; if (el.ledDO !== m.out) el.ledDO = m.out; }
-      } else if (part.type === 'arduino-uno') {
-        const el = root.querySelector('wokwi-arduino-uno');
-        if (!el.ledPower) el.ledPower = true;
-        const l = this.modes?.get('13') === 'H';
+      } else if (BOARD_SPECS[part.type]) {
+        const el = root.querySelector(PART_DEFS[part.type].tag);
+        if (!el) continue;
+        const live = part.id === circuit.uno.board?.id;
+        if (el.ledPower !== live) el.ledPower = live;
+        const l = live && this.modes?.get(BOARD_SPECS[part.type].ledPin) === 'H';
         if (el.led13 !== l) el.led13 = l;
       }
     }
@@ -222,7 +232,7 @@ export class Simulation {
       if (part.type === 'rgb-led') { const el = root?.querySelector('wokwi-rgb-led'); if (el) { el.ledRed = 0; el.ledGreen = 0; el.ledBlue = 0; } }
       if (part.type === 'seven-segment') { const el = root?.querySelector('wokwi-7segment'); if (el) el.values = [0, 0, 0, 0, 0, 0, 0, 0]; }
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
-      if (part.type === 'arduino-uno') { const el = root?.querySelector('wokwi-arduino-uno'); if (el) { el.ledPower = false; el.led13 = false; } }
+      if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; } }
       if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
       if (part.type === 'ssd1306') { const el = root?.querySelector('wokwi-ssd1306'); if (el?.imageData) { el.imageData.data.fill(0); for (let i = 3; i < el.imageData.data.length; i += 4) el.imageData.data[i] = 255; el._drawn = null; el.redraw?.(); } }
     }
@@ -240,7 +250,7 @@ export class Simulation {
     const MODE = { H: 'OUTPUT HIGH', L: 'OUTPUT LOW', U: 'INPUT_PULLUP', Z: 'INPUT' };
     const pins = [];
     for (const pin of circuit.uno.pins) {
-      const m = this.modes?.get(pin.name), v = this.result.voltage(pin.net), analog = /^A\d$/.test(pin.name);
+      const m = this.modes?.get(pin.name), v = this.result.voltage(pin.net), analog = /^A\d+$/.test(pin.name);
       if (v == null && (m === 'Z' || !m)) continue;                       // nothing attached, firmware not using it
       const entry = { pin: analog ? pin.name : `D${pin.name}`, mode: m === 'P' ? `PWM ${Math.round((this.duty?.get(pin.name) || 0) * 100)}%` : MODE[m] || m, volts: v == null ? null : r2(v) };
       if (analog && v != null) entry.adc = Math.round(Math.max(0, Math.min(5, v)) / 5 * 1023);   // what analogRead() returns
@@ -260,7 +270,7 @@ export class Simulation {
     });
     const unanswered = this.i2cUnanswered();
     return {
-      running: true, paused: this.paused, seconds: r2(this.mcu.seconds),
+      running: true, paused: this.paused, seconds: r2(this.mcu.seconds), board: this.boardName, chip: this.chipName,
       pins, leds, pressed: [...this.pressed], i2c, ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
       warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
     };

@@ -21,7 +21,7 @@ const TEMPLATES = { h: '#pragma once\n\n', hpp: '#pragma once\n\n', c: '#include
  * The code dock: project files (tabs), the editor, compile orchestration, compiler output, Serial Monitor.
  * @param {{compile?: Function, editor?: object}} opts  compile(files, {signal}) → build result; editor = a CodeEditor implementation
  */
-export function initCode({ compile = defaultCompile, editor = createTextEditor() } = {}) {
+export function initCode({ compile = defaultCompile, editor = createTextEditor(), board = () => null } = {}) {
   const dock = $('codeDock'), status = $('codeStatus'), outPane = $('outputPane'), examples = $('codeExamples'), tabsEl = $('fileTabs');
   const listeners = { change: [], open: [], toggle: null };
   let ed = editor;
@@ -43,7 +43,8 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
   }
   const persist = () => { try { localStorage.setItem(PROJECT_KEY, JSON.stringify({ files, active })); } catch { /* ignore */ } };
   const mainName = () => (files.find(f => f.name === MAIN) || files.find(f => f.name.endsWith('.ino')) || files[0]).name;
-  const snapshot = () => JSON.stringify(files);
+  let boardOf = board;                                     // () → the fqbn of the board on the canvas (the sketch is compiled for it)
+  const snapshot = () => JSON.stringify([boardOf() || '', files]);
   const fileByName = n => files.find(f => f.name === n);
 
   examples.innerHTML = '<option value="">Examples…</option>' + Object.entries(EXAMPLES).map(([k, e]) => `<option value="${k}">${e.name}</option>`).join('');
@@ -163,7 +164,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     dock.classList.add('compiling'); $('codeCompile').disabled = true;
     setStatus('Compiling…', 'busy'); renderOutput(null, 'Compiling with Arduino CLI…');
     let res; const sent = snapshot();
-    try { res = await compile(files.map(f => ({ name: f.name, content: f.content })), { signal: controller.signal }); }
+    try { res = await compile(files.map(f => ({ name: f.name, content: f.content })), { signal: controller.signal, fqbn: boardOf() || undefined }); }
     catch (err) { if (err?.name === 'AbortError') res = null; else res = { ok: false, diagnostics: [], output: String(err?.message || err), error: String(err?.message || err) }; }
     if (id !== buildId) return null;
     dock.classList.remove('compiling'); $('codeCompile').disabled = false;
@@ -315,6 +316,8 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     get active() { return active; },
     setFiles, addFile, removeFile, renameFile, selectFile,
     compile: build, open: () => setOpen(true), goToLine,
+    /** Tell the dock which board the sketch is for: fn() → fqbn. */
+    setBoard(fn) { boardOf = fn; },
     onChange: fn => listeners.change.push(fn),
     /** Runs once, the first time the dock is opened — where the app upgrades to Monaco. */
     onFirstOpen: fn => { if (opened) fn(); else listeners.open.push(fn); },
