@@ -214,7 +214,7 @@ export const EXTRA_BEHAVIOURS = {
   'signal-source': {
     label: 'Biosignal source (electrodes on a body: ECG, EMG, EEG, EOG)',
     ...roles({ pos: 'Electrode + (IN+)', neg: 'Electrode − (IN−)', ref: 'Reference electrode (REF)' }),
-    props: { signal: 'ecg', bpm: 70, effort: 50, scale: 100, contact: 5, hum: 0, attached: 1 },
+    props: { signal: 'ecg', bpm: 70, effort: 50, scale: 100, contact: 5, hum: 0, attached: 1, sp: '', sn: '', sr: '' },
     settings: [
       { key: 'signal', label: 'Signal', kind: 'select', options: [['ecg', 'ECG — heartbeat'], ['emg', 'EMG — muscle'], ['eeg', 'EEG — brain'], ['eog', 'EOG — eyes'], ['sine', 'Test sine 10 Hz']] },
       { key: 'bpm', label: 'Heart rate (ECG)', kind: 'range', min: 40, max: 180, step: 1, fmt: v => `${Math.round(v)} bpm` },

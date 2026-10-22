@@ -4,9 +4,11 @@ import { WOKWI_ELEMENTS_VERSION } from './pins.generated.js';
 import { DEFAULT_OHMS, MIN_OHMS, MAX_OHMS } from './resistance.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { WIRE_KINDS, LEGACY_WIRE_KIND } from './wire-kinds.js';
+import { SITE } from './body-sites.js';
 import { validatePartSpec, registerCustomPart, specsUsed } from './custom-parts.js';
 
 /** Per-part editable properties (ohms, LED colour, switch position) — the keys come from PART_DEFS[type].props. */
+const site = v => (SITE[v] ? v : '');
 const num = (lo, hi) => (v, d) => (Number.isFinite(+v) && v !== null && v !== '' ? Math.min(hi, Math.max(lo, +v)) : d);
 const clean = {
   ohms: (v, d) => (+v ? Math.min(MAX_OHMS, Math.max(MIN_OHMS, +v)) : d),
@@ -20,7 +22,7 @@ const clean = {
   volts: num(1.5, 12),     // battery
   dist: num(2, 400),       // ultrasonic sensor, cm
   phase: v => ((+v || 0) & 3),   // rotary encoder quadrature phase
-  signal: v => (['ecg', 'emg', 'eeg', 'eog', 'sine'].includes(v) ? v : 'ecg'), bpm: num(40, 180), effort: num(0, 100), scale: num(0, 300), contact: num(1, 100), hum: num(0, 100), attached: v => (+v === 0 ? 0 : 1),   // biosignal source
+  signal: v => (['ecg', 'emg', 'eeg', 'eog', 'sine'].includes(v) ? v : 'ecg'), bpm: num(40, 180), effort: num(0, 100), scale: num(0, 300), contact: num(1, 100), hum: num(0, 100), attached: v => (+v === 0 ? 0 : 1), sp: site, sn: site, sr: site,   // biosignal source
   keys: v => ((+v || 0) & 0xffff), bits: v => ((+v || 0) & 0xffff),   // keypad: one bit per key; DIP bank: one bit per switch
   jx: num(0, 100), jy: num(0, 100), jsel: v => (+v ? 1 : 0),   // joystick
   len: num(38.4, 600),     // resistor lead spacing (world px)

@@ -606,3 +606,26 @@ button { cursor: pointer; }
 .ws-group { margin: 12px 0 4px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .ws-row { border: 1px solid var(--line); margin-bottom: 6px; }
 .ws-save { border-top: 1px solid var(--line); border-bottom: 0; padding-top: 12px; margin-top: 8px; }
+
+/* Visualizer (Bioelectronics workspace) */
+.view-toggle { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.view-toggle[hidden] { display: none; }
+.view-toggle button { height: 30px; padding: 0 12px; border: 0; background: #fff; color: inherit; font-weight: 600; cursor: pointer; }
+.view-toggle button.on { background: var(--ink-2); color: var(--ink-text); }
+.viz-pane { position: absolute; inset: 0; z-index: 20; display: flex; background: var(--mat, #eef3f0); }
+.viz-pane[hidden] { display: none; }
+.viz-stage { position: relative; flex: 1; min-width: 0; cursor: grab; touch-action: none; }
+.viz-stage.dragging { cursor: grabbing; }
+.viz-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.viz-hint { position: absolute; inset: 0; display: grid; place-items: center; color: #48564f; font-size: 13px; text-align: center; padding: 16px; }
+.viz-hint[hidden] { display: none; }
+.viz-labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.viz-tag { position: absolute; left: 0; top: 0; padding: 1px 6px; border-radius: 9px; color: #fff; font-size: 11px; font-weight: 700; }
+.viz-side { width: 310px; max-width: 45%; padding: 14px; display: grid; gap: 10px; align-content: start; background: #fff; border-left: 1px solid var(--line); overflow: auto; }
+.viz-note { margin: 0; font-size: 12px; line-height: 1.5; color: #48564f; }
+.viz-read { margin: 0; font-size: 12.5px; line-height: 1.5; }
+.viz-row { display: grid; grid-template-columns: 54px 1fr; gap: 8px; align-items: center; }
+.viz-row select { min-width: 0; }
+.viz-chip { padding: 5px 0; text-align: center; border-radius: 14px; color: #fff; font-weight: 700; font-size: 12px; cursor: grab; user-select: none; touch-action: none; }
+.viz-ghost { position: fixed; z-index: 1000; width: 54px; transform: translate(-50%, -50%); pointer-events: none; opacity: .9; }
+.viz-trace { width: 100%; height: 90px; border: 1px solid var(--line); border-radius: 8px; background: #fafcfb; }

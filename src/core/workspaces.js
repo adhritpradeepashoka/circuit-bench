@@ -27,7 +27,7 @@ export const BUILTIN_WORKSPACES = [
   {
     format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: 'bioelectronics', builtin: true, name: 'Bioelectronics',
     blurb: 'ECG, EMG, EEG and EOG: electrodes, amplifiers (BioAmp), signal sources, and an Arduino to read them',
-    author: 'CircuitBench', menuFirst: ['Biosignal'], parts: [],
+    author: 'CircuitBench', menuFirst: ['Biosignal'], parts: [], visualizer: true,
     hint: { title: 'Read a heartbeat', text: 'The BODY block is the signal source (right-click it to pick ECG, EMG, EEG or EOG). Wire its electrode pins to the BioAmp EXG Pill inputs (IN+, IN−, REF), power the Pill from the Arduino 5V and GND, then connect the Pill OUT to A0 and press Run. Open Code to see the samples.' },
     starter: {
       extra: [
@@ -70,6 +70,7 @@ export function validateWorkspace(raw) {
     ok: true,
     workspace: {
       format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id, name, blurb: str(raw.blurb, 160), author: str(raw.author, 60), builtin: !!raw.builtin,
+      visualizer: raw.visualizer === true,
       menuFirst: (Array.isArray(raw.menuFirst) ? raw.menuFirst : []).slice(0, 6).map(c => str(c, 30)).filter(Boolean),
       hint: raw.hint && typeof raw.hint === 'object' ? { title: str(raw.hint.title, 60), text: str(raw.hint.text, 400) } : null,
       parts, starter: { extra, ...(project ? { project } : {}), ...(raw.starter?.sketch ? { sketch: str(raw.starter.sketch, 40) } : {}) },
