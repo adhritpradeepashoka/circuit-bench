@@ -1,15 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { SITE, siteSignal, sitePosition } from '../src/core/body-sites.js';
+import { SITE, SITES, siteSignal, sitePosition, surfacePoint } from '../src/core/body-sites.js';
 import { signalAt } from '../src/core/signals.js';
 
 const peak = (a, b, opts) => { let m = 0; for (let i = 0; i < 4000; i++) m = Math.max(m, Math.abs(siteSignal(a, b, i / 500, opts))); return m; };
 
-test('every site sits on the head ellipsoid', () => {
-  for (const s of Object.values(SITE)) {
-    const p = sitePosition(s.id), r = (p.x / 0.78) ** 2 + (p.y / 0.95) ** 2 + (p.z / 0.95) ** 2;
-    assert.ok(Math.abs(r - 1) < 1e-9, s.id);
-  }
+test('every site has a position on the head scan, left sites left and right sites right', () => {
+  for (const s of SITES) assert.ok(sitePosition(s.id), s.id);
+  assert.ok(sitePosition('Fp1').x < 0 && sitePosition('Fp2').x > 0);
+  assert.ok(sitePosition('Cz').z > sitePosition('T3').z && sitePosition('Fz').y > sitePosition('Pz').y);
+  const p = surfacePoint(36, 90); assert.ok(Math.abs((p.x / 0.78) ** 2 + (p.y / 0.95) ** 2 + (p.z / 0.95) ** 2 - 1) < 1e-9);
 });
 test('alpha is stronger at the back of the head than at the front', () => {
   assert.ok(peak('O1', 'A1', { effort: 0 }) > peak('Cz', 'A1', { effort: 0 }));

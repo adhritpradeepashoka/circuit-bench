@@ -6,6 +6,8 @@
 // blinks show at the forehead, a gaze to the right makes the right eye's outer edge positive, jaw muscle shows at the
 // cheek and temple), but they are not measurements and not for medical use.
 
+import { HEAD_SITES } from './head-sites.generated.js';
+
 const D = Math.PI / 180;
 /** Head frame: x = right ear, y = nose, z = crown. The skull is an ellipsoid with these radii (1 unit ≈ 10 cm × 0.8). */
 export const HEAD_RADII = { x: 0.78, y: 0.95, z: 0.95 };
@@ -21,7 +23,7 @@ export function surfacePoint(theta, phi) {
 //   a = alpha/beta brain rhythm, b = blink, h = horizontal gaze, v = vertical gaze, m = muscle
 const S = (id, name, group, theta, phi, w) => ({ id, name, group, theta, phi, w: { a: 0, b: 0, h: 0, v: 0, m: 0, ...w } });
 export const SITES = [
-  S('Fp1', 'Fp1 (forehead, left)', 'EEG', 72, -18, { a: 0.25, b: 1, h: 0.1, m: 0.3 }), S('Fp2', 'Fp2 (forehead, right)', 'EEG', 72, 18, { a: 0.25, b: 1, h: 0.1, m: 0.3 }),
+  S('Fp1', 'Fp1 (forehead, left)', 'EEG', 64, -18, { a: 0.25, b: 1, h: 0.1, m: 0.3 }), S('Fp2', 'Fp2 (forehead, right)', 'EEG', 64, 18, { a: 0.25, b: 1, h: 0.1, m: 0.3 }),
   S('F7', 'F7 (front, left temple)', 'EEG', 72, -54, { a: 0.3, b: 0.35, h: -0.35, m: 0.4 }), S('F3', 'F3 (front, left)', 'EEG', 46, -45, { a: 0.35, b: 0.4, m: 0.1 }),
   S('Fz', 'Fz (front, middle)', 'EEG', 36, 0, { a: 0.4, b: 0.4, m: 0.1 }), S('F4', 'F4 (front, right)', 'EEG', 46, 45, { a: 0.35, b: 0.4, m: 0.1 }),
   S('F8', 'F8 (front, right temple)', 'EEG', 72, 54, { a: 0.3, b: 0.35, h: 0.35, m: 0.4 }),
@@ -37,7 +39,8 @@ export const SITES = [
 ];
 export const SITE = Object.fromEntries(SITES.map(s => [s.id, s]));
 export const SITE_GROUPS = ['EEG', 'EOG', 'EMG', 'Reference'];
-export const sitePosition = id => (SITE[id] ? surfacePoint(SITE[id].theta, SITE[id].phi) : null);
+/** Where a site is on the head scan (model units: 1 = 100 mm). Falls back to the plain ellipsoid if a site was not baked. */
+export const sitePosition = id => (HEAD_SITES[id] ? { x: HEAD_SITES[id][0], y: HEAD_SITES[id][1], z: HEAD_SITES[id][2] } : SITE[id] ? surfacePoint(SITE[id].theta, SITE[id].phi) : null);
 
 /* ── a little deterministic noise ── */
 const hash = n => { let h = Math.imul(n | 0, 0x9e3779b1) ^ 0x85ebca6b; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15; return ((h >>> 0) / 4294967295) * 2 - 1; };

@@ -209,6 +209,7 @@ export const EXTRA_BEHAVIOURS = {
       { key: 'dropLow', label: 'Output stops this far above V−', unit: 'V', min: 0, max: 5, step: 0.05, def: 0.1 },
       { key: 'minSupply', label: 'Needs at least this supply', unit: 'V', min: 1, max: 40, step: 0.1, def: 3 },
     ],
+    props: { sp: '', sn: '', sr: '', effort: 50, scale: 100, contact: 5, hum: 0 },       // electrode sites on the Visualizer's head (blank = wired by hand)
     note: 'Output = rest level + gain × (IN+ − IN−), limited to the supply. The rest level is half the supply, the REF pin, or ground, as chosen. Input impedance is very high. Filtering and noise are not modelled.',
   },
   'signal-source': {

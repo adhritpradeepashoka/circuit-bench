@@ -347,3 +347,17 @@ test('biosignal source through the BioAmp Pill: the ADC-side voltage follows the
   near(chain(0.001).v('px', 'OUT'), 3.5, 0.1, '1 mV × 1000');
   near(chain(0.001, { attached: 0 }).v('px', 'OUT'), 2.5, 0.05, 'peeled-off electrodes pick nothing up');
 });
+
+test('head channels: each BioAmp Pill with electrode sites placed is its own channel, even with nothing wired to its inputs or REF', async () => {
+  const { signalAt } = await import('../src/core/signals.js');
+  const pill = (id, extra) => ({ id, type: 'custom-bioamp-exg-pill', x: 0, y: 0, rot: 0, ...extra });
+  const parts = [bat('b', 5), pill('p1', { sp: 'O1', sn: 'A1', sr: 'A2' }), pill('p2', { sp: 'EOG-L', sn: 'EOG-R', sr: 'A2' }), pill('p3')];
+  const wires = ['p1', 'p2', 'p3'].flatMap(p => [W('b', '+', p, 'VCC'), W('b', '-', p, 'GND')]);
+  const t = 1.234;
+  const signals = new Map([['p1', signalAt(parts[1], t)], ['p2', signalAt(parts[2], t)]]);
+  const { c, r, v } = run(parts, wires, { signals });
+  assert.equal(c.elements.filter(e => e.kind === 'BIO').length, 2, 'only the Pills with both E+ and E− placed get a body');
+  for (const [id, want] of [['p1', signals.get('p1')], ['p2', signals.get('p2')]]) near(v(id, 'OUT'), 2.5 + 1000 * want, 0.05, `${id} follows its own sites`);
+  assert.notEqual(signals.get('p1'), signals.get('p2'));
+  near(v('p3', 'OUT'), 2.5, 0.05, 'an unplaced channel idles at half supply');
+});

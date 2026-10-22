@@ -1,3 +1,4 @@
+import { SITE } from './body-sites.js';
 import { PART_DEFS } from './parts.js';
 import { allPinsWorld } from './geometry.js';
 import { boardHoles, holeAt } from './snap.js';
@@ -155,6 +156,8 @@ export function compile(state) {
       else if (kind === 'inamp') {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply, gain: bh.gain, bias: bh.bias === 'ref' && roles.ref ? { mode: 'ref', net: r('ref') } : { mode: bh.bias === 'zero' ? 'zero' : bh.bias === 'ref' ? 'zero' : 'mid' } });
+        // electrodes placed on the Visualizer's head: this amplifier's own inputs are fed by the body (a channel per amplifier)
+        if (part.sp && part.sn && SITE[part.sp] && SITE[part.sn] && roles.ref) elements.push({ kind: 'BIO', partId: part.id, pos: r('inp'), neg: r('inn'), ref: r('ref'), rc: 2000 + 1000 * Math.max(1, part.contact ?? 5) });
       }
       else if (kind === 'keypad') {
         const bh = PART_DEFS[part.type].spec.behaviour, cols = bh.cols.length;
