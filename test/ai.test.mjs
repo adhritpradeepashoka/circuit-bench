@@ -417,3 +417,34 @@ test('models: NVIDIA lists models an account cannot call ("Not found for account
   const none = createAiService({ fetchImpl: async (u, o) => (o.method === 'GET' ? { ok: false, status: 500, json: async () => ({}) } : { ok: false, status: 404, json: async () => ({ error: { message: 'Not found for account' } }) }) });
   await assert.rejects(() => none.generateCode({ instruction: 'x', userKey: 'nvapi-zzzzzzzz', provider: 'nvidia' }), e => /models I tried/.test(e.message) && /open to this key/.test(e.message));
 });
+
+test('replies: a prose-only answer, a bare JSON object with no fence, and an empty reply from one model (next model is tried) all work', async () => {
+  const prose = createAiService({ fetchImpl: fakeGeminiText('Your LED has no resistor and its cathode is not connected to GND, so it cannot light.') });
+  const r1 = await prose.generateCode({ instruction: 'what is wrong with this circuit, can you fix it', userKey: 'k' });
+  assert.equal(r1.ok, true); assert.deepEqual(r1.actions, []); assert.match(r1.explanation, /no resistor/);
+  const bare = createAiService({ fetchImpl: fakeGeminiText('Here you go: {"actions":[],"explanation":"All good."} hope it helps') });
+  const r2 = await bare.generateCode({ instruction: 'x', userKey: 'k' });
+  assert.equal(r2.explanation, 'All good.');
+  const asked = [];
+  const empties = createAiService({ fetchImpl: async (u, o) => {
+    if (o.method === 'GET') return { ok: true, status: 200, json: async () => ({ data: [{ id: 'openrouter/free' }, { id: 'meta-llama/llama-3.3-70b-instruct:free' }] }) };
+    asked.push(JSON.parse(o.body).model);
+    return oaiReply(asked.length === 1 ? '' : okJson);
+  } });
+  const r3 = await empties.generateCode({ instruction: 'x', userKey: 'or-key-1234567', provider: 'openrouter' });
+  assert.equal(r3.ok, true); assert.equal(asked.length, 2);
+});
+
+test('models: NVIDIA — when every favourite is retired, it keeps going through whatever chat model the catalogue still lists', async () => {
+  const listed = ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-8b-instruct', 'nvidia/nv-embed-v1', 'acme/new-chat-model', 'nvidia/llama-3.2-nv-rerankqa-1b'];
+  const asked = [];
+  const ai = createAiService({ fetchImpl: async (u, o) => {
+    if (o.method === 'GET') return { ok: true, status: 200, json: async () => ({ data: listed.map(id => ({ id })) }) };
+    const m = JSON.parse(o.body).model; asked.push(m);
+    return m === 'acme/new-chat-model' ? oaiReply(okJson) : { ok: false, status: 410, json: async () => ({ error: { message: `The model '${m}' has reached its end of life and is no longer available.` } }) };
+  } });
+  const r = await ai.generateCode({ instruction: 'x', userKey: 'nvapi-qqqqqqqq', provider: 'nvidia' });
+  assert.equal(r.ok, true);
+  assert.equal(asked.at(-1), 'acme/new-chat-model');
+  assert.ok(!asked.some(m => /embed|rerank/.test(m)));
+});

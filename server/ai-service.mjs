@@ -215,7 +215,12 @@ function extractBareCode(text) {
 function parseReply(text) {
   const t = text || '';
   const jsonMatch = matchJsonFence(t);
-  const parsed = jsonMatch ? tryParseJson(jsonMatch[1]) : null;
+  let parsed = jsonMatch ? tryParseJson(jsonMatch[1]) : null;
+  if (!parsed) {                                         // some models skip the fence and send the bare object (maybe with chatter around it)
+    const a = t.indexOf('{'), b = t.lastIndexOf('}');
+    const bare = a >= 0 && b > a ? tryParseJson(t.slice(a, b + 1)) : null;
+    if (bare && typeof bare === 'object' && ('explanation' in bare || 'actions' in bare || 'code' in bare)) parsed = bare;
+  }
   // Strip exactly the matched json fence (not any ``` fence) before hunting for a separate code block,
   // so the json block itself is never mistaken for "bare code" when it has no "json" language tag.
   const withoutJson = jsonMatch ? t.slice(0, jsonMatch.index) + t.slice(jsonMatch.index + jsonMatch[0].length) : t;
@@ -232,6 +237,9 @@ function parseReply(text) {
   }
   // No valid/parseable json at all — the model ignored the schema and just sent code.
   if (bareCode) return { actions: [], code: bareCode, explanation: withoutJson.replace(/```[\s\S]*?```/g, '').trim() };
+  // Plain prose and nothing else: a model that ignored the format but still answered ("what's wrong with my circuit?") — show it as the answer.
+  const prose = t.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  if (prose.length > 15 && !/^[{[]/.test(prose)) return { actions: [], code: null, explanation: prose.slice(0, 4000) };
   return null;
 }
 
@@ -245,9 +253,9 @@ function statusFor(httpStatus, message) {
 const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
 
 /** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
-function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false }) {
+function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false, anyChat = false }) {
   return {
-    label, models, keyUrl, hint, prefer, onlyFree, anyFree, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'),
+    label, models, keyUrl, hint, prefer, onlyFree, anyFree, anyChat, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'),
     listHeaders: key => ({ authorization: `Bearer ${key}` }),
     listIds: body => (Array.isArray(body?.data) ? body.data : []).filter(m => !onlyFree || m?.id === 'openrouter/free' || /:free$/.test(m?.id || '') || (m?.pricing && Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0)).map(m => m?.id).filter(Boolean),
     url: () => url,
@@ -285,7 +293,7 @@ export const PROVIDERS = {
   },
   // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
   groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
-  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
+  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], anyChat: true, prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
   // openrouter/free is OpenRouter's own router: it hands the request to whichever free model is up right now, so it survives retirements.
   openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free'], onlyFree: true, anyFree: true, prefer: [/^openrouter\/free$/, /^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^(?:openai\/gpt-oss-(\d+)b|qwen\/qwen[\d.]*-(\d+)b[\w.-]*|deepseek\/deepseek-(?:chat|v)[\w.-]*|mistralai\/mistral[\w.-]*|google\/gemma-(\d+)[\w.-]*):free$/] }),
@@ -369,6 +377,7 @@ export function rankModels(p, ids) {
     hit.sort((a, b) => b.v - a.v || a.id.length - b.id.length);
     for (const { id } of hit) if (!seen.has(id)) { seen.add(id); out.push(id); }
   }
+  if (p.anyChat) for (const id of pool) if (!seen.has(id) && /instruct|chat|nemotron|llama|qwen|deepseek|mistral|mixtral|gemma|gpt-oss|phi|glm|kimi|granite/i.test(id) && !/reward|safety|nv-embed|rerank|clip|vlm|parse|translate|\b(?:vila|neva|paligemma|kosmos)\b/i.test(id)) { seen.add(id); out.push(id); }   // lists include retired models, so after the favourites try everything chat-like
   if (p.anyFree) for (const id of pool) if (!seen.has(id) && /:free$/.test(id)) { seen.add(id); out.push(id); }       // then any other free model that is up
   return out;
 }
@@ -407,7 +416,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
    */
   async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
     const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
-    const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, 8), ...p.models].filter(Boolean))].slice(0, 10);   // a model the student typed is the only one tried
+    const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, p.anyChat ? 16 : 8), ...p.models].filter(Boolean))].slice(0, p.anyChat ? 16 : 10);   // a model the student typed is the only one tried
     const tried = [];
     let res, body, msg;
     for (let i = 0; i < wanted.length; i++) {
@@ -417,13 +426,16 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
         throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
       }
       try { body = await res.json(); } catch { body = null; }
-      if (res.ok) break;
+      if (res.ok) {
+        if (!String(p.text(body) || '').trim() && i < wanted.length - 1) { tried.push(wanted[i]); continue; }   // an empty answer (a reasoning model that ran out of room): try the next model
+        break;
+      }
       msg = p.errorMessage(body) || `HTTP ${res.status}`; tried.push(wanted[i]);
       if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model });
       if (i < wanted.length - 1 && modelGone(res.status, msg)) continue;            // that model isn't available to this key — try the next one
       throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ` — none of ${tried.length > 1 ? `the ${tried.length} models I tried (${tried.slice(0, 4).join(', ')}${tried.length > 4 ? '…' : ''})` : `“${tried[0]}”`} is open to this key. Type a model your account can use in the AI settings, or pick another provider.` : ''}`, statusFor(res.status, msg));
     }
-    if (!typed) works.set(keyId(p, userKey), wanted[tried.length]);
+    if (!typed) works.set(keyId(p, userKey), wanted[Math.min(tried.length, wanted.length - 1)]);
     const sources = [];
     for (const s of p.sources?.(body) || []) if (s?.url && !sources.some(x => x.url === s.url)) sources.push({ title: String(s.title || s.url).slice(0, 120), url: String(s.url).slice(0, 500) });
     return { text: p.text(body), sources: sources.slice(0, 6), searched: search && sources.length > 0 };
