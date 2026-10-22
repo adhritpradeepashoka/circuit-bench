@@ -71,6 +71,14 @@ export const TEMPLATES = [
   { group: 5, id: 'hall', ...mod('Hall / magnet sensor', 'HALL', '#444', [['VCC'], ['GND'], ['OUT']], { kind: 'digital-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'OUT' } }, { description: 'Click it while running to simulate a magnet.' }) },
 
   // ── Chips (rules)
+  { group: 6, id: 'gate-not', ...mod('NOT gate', 'NOT', '#1f2933', [['A', 'Input'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: '!A' } }, { description: 'One NOT gate (like a 74HC04) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
+  { group: 6, id: 'gate-and', ...mod('AND gate', 'AND', '#1f2933', [['A', 'Input A'], ['B', 'Input B'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: 'A && B' } }, { description: 'One AND gate (like a 74HC08) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
+  { group: 6, id: 'gate-or', ...mod('OR gate', 'OR', '#1f2933', [['A', 'Input A'], ['B', 'Input B'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: 'A || B' } }, { description: 'One OR gate (like a 74HC32) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
+  { group: 6, id: 'gate-xor', ...mod('XOR gate', 'XOR', '#1f2933', [['A', 'Input A'], ['B', 'Input B'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: '(A + B) % 2' } }, { description: 'One XOR gate (like a 74HC86) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
+  { group: 6, id: 'gate-nand', ...mod('NAND gate', 'NAND', '#1f2933', [['A', 'Input A'], ['B', 'Input B'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: '!(A && B)' } }, { description: 'One NAND gate (like a 74HC00) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
+  { group: 6, id: 'gate-nor', ...mod('NOR gate', 'NOR', '#1f2933', [['A', 'Input A'], ['B', 'Input B'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: '!(A || B)' } }, { description: 'One NOR gate (like a 74HC02) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
+  { group: 6, id: 'gate-dff', ...mod('D flip-flop', 'D-FF', '#1f2933', [['D', 'Data in'], ['CLK', 'Clock'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Q', 'Output'], ['QN', 'Output (inverted)']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: { st: 0 }, rules: [{ when: 'rising(CLK)', set: { st: 'D' } }], outputs: { Q: 'st', QN: '!st' } }, { description: 'Remembers D on each rising edge of CLK. Q holds it until the next edge; QN is the opposite.' }) },
+  { group: 6, id: 'gate-mux2', ...mod('2-to-1 multiplexer', 'MUX2', '#1f2933', [['A', 'Input 0'], ['B', 'Input 1'], ['S', 'Select'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: 'S ? B : A' } }, { description: 'Y copies input A while S is LOW and input B while S is HIGH.' }) },
   chip74hc595(),
   chipGates(),
   chipCounter(),
@@ -113,6 +121,7 @@ export const POPULAR = {
   'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors', 'opamp-lm358': 'Semiconductors', 'opamp-rr': 'Semiconductors',
   'reg-7805': 'Power', 'cap-100n': 'Passives', 'cap-100u': 'Passives', 'ind-10mh': 'Passives',
   'ic-74hc595': 'Chips',
+  'gate-not': 'Logic', 'gate-and': 'Logic', 'gate-or': 'Logic', 'gate-xor': 'Logic', 'gate-nand': 'Logic', 'gate-nor': 'Logic', 'gate-dff': 'Logic', 'gate-mux2': 'Logic',
 };
 /** Templates that have a real @wokwi/elements equivalent in the catalogue (src/core/native-parts.js), so they are not offered as templates any more. */
 export const HAS_WOKWI_PART = new Set(['servo-sg90', 'hcsr04', 'ky040', 'buzzer-active', 'buzzer-passive', 'led-bar', 'relay-5v', 'pot-trimmer', 'sound']);

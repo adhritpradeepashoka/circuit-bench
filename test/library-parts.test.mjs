@@ -299,3 +299,20 @@ test('op-amp: non-inverting amplifier gain 1+Rf/Rg, a follower, rail clipping, a
   const dead = run([bat('b', 1), oa, r('rl', 1000)], [W('b', '+', 'oa', 'V+'), W('b', '-', 'oa', 'V-'), W('oa', 'OUT', 'rl', '1'), W('rl', '2', 'b', '-')]);
   assert.ok(Math.abs(dead.v('oa', 'OUT')) < 0.2, 'unpowered op-amp does not drive');
 });
+
+test('logic parts in the catalogue: gates follow their truth tables from a battery supply, and the D flip-flop is built in', async () => {
+  const { PART_DEFS } = await import('../src/core/parts.js');
+  for (const id of ['not', 'and', 'or', 'xor', 'nand', 'nor', 'dff', 'mux2']) assert.ok(PART_DEFS[`custom-gate-${id}`]?.builtin, `${id} is in the catalogue`);
+  assert.equal(PART_DEFS['custom-gate-and'].category, 'Logic');
+  const { compileLogic, createLogicState, logicDrive } = await import('../src/core/logic.js');
+  const out = (id, inputs) => {
+    const def = PART_DEFS[`custom-gate-${id}`], compiled = def.logic, state = createLogicState(compiled);
+    const volts = pin => (pin in inputs ? inputs[pin] * 5 : pin === 'VCC' ? 5 : 0);
+    return logicDrive(compiled, state, def.spec.behaviour.roles, volts);
+  };
+  const y = (id, a, b) => out(id, { A: a, B: b }).get('Y');
+  const table = { and: [0, 0, 0, 1], or: [0, 1, 1, 1], xor: [0, 1, 1, 0], nand: [1, 1, 1, 0], nor: [1, 0, 0, 0] };
+  for (const [id, want] of Object.entries(table)) [[0, 0], [0, 1], [1, 0], [1, 1]].forEach(([a, b], i) => near(y(id, a, b) ?? 0, want[i] * 5, 0.1, `${id}(${a},${b})`));
+  near(out('not', { A: 0 }).get('Y'), 5, 0.1); near(out('not', { A: 1 }).get('Y'), 0, 0.1);
+  near(out('mux2', { A: 0, B: 1, S: 1 }).get('Y'), 5, 0.1, 'S high picks B'); near(out('mux2', { A: 0, B: 1, S: 0 }).get('Y'), 0, 0.1, 'S low picks A');
+});
