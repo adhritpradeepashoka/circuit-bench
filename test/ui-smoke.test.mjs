@@ -265,8 +265,13 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'My parts']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Passives', 'Sound', 'Chips', 'My parts']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
+  for (const n of ['Servo SG90', 'Ultrasonic sensor HC-SR04', 'Stepper 28BYJ-48 + ULN2003', 'Rotary encoder KY-040', 'NPN transistor 2N2222', 'Active buzzer']) assert.ok(names.includes(n), `${n} ships in the default catalogue`);
+  assert.equal(doc.querySelectorAll('#catalog .part-card .edit-part').length, 0, 'built-in parts have no edit button');
+  editor.addPart('custom-servo-sg90');
+  assert.ok(editor.state.parts.some(p => p.type === 'custom-servo-sg90'));
+  assert.ok(![...doc.querySelectorAll('#pcTemplate option')].some(o => o.value === 'servo-sg90'), 'popular parts are not in the template list');
   for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro', 'OLED Display 128×64 (SSD1306)']) assert.ok(names.includes(n), `${n} in catalogue`);
   for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306', 'arduino-nano', 'arduino-mega', 'dht', 'lcd1602', 'dc-motor', 'l298n', 'battery']) {
     editor.addPart(type);
@@ -1660,7 +1665,7 @@ test('ui: Part Creator — start from a ready-made switch, save it, click it to 
   const doc = w.document, $ = id => doc.getElementById(id);
   w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false, error: 'no AI in this test' }) });
   assert.ok($('pcKind').querySelectorAll('optgroup').length >= 4, 'behaviours are grouped');
-  assert.ok($('pcTemplate').querySelectorAll('option').length > 40, 'a long template list');
+  assert.ok($('pcTemplate').querySelectorAll('option').length > 15, 'a long template list');
   $('createPartBtn').click();
   $('pcTemplate').value = 'sw-spst'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
   assert.equal($('pcName').value, 'Toggle switch (on / off)');
@@ -1686,16 +1691,16 @@ test('ui: Part Creator — a behaviour’s numbers appear as fields, are validat
   const pc = w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false }) });
   const set = (id, v, ev = 'input') => { const e = $(id); e.value = v; e.dispatchEvent(new w.Event(ev, { bubbles: true })); };
   editor.emit('create-part');
-  $('pcTemplate').value = 'q-irlz44n'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  $('pcTemplate').value = 'q-irf540'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
   assert.equal($('pcKind').value, 'nmos');
-  assert.equal($('pcParam-vth').value, '2'); assert.equal($('pcParam-rds').value, '0.022');
+  assert.equal($('pcParam-vth').value, '5.5'); assert.equal($('pcParam-rds').value, '0.044');
   assert.equal($('pcRole-gate').value, 'G'); assert.equal($('pcRole-drain').value, 'D');
   set('pcParam-vth', '3.3');
   $('pcSave').click();
   assert.equal(pc.library()[0].behaviour.vth, 3.3);
   // switching what a part does re-guesses the roles from the pin names and resets the numbers
   editor.emit('create-part');
-  $('pcTemplate').value = 'd-1n4007'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  $('pcTemplate').value = 'd-schottky'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
   set('pcKind', 'npn', 'change');
   assert.equal($('pcParam-beta').value, '100');
   set('pcKind', 'diode', 'change');

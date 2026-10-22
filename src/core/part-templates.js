@@ -103,3 +103,14 @@ function chipCounter() {
     }, 'Counts rising edges on CLK from 0 to 15; MR (HIGH) resets it.'),
   };
 }
+
+/** Common parts that ship in the default catalogue (sidebar) instead of the Part Creator's template list: template id → sidebar category. */
+export const POPULAR = {
+  'servo-sg90': 'Motors', 'stepper': 'Motors', 'fan': 'Motors', 'relay-5v': 'Motors',
+  'hcsr04': 'Sensors', 'hall': 'Sensors', 'ir-dist': 'Sensors',
+  'ky040': 'Input', 'pot-trimmer': 'Input',
+  'buzzer-active': 'Sound', 'buzzer-passive': 'Sound',
+  'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors',
+  'reg-7805': 'Power', 'cap-100n': 'Passives', 'cap-100u': 'Passives', 'ind-10mh': 'Passives',
+  'led-bar': 'Displays', 'ic-74hc595': 'Chips',
+};

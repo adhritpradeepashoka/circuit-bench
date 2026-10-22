@@ -11,6 +11,7 @@ import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
 import { EXTRA_BEHAVIOURS, ICON_KINDS, cleanParams } from './behaviours-extra.js';
+import { TEMPLATES, POPULAR } from './part-templates.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
 const PAD = 14, MIN_W = 76, MIN_H = 56, ICON_MIN_H = 76, MAX_PINS = 64;
@@ -240,12 +241,14 @@ export function partDefFromSpec(spec) {
     ...Object.keys(B.lists || {}).map(l => `${B.lists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
   const paramText = (B.params || []).map(p => `${p.label} ${spec.behaviour[p.key]}${p.unit ? ` ${p.unit}` : ''}`).join(', ');
   return {
-    type: spec.id, name: spec.name, category: 'My parts', tag: 'cb-custom-part', custom: true, spec,
+    type: spec.id, name: spec.name, category: BUILTIN_CATEGORY.get(spec.id) || 'My parts', tag: 'cb-custom-part', custom: true, spec, ...(BUILTIN_CATEGORY.has(spec.id) ? { builtin: true } : {}),
     w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}), ...(logic ? { logic } : {}),
     interactive: k === 'button' || k === 'digital-sensor' || !!B.toggle || k === 'encoder',
     aiNote: `Student-made part. ${B.note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${paramText ? ` Settings: ${paramText}.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
   };
 }
+
+const BUILTIN_CATEGORY = new Map(TEMPLATES.filter(t => POPULAR[t.id]).map(t => [`custom-${t.id}`, POPULAR[t.id]]));
 
 /** Add (or update) a custom part in the live catalogue. Returns its def. */
 export function registerCustomPart(spec) {
@@ -260,8 +263,9 @@ export function registerCustomPart(spec) {
   return def;
 }
 
+export const customTypes = () => Object.keys(PART_DEFS).filter(isCustomType).filter(t => !PART_DEFS[t].builtin);
+export const builtinTypes = () => Object.keys(PART_DEFS).filter(t => PART_DEFS[t].builtin);
 export const isCustomType = type => /^custom-/.test(String(type)) && !!PART_DEFS[type]?.custom;
-export const customTypes = () => Object.keys(PART_DEFS).filter(isCustomType);
 /** The specs a project uses, for saving them inside the project file. */
 export const specsUsed = parts => [...new Set(parts.map(p => p.type))].filter(isCustomType).map(t => PART_DEFS[t].spec);
 
@@ -274,4 +278,12 @@ export function describeCustomSpecs(specs) {
     out.push(`- ${v.spec.id}: pins ${v.spec.pins.map(p => p.id).join(', ')}${Object.keys(partDefFromSpec(v.spec).props || {}).length ? ` props: ${Object.keys(partDefFromSpec(v.spec).props).join(', ')}` : ''} — "${v.spec.name}". ${partDefFromSpec(v.spec).aiNote}`);
   }
   return out.join('\n');
+}
+
+// The popular parts are part of the default catalogue: registered here, before any project loads.
+for (const t of TEMPLATES) {
+  if (!POPULAR[t.id]) continue;
+  const { id: _i, group: _g, ...raw } = t;
+  const v = validatePartSpec({ ...raw, id: `custom-${t.id}` });
+  if (v.ok) registerCustomPart(v.spec);
 }
