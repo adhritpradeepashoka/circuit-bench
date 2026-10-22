@@ -245,11 +245,11 @@ function statusFor(httpStatus, message) {
 const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
 
 /** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
-function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false }) {
+function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false }) {
   return {
-    label, models, keyUrl, hint, prefer, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'), onlyFree,
+    label, models, keyUrl, hint, prefer, onlyFree, anyFree, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'),
     listHeaders: key => ({ authorization: `Bearer ${key}` }),
-    listIds: body => (Array.isArray(body?.data) ? body.data : []).map(m => m?.id).filter(Boolean),
+    listIds: body => (Array.isArray(body?.data) ? body.data : []).filter(m => !onlyFree || m?.id === 'openrouter/free' || /:free$/.test(m?.id || '') || (m?.pricing && Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0)).map(m => m?.id).filter(Boolean),
     url: () => url,
     headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
     body: (prompt, useSearch, model) => JSON.stringify({
@@ -287,7 +287,8 @@ export const PROVIDERS = {
   groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
   nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
-  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'], onlyFree: true, prefer: [/^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^google\/gemini-(\d+(?:\.\d+)?)-flash.*:free$/, /^(?:openai\/gpt-oss-\d+b|qwen\/[\w.-]+):free$/] }),
+  // openrouter/free is OpenRouter's own router: it hands the request to whichever free model is up right now, so it survives retirements.
+  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free'], onlyFree: true, anyFree: true, prefer: [/^openrouter\/free$/, /^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^(?:openai\/gpt-oss-(\d+)b|qwen\/qwen[\d.]*-(\d+)b[\w.-]*|deepseek\/deepseek-(?:chat|v)[\w.-]*|mistralai\/mistral[\w.-]*|google\/gemma-(\d+)[\w.-]*):free$/] }),
 };
 /** What the browser needs to draw the provider picker. */
 export const PROVIDER_LIST = Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, models: p.models }));
@@ -362,12 +363,13 @@ PACKAGE — get this right or the part will be the wrong shape and unusable:
 /** Model ids a provider offers, best first: for each "prefer" pattern, the newest version (highest number in the id) first. */
 export function rankModels(p, ids) {
   const seen = new Set(), out = [];
-  const pool = ids.filter(id => !/preview|exp(erimental)?\b|image|tts|audio|live|embed|guard|whisper|vision|moderation|robotics|thinking|-1b|-3b/i.test(id) || (p.onlyFree && /:free$/.test(id)));
+  const pool = ids.filter(id => !/preview|exp(erimental)?\b|image|tts|audio|live|embed|guard|whisper|vision|moderation|robotics|thinking|-1b|-3b/i.test(id));
   for (const re of p.prefer || []) {
-    const hit = pool.filter(id => re.test(id) && (!p.onlyFree || /:free$/.test(id))).map(id => ({ id, v: parseFloat(id.match(re)?.[1] ?? '0') || 0 }));
+    const hit = pool.filter(id => re.test(id) && (!p.onlyFree || /:free$/.test(id) || id === 'openrouter/free')).map(id => ({ id, v: parseFloat(id.match(re)?.[1] ?? '0') || 0 }));
     hit.sort((a, b) => b.v - a.v || a.id.length - b.id.length);
     for (const { id } of hit) if (!seen.has(id)) { seen.add(id); out.push(id); }
   }
+  if (p.anyFree) for (const id of pool) if (!seen.has(id) && /:free$/.test(id)) { seen.add(id); out.push(id); }       // then any other free model that is up
   return out;
 }
 
