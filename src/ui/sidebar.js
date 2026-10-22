@@ -93,7 +93,24 @@ export function initSidebar(editor) {
         host.append(mk);
       }
     }
-    if (!items.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No matching parts'; host.append(d); }
+    if (!items.length) {
+      const q0 = query.trim();
+      const d = document.createElement('div'); d.className = 'empty no-match';
+      const msg = document.createElement('p');
+      msg.textContent = q0 ? `No part called “${q0}” yet.` : 'No matching parts';
+      d.append(msg);
+      if (q0) {
+        const sub = document.createElement('p'); sub.className = 'hint'; sub.textContent = 'Make it: the AI can look it up on the web and build it, or you can draw it yourself.';
+        const ai = document.createElement('button'); ai.type = 'button'; ai.className = 'create-part'; ai.id = 'makeMissingBtn';
+        ai.innerHTML = '<span class="plus">+</span><span><b></b><span>Let the AI look it up and build it</span></span>';
+        ai.querySelector('b').textContent = `Make “${q0.slice(0, 40)}”`;
+        ai.addEventListener('click', () => editor.emit('create-part', { name: q0, ask: true }));
+        const own = document.createElement('button'); own.type = 'button'; own.className = 'link-btn'; own.id = 'drawMissingBtn'; own.textContent = 'Or draw it myself';
+        own.addEventListener('click', () => editor.emit('create-part', { name: q0 }));
+        d.append(sub, ai, own);
+      }
+      host.append(d);
+    }
   }
 
   function renderWorkspace() {

@@ -1628,3 +1628,23 @@ test('ui: the Package dropdown turns a part into a DIP chip — two rows of legs
   assert.deepEqual([...laid.pins].map(p => `${p.id}:${p.side}`), ['GND:bottom', 'TRIG:bottom', 'OUT:top', 'RESET:top']);
   assert.ok(Math.abs(laid.pins[0].y - laid.pins[3].y - 3 * PITCH) < 1e-6, 'pin 1 and the last pin face each other 0.3" apart');
 });
+
+test('ui: searching for a part that does not exist offers to make it (AI or by hand)', async () => {
+  const { w, editor } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  const calls = [];
+  w.__lab.initPartCreator(editor, { createPart: async ({ description }) => { calls.push(description); return { ok: false, error: 'offline' }; } });
+  const search = v => { const e = $('partsSearch'); e.value = v; e.dispatchEvent(new w.Event('input', { bubbles: true })); };
+  search('zzqx9000');
+  assert.match(doc.querySelector('#catalog .no-match').textContent, /No part called .zzqx9000./);
+  $('makeMissingBtn').click();
+  assert.equal($('partModal').hidden, false);
+  assert.equal($('pcName').value, 'zzqx9000');
+  assert.equal(calls.length, 1, 'AI lookup started');
+  assert.match(calls[0], /zzqx9000/);
+  $('partClose').click();
+  search('zzqx9000');
+  $('drawMissingBtn').click();
+  assert.equal($('pcName').value, 'zzqx9000');
+  assert.equal(calls.length, 1, 'drawing it yourself does not call the AI');
+});

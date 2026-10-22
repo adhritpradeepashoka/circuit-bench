@@ -225,7 +225,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     return v;
   }
 
-  function open(type = null) {
+  function open(type = null, prefill = null) {
     editing = type && PART_DEFS[type]?.custom ? type : null;
     draft = editing ? clone(PART_DEFS[editing].spec) : blank();
     $('partTitle').textContent = editing ? `Edit “${PART_DEFS[editing].name}”` : 'Create a part';
@@ -234,7 +234,14 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     $('pcAiStatus').textContent = ''; $('pcAiStatus').className = 'pc-ai-status';
     paintForm();
     modal.hidden = false;
+    if (!editing && prefill?.name) {
+      const n = String(prefill.name).slice(0, 40);
+      draft.name = n; draft.label = n.slice(0, 16); $('pcName').value = n;
+      $('pcDescribe').value = `${n}. Look up its datasheet and pinout.`;
+      preview();
+    }
     (editing ? $('pcName') : $('pcDescribe')).focus();
+    if (!editing && prefill?.ask) askAi();
   }
   function close() { modal.hidden = true; aiBusy?.abort(); aiBusy = null; }
 
@@ -330,7 +337,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
 
-  editor.on('create-part', () => open());
+  editor.on('create-part', arg => open(null, arg && typeof arg === 'object' ? arg : null));
   editor.on('edit-part', type => open(type));
   editor.emit('catalog');
   return { open, close, isOpen: () => !modal.hidden, library: () => loadLibrary(), customTypes };
