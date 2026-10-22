@@ -1372,52 +1372,45 @@ test('ui: Sign in with Google — hidden without a client ID; with one, Google\'
   assert.equal(acc.user, null, 'a bad token signs nobody in');
 });
 
-test('ui: wire types — a Normal / Hookup / Alligator / Automatic menu on the selected wire; Automatic draws a hookup between holes, a jumper to a header, a clip on a bare leg, and stops clipping once that leg is plugged in', () => {
+test('ui: wire types — a Normal / Hookup / Alligator menu on the selected wire; new wires are plain jumpers, and old "Automatic" wires load as jumpers', () => {
   const { w, editor, drag } = boot();
   const doc = w.document, bb = editor.partById('bb-1'), uno = editor.partById('uno-1');
   const canvas = doc.getElementById('canvas');
   drag(pinWorld(bb, 'A3'), pinWorld(bb, 'A9'), canvas);                     // hole → hole
   drag(pinWorld(uno, '13'), pinWorld(bb, 'J3'), canvas);                    // header → hole
   const [hh, hdr] = editor.state.wires;
-  assert.equal(hh.kind, 'auto', 'new wires are Automatic');
-  assert.equal(editor.wireKindOf(hh), 'hookup');
-  assert.equal(editor.wireKindOf(hdr), 'normal');
-  assert.ok(doc.querySelector(`.wire-hookup[data-wire="${hh.id}"]`), 'drawn as hookup wire');
-
-  // a resistor lying loose on the bench: a wire to its leg is a clip lead
+  assert.equal(hh.kind, 'normal', 'new wires are normal jumpers');
+  assert.equal(editor.wireKindOf(hh), 'normal');
+  // a resistor lying loose on the bench: a wire to its leg stays a plain jumper (no clip unless you choose one)
   editor.addPart('resistor', { x: 120, y: 420 });
   const res = editor.state.parts.find(p => p.type === 'resistor');
   drag(pinWorld(uno, '12'), pinWorld(res, '1'), canvas);
-  const clip = editor.state.wires[2];
-  assert.equal(editor.wireKindOf(clip), 'alligator');
-  assert.ok(doc.querySelector(`[data-wire="${clip.id}"] .wire-clip`), 'with crocodile clips drawn on');
-  // plug that leg into the breadboard: now it's just a breadboard wire
-  const h = pinWorld(bb, 'C20'), p = pinWorld(res, '1');
-  editor.state.parts.find(x => x.id === res.id).x += h.x - p.x; editor.state.parts.find(x => x.id === res.id).y += h.y - p.y;
-  editor.syncParts(); editor.markDirty();
-  assert.equal(editor.wireKindOf(clip), 'normal', 'a seated leg is treated like the hole it sits in');
+  const loose = editor.state.wires[2];
+  assert.equal(editor.wireKindOf(loose), 'normal');
+  assert.equal(doc.querySelector(`[data-wire="${loose.id}"] .wire-clip`), null, 'no clip unless chosen');
 
   // choose a type from the menu
   editor.select({ kind: 'wire', id: hdr.id });
   doc.getElementById('wireKindBtn').click();
   const menu = doc.getElementById('wireKindMenu');
   assert.equal(menu.hidden, false);
-  assert.deepEqual([...menu.querySelectorAll('[data-kind] span:last-child')].map(e => e.textContent), ['Normal', 'Hookup', 'Alligator', 'Automatic']);
-  assert.ok(menu.querySelector('[data-kind="auto"]').classList.contains('on'));
+  assert.deepEqual([...menu.querySelectorAll('[data-kind] span:last-child')].map(e => e.textContent), ['Normal', 'Hookup', 'Alligator']);
+  assert.ok(menu.querySelector('[data-kind="normal"]').classList.contains('on'));
   menu.querySelector('[data-kind="alligator"]').click();
   assert.equal(hdr.kind, 'alligator');
   assert.equal(menu.hidden, true);
   assert.equal(doc.getElementById('wireKindName').textContent, 'Alligator');
   assert.ok(doc.querySelector(`.wire-alligator[data-wire="${hdr.id}"]`));
   editor.undo();
-  assert.equal(editor.state.wires.find(x => x.id === hdr.id).kind, 'auto', 'undoable');
+  assert.equal(editor.state.wires.find(x => x.id === hdr.id).kind, 'normal', 'undoable');
 
-  // saved with the project; files from before wire types keep their old look
+  // saved with the project; files from before wire types — or from the removed Automatic type — load as jumpers
   const file = editor.exportProject();
-  assert.equal(file.wires.find(x => x.id === hh.id).kind, 'auto');
-  delete file.wires[0].kind;
+  assert.equal(file.wires.find(x => x.id === hh.id).kind, 'normal');
+  delete file.wires[0].kind; file.wires[1].kind = 'auto';
   editor.importProject(file);
   assert.equal(editor.state.wires[0].kind, 'normal');
+  assert.equal(editor.state.wires[1].kind, 'normal');
 });
 
 test('ui: weather station — DHT22 + 16×2 LCD run the real libraries; right-click the DHT to change the weather and the LCD follows', async () => {

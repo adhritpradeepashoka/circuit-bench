@@ -3,37 +3,21 @@
 //   normal     – a jumper wire (the default look)
 //   hookup     – solid insulated wire with stripped copper ends, the neat flat kind used on a breadboard
 //   alligator  – a thick lead with a crocodile clip on each end, for grabbing a bare component leg
-//   auto       – pick for me: alligator if an end grabs a bare leg, hookup if both ends are in the
-//                breadboard, otherwise a jumper
 // Pure (no DOM): the editor turns the SVG strings below into the overlay.
-import { PART_DEFS } from './parts.js';
 
 export const WIRE_KINDS = {
-  auto: { name: 'Automatic', blurb: 'Picks the right wire for where it goes' },
   normal: { name: 'Normal', blurb: 'Jumper wire' },
   hookup: { name: 'Hookup', blurb: 'Solid wire with stripped ends, lies flat on a breadboard' },
   alligator: { name: 'Alligator', blurb: 'Clip lead that grabs a bare leg or terminal' },
 };
-export const DEFAULT_WIRE_KIND = 'auto';
+export const DEFAULT_WIRE_KIND = 'normal';
 /** Wires saved before kinds existed keep looking the way they did. */
 export const LEGACY_WIRE_KIND = 'normal';
 
-// Parts whose pins are bare metal legs (no header a jumper could plug into).
-const BARE_LEADS = new Set(['led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment']);
-
-/**
- * The concrete kind a wire is drawn as. `typeOf(partId)` → that part's type; `seated(endpoint)` → whether that
- * endpoint is a component leg already pushed into a breadboard hole (then it's wired like the hole it sits in,
- * not grabbed with a clip).
- */
-export function resolveWireKind(wire, typeOf, seated = () => false) {
+/** The kind a wire is drawn as. (Wires saved with the old "Automatic" type are plain jumpers now.) */
+export function resolveWireKind(wire) {
   const k = wire.kind || LEGACY_WIRE_KIND;
-  if (k !== 'auto') return WIRE_KINDS[k] ? k : 'normal';
-  const onBoard = ep => PART_DEFS[typeOf(ep.part)]?.isBoard || seated(ep);
-  const bare = ep => BARE_LEADS.has(typeOf(ep.part)) && !seated(ep);
-  if (bare(wire.a) || bare(wire.b)) return 'alligator';
-  if (onBoard(wire.a) && onBoard(wire.b)) return 'hookup';
-  return 'normal';
+  return WIRE_KINDS[k] ? k : 'normal';
 }
 
 /** Small icons for the wire-type menu (24×14). */
@@ -41,9 +25,8 @@ export const WIRE_KIND_ICONS = {
   normal: '<svg viewBox="0 0 24 14" width="24" height="14"><path d="M3 7H19" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/><circle cx="20.5" cy="7" r="2.6" fill="currentColor"/></svg>',
   hookup: '<svg viewBox="0 0 24 14" width="24" height="14"><path d="M9 7H21" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><rect x="2" y="3.5" width="7.5" height="7" rx="1" fill="currentColor"/></svg>',
   alligator: '<svg viewBox="0 0 24 14" width="24" height="14"><path d="M2 5.2L11 2.8V11.2L2 8.8Z" fill="currentColor" opacity=".55"/><rect x="10" y="3" width="8" height="8" rx="2.4" fill="currentColor"/><path d="M18 7H23" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M3 5.5l1-.6 1 .6 1-.6 1 .6 1-.6" fill="none" stroke="#fff" stroke-width=".7"/></svg>',
-  auto: '<svg viewBox="0 0 24 14" width="24" height="14"><path d="M5 12L14 3" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M17 1.5l.7 1.6 1.6.7-1.6.7-.7 1.6-.7-1.6-1.6-.7 1.6-.7zM20.5 7l.45 1 1 .45-1 .45-.45 1-.45-1-1-.45 1-.45z" fill="currentColor"/></svg>',
 };
-export const WIRE_KIND_ORDER = ['normal', 'hookup', 'alligator', 'auto'];
+export const WIRE_KIND_ORDER = ['normal', 'hookup', 'alligator'];
 
 const n2 = v => +v.toFixed(2);
 const at = (p, u) => `translate(${n2(p.x)} ${n2(p.y)}) rotate(${n2((Math.atan2(u.y, u.x) * 180) / Math.PI)})`;

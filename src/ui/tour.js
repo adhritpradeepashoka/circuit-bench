@@ -160,7 +160,7 @@ export function initTour({ editor, sim, code, projects }) {
     { spots: ['#selectTool'], title: `Select ${kbd('V')}`,
       body: `<p>The normal mode, and the one you'll use most:</p><ul><li><b>Drag a part</b> to move it. Its legs click into breadboard holes.</li><li><b>Drag from any pin or hole</b> to another to draw a wire. No need to switch tools.</li><li><b>Right-click a part</b> to change it: resistor value, LED colour, sensor readings.</li></ul>` },
     { spots: ['#wireTool'], title: `Wire-only mode ${kbd('W')}`,
-      body: `<p>A mode where clicks only draw wires (click a pin, then another), handy when lots of parts are close together.</p><p><b>Click any wire</b> to change it: its <b>type</b> (a jumper, flat hookup wire with stripped ends, or an alligator clip lead for grabbing a bare leg; Automatic picks for you), its colour or its shape. Drag its ends to move them.</p>` },
+      body: `<p>A mode where clicks only draw wires (click a pin, then another), handy when lots of parts are close together.</p><p><b>Click any wire</b> to change it: its <b>type</b> (a jumper, flat hookup wire with stripped ends, or an alligator clip lead for grabbing a bare leg), its colour or its shape. Drag its ends to move them.</p>` },
     { spots: ['#rotateTool', '#deleteTool'], title: 'Rotate & delete',
       body: `<p><b>Rotate</b> ${kbd('R')} turns the selected part 90°. <b>Delete</b> ${kbd('Del')} removes the selected part or wire.</p>` },
     { spots: ['#undoTool', '#redoTool'], title: 'Undo & redo',

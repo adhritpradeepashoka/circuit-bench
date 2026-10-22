@@ -458,7 +458,7 @@ export class Editor {
     $('wireColor').addEventListener('input', e => this.editWire(w => { w.color = e.target.value; }, false));
     $('wireColor').addEventListener('change', () => this.commit());
     $('wireWidth').addEventListener('change', e => this.editWire(w => { w.width = Number(e.target.value); }, true));
-    // Wire type menu (Normal / Hookup / Alligator / Automatic) — the electrical connection is identical; this is how it looks
+    // Wire type menu (Normal / Hookup / Alligator) — the electrical connection is identical; this is how it looks
     const kindMenu = $('wireKindMenu'), kindBtn = $('wireKindBtn');
     kindMenu.innerHTML = '<div class="wk-head">Wire type</div>' + WIRE_KIND_ORDER.map(k => `<button type="button" role="menuitemradio" data-kind="${k}" title="${WIRE_KINDS[k].blurb}"><span class="wk-ico">${WIRE_KIND_ICONS[k]}</span><span>${WIRE_KINDS[k].name}</span></button>`).join('');
     const setMenu = open => { kindMenu.hidden = !open; kindBtn.setAttribute('aria-expanded', String(open)); };
@@ -467,7 +467,7 @@ export class Editor {
       const b = e.target.closest('[data-kind]'); if (!b) return;
       this.editWire(w => { w.kind = b.dataset.kind; }, true);
       setMenu(false); this.syncWireEditor();
-      const w = this.selectedWire(); if (w) this.status(`Wire type: ${WIRE_KINDS[b.dataset.kind].name}${b.dataset.kind === 'auto' ? ` (drawn as ${WIRE_KINDS[this.wireKindOf(w)].name.toLowerCase()} here)` : ''}`);
+      const w = this.selectedWire(); if (w) this.status(`Wire type: ${WIRE_KINDS[b.dataset.kind].name}`);
     });
     document.addEventListener('pointerdown', e => { if (!kindMenu.hidden && !e.target.closest('.we-kind')) setMenu(false); }, true);
     $('wireDelete').addEventListener('click', () => this.deleteSelected());
@@ -831,11 +831,8 @@ export class Editor {
     if (this.handleDrag && this.handleDrag.kind === which && this.handleDrag.pos && this.selectedWire() === wire) return this.handleDrag.pos;
     return this.anchor(wire[which]);
   }
-  /** How a wire is drawn right now (resolves Automatic from what its ends are attached to). */
-  wireKindOf(wire) {
-    const c = this.getCircuit();
-    return resolveWireKind(wire, id => this.partById(id)?.type, ep => c.attachments.has(pkey(ep.part, ep.pin)));
-  }
+  /** How a wire is drawn right now. */
+  wireKindOf(wire) { return resolveWireKind(wire); }
   syncWireEditor() {
     const w = this.selectedWire(), box = $('wireEditor');
     box.hidden = !w;
@@ -843,10 +840,10 @@ export class Editor {
     $('wireStyle').value = w.style || 'straight';
     $('wireColor').value = /^#[0-9a-f]{6}$/i.test(w.color) ? w.color : '#454d53';
     $('wireWidth').value = String(w.width || 3);
-    const chosen = w.kind || LEGACY_WIRE_KIND, shown = this.wireKindOf(w);
+    const chosen = this.wireKindOf(w);
     $('wireKindIco').innerHTML = WIRE_KIND_ICONS[chosen];
     $('wireKindName').textContent = WIRE_KINDS[chosen].name;
-    $('wireKindBtn').title = chosen === 'auto' ? `Automatic: drawn as ${WIRE_KINDS[shown].name.toLowerCase()} here` : WIRE_KINDS[chosen].blurb;
+    $('wireKindBtn').title = WIRE_KINDS[chosen].blurb;
     for (const b of $('wireKindMenu').querySelectorAll('[data-kind]')) { const on = b.dataset.kind === chosen; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); }
     this.positionWireEditor();
   }
