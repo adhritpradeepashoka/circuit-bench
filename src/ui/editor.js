@@ -238,6 +238,10 @@ export class Editor {
       } else if (p.type === 'slide-switch') {
         const model = root.querySelector('wokwi-slide-switch');
         if (model && model.value !== p.pos) model.value = p.pos;
+      } else if (PART_DEFS[p.type]?.custom) {
+        const kind = PART_DEFS[p.type].spec.behaviour.kind, model = root.querySelector('cb-custom-part');
+        if (model && kind === 'switch') model.lit = p.pos ? 1 : 0;                           // the lever shows which way it is flipped
+        else if (model && kind === 'encoder' && !this.running) model.aux = this.encAngle?.get(p.id) ?? 0;
       } else if (p.type === 'potentiometer') {
         const model = root.querySelector('wokwi-potentiometer'), v = Math.round(p.level * 10.23 * 100) / 100;    // element range is 0–1023
         if (model && model.value !== v) model.value = v;
@@ -251,6 +255,30 @@ export class Editor {
     part[key] = value;
     this.applyPartValues(); this.markDirty(); this.renderOverlay();
     if (commit) this.commit();
+  }
+  /** A student-made switch: click flips it (works while the simulation runs too). */
+  toggleCustomSwitch(part) {
+    part.pos = part.pos ? 0 : 1;
+    this.applyPartValues(); this.markDirty(); this.commit();
+    const b = PART_DEFS[part.type].spec.behaviour;
+    this.status(b.roles.throw2 ? `${PART_DEFS[part.type].name}: common now joins ${part.pos ? 'throw 2' : 'throw 1'}` : `${PART_DEFS[part.type].name}: ${part.pos ? 'closed — current can flow' : 'open'}`);
+  }
+  /** Turn a rotary encoder one notch: its A and B outputs walk through the four quadrature phases, ~25 ms apart so the firmware sees each edge. */
+  rotateEncoder(partId, dir) {
+    this.encAngle ||= new Map(); this.encChain ||= new Map();
+    const run = async () => {
+      this.encAngle.set(partId, (this.encAngle.get(partId) || 0) + dir * 18);
+      for (let i = 0; i < 4; i++) {
+        const p = this.partById(partId); if (!p) return;
+        p.phase = ((((p.phase ?? 0) + dir) % 4) + 4) % 4;
+        const m = this.els.get(partId)?.querySelector('cb-custom-part'); if (m) m.aux = this.encAngle.get(partId);
+        this.markDirty();
+        await new Promise(r => setTimeout(r, 25));
+      }
+      this.commit();
+    };
+    this.encChain.set(partId, (this.encChain.get(partId) || Promise.resolve()).then(run));
+    this.status(`Encoder turned ${dir > 0 ? 'clockwise' : 'anticlockwise'} one notch`);
   }
   toggleSwitch(part) {
     part.pos = part.pos ? 0 : 1;
@@ -509,6 +537,14 @@ export class Editor {
       this.track(() => {}, () => this.setButtonPressed(id, false));
       return;
     }
+    if (custom === 'encoder' && this.running) {                                              // left = back, right = forward, middle = press the shaft
+      e.preventDefault();
+      const box = this.els.get(id).getBoundingClientRect(), f = (e.clientX - box.left) / Math.max(1, box.width);
+      if (f < 0.34) this.rotateEncoder(id, -1);
+      else if (f > 0.66) this.rotateEncoder(id, 1);
+      else { this.setButtonPressed(id, true); this.track(() => {}, () => this.setButtonPressed(id, false)); }
+      return;
+    }
     if ((part.type === 'pir-sensor' || custom === 'digital-sensor') && this.running) {      // while running: click = trigger / clear
       e.preventDefault();
       const on = !this.els.get(id).classList.contains('triggered');
@@ -547,6 +583,7 @@ export class Editor {
       lift(false); this.snapMarks = [];
       if (moved) { this.markDirty(); this.commit(); this.status(`${def.name} placed — ${this.describePlacement(part)}`); }
       else if (part.type === 'slide-switch') this.toggleSwitch(part);
+      else if (custom === 'switch') this.toggleCustomSwitch(part);
       else if (part.type === 'pir-sensor') { this.renderOverlay(); this.status('PIR selected — press Run, then click the sensor to trigger motion'); }
       else { this.renderOverlay(); this.status(`${def.name} selected`); }
     });

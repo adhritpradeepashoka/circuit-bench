@@ -10,6 +10,7 @@ import { PART_DEFS } from './parts.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
+import { EXTRA_BEHAVIOURS, cleanParams } from './behaviours-extra.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
 const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 64;
@@ -50,6 +51,8 @@ export const BEHAVIOURS = {
   },
   'digital-sensor': { label: 'Digital sensor (on / off)', roles: ['vcc', 'gnd', 'out'], roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', out: 'Signal out' }, note: 'OUT is HIGH while it is triggered (click it while running), LOW otherwise.' },
 };
+
+Object.assign(BEHAVIOURS, EXTRA_BEHAVIOURS);
 
 const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
 const hexColor = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v).toLowerCase() : d);
@@ -118,6 +121,12 @@ export function validatePartSpec(raw, { id } = {}) {
       behaviour.ohms = ohms >= 1 && ohms <= 1e7 ? +ohms.toPrecision(4) : 1000;
     }
     if (kind === 'led') behaviour.color = b.color in LED_COLORS ? b.color : DEFAULT_LED_COLOR;
+    if (BEHAVIOURS[kind].params) {
+      Object.assign(behaviour, cleanParams(BEHAVIOURS[kind], b));
+      if (kind === 'variable-resistor') behaviour.min = Math.min(behaviour.min, behaviour.ohms);
+    }
+    if (kind === 'led-array' && behaviour.segments.length < 1) errors.push('An LED array needs at least one LED pin.');
+    if (kind === 'stepper' && behaviour.coils.length !== 4) errors.push('A stepper motor needs exactly 4 coil input pins (IN1…IN4).');
     if (kind === 'logic') {
       const v = validateLogicBehaviour(b, pins.map(p => p.id), behaviour.roles);
       if (v.ok) Object.assign(behaviour, { vars: v.behaviour.vars, rules: v.behaviour.rules, outputs: v.behaviour.outputs, analog: v.behaviour.analog });
@@ -220,16 +229,17 @@ function layoutQuad(spec) {
 /** The PART_DEFS entry for a spec. */
 export function partDefFromSpec(spec) {
   const { w, h, pins } = layoutSpec(spec);
-  const k = spec.behaviour.kind;
-  const props = k === 'analog-sensor' ? { level: 50 } : undefined;
+  const k = spec.behaviour.kind, B = BEHAVIOURS[k];
+  const props = k === 'analog-sensor' ? { level: 50 } : B.props ? { ...B.props } : undefined;
   const logic = k === 'logic' ? compileLogic(spec) : null;
-  const roleText = [...Object.entries(spec.behaviour.roles).map(([r, p]) => `${p} = ${BEHAVIOURS[k].roleLabels[r]}`),
-    ...Object.keys(BEHAVIOURS[k].lists || {}).map(l => `${BEHAVIOURS[k].lists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
+  const roleText = [...Object.entries(spec.behaviour.roles).map(([r, p]) => `${p} = ${B.roleLabels[r]}`),
+    ...Object.keys(B.lists || {}).map(l => `${B.lists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
+  const paramText = (B.params || []).map(p => `${p.label} ${spec.behaviour[p.key]}${p.unit ? ` ${p.unit}` : ''}`).join(', ');
   return {
     type: spec.id, name: spec.name, category: 'My parts', tag: 'cb-custom-part', custom: true, spec,
     w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}), ...(logic ? { logic } : {}),
-    interactive: k === 'button' || k === 'digital-sensor',
-    aiNote: `Student-made part. ${BEHAVIOURS[k].note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
+    interactive: k === 'button' || k === 'digital-sensor' || !!B.toggle || k === 'encoder',
+    aiNote: `Student-made part. ${B.note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${paramText ? ` Settings: ${paramText}.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
   };
 }
 
@@ -240,6 +250,8 @@ export function registerCustomPart(spec) {
   PART_DEFS[spec.id] = def;
   if (spec.behaviour.kind === 'analog-sensor') {
     SETTINGS[spec.id] = { title: spec.name, note: BEHAVIOURS['analog-sensor'].note, fields: [{ key: 'level', label: 'Output', kind: 'range', min: 0, max: 100, step: 1, fmt: v => `${Math.round(v)} %` }] };
+  } else if (BEHAVIOURS[spec.behaviour.kind].settings) {
+    SETTINGS[spec.id] = { title: spec.name, note: BEHAVIOURS[spec.behaviour.kind].note, fields: BEHAVIOURS[spec.behaviour.kind].settings };
   } else delete SETTINGS[spec.id];
   return def;
 }
@@ -255,7 +267,7 @@ export function describeCustomSpecs(specs) {
   for (const raw of Array.isArray(specs) ? specs.slice(0, 20) : []) {
     const v = validatePartSpec(raw);
     if (!v.ok) continue;
-    out.push(`- ${v.spec.id}: pins ${v.spec.pins.map(p => p.id).join(', ')}${v.spec.behaviour.kind === 'analog-sensor' ? ' props: level' : ''} — "${v.spec.name}". ${partDefFromSpec(v.spec).aiNote}`);
+    out.push(`- ${v.spec.id}: pins ${v.spec.pins.map(p => p.id).join(', ')}${Object.keys(partDefFromSpec(v.spec).props || {}).length ? ` props: ${Object.keys(partDefFromSpec(v.spec).props).join(', ')}` : ''} — "${v.spec.name}". ${partDefFromSpec(v.spec).aiNote}`);
   }
   return out.join('\n');
 }

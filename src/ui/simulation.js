@@ -10,7 +10,9 @@ import { Mpu6050 } from '../parts/mpu6050.js';
 import { Ssd1306, OLED_W, OLED_H } from '../parts/ssd1306.js';
 import { Lcd1602 } from '../parts/lcd1602.js';
 import { Dht } from '../parts/dht.js';
-import { dhtParts } from '../core/digital.js';
+import { dhtParts, timedParts } from '../core/digital.js';
+import { Servo, Ultrasonic, Stepper, FreqProbe } from '../parts/timed.js';
+import { Sound } from './audio.js';
 import { motorRpm } from '../core/solver.js';
 import { createLogicState, tickLogic, MIN_SUPPLY } from '../core/logic.js';
 
@@ -30,6 +32,14 @@ export class Simulation {
     this.pressed = new Set();
     this.error = null;
     this.idleTimer = 0;
+    this.sound = new Sound();
+    this.timed = new Map(); this.timedInfo = []; this.probes = new Map(); this.reactive = new Map(); this.lastSolveAt = 0;
+    const soundBtn = $('simSound');
+    if (soundBtn) {
+      const paint = () => { soundBtn.textContent = this.sound.enabled ? '🔊' : '🔇'; soundBtn.setAttribute('aria-pressed', String(this.sound.enabled)); };
+      paint();
+      soundBtn.addEventListener('click', () => { this.sound.setEnabled(!this.sound.enabled); paint(); });
+    }
 
     $('runBtn').addEventListener('click', () => this.toggle());
     $('simPause').addEventListener('click', () => this.togglePause());
@@ -82,6 +92,7 @@ export class Simulation {
     this.code.setRunning?.(true);
     this.models = new Map(); this.i2cInfo = []; this.i2cVersion = -1; this.dhts = new Map(); this.dhtInfo = [];
     this.logicInfo = []; this.logicStates = new Map(); this.logicPorts = []; this.logicMap = new Map();
+    this.timed = new Map(); this.timedInfo = []; this.probes = new Map(); this.reactive = new Map(); this.lastSolveAt = 0;
     this.onLogicPort = () => this.logicTick();
     this.i2cPrepare();                                  // attach I²C devices before setup() runs its Wire.begin()/begin() calls
     this.running = true; this.paused = false; this.error = null; this.lastSig = ''; this.result = null;
@@ -105,9 +116,13 @@ export class Simulation {
     this.logicDetach(); this.logicInfo = []; this.logicStates = new Map(); this.logicMap = new Map();
     for (const m of this.dhts?.values() || []) m.detach();
     this.dhts = new Map(); this.dhtInfo = [];
+    this.timedDetach();
+    this.sound.silence();
+    this.reactive = new Map();
     this.mcu = null; this.result = null;
     this.code.setRunning?.(false);
     this.resetVisuals();
+    this.editor.applyPartValues?.();                   // switches / encoders go back to showing the position they are in
     this.setRunButton('idle');
     this.editor.status('Simulation stopped');
     this.refreshTray();
@@ -137,6 +152,7 @@ export class Simulation {
         this.i2cPrepare();                         // devices see this frame's wiring + tilt before the firmware runs
         this.mcu.run(dt * CPU_HZ);
         this.step();
+        this.animate(dt);
       }
       this.last = ts;
       this.refreshTray();
@@ -156,12 +172,18 @@ export class Simulation {
     this.duty = duty;
     const sig = `${circuit.version}|${[...modes].join(',')}|${[...duty].map(([n, d]) => `${n}:${d.toFixed(3)}`).join(',')}|${[...this.pressed].join(',')}`;
     this.i2cPrepare(); this.i2cVisuals();               // an OLED redraws whenever the firmware changed its RAM, even if no pin did
-    if (sig === this.lastSig && this.result) return;
+    // A capacitor or coil changes with TIME, so a circuit that has one is solved every frame (not only when a pin changes)
+    const reactive = circuit.elements.some(e => e.kind === 'CAP' || e.kind === 'IND');
+    if (!reactive && sig === this.lastSig && this.result) return;
     this.lastSig = sig;
     this.modes = modes;
     this.logicTick();                                   // inputs that aren't MCU pins (a switch, another chip) settle here
-    this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty, logic: this.logicMap });
-    const digitalDriven = new Set(this.dhtInfo.filter(d => d.attached).map(d => d.pin.name));   // a DHT times its own line, cycle by cycle
+    const now = this.mcu.seconds, dt = reactive ? Math.min(0.1, Math.max(1e-5, now - this.lastSolveAt)) : 0;
+    this.lastSolveAt = now;
+    this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty, logic: this.logicMap, dt, reactive: this.reactive });
+    if (reactive) this.reactive = new Map(this.result.reactive);
+    const digitalDriven = new Set([...this.dhtInfo.filter(d => d.attached).map(d => d.pin.name),            // a DHT times its own line, cycle by cycle
+      ...this.timedInfo.filter(t => t.attached && t.kind === 'ultrasonic').map(t => t.pins.echo.name)]);   // so does an ultrasonic sensor's ECHO
     for (const pin of circuit.uno.pins) {
       const m = modes.get(pin.name);
       if (pin.port && (m === 'Z' || m === 'U') && !digitalDriven.has(pin.name)) {
@@ -187,6 +209,7 @@ export class Simulation {
       for (const d of this.i2cInfo) if (!this.models.has(d.partId)) this.models.set(d.partId, I2C_MODELS[d.type]());
       this.mcu.i2c.setDevices(new Map(this.i2cInfo.filter(d => d.attached).map(d => [d.address, this.models.get(d.partId)])));
       this.logicPrepare(circuit);
+      this.timedPrepare(circuit);
       this.dhtInfo = dhtParts(circuit, this.editor.state.parts);
       for (const [id, m] of [...this.dhts]) if (!this.dhtInfo.some(d => d.partId === id && d.model === m.model)) { m.detach(); this.dhts.delete(id); }
       for (const d of this.dhtInfo) {
@@ -195,11 +218,74 @@ export class Simulation {
         if (d.attached) m.attach(this.mcu, d.pin); else m.detach();
       }
     }
+    for (const t of this.timedInfo) if (t.kind === 'ultrasonic') this.timed.get(t.partId)?.model.setDistance(this.editor.partById(t.partId)?.dist ?? 50);
     for (const d of this.dhtInfo) { const p = this.editor.partById(d.partId); if (p) this.dhts.get(d.partId)?.setValues({ temp: p.temp ?? 24, humidity: p.humidity ?? 40 }); }
     for (const d of this.i2cInfo) {
       const m = this.models.get(d.partId);
       if (m instanceof Mpu6050) m.setPose(this.editor.partById(d.partId) || {}, this.mcu.seconds);
     }
+  }
+
+  /** Student-made servos, ultrasonic sensors and steppers listen to the firmware's pins; a passive buzzer listens for tone(). */
+  timedPrepare(circuit) {
+    this.timedInfo = timedParts(circuit, this.editor.state.parts);
+    for (const [id, e] of [...this.timed]) if (!this.timedInfo.some(t => t.partId === id && t.kind === e.kind)) { e.model.detach(); this.timed.delete(id); }
+    for (const t of this.timedInfo) {
+      let e = this.timed.get(t.partId);
+      if (!e) {
+        const b = t.spec.behaviour;
+        const model = t.kind === 'servo' ? new Servo(b) : t.kind === 'ultrasonic' ? new Ultrasonic() : new Stepper(b);
+        e = { kind: t.kind, model }; this.timed.set(t.partId, e);
+      }
+      if (!t.attached) { e.model.detach(); continue; }
+      if (t.kind === 'servo') e.model.attach(this.mcu, t.pins.signal);
+      else if (t.kind === 'ultrasonic') e.model.attach(this.mcu, t.pins.trig, t.pins.echo);
+      else e.model.attach(this.mcu, t.pins.coils);
+    }
+    // passive buzzers: the board pin on either terminal carries the tone
+    const seen = new Set();
+    for (const part of this.editor.state.parts) {
+      const def = PART_DEFS[part.type];
+      if (!def?.custom || def.spec.behaviour.kind !== 'buzzer' || def.spec.behaviour.mode !== 'passive') continue;
+      seen.add(part.id);
+      const { a, b } = def.spec.behaviour.roles;
+      const pin = circuit.uno.pins.find(p => p.port && (p.net === circuit.netOf(part.id, a) || p.net === circuit.netOf(part.id, b)));
+      let probe = this.probes.get(part.id);
+      if (!pin) { probe?.detach(); this.probes.delete(part.id); continue; }
+      if (!probe) { probe = new FreqProbe(); this.probes.set(part.id, probe); }
+      probe.attach(this.mcu, pin);
+    }
+    for (const [id, probe] of [...this.probes]) if (!seen.has(id)) { probe.detach(); this.probes.delete(id); }
+  }
+  timedDetach() {
+    for (const e of this.timed.values()) e.model.detach();
+    for (const p of this.probes.values()) p.detach();
+    this.timed = new Map(); this.timedInfo = []; this.probes = new Map();
+  }
+  /** Every frame: servo horns and stepper shafts move, buzzers sound. */
+  animate(dt) {
+    const r = this.result;
+    const supply = (net1, net2) => { const a = r?.voltage(net1), b = r?.voltage(net2); return a == null || b == null ? 0 : a - b; };
+    const circuit = this.editor.getCircuit();
+    for (const t of this.timedInfo) {
+      const e = this.timed.get(t.partId), root = this.editor.els.get(t.partId), el = root?.querySelector('cb-custom-part');
+      if (!e || !el) continue;
+      const roles = t.spec.behaviour.roles, powered = supply(circuit.netOf(t.partId, roles.vcc), circuit.netOf(t.partId, roles.gnd)) >= 3.5;
+      if (t.kind === 'servo') { e.model.update(dt, powered); el.aux = e.model.angle; el.lit = powered && t.attached ? 1 : 0; }
+      else if (t.kind === 'stepper') el.aux = powered ? e.model.angle : el.aux;
+    }
+    for (const part of this.editor.state.parts) {
+      const def = PART_DEFS[part.type];
+      if (!def?.custom || def.spec.behaviour.kind !== 'buzzer') continue;
+      const b = def.spec.behaviour, root = this.editor.els.get(part.id), el = root?.querySelector('cb-custom-part');
+      let freq = 0;
+      if (b.mode === 'passive') freq = this.probes.get(part.id)?.update() || 0;
+      else if ((r?.loadVolts?.get(part.id) ?? 0) >= b.vmin) freq = 2700;
+      if (el) el.lit = freq > 0 ? 1 : 0;
+      this.sound.tone(part.id, freq);
+    }
+    const tray = $('simSound');
+    if (tray) tray.hidden = !this.editor.state.parts.some(p => PART_DEFS[p.type]?.custom && PART_DEFS[p.type].spec.behaviour.kind === 'buzzer');
   }
 
   /** Student-made "rules" parts (src/core/logic.js): give each one its state, and watch the MCU pins it listens to. */
@@ -288,8 +374,13 @@ export class Simulation {
         const el = root.querySelector('wokwi-photoresistor-sensor'), m = result.modules?.get(part.id);
         if (el && m) { if (el.ledPower !== m.powered) el.ledPower = m.powered; if (el.ledDO !== m.out) el.ledDO = m.out; }
       } else if (PART_DEFS[part.type]?.custom) {
-        const el = root.querySelector('cb-custom-part');
-        if (el && PART_DEFS[part.type].spec.behaviour.kind === 'led') el.lit = Math.min(1, (result.ledCurrent.get(part.id) || 0) / LED_FULL_A);
+        const el = root.querySelector('cb-custom-part'), b = PART_DEFS[part.type].spec.behaviour;
+        if (!el) continue;
+        if (b.kind === 'led') el.lit = Math.min(1, (result.ledCurrent.get(part.id) || 0) / LED_FULL_A);
+        else if (b.kind === 'relay') el.lit = result.relays?.get(part.id) ? 1 : 0;
+        else if (b.kind === 'motor') el.aux = motorRpm(result.loadVolts?.get(part.id) || 0);
+        else if (b.kind === 'led-array') el.levels = b.segments.map(seg => Math.min(1, (result.ledCurrent.get(`${part.id}:${seg}`) || 0) / LED_FULL_A));
+        else if (b.kind === 'encoder') el.lit = this.pressed.has(part.id) ? 1 : 0;
       } else if (part.type === 'dc-motor') {
         const el = root.matches?.('cb-dc-motor') ? root : root.querySelector('cb-dc-motor');
         if (el) el.rpm = motorRpm(result.motorVolts?.get(part.id) || 0);
@@ -316,7 +407,7 @@ export class Simulation {
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
       if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; } }
       if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
-      if (PART_DEFS[part.type]?.custom) { const el = root?.querySelector('cb-custom-part'); if (el) el.lit = 0; }
+      if (PART_DEFS[part.type]?.custom) { const el = root?.querySelector('cb-custom-part'); if (el) { el.lit = 0; el.aux = 0; el.levels = null; } }
       if (part.type === 'dc-motor') { const el = root?.matches?.('cb-dc-motor') ? root : root?.querySelector('cb-dc-motor'); if (el) el.rpm = 0; }
       if (part.type === 'l298n') { const el = root?.matches?.('cb-l298n') ? root : root?.querySelector('cb-l298n'); if (el) { el.ledPower = false; el.channels = ['', '']; } }
       if (part.type === 'lcd1602') { const el = root?.querySelector('wokwi-lcd1602'); if (el) { el.characters = new Uint8Array(32).fill(32); el.backlight = false; el.cursor = false; el.blink = false; el._drawn = null; } }
@@ -368,11 +459,40 @@ export class Simulation {
     const muxes = [...(this.result.muxChannels || [])].map(([id, ch]) => ({ id, channel: ch >= 0 ? ch : null }));
     const drivers = [...(this.result.drivers || [])].map(([id, d]) => ({ id, powered: d.powered, motorA: d.ch[0] || 'stopped', motorB: d.ch[1] || 'stopped' }));
     const unanswered = this.i2cUnanswered();
+    const library = this.libraryState(r2);
     return {
       running: true, paused: this.paused, seconds: r2(this.mcu.seconds), board: this.boardName, chip: this.chipName,
-      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(muxes.length ? { muxes } : {}), ...(logic.length ? { logic } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
+      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(muxes.length ? { muxes } : {}), ...(logic.length ? { logic } : {}), ...(library.length ? { library } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
       warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
     };
+  }
+
+  /** What the component-library parts (switches, diodes, transistors, regulators, servos…) are doing right now, as plain data for the AI. */
+  libraryState(r2) {
+    const r = this.result, out = [];
+    for (const part of this.editor.state.parts) {
+      const def = PART_DEFS[part.type];
+      if (!def?.custom) continue;
+      const b = def.spec.behaviour, e = { id: part.id, name: def.name, kind: b.kind };
+      const dev = r.devices?.get(part.id), amps = r.deviceAmps?.get(part.id);
+      switch (b.kind) {
+        case 'switch': e.state = part.pos ? (b.roles.throw2 ? 'on throw 2' : 'closed') : (b.roles.throw2 ? 'on throw 1' : 'open'); break;
+        case 'relay': e.energized = !!r.relays?.get(part.id); break;
+        case 'variable-resistor': e.positionPct = Math.round(part.level ?? 50); break;
+        case 'diode': e.state = dev || 'blocking'; e.mA = r2((amps || 0) * 1000); break;
+        case 'npn': case 'pnp': case 'nmos': case 'pmos': e.state = dev || 'off'; e.mA = r2((amps || 0) * 1000); break;
+        case 'regulator': { const g = r.regulators?.get(part.id); if (g) Object.assign(e, { outputVolts: r2(g.volts), outputMA: r2(g.amps * 1000), regulating: g.regulating }); break; }
+        case 'capacitor': e.volts = r2(r.reactive?.get(part.id)?.v ?? 0); break;
+        case 'inductor': e.mA = r2((r.reactive?.get(part.id)?.i ?? 0) * 1000); break;
+        case 'buzzer': e.sounding = (r.loadVolts?.get(part.id) ?? 0) >= b.vmin || (b.mode === 'passive' && (this.probes.get(part.id)?.freq || 0) > 0); if (b.mode === 'passive') e.hz = Math.round(this.probes.get(part.id)?.freq || 0); break;
+        case 'motor': e.volts = r2(r.loadVolts?.get(part.id) ?? 0); e.rpm = motorRpm(e.volts); break;
+        case 'servo': case 'ultrasonic': case 'stepper': { const m = this.timed.get(part.id)?.model; if (m) Object.assign(e, m.summary()); const info = this.timedInfo.find(t => t.partId === part.id); if (info?.problems.length) e.problems = info.problems; break; }
+        case 'encoder': e.phase = part.phase ?? 0; break;
+        default: continue;
+      }
+      out.push(e);
+    }
+    return out;
   }
 
   /** Addresses the sketch tried that no part could ever answer (e.g. 0x3D when the display is at 0x3C). */
@@ -390,7 +510,7 @@ export class Simulation {
   refreshTray() {
     const tray = $('simTray'), circuit = this.editor.getCircuit();
     const notes = [...circuit.issues.map(i => i.text), ...(this.running ? (circuit.openLeads || []).map(o => o.text) : []), ...(this.running && this.result ? this.result.warnings.map(w => w.text) : []),
-      ...(this.running ? (this.i2cInfo || []).flatMap(d => d.problems) : []), ...(this.running ? this.i2cUnanswered().map(a => `The sketch is looking for an I²C device at ${a}, but nothing on the bus has that address`) : [])];
+      ...(this.running ? (this.i2cInfo || []).flatMap(d => d.problems) : []), ...(this.running ? (this.timedInfo || []).flatMap(t => t.problems) : []), ...(this.running ? this.i2cUnanswered().map(a => `The sketch is looking for an I²C device at ${a}, but nothing on the bus has that address`) : [])];
     if (this.error) notes.unshift(`Simulator error: ${this.error}`);
     const uniq = [...new Set(notes)];
     tray.hidden = !this.running && !uniq.length;

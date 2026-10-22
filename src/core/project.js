@@ -18,6 +18,8 @@ const clean = {
   humidity: num(0, 100),   // DHT, %RH
   model: v => (v === 'DHT11' ? 'DHT11' : 'DHT22'),
   volts: num(1.5, 12),     // battery
+  dist: num(2, 400),       // ultrasonic sensor, cm
+  phase: v => ((+v || 0) & 3),   // rotary encoder quadrature phase
   len: num(38.4, 600),     // resistor lead spacing (world px)
   roll: num(-180, 180), pitch: num(-90, 90), yaw: num(-180, 180),   // MPU-6050 orientation, degrees
 };

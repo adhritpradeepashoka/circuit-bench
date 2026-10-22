@@ -149,6 +149,55 @@ export function compile(state) {
           outputs: (def.logic?.outputs || []).map(o => o.pin),
         });
         if (!def.logic) issues.push({ partId: part.id, text: `${def.name}: its rules could not be read, so it does nothing` });
+      } else if (kind === 'switch') {
+        if (roles.throw2) elements.push({ kind: 'SW', partId: part.id, a: r('common'), b: part.pos ? r('throw2') : r('throw1'), closed: true });
+        else elements.push({ kind: 'SW', partId: part.id, a: r('common'), b: r('throw1'), closed: !!part.pos });
+        if (r('common') === r('throw1') && !roles.throw2) issues.push({ partId: part.id, text: `${PART_DEFS[part.type].name}: both contacts are on the same strip, so the switch does nothing` });
+      } else if (kind === 'relay') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'RLY', partId: part.id, ca: r('coilA'), cb: r('coilB'), com: r('common'), no: r('no'), nc: roles.nc ? r('nc') : null, ohms: bh.ohms, pick: bh.pick });
+      } else if (kind === 'variable-resistor') {
+        const bh = PART_DEFS[part.type].spec.behaviour, f = Math.min(1, Math.max(0, (part.level ?? 50) / 100));
+        if (roles.wiper) {
+          elements.push({ kind: 'R', partId: part.id, a: r('a'), b: r('wiper'), ohms: Math.max(1, bh.ohms * f) });
+          elements.push({ kind: 'R', partId: part.id, a: r('wiper'), b: r('b'), ohms: Math.max(1, bh.ohms * (1 - f)) });
+        } else elements.push({ kind: 'R', partId: part.id, a: r('a'), b: r('b'), ohms: Math.max(1, bh.min + (bh.ohms - bh.min) * f) });
+      } else if (kind === 'diode') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'D', partId: part.id, a: r('anode'), k: r('cathode'), vf: bh.vf, vz: bh.vz, imax: bh.imax / 1000 });
+        if (r('anode') === r('cathode')) issues.push({ partId: part.id, text: `${PART_DEFS[part.type].name}: both ends are on the same strip, so it does nothing` });
+      } else if (kind === 'npn' || kind === 'pnp') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'Q', partId: part.id, type: kind, b: r('base'), c: r('collector'), e: r('emitter'), beta: bh.beta, imax: bh.imax / 1000 });
+      } else if (kind === 'nmos' || kind === 'pmos') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'Q', partId: part.id, type: kind, g: r('gate'), d: r('drain'), s: r('source'), vth: bh.vth, rds: bh.rds, imax: bh.imax / 1000 });
+      } else if (kind === 'regulator') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'REG', partId: part.id, vin: r('vin'), gnd: r('gnd'), out: r('out'), vout: bh.vout, drop: bh.drop, mode: bh.mode, imax: bh.imax / 1000 });
+      } else if (kind === 'capacitor') {
+        elements.push({ kind: 'CAP', partId: part.id, a: r('a'), b: r('b'), farads: PART_DEFS[part.type].spec.behaviour.uF * 1e-6 });
+      } else if (kind === 'inductor') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'IND', partId: part.id, a: r('a'), b: r('b'), henries: bh.mH * 1e-3, rs: bh.rs });
+      } else if (kind === 'buzzer') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'LOAD', partId: part.id, a: r('a'), b: r('b'), ohms: bh.ohms });
+      } else if (kind === 'motor') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'LOAD', partId: part.id, a: r('a'), b: r('b'), ohms: bh.ohms, heavy: true });
+      } else if (kind === 'led-array') {
+        const bh = PART_DEFS[part.type].spec.behaviour, com = r('common'), cat = bh.common !== 'anode';
+        for (const seg of bh.segments) {
+          const n = netOf(part.id, seg);
+          elements.push({ kind: 'LED', id: `${part.id}:${seg}`, partId: part.id, channel: seg, a: cat ? n : com, k: cat ? com : n, vf: ledVf(bh.color || 'red'), rd: ledRd(bh.color || 'red') });
+        }
+      } else if (kind === 'encoder') {
+        // A and B each pull to the common pin through a contact; the phase (0–3) walks the Gray code 00 → 01 → 11 → 10
+        const ph = part.phase ?? 0, closedA = ph === 1 || ph === 2, closedB = ph === 2 || ph === 3;
+        elements.push({ kind: 'SW', partId: part.id, a: r('a'), b: r('common'), closed: closedA, fixed: true });
+        elements.push({ kind: 'SW', partId: part.id, a: r('b'), b: r('common'), closed: closedB, fixed: true });
+        if (roles.sw) elements.push({ kind: 'SW', partId: part.id, a: r('sw'), b: r('common') });
       } else if (kind === 'digital-sensor') elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('out'), frac: 1, momentary: true });
     } else if (part.type === 'dht') {
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, 'SDA'), b: netOf(part.id, 'VCC'), ohms: 10000 });   // the module's pull-up on DATA
@@ -191,7 +240,7 @@ export function compile(state) {
 
   // A motor straight on an I/O pin: it would need far more current than the pin can give.
   const ioNets = new Map(uno.pins.filter(p => p.port).map(p => [p.net, p.label]));
-  for (const e of elements) if (e.kind === 'MOT') for (const t of [e.a, e.b]) if (ioNets.has(t)) issues.push({ partId: e.partId, text: `A DC motor is wired straight to ${ioNets.get(t)}: an Arduino pin can't power a motor (40 mA max) — drive it through an L298N motor driver` });
+  for (const e of elements) if (e.kind === 'MOT' || (e.kind === 'LOAD' && e.heavy)) for (const t of [e.a, e.b]) if (ioNets.has(t)) issues.push({ partId: e.partId, text: `A DC motor is wired straight to ${ioNets.get(t)}: an Arduino pin can't power a motor (40 mA max) — drive it through an L298N motor driver` });
 
   return { nets, netOf, netOfKey, elements, uno, attachments, issues, openLeads };
 }

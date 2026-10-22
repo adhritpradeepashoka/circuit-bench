@@ -117,7 +117,76 @@ for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-ba
 
 /** A student-made part (src/core/custom-parts.js): drawn from its spec — body, name, pins with their labels. */
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-export function customPartSVG(spec, { lit = 0 } = {}) {
+
+/**
+ * A little schematic symbol (or live indicator) in the middle of a student-made part: the symbol of the
+ * component it behaves like, so a diode reads as a diode, with state drawn in — a switch's lever, a relay's
+ * contact, a servo's horn, a motor's blades, a bar graph's lit segments.
+ *   st = { lit: 0–1, aux: number (angle in degrees, or rpm), levels: number[] (per-LED brightness) }
+ */
+const ICON_KINDS = new Set(['switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper']);
+function iconSVG(spec, st, cx, cy, fg) {
+  const kind = spec.behaviour.kind, b = spec.behaviour, lit = st.lit || 0, aux = st.aux || 0;
+  const line = `stroke="${fg}" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
+  const on = '#ffd60a';
+  const g = inner => `<g transform="translate(${cx} ${cy})">${inner}</g>`;
+  switch (kind) {
+    case 'switch': {
+      const spdt = !!b.roles.throw2, closed = spdt ? true : lit > 0.5;
+      const tip = spdt ? (lit > 0.5 ? [11, 6] : [11, -6]) : closed ? [11, 0] : [10, -8];
+      return g(`<circle cx="-11" cy="0" r="1.8" fill="${fg}"/><circle cx="11" cy="${spdt ? -6 : 0}" r="1.8" fill="${fg}"/>${spdt ? `<circle cx="11" cy="6" r="1.8" fill="${fg}"/>` : ''}<path d="M-11 0 L${tip[0]} ${tip[1]}" ${line}/>`);
+    }
+    case 'relay':
+      return g(`<path d="M-14 4 q2-7 4 0 q2-7 4 0 q2-7 4 0" ${line}/><circle cx="8" cy="-4" r="1.6" fill="${fg}"/><circle cx="14" cy="2" r="1.6" fill="${fg}"/><path d="M8 -4 L${lit > 0.5 ? '14 2' : '12 -5'}" ${line}/><circle cx="-13" cy="-6" r="2.6" fill="${lit > 0.5 ? on : '#00000055'}" stroke="#0005" stroke-width=".5"/>`);
+    case 'variable-resistor':
+      return g(`<rect x="-12" y="-4" width="24" height="8" ${line}/><path d="M-5 11 L5 -9 M5 -9 l-1 4 M5 -9 l-4 1" ${line}/>`);
+    case 'diode':
+      return g(`<path d="M-12 0h8M4 0h8M-4 -7v14l8-7zM4 -7v14" ${line}/>${b.vz ? `<path d="M4 -7l-3 -2M4 7l3 2" ${line}/>` : ''}`);
+    case 'npn': case 'pnp': {
+      const out = kind === 'npn';
+      return g(`<circle cx="2" cy="0" r="12" ${line}/><path d="M-14 0h8M-6 -7v14M-6 -3L4 -9v-3M-6 3L4 9v3" ${line}/><path d="${out ? 'M4 9 l-4 -1 M4 9 l-1 -4' : 'M-6 3 l4 -1 M-6 3 l1 4'}" ${line}/>`);
+    }
+    case 'nmos': case 'pmos':
+      return g(`<path d="M-14 4h6M-8 -8v16M-5 -8v4M-5 -2v4M-5 4v4M-5 -6h12v-6M-5 6h12v6M-5 0h12" ${line}/><path d="${kind === 'nmos' ? 'M-1 0 l4 -2 M-1 0 l4 2' : 'M6 0 l-4 -2 M6 0 l-4 2'}" ${line}/>`);
+    case 'regulator':
+      return g(`<rect x="-14" y="-9" width="28" height="18" rx="3" ${line}/><text y="4.5" text-anchor="middle" font-size="10" font-weight="800" font-family="sans-serif" fill="${fg}">${+b.vout}V</text>`);
+    case 'capacitor':
+      return g(`<path d="M-12 0h9M3 0h9M-3 -8v16M3 -8v16" ${line}/>`);
+    case 'inductor':
+      return g(`<path d="M-14 3 a4 5 0 0 1 8 0 a4 5 0 0 1 8 0 a4 5 0 0 1 8 0" ${line}/>`);
+    case 'buzzer': {
+      const wave = lit > 0.5 ? `<path d="M8 -6 q4 6 0 12 M12 -9 q7 9 0 18" ${line} stroke="${on}"/>` : '';
+      return g(`<path d="M-12 -3h5l6 -5v16l-6 -5h-5z" fill="${fg}" opacity=".9"/>${wave}`);
+    }
+    case 'motor': {
+      const dur = aux ? Math.max(0.12, Math.min(3, 60 / Math.abs(aux))) : 0;
+      const spin = aux ? `style="transform-origin:0 0;animation:cp-spin ${dur.toFixed(2)}s linear infinite${aux < 0 ? ' reverse' : ''}"` : '';
+      return g(`<circle r="12" ${line}/><g ${spin}><path d="M0 -9v18M-9 0h18" ${line}/></g><circle r="2" fill="${fg}"/>`);
+    }
+    case 'led-array': {
+      const n = b.segments.length, w = Math.min(5, 40 / Math.max(1, n)), total = n * (w + 1), color = { red: '#ff3b30', green: '#34c759', blue: '#3b82f6', yellow: '#ffd60a', orange: '#ff9f0a', white: '#ffffff' }[b.color] || '#34c759';
+      const lv = st.levels || [];
+      return g(b.segments.map((_, i) => `<rect x="${(-total / 2 + i * (w + 1)).toFixed(1)}" y="-6" width="${w.toFixed(1)}" height="12" rx="1" fill="${color}" opacity="${(0.18 + 0.82 * (lv[i] || 0)).toFixed(2)}" stroke="#0004" stroke-width=".4"/>`).join(''));
+    }
+    case 'servo': {
+      const a = (-90 + (aux / (b.range || 180)) * 180 - 90) * Math.PI / 180, r = 11;
+      return g(`<path d="M-12 8 A15 15 0 0 1 12 8" ${line} opacity=".5"/><circle cx="0" cy="6" r="3" fill="${fg}"/><path d="M0 6 L${(Math.cos(a) * r).toFixed(1)} ${(6 + Math.sin(a) * r).toFixed(1)}" ${line} stroke-width="2.4"/>`);
+    }
+    case 'ultrasonic':
+      return g(`<circle cx="-9" cy="0" r="8" ${line}/><circle cx="9" cy="0" r="8" ${line}/><circle cx="-9" cy="0" r="3" fill="${fg}" opacity=".6"/><circle cx="9" cy="0" r="3" fill="${fg}" opacity=".6"/>`);
+    case 'encoder': {
+      const a = aux * Math.PI / 180;
+      return g(`<circle r="11" ${line}/><path d="M0 0 L${(Math.sin(a) * 9).toFixed(1)} ${(-Math.cos(a) * 9).toFixed(1)}" ${line} stroke-width="2.2"/>${lit ? `<circle r="4" fill="${on}"/>` : ''}`);
+    }
+    case 'stepper': {
+      const a = aux * Math.PI / 180;
+      return g(`<circle r="11" ${line}/><circle r="3" fill="${fg}"/><circle cx="${(Math.sin(a) * 8).toFixed(1)}" cy="${(-Math.cos(a) * 8).toFixed(1)}" r="2.2" fill="${on}"/>`);
+    }
+    default: return '';
+  }
+}
+
+export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   const { w, h, pins } = layoutSpec(spec);
   if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
@@ -140,8 +209,9 @@ export function customPartSVG(spec, { lit = 0 } = {}) {
   const color = { red: '#ff3b30', green: '#34c759', blue: '#3b82f6', yellow: '#ffd60a', orange: '#ff9f0a', white: '#ffffff' }[spec.behaviour.color] || '#ff3b30';
   const extra = kind === 'led'
     ? `<circle class="cp-led" cx="${w / 2}" cy="${h / 2 - 7}" r="6" fill="${color}" opacity="${0.25 + 0.75 * lit}" stroke="#0003"/>${lit ? `<circle cx="${w / 2}" cy="${h / 2 - 7}" r="11" fill="${color}" opacity="${0.35 * lit}"/>` : ''}`
-    : kind === 'button' || kind === 'digital-sensor' ? `<circle class="cp-cap" cx="${w / 2}" cy="${h / 2 - 7}" r="6.5" fill="#20262c" stroke="#0006"/>` : '';
-  const nameY = kind === 'led' || kind === 'button' || kind === 'digital-sensor' ? h / 2 + 8 : h / 2 + 3;
+    : kind === 'button' || kind === 'digital-sensor' ? `<circle class="cp-cap" cx="${w / 2}" cy="${h / 2 - 7}" r="6.5" fill="#20262c" stroke="#0006"/>`
+    : ICON_KINDS.has(kind) ? iconSVG(spec, { lit, aux, levels }, w / 2, h / 2 - 8, spec.textColor) : '';
+  const nameY = kind === 'led' || kind === 'button' || kind === 'digital-sensor' || ICON_KINDS.has(kind) ? h / 2 + 12 : h / 2 + 3;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     ${leads}
     <rect x="${inset}" y="${inset}" width="${bw}" height="${bh}" rx="5" fill="${spec.color}" stroke="#0005"/>
@@ -187,12 +257,18 @@ function dipSVG(spec, w, h, pins) {
 }
 
 class CustomPart extends HTMLElement {
-  constructor() { super(); this._spec = null; this._lit = 0; }
+  constructor() { super(); this._spec = null; this._lit = 0; this._aux = 0; this._levels = null; }
   set spec(s) { this._spec = s; this.render(); }
   get spec() { return this._spec; }
   set lit(v) { v = Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 10) / 10; if (v === this._lit) return; this._lit = v; this.render(); }
   get lit() { return this._lit; }
+  /** An angle (servo, encoder, stepper) or a speed (motor, in rpm) — whatever the part's picture needs besides "lit". */
+  set aux(v) { v = Math.round(Number(v) || 0); if (v === this._aux) return; this._aux = v; this.render(); }
+  get aux() { return this._aux; }
+  /** Per-LED brightness 0–1 for an LED array. */
+  set levels(v) { const key = JSON.stringify((v || []).map(x => Math.round(x * 5) / 5)); if (key === this._levelsKey) return; this._levelsKey = key; this._levels = v ? v.map(x => Math.round(x * 5) / 5) : null; this.render(); }
+  get levels() { return this._levels; }
   connectedCallback() { this.style.display = 'inline-block'; this.render(); }
-  render() { if (this._spec) this.innerHTML = customPartSVG(this._spec, { lit: this._lit }); }
+  render() { if (this._spec) this.innerHTML = customPartSVG(this._spec, { lit: this._lit, aux: this._aux, levels: this._levels }); }
 }
 if (globalThis.customElements && !customElements.get('cb-custom-part')) customElements.define('cb-custom-part', CustomPart);

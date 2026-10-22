@@ -113,7 +113,7 @@
             <span class="sim-state"><i class="sim-dot" id="simDot"></i><span id="simStatus">Stopped</span></span>
             <span class="sim-readout"><span id="simChip">ATmega328P</span> <b id="simTime">0.00 s</b></span>
             <span class="sim-readout">High pins <b id="simPin">–</b></span>
-            <span class="sim-actions"><button id="simAskAi" class="sim-ai" title="Ask the AI, with these live readings">✨ Ask AI why</button><button id="simPause">Pause</button><button id="simStop">Stop</button></span>
+            <span class="sim-actions"><button id="simAskAi" class="sim-ai" title="Ask the AI, with these live readings">✨ Ask AI why</button><button id="simSound" type="button" title="Sound on / off (buzzers and speakers)" aria-pressed="true" hidden>🔊</button><button id="simPause">Pause</button><button id="simStop">Stop</button></span>
           </div>
           <ul class="sim-notes" id="simNotes"></ul>
         </div>
@@ -228,6 +228,7 @@
       </div>
       <div class="pc-grid">
         <div class="pc-form">
+          <label class="pc-field pc-template"><span>Start from a ready-made part <i>(no AI needed — switches, diodes, transistors, relays, regulators, sensors, motors…)</i></span><select id="pcTemplate"></select></label>
           <label class="pc-field"><span>Name</span><input id="pcName" maxlength="40" placeholder="Sound sensor"></label>
           <div class="pc-row">
             <label class="pc-field"><span>Text on the part</span><input id="pcLabel" maxlength="16" placeholder="KY-038"></label>

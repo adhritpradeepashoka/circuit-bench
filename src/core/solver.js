@@ -31,6 +31,9 @@ const G_MUX = 1 / 70;       // S  (CD74HC4067 on-resistance)
 const G_BAT = 1 / 0.5;      // S  (battery internal resistance)
 const G_DRV = 1 / 1.5;      // S  (H-bridge output)
 const DRV_DROP = 1.4, DRV_MIN_SUPPLY = 4.5, LOGIC_HIGH = 2.3;
+const G_DIODE = 1 / 0.5, G_ZENER = 1 / 2;     // S  (forward dynamic resistance of a silicon diode; Zener knee)
+const G_BE = 1 / 10, V_BE = 0.7, V_CESAT = 0.2, G_SAT = 1 / 0.5;     // BJT: base-emitter junction, collector-emitter saturation
+const G_RLY_CONTACT = 20, G_REG = 1 / 0.3;
 const G_MIN = 1e-9;         // S  to ground on every node: keeps floating nets solvable
 
 export const LIMITS = { pinA: 0.04, ledA: 0.03 };
@@ -85,6 +88,9 @@ export function solve(circuit, drive) {
     else if (e.kind === 'CMP' || e.kind === 'SRC') { use(e.vcc); use(e.gnd); use(e.out); if (e.ao != null) use(e.ao); }
     else if (e.kind === 'LOGIC') { for (const n of Object.values(e.nets)) use(n); }
     else if (e.kind === 'MUX') { for (const k of [e.vcc, e.gnd, e.common, ...e.sel, ...e.ch]) use(k); if (e.en != null) use(e.en); }
+    else if (e.kind === 'Q') { for (const n of [e.b, e.c, e.e, e.g, e.d, e.s]) if (n != null) use(n); }
+    else if (e.kind === 'RLY') { for (const n of [e.ca, e.cb, e.com, e.no, e.nc]) if (n != null) use(n); }
+    else if (e.kind === 'REG') { use(e.vin); use(e.gnd); use(e.out); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
   });
@@ -103,6 +109,15 @@ export function solve(circuit, drive) {
   const drvs = circuit.elements.filter(e => e.kind === 'DRV');
   const drvKey = d => drvs.indexOf(d);
   const drvState = drvs.map(() => ({ powered: false, ch: [{ en: false, a: false, b: false }, { en: false, a: false, b: false }] }));
+
+  const diodes = circuit.elements.filter(e => e.kind === 'D'), dState = new Map(diodes.map(d => [d.partId, 0]));      // 0 blocking · 1 forward · 2 Zener breakdown
+  const qs = circuit.elements.filter(e => e.kind === 'Q'), qState = new Map(qs.map(q => [q.partId, 0]));              // 0 off · 1 active/on · 2 saturated
+  const rlys = circuit.elements.filter(e => e.kind === 'RLY'), rlyOn = new Map(rlys.map(r => [r.partId, false]));
+  const regs = circuit.elements.filter(e => e.kind === 'REG'), regState = new Map(regs.map(r => [r.partId, { v: 0, i: 0, iin: 0 }]));
+  const dt = drive.dt > 0 ? drive.dt : 0, prior = drive.reactive || new Map();
+  const reactive = new Map();
+  const bjtNodes = q => (q.type === 'pnp' ? { p: q.e, n: q.b, hi: q.e, lo: q.c } : { p: q.b, n: q.e, hi: q.c, lo: q.e });
+  const isMos = q => q.type === 'nmos' || q.type === 'pmos';
 
   let x = new Float64Array(n);
   for (let iter = 0; iter < 40; iter++) {
@@ -152,7 +167,45 @@ export function solve(circuit, drive) {
           }
         });
       }
-      else if (e.kind === 'SW') { if (e.closed || drive.pressed.has(e.partId)) stamp(e.a, e.b, G_SWITCH); }
+      else if (e.kind === 'LOAD') stamp(e.a, e.b, 1 / e.ohms);
+      else if (e.kind === 'D') {
+        const st = dState.get(e.partId);
+        if (st === 1 && e.a !== e.k) { stamp(e.a, e.k, G_DIODE); b[idx.get(e.a)] += G_DIODE * e.vf; b[idx.get(e.k)] -= G_DIODE * e.vf; }
+        else if (st === 2 && e.a !== e.k) { stamp(e.a, e.k, G_ZENER); b[idx.get(e.a)] -= G_ZENER * e.vz; b[idx.get(e.k)] += G_ZENER * e.vz; }
+      } else if (e.kind === 'Q') {
+        const st = qState.get(e.partId);
+        if (isMos(e)) { if (st && e.d !== e.s) stamp(e.d, e.s, 1 / e.rds); }
+        else if (st) {
+          const { p, n: nn, hi, lo } = bjtNodes(e), ip = idx.get(p), in_ = idx.get(nn);
+          stamp(p, nn, G_BE); b[ip] += G_BE * V_BE; b[in_] -= G_BE * V_BE;                    // the base-emitter junction
+          if (st === 2) { stamp(hi, lo, G_SAT); b[idx.get(hi)] += G_SAT * V_CESAT; b[idx.get(lo)] -= G_SAT * V_CESAT; }
+          else {                                                                           // collector current = gain × base current
+            const k = e.beta * G_BE, ih = idx.get(hi), il = idx.get(lo);
+            A[ih][ip] += k; A[ih][in_] -= k; b[ih] += k * V_BE;
+            A[il][ip] -= k; A[il][in_] += k; b[il] -= k * V_BE;
+          }
+        }
+      } else if (e.kind === 'RLY') {
+        stamp(e.ca, e.cb, 1 / e.ohms);
+        if (rlyOn.get(e.partId)) stamp(e.com, e.no, G_RLY_CONTACT); else if (e.nc != null) stamp(e.com, e.nc, G_RLY_CONTACT);
+      } else if (e.kind === 'REG') {
+        const r = regState.get(e.partId), ig = idx.get(e.gnd);
+        if (r.v > 0) {
+          const io = idx.get(e.out);
+          A[io][io] += G_REG; A[ig][ig] += G_REG; A[io][ig] -= G_REG; A[ig][io] -= G_REG;
+          b[io] += G_REG * r.v; b[ig] -= G_REG * r.v;
+        }
+        if (r.iin) { b[idx.get(e.vin)] -= r.iin; b[ig] += r.iin; }
+      } else if (e.kind === 'CAP') {
+        if (dt > 0 && e.a !== e.b) {
+          const g = e.farads / dt, v0 = prior.get(e.partId)?.v ?? 0;
+          stamp(e.a, e.b, g); b[idx.get(e.a)] += g * v0; b[idx.get(e.b)] -= g * v0;
+        }
+      } else if (e.kind === 'IND') {
+        const lt = dt > 0 ? e.henries / dt : 0, g = 1 / (e.rs + lt), i0 = prior.get(e.partId)?.i ?? 0, is = g * lt * i0;
+        if (e.a !== e.b) { stamp(e.a, e.b, g); b[idx.get(e.a)] -= is; b[idx.get(e.b)] += is; }
+      }
+      else if (e.kind === 'SW') { if (e.closed || (!e.fixed && drive.pressed.has(e.partId))) stamp(e.a, e.b, G_SWITCH); }
       else if (e.kind === 'PIR' && powered.get(e.partId)) {
         const v = drive.pressed.has(e.partId) ? PIR_OUT_V : 0;      // idle output is driven low once powered
         stamp(e.out, e.gnd, G_PIR);
@@ -173,6 +226,41 @@ export function solve(circuit, drive) {
       const vd = x[idx.get(l.a)] - x[idx.get(l.k)];
       const next = l.a !== l.k && vd > l.vf;
       if (next !== on.get(ledId(l))) { on.set(ledId(l), next); changed = true; }
+    }
+    const settle = iter < 30;                      // after that, stop flipping states so a marginal circuit (a source follower) still ends
+    for (const d of diodes) {
+      const vd = x[idx.get(d.a)] - x[idx.get(d.k)], cur = dState.get(d.partId);
+      const next = d.a === d.k ? 0 : vd > d.vf + (cur === 1 ? -0.005 : 0) ? 1 : d.vz > 0 && vd < -d.vz + (cur === 2 ? 0.005 : 0) ? 2 : 0;
+      if (settle && next !== cur) { dState.set(d.partId, next); changed = true; }
+    }
+    for (const q of qs) {
+      const cur = qState.get(q.partId);
+      let next = cur;
+      if (isMos(q)) {
+        const vgs = q.type === 'nmos' ? x[idx.get(q.g)] - x[idx.get(q.s)] : x[idx.get(q.s)] - x[idx.get(q.g)];
+        next = vgs > q.vth + (cur ? -0.05 : 0.05) ? 1 : 0;
+      } else {
+        const { p, n: nn, hi, lo } = bjtNodes(q), vbe = x[idx.get(p)] - x[idx.get(nn)], vce = x[idx.get(hi)] - x[idx.get(lo)];
+        const ib = Math.max(0, (vbe - V_BE) * G_BE);
+        if (!cur) next = vbe > V_BE + 0.01 ? 1 : 0;
+        else if (vbe < V_BE - 0.01 && ib <= 0) next = 0;
+        else if (cur === 1) next = vce < V_CESAT && ib > 0 ? 2 : 1;
+        else next = G_SAT * (vce - V_CESAT) > q.beta * ib * 1.02 ? 1 : 2;
+      }
+      if (settle && next !== cur) { qState.set(q.partId, next); changed = true; }
+    }
+    for (const r of rlys) {
+      const v = Math.abs(x[idx.get(r.ca)] - x[idx.get(r.cb)]), cur = rlyOn.get(r.partId), next = cur ? v > r.pick * 0.4 : v >= r.pick;
+      if (settle && next !== cur) { rlyOn.set(r.partId, next); changed = true; }
+    }
+    for (const r of regs) {
+      const supply = x[idx.get(r.vin)] - x[idx.get(r.gnd)], st = regState.get(r.partId);
+      const target = r.mode === 'switching' ? (supply >= 2.5 ? r.vout : 0) : Math.min(r.vout, Math.max(0, supply - r.drop));
+      const vo = x[idx.get(r.out)] - x[idx.get(r.gnd)];
+      // the current it is delivering is only known from a solve in which it was stamped (v > 0); the first time round, start from zero
+      const iout = target > 0 && st.v > 0 ? Math.max(0, G_REG * (st.v - vo)) : 0;
+      const iin = r.mode === 'switching' ? (target * iout) / (0.85 * Math.max(supply, 1)) : iout;
+      if (Math.abs(target - st.v) > 0.005 || Math.abs(iin - st.iin) > 0.002 || Math.abs(iout - (st.i || 0)) > 0.002) { st.v = target; st.iin = iin; st.i = iout; if (settle) changed = true; }
     }
     for (const p of pirs) {
       const next = x[idx.get(p.vcc)] - x[idx.get(p.gnd)] >= PIR_MIN_SUPPLY;
@@ -254,7 +342,45 @@ export function solve(circuit, drive) {
     const st = drvState[drvKey(d)];
     if (!st.powered && d.ch.some((c, k) => st.ch[k].a || st.ch[k].b)) warnings.push({ partId: d.partId, text: 'The L298N has no motor power: connect its 12V terminal to a battery (or VIN) and its GND to the Arduino GND' });
   }
-  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, muxChannels: new Map(muxCh), logicOut, warnings };
+  // ── the component-library parts ──
+  const V = net => x[idx.get(net)];
+  const amps = new Map(), devices = new Map(), loadVolts = new Map(), regulators = new Map();
+  for (const d of diodes) {
+    const st = dState.get(d.partId), vd = V(d.a) - V(d.k);
+    const i = st === 1 ? G_DIODE * (vd - d.vf) : st === 2 ? -G_ZENER * (vd + d.vz) : 0;
+    amps.set(d.partId, i); devices.set(d.partId, st === 1 ? 'conducting' : st === 2 ? 'breakdown' : 'blocking');
+    if (Math.abs(i) > d.imax) warnings.push({ partId: d.partId, text: `A diode is carrying ${fmt(Math.abs(i))} (its rating: ${fmt(d.imax)})` });
+  }
+  for (const q of qs) {
+    const st = qState.get(q.partId);
+    if (isMos(q)) {
+      const i = st ? Math.abs(V(q.d) - V(q.s)) / q.rds : 0;
+      amps.set(q.partId, i); devices.set(q.partId, st ? 'on' : 'off');
+      if (i > q.imax) warnings.push({ partId: q.partId, text: `A MOSFET is carrying ${fmt(i)} (its rating: ${fmt(q.imax)})` });
+    } else {
+      const { p, n: nn, hi, lo } = bjtNodes(q), ib = st ? Math.max(0, (V(p) - V(nn) - V_BE) * G_BE) : 0;
+      const ic = !st ? 0 : st === 2 ? Math.max(0, G_SAT * (V(hi) - V(lo) - V_CESAT)) : q.beta * ib;
+      amps.set(q.partId, ic); devices.set(q.partId, st === 2 ? 'saturated' : st ? 'active' : 'off');
+      if (ib > 0.05) warnings.push({ partId: q.partId, text: `A transistor's base is being driven with ${fmt(ib)} — put a resistor (about 1 kΩ) in series with the base` });
+      if (ic > q.imax) warnings.push({ partId: q.partId, text: `A transistor is carrying ${fmt(ic)} through its collector (its rating: ${fmt(q.imax)})` });
+    }
+  }
+  for (const r of regs) {
+    const st = regState.get(r.partId), vo = V(r.out) - V(r.gnd), supply = V(r.vin) - V(r.gnd);
+    regulators.set(r.partId, { volts: st.v > 0 ? vo : 0, amps: st.i || 0, inputAmps: st.iin || 0, regulating: st.v > 0 });
+    if ((st.i || 0) > r.imax) warnings.push({ partId: r.partId, text: `A voltage regulator is delivering ${fmt(st.i)} (its rating: ${fmt(r.imax)})` });
+    if (r.mode !== 'switching' && st.v > 0 && (supply - vo) * (st.i || 0) > 1.5) warnings.push({ partId: r.partId, text: `A linear regulator is wasting ${((supply - vo) * st.i).toFixed(1)} W as heat — it will get very hot` });
+  }
+  for (const e of circuit.elements) {
+    if (e.kind === 'LOAD') loadVolts.set(e.partId, V(e.a) - V(e.b));
+    else if (e.kind === 'CAP') reactive.set(e.partId, { v: V(e.a) - V(e.b) });
+    else if (e.kind === 'IND') {
+      const lt = dt > 0 ? e.henries / dt : 0, g = 1 / (e.rs + lt), i0 = prior.get(e.partId)?.i ?? 0;
+      reactive.set(e.partId, { i: g * (V(e.a) - V(e.b)) + g * lt * i0 });
+    }
+  }
+  const relays = new Map(rlys.map(r => [r.partId, rlyOn.get(r.partId)]));
+  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, muxChannels: new Map(muxCh), logicOut, warnings, deviceAmps: amps, devices, loadVolts, relays, regulators, reactive };
 }
 
 /**
@@ -294,7 +420,17 @@ export function solveDrive(circuit, drive) {
   const motorVolts = new Map();
   for (const id of dominant.res.motorVolts.keys()) motorVolts.set(id, runs.reduce((s, r) => s + r.w * (r.res.motorVolts.get(id) || 0), 0));
   // a PWM'd driver: show the direction it has most of the time
-  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, muxChannels: dominant.res.muxChannels, logicOut: dominant.res.logicOut, warnings };
+  const avg = (key, field) => {
+    const out = new Map();
+    for (const id of dominant.res[key].keys()) out.set(id, runs.reduce((sum, r) => sum + r.w * (field ? r.res[key].get(id)?.[field] ?? 0 : r.res[key].get(id) ?? 0), 0));
+    return out;
+  };
+  const reactive = new Map();
+  for (const [id, st] of dominant.res.reactive) reactive.set(id, Object.fromEntries(Object.keys(st).map(k => [k, runs.reduce((sum, r) => sum + r.w * (r.res.reactive.get(id)?.[k] ?? 0), 0)])));
+  return {
+    voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, muxChannels: dominant.res.muxChannels, logicOut: dominant.res.logicOut, warnings,
+    deviceAmps: avg('deviceAmps'), devices: dominant.res.devices, loadVolts: avg('loadVolts'), relays: dominant.res.relays, regulators: dominant.res.regulators, reactive,
+  };
 }
 
 /** A small 6 V hobby motor: ≈ 250 rpm at 6 V, nothing below the ≈ 0.6 V it takes to overcome friction. Sign = direction. */

@@ -1648,3 +1648,111 @@ test('ui: searching for a part that does not exist offers to make it (AI or by h
   assert.equal($('pcName').value, 'zzqx9000');
   assert.equal(calls.length, 1, 'drawing it yourself does not call the AI');
 });
+
+// ── the component library in the real UI ──
+import { TEMPLATES } from '../src/core/part-templates.js';
+import { validatePartSpec } from '../src/core/custom-parts.js';
+const libSpec = (tplId, id) => { const { id: _i, group: _g, ...t } = TEMPLATES.find(x => x.id === tplId); const v = validatePartSpec({ ...t, id }); assert.ok(v.ok, v.errors?.join()); return v.spec; };
+const wire = (id, a, ap, b, bp) => ({ id, from: { part: a, pin: ap }, to: { part: b, pin: bp }, style: 'straight', color: '#2f6cf0', width: 2 });
+
+test('ui: Part Creator — start from a ready-made switch, save it, click it to flip it; its symbol and the circuit follow', () => {
+  const { w, editor, drag } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false, error: 'no AI in this test' }) });
+  assert.ok($('pcKind').querySelectorAll('optgroup').length >= 4, 'behaviours are grouped');
+  assert.ok($('pcTemplate').querySelectorAll('option').length > 40, 'a long template list');
+  $('createPartBtn').click();
+  $('pcTemplate').value = 'sw-spst'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal($('pcName').value, 'Toggle switch (on / off)');
+  assert.equal($('pcKind').value, 'switch');
+  assert.equal($('pcSave').disabled, false);
+  $('pcSave').click();
+  const part = editor.state.parts.find(p => p.type.startsWith('custom-'));
+  assert.ok(part, 'placed');
+  const el = () => editor.els.get(part.id).querySelector('cb-custom-part');
+  assert.equal(el().lit, 0);
+  const r = { x: part.x + 20, y: part.y + 20 };
+  drag(r, r, editor.els.get(part.id));                                   // a click
+  assert.equal(part.pos, 1); assert.equal(el().lit, 1);
+  const sw = editor.getCircuit().elements.find(e => e.partId === part.id);
+  assert.equal(sw.kind, 'SW'); assert.equal(sw.closed, true);
+  drag(r, r, editor.els.get(part.id)); assert.equal(part.pos, 0);
+  assert.equal(editor.getCircuit().elements.find(e => e.partId === part.id).closed, false);
+});
+
+test('ui: Part Creator — a behaviour’s numbers appear as fields, are validated, and a template can be tuned before saving', () => {
+  const { w, editor } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  const pc = w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false }) });
+  const set = (id, v, ev = 'input') => { const e = $(id); e.value = v; e.dispatchEvent(new w.Event(ev, { bubbles: true })); };
+  editor.emit('create-part');
+  $('pcTemplate').value = 'q-irlz44n'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal($('pcKind').value, 'nmos');
+  assert.equal($('pcParam-vth').value, '2'); assert.equal($('pcParam-rds').value, '0.022');
+  assert.equal($('pcRole-gate').value, 'G'); assert.equal($('pcRole-drain').value, 'D');
+  set('pcParam-vth', '3.3');
+  $('pcSave').click();
+  assert.equal(pc.library()[0].behaviour.vth, 3.3);
+  // switching what a part does re-guesses the roles from the pin names and resets the numbers
+  editor.emit('create-part');
+  $('pcTemplate').value = 'd-1n4007'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  set('pcKind', 'npn', 'change');
+  assert.equal($('pcParam-beta').value, '100');
+  set('pcKind', 'diode', 'change');
+  assert.equal($('pcRole-anode').value, 'A'); assert.equal($('pcRole-cathode').value, 'K');
+  assert.ok($('pcParam-vz'), 'Zener field');
+  assert.ok(pc.library().length === 1);
+});
+
+test('ui: a capacitor charges over simulated time (RC), frame by frame, and the AI snapshot reports its voltage', async () => {
+  const { editor, sim, code } = boot();
+  const cap = libSpec('cap-100u', 'custom-cap-ui');
+  const file = editor.exportProject();
+  file.customParts = [cap];
+  file.parts.push({ id: 'r1', type: 'resistor', x: 700, y: 40, rotate: 0, ohms: 10000 }, { id: 'c1', type: cap.id, x: 900, y: 40, rotate: 0 });
+  file.wires = [wire('w1', 'uno-1', '5V', 'r1', '1'), wire('w2', 'r1', '2', 'c1', '+'), wire('w3', 'c1', '-', 'uno-1', 'GND.1')];
+  editor.importProject(file);
+  code.source = EXAMPLES.blink.code;
+  await sim.start();
+  const v = () => sim.result.voltage(editor.getCircuit().netOf('c1', '+'));
+  const tick = s => { for (let t = 0; t < s; t += 0.05) { sim.mcu.run(0.05 * 16e6); sim.step(); } };
+  tick(0.05); assert.ok(v() < 1, `starts empty: ${v()}`);
+  tick(1); assert.ok(v() > 2.8 && v() < 3.5, `about one time constant in: ${v()}`);
+  tick(6); assert.ok(v() > 4.9, `full: ${v()}`);
+  const lib = sim.snapshot().library.find(x => x.id === 'c1');
+  assert.equal(lib.kind, 'capacitor'); assert.ok(lib.volts > 4.9);
+  sim.stop();
+});
+
+test('ui: a servo follows the Servo library’s pulses and an ultrasonic sensor answers pulseIn(), both through the whole stack', async () => {
+  const { editor, sim, code } = boot();
+  const servo = libSpec('servo-sg90', 'custom-servo-ui'), sonar = libSpec('hcsr04', 'custom-sonar-ui');
+  const file = editor.exportProject();
+  file.customParts = [servo, sonar];
+  file.parts.push({ id: 'sv', type: servo.id, x: 700, y: 40, rotate: 0 }, { id: 'us', type: sonar.id, x: 900, y: 40, rotate: 0, dist: 80 });
+  file.wires = [wire('a', 'uno-1', '9', 'sv', 'SIG'), wire('b', 'uno-1', '5V', 'sv', 'VCC'), wire('c', 'uno-1', 'GND.1', 'sv', 'GND'),
+    wire('d', 'uno-1', '7', 'us', 'TRIG'), wire('e', 'uno-1', '8', 'us', 'ECHO'), wire('f', 'uno-1', '5V', 'us', 'VCC'), wire('g', 'uno-1', 'GND.1', 'us', 'GND')];
+  editor.importProject(file);
+  const tick = s => { for (let t = 0; t < s; t += 0.05) { sim.mcu.run(0.05 * 16e6); sim.step(); sim.animate(0.05); } };
+  code.source = sketch('servo-cmd');
+  await sim.start();
+  tick(0.8);
+  const horn = () => editor.els.get('sv').querySelector('cb-custom-part').aux;
+  assert.ok(Math.abs(horn() - 90) < 3, `centred: ${horn()}`);
+  sim.mcu.serialWrite('c'); tick(0.8);
+  assert.ok(horn() > 170, `swung to 180: ${horn()}`);
+  const snap = sim.snapshot();
+  assert.equal(snap.library.find(x => x.id === 'sv').targetDeg, 180);
+  sim.stop();
+  assert.equal(editor.els.get('sv').querySelector('cb-custom-part').aux, 0);
+
+  code.source = sketch('ultrasonic-read');
+  await sim.start();
+  tick(1);
+  const us = sim.snapshot().library.find(x => x.id === 'us');
+  assert.equal(us.distanceCm, 80); assert.ok(us.measurements >= 3, `measured ${us.measurements} times`);
+  editor.setPartProp('us', 'dist', 120);
+  tick(0.6);
+  assert.equal(sim.snapshot().library.find(x => x.id === 'us').distanceCm, 120);
+  sim.stop();
+});

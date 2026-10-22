@@ -4,6 +4,7 @@
 // (this browser) and travel inside any project that uses them.
 import { BEHAVIOURS, PACKAGES, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
 import { FUNCTIONS } from '../core/expr.js';
+import { TEMPLATES, TEMPLATE_GROUPS } from '../core/part-templates.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { customPartSVG } from '../parts/elements.js';
@@ -33,7 +34,20 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   for (const raw of loadLibrary()) { const v = validatePartSpec(raw); if (v.ok) registerCustomPart(v.spec); }
 
   $('pcPackage').replaceChildren(...Object.entries(PACKAGES).map(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; return o; }));
-  kindSel.replaceChildren(...Object.entries(BEHAVIOURS).map(([k, b]) => { const o = document.createElement('option'); o.value = k; o.textContent = b.label; return o; }));
+  const KIND_GROUPS = [
+    ['Basics', ['none', 'resistor', 'variable-resistor', 'led', 'led-array', 'switch', 'button']],
+    ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'relay', 'capacitor', 'inductor']],
+    ['Sound, motors & motion', ['buzzer', 'motor', 'servo', 'stepper']],
+    ['Sensors & inputs', ['analog-sensor', 'digital-sensor', 'ultrasonic', 'encoder']],
+    ['Chips', ['mux', 'logic']],
+  ];
+  const kindOption = k => { const o = document.createElement('option'); o.value = k; o.textContent = BEHAVIOURS[k].label; return o; };
+  const grouped = new Set(KIND_GROUPS.flatMap(([, ks]) => ks));
+  kindSel.replaceChildren(...KIND_GROUPS.map(([name, ks]) => { const g = document.createElement('optgroup'); g.label = name; g.append(...ks.filter(k => BEHAVIOURS[k]).map(kindOption)); return g; }),
+    ...Object.keys(BEHAVIOURS).filter(k => !grouped.has(k)).map(kindOption));
+  const tpl = $('pcTemplate');
+  tpl.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: '— choose one, or build your own below —' }),
+    ...TEMPLATE_GROUPS.map((name, gi) => { const g = document.createElement('optgroup'); g.label = name; g.append(...TEMPLATES.filter(t => t.group === gi).map(t => Object.assign(document.createElement('option'), { value: t.id, textContent: t.name }))); return g; }));
 
   const el = (tag, props = {}) => Object.assign(document.createElement(tag), props);
 
@@ -56,7 +70,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       id.addEventListener('input', () => {
         const old = p.id; p.id = id.value.trim().replace(/\s+/g, '_');
         for (const r of Object.keys(draft.behaviour.roles)) if (draft.behaviour.roles[r] === old) draft.behaviour.roles[r] = p.id;
-        for (const l of ['select', 'channels']) if (Array.isArray(draft.behaviour[l])) draft.behaviour[l] = draft.behaviour[l].map(v => (v === old ? p.id : v));
+        for (const l of ['select', 'channels', 'segments', 'coils']) if (Array.isArray(draft.behaviour[l])) draft.behaviour[l] = draft.behaviour[l].map(v => (v === old ? p.id : v));
         paintRoles(); preview();
       });
       label.addEventListener('input', () => { p.label = label.value.trim() || p.id; preview(); });
@@ -82,9 +96,24 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     });
     for (const [list, what] of Object.entries(b.lists || {})) {
       const f = el('label', { className: 'pc-field pc-wide' });
-      const inp = el('input', { id: `pcList-${list}`, value: (draft.behaviour[list] || []).join(', '), placeholder: list === 'select' ? 'S0, S1, S2, S3' : 'C0, C1, C2, …' });
+      const inp = el('input', { id: `pcList-${list}`, value: (draft.behaviour[list] || []).join(', '), placeholder: { select: 'S0, S1, S2, S3', channels: 'C0, C1, C2, …', segments: 'A1, A2, A3, …', coils: 'IN1, IN2, IN3, IN4' }[list] || '' });
       inp.addEventListener('input', () => { draft.behaviour[list] = inp.value.split(/[\s,]+/).filter(Boolean); preview(); });
       f.append(el('span', { textContent: `${what} (comma-separated)` }), inp); fields.push(f);
+    }
+    for (const p of b.params || []) {
+      const f = el('label', { className: 'pc-field' });
+      const cur = draft.behaviour[p.key] ?? p.def;
+      let inp;
+      if (p.options) {
+        inp = el('select', { id: `pcParam-${p.key}` });
+        for (const [v, t] of p.options) inp.append(el('option', { value: v, textContent: t }));
+        inp.value = cur;
+        inp.addEventListener('change', () => { draft.behaviour[p.key] = inp.value; preview(); });
+      } else {
+        inp = el('input', { id: `pcParam-${p.key}`, type: 'number', min: p.min, max: p.max, step: 'any', value: String(cur) });
+        inp.addEventListener('input', () => { draft.behaviour[p.key] = Number(inp.value); preview(); });
+      }
+      f.append(el('span', { textContent: p.unit ? `${p.label} (${p.unit})` : p.label }), inp); fields.push(f);
     }
     if (draft.behaviour.kind === 'resistor') {
       const f = el('label', { className: 'pc-field' });
@@ -92,7 +121,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       inp.addEventListener('input', () => { draft.behaviour.ohms = Number(inp.value); preview(); });
       f.append(el('span', { textContent: 'Resistance (Ω)' }), inp); fields.push(f);
     }
-    if (draft.behaviour.kind === 'led') {
+    if (draft.behaviour.kind === 'led' || draft.behaviour.kind === 'led-array') {
       const f = el('label', { className: 'pc-field' });
       const sel = el('select', { id: 'pcLedColor' });
       for (const [k, c] of Object.entries(LED_COLORS)) sel.append(el('option', { value: k, textContent: c.name }));
@@ -309,6 +338,14 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     if (draft.breadboard) for (const p of draft.pins) p.side = 'bottom';
     paintPins(); preview();
   });
+  tpl.addEventListener('change', () => {
+    const t = TEMPLATES.find(x => x.id === tpl.value);
+    if (!t) return;
+    const { id: _id, group: _g, ...spec } = clone(t);
+    draft = { ...blank(), ...spec, pins: spec.pins.map(p => ({ side: 'bottom', ...p })), id: editing || draft.id };
+    paintForm();
+    $('pcAiStatus').textContent = ''; tpl.value = '';
+  });
   kindSel.addEventListener('change', () => {
     const kind = kindSel.value, roles = {};
     BEHAVIOURS[kind].roles.forEach((r, i) => { roles[r] = draft.pins.find(p => p.id.toLowerCase() === r)?.id || draft.pins[i]?.id || ''; });
@@ -318,7 +355,21 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       Object.assign(roles, { vcc: pick(/^(vcc|vdd|5v)$/i), gnd: pick(/^(gnd|vss)$/i), common: pick(/^(sig|z|com|common)$/i) });
       const en = pick(/^(en|e|inh)$/i); if (en) roles.enable = en;
     }
-    draft.behaviour = { kind, roles, ...(kind === 'resistor' ? { ohms: 1000 } : {}), ...(kind === 'led' ? { color: 'red' } : {}),
+    const GUESS = {
+      vcc: /^(vcc|vdd|5v|3v3|\+5v?|v\+|vin)$/i, gnd: /^(gnd|vss|0v|-|−)$/i, anode: /^(a|anode|\+)$/i, cathode: /^(k|c|cathode|-)$/i,
+      base: /^b(ase)?$/i, collector: /^c(ollector)?$/i, emitter: /^e(mitter)?$/i, gate: /^g(ate)?$/i, drain: /^d(rain)?$/i, source: /^s(ource)?$/i,
+      vin: /^(in|vin|input)$/i, out: /^(out|vout|output|sig|signal|ao)$/i, signal: /^(sig|signal|pwm|ctrl)$/i, trig: /^trig/i, echo: /^echo/i,
+      coilA: /^(c\+|coil\+|coila|a1)$/i, coilB: /^(c-|coil-|coilb|a2)$/i, common: /^(com|common|c|sig|z)$/i, no: /^no$/i, nc: /^nc$/i,
+      throw1: /^(t1|throw1|nc|1)$/i, throw2: /^(t2|throw2|no|3)$/i, wiper: /^(w|wiper|sig)$/i, sw: /^sw/i,
+    };
+    for (const role of [...BEHAVIOURS[kind].roles, ...(BEHAVIOURS[kind].optional || [])]) {
+      const hit = GUESS[role] && draft.pins.find(p => GUESS[role].test(p.id) && !Object.values(roles).includes(p.id));
+      if (hit && !(role in roles && roles[role] === hit.id)) roles[role] = hit.id;
+    }
+    const params = Object.fromEntries((BEHAVIOURS[kind].params || []).map(p => [p.key, p.def]));
+    draft.behaviour = { kind, roles, ...params, ...(kind === 'resistor' ? { ohms: 1000 } : {}), ...(kind === 'led' || kind === 'led-array' ? { color: kind === 'led' ? 'red' : 'green' } : {}),
+      ...(kind === 'led-array' ? { segments: draft.pins.filter(p => !Object.values(roles).includes(p.id)).map(p => p.id) } : {}),
+      ...(kind === 'stepper' ? { coils: draft.pins.filter(p => /^in?[1-4]$/i.test(p.id)).map(p => p.id) } : {}),
       ...(kind === 'mux' ? { select: byNum(/^S\d+$/i), channels: byNum(/^(C|Y|CH)\d+$/i) } : {}) };
     paintRoles(); preview();
   });

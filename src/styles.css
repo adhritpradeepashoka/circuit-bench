@@ -584,3 +584,7 @@ button { cursor: pointer; }
 .empty.no-match p { margin: 0; }
 .empty.no-match .hint { font-size: 12px; opacity: .75; }
 .link-btn { background: none; border: 0; color: inherit; text-decoration: underline; cursor: pointer; justify-self: start; padding: 0; font: inherit; font-size: 12px; }
+
+@keyframes cp-spin { to { transform: rotate(360deg); } }
+.pc-template { margin-bottom: 8px; }
+.pc-template i { font-weight: 400; opacity: .7; }
