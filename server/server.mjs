@@ -64,6 +64,16 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         log(`ai generate-code ok`);
         return send(res, 200, result);
       }
+      if (url.pathname === '/api/ai/create-part') {
+        if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
+        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
+        let raw = '';
+        for await (const chunk of req) { raw += chunk; if (raw.length > 20_000) { req.destroy(); return; } }
+        let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
+        const result = await ai.createPart(body);
+        log(`ai create-part ok`);
+        return send(res, 200, result);
+      }
       if (url.pathname.startsWith('/api/')) return send(res, 404, { ok: false, error: 'Unknown endpoint.' });
 
       if (staticDir) {                                                     // serve the built app

@@ -55,6 +55,7 @@ export function createModelElement(type, part = null) {
   }
   if (type === 'resistor') return buildResistor(part);
   const el = document.createElement(def.tag);
+  if (def.custom) { el.classList.add('model'); el.spec = def.spec; return el; }
   el.classList.add('model');
   if (type === 'led') el.setAttribute('color', part?.color || 'red');
   if (type === 'slide-switch') el.value = part?.pos ? 1 : 0;
@@ -135,6 +136,7 @@ export class Editor {
   }
   importProject(data) {
     const next = fromProjectFile(data);
+    if (Array.isArray(data.customParts) && data.customParts.length) this.emit('catalog');      // the project brought its own parts
     this.state.parts = next.parts; this.state.wires = next.wires; this.sel = null;
     this.syncParts(); this.markDirty(); this.commit(); this.fit();
     this.status(`Opened project — ${next.parts.length} parts, ${next.wires.length} wires`);
@@ -210,6 +212,8 @@ export class Editor {
       el.dataset.id = p.id;
       const size = partSize(p);
       el.style.width = `${size.w}px`; el.style.height = `${size.h}px`;
+      // stacking: breadboard at the bottom, a board beside it, a board that plugs in (Nano) on it, every other part on top
+      el.style.setProperty('--z', p.type === 'breadboard' ? 1 : isMcuBoard(p.type) ? (def.insertable ? 3 : 2) : 5);
       el.append(createModelElement(p.type, p));
       this.layer.append(el);
       this.els.set(p.id, el);
@@ -361,6 +365,13 @@ export class Editor {
     this.running = on;
     this.canvas.classList.toggle('running', on);
   }
+  /** A custom part's definition changed: redraw every copy, and drop wires to pins it no longer has. */
+  refreshPartType(type) {
+    const def = PART_DEFS[type];
+    for (const p of this.state.parts) if (p.type === type) { this.els.get(p.id)?.remove(); this.els.delete(p.id); }
+    this.state.wires = this.state.wires.filter(w => [w.a, w.b].every(end => this.partById(end.part)?.type !== type || def.pinById.has(end.pin)));
+    this.syncParts(); this.markDirty(); this.commit(); this.renderOverlay();
+  }
   setButtonPressed(partId, pressed) {
     const el = this.els.get(partId)?.querySelector('wokwi-pushbutton');
     if (el) el.pressed = pressed;
@@ -470,7 +481,7 @@ export class Editor {
     // a breadboard hole, a component lead) starts a wire; pressing anywhere else on a part moves it.
     // The radius is tight so a part's body — and the breadboard between holes — still drags normally.
     const pin = this.pinAt(w, 6);
-    if (pin && !(pin.type === 'pushbutton' && this.running)) { this.beginWire(e, pin); return; }
+    if (pin && !((pin.type === 'pushbutton' || PART_DEFS[pin.type]?.spec?.behaviour.kind === 'button') && this.running)) { this.beginWire(e, pin); return; }
     if (wireEl) { e.preventDefault(); this.select({ kind: 'wire', id: wireEl.dataset.wire }); return; }
     const partEl = e.target.closest?.('.part');
     if (partEl) { this.beginPartDrag(e, partEl.dataset.id); return; }
@@ -491,17 +502,19 @@ export class Editor {
     const part = this.partById(id);
     if (!part) return;
     this.select({ kind: 'part', id });
-    if (part.type === 'pushbutton' && this.running) {
+    const custom = PART_DEFS[part.type].custom ? PART_DEFS[part.type].spec.behaviour.kind : null;
+    if ((part.type === 'pushbutton' || custom === 'button') && this.running) {
       e.preventDefault();
       this.setButtonPressed(id, true);
       this.track(() => {}, () => this.setButtonPressed(id, false));
       return;
     }
-    if (part.type === 'pir-sensor' && this.running) {      // while running: click = trigger / clear motion
+    if ((part.type === 'pir-sensor' || custom === 'digital-sensor') && this.running) {      // while running: click = trigger / clear
       e.preventDefault();
       const on = !this.els.get(id).classList.contains('triggered');
       this.setButtonPressed(id, on);
-      this.status(on ? 'PIR: motion detected — OUT goes HIGH (click again to clear)' : 'PIR: no motion — OUT is LOW');
+      const name = custom ? PART_DEFS[part.type].name : 'PIR';
+      this.status(on ? `${name}: triggered — OUT goes HIGH (click again to clear)` : `${name}: idle — OUT is LOW`);
       return;
     }
     e.preventDefault();

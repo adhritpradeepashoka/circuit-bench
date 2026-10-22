@@ -78,7 +78,7 @@ export function solve(circuit, drive) {
   sources.forEach(s => use(s.net));
   circuit.elements.forEach(e => {
     if (e.kind === 'PIR') { use(e.vcc); use(e.out); use(e.gnd); }
-    else if (e.kind === 'CMP') { use(e.vcc); use(e.gnd); use(e.ao); use(e.out); }
+    else if (e.kind === 'CMP' || e.kind === 'SRC') { use(e.vcc); use(e.gnd); use(e.out); if (e.ao != null) use(e.ao); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
   });
@@ -90,6 +90,7 @@ export function solve(circuit, drive) {
   const powered = new Map(pirs.map(p => [p.partId, false]));
   const cmps = circuit.elements.filter(e => e.kind === 'CMP');
   const cmpOn = new Map(cmps.map(c => [c.partId, false])), cmpHigh = new Map(cmps.map(c => [c.partId, false]));
+  const srcs = circuit.elements.filter(e => e.kind === 'SRC'), srcOn = new Map(srcs.map(s => [s.partId, false]));
   const drvs = circuit.elements.filter(e => e.kind === 'DRV');
   const drvKey = d => drvs.indexOf(d);
   const drvState = drvs.map(() => ({ powered: false, ch: [{ en: false, a: false, b: false }, { en: false, a: false, b: false }] }));
@@ -109,6 +110,13 @@ export function solve(circuit, drive) {
       if (e.kind === 'R' || e.kind === 'MOT') stamp(e.a, e.b, 1 / e.ohms);
       else if (e.kind === 'BAT') {
         if (e.a !== e.b) { stamp(e.a, e.b, G_BAT); b[idx.get(e.a)] += G_BAT * e.v; b[idx.get(e.b)] -= G_BAT * e.v; }
+      } else if (e.kind === 'SRC') {
+        // a student-made sensor: OUT = frac × (VCC − GND) through 100 Ω, only while it has a supply (digital: only while triggered)
+        const supply = x[idx.get(e.vcc)] - x[idx.get(e.gnd)];
+        if (!srcOn.get(e.partId)) continue;
+        const v = (e.momentary ? (drive.pressed.has(e.partId) ? 1 : 0) : e.frac) * supply;
+        stamp(e.out, e.gnd, G_PIR);
+        b[idx.get(e.out)] += G_PIR * v; b[idx.get(e.gnd)] -= G_PIR * v;
       } else if (e.kind === 'DRV') {
         const st = drvState[drvKey(e)];
         if (!st.powered) continue;
@@ -154,6 +162,10 @@ export function solve(circuit, drive) {
       const on2 = supply >= CMP_MIN_SUPPLY, hi = on2 && x[idx.get(c.ao)] - x[idx.get(c.gnd)] > supply / 2;
       if (on2 !== cmpOn.get(c.partId)) { cmpOn.set(c.partId, on2); changed = true; }
       if (hi !== cmpHigh.get(c.partId)) { cmpHigh.set(c.partId, hi); changed = true; }
+    }
+    for (const s of srcs) {
+      const next = x[idx.get(s.vcc)] - x[idx.get(s.gnd)] >= 2.5;
+      if (next !== srcOn.get(s.partId)) { srcOn.set(s.partId, next); changed = true; }
     }
     for (const d of drvs) {
       const st = drvState[drvKey(d)], g = x[idx.get(d.gnd)];

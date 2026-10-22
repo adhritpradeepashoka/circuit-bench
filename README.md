@@ -65,6 +65,16 @@ the live netlist). The **?** button in the top bar brings it back any time (`src
 Wiring needs no tool switching: in the normal Select mode, pressing on any pin, hole or lead and dragging to another draws a wire;
 pressing anywhere else on a part moves it. Wire-only mode (`W`) is still there for crowded spots.
 
+### Part Creator: make your own parts
+
+Parts → My parts → **Create a part**. Give it a name, colour and pins (on any side, or all on the bottom edge to plug
+into a breadboard), and pick what it does from a fixed menu: just connections, a resistor/load, an LED, a push button,
+an analog sensor (a slider sets OUT = VCC × position) or a digital sensor (click to trigger). Or type a description and
+**Make it**: the AI fills in the same form (`POST /api/ai/create-part`). A part is a declarative spec — never code —
+and every spec, typed, imported or AI-made, goes through `validatePartSpec()` in `src/core/custom-parts.js`. Saved parts
+stay in this browser's "My parts" and are embedded in any project file that uses them (`customParts`), so a shared
+project opens with its parts. The AI chat sees them in its catalogue and can place and wire them.
+
 ### Boards: Uno, Nano, Mega 2560
 
 Pick the board when you make a new project (or add one from Parts). Everything board-specific — pin → port/bit, ADC

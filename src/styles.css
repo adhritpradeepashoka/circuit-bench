@@ -72,12 +72,11 @@ button { cursor: pointer; }
 .world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
 .overlay { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 30; }
 
-.part { position: absolute; left: 0; top: 0; transform-origin: 50% 50%; user-select: none; -webkit-user-select: none; cursor: grab; }
+.part { position: absolute; left: 0; top: 0; z-index: var(--z, 5); transform-origin: 50% 50%; user-select: none; -webkit-user-select: none; cursor: grab; }
 .part .model { position: absolute; left: 0; top: 0; pointer-events: none; }
 .part svg.bb { display: block; pointer-events: none; }
-.part-breadboard { z-index: 1; filter: drop-shadow(0 2px 3px rgba(20, 35, 28, .28)); }
-.part-arduino-uno { z-index: 2; filter: drop-shadow(0 2px 4px rgba(20, 35, 28, .3)); }
-.part-led, .part-rgb-led, .part-resistor, .part-pushbutton, .part-slide-switch, .part-seven-segment, .part-pir-sensor, .part-potentiometer, .part-ldr-module, .part-ntc-sensor { z-index: 5; }   /* every insertable part sits above the board */
+.part-breadboard { filter: drop-shadow(0 2px 3px rgba(20, 35, 28, .28)); }
+.part-arduino-uno { filter: drop-shadow(0 2px 4px rgba(20, 35, 28, .3)); }
 .part.dragging { z-index: 40; cursor: grabbing; }
 .part.dragging.part-breadboard, .part.dragging.part-arduino-uno { z-index: 3; }
 .part.selected::after { content: ""; position: absolute; inset: -5px; border: 1.5px solid var(--blue); border-radius: 6px; background: rgba(29, 99, 237, .05); pointer-events: none; }
@@ -516,3 +515,50 @@ button { cursor: pointer; }
 .tour-outro { margin: 0 0 14px !important; font-size: 20px; font-weight: 700; color: var(--blue); }
 .tour-outro-sub { color: #6d7a75; font-size: 12.5px; }
 .tour-actions button[hidden], .tour-skip[hidden] { display: none; }
+
+/* ── Part Creator ─────────────────────────── */
+.part-card .edit-part { flex: none; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); font-size: 12px; cursor: pointer; }
+.part-card .edit-part:hover { color: var(--blue); border-color: #c5d5f5; }
+.create-part { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 6px; margin-top: 2px; border: 1.5px dashed #b9c9c1; border-radius: 9px; background: none; text-align: left; cursor: pointer; }
+.create-part:hover { background: #fff; border-color: var(--blue); }
+.create-part .plus { width: 58px; height: 44px; flex: none; display: grid; place-items: center; border-radius: 7px; background: var(--blue-soft); color: var(--blue); font-size: 22px; font-weight: 700; }
+.create-part > span:last-child { display: grid; }
+.create-part b { font-size: 12.5px; }
+.create-part span span { font-size: 11.5px; color: var(--muted); }
+.modal-card.part-card-modal { width: min(820px, 100%); max-height: 88vh; }
+.part-card-modal { --pc-line: var(--line); }
+#partModal { padding-top: 5vh; }
+.pc-body { overflow: auto; padding: 0 18px 12px; }
+.pc-ai { padding: 10px 12px; margin-bottom: 12px; border: 1px solid #d7e2fb; border-radius: 10px; background: #f5f8ff; font-size: 12.5px; }
+.pc-ai-row { display: flex; gap: 8px; margin-top: 6px; }
+.pc-ai textarea { flex: 1; min-width: 0; resize: vertical; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; font: inherit; }
+.pc-ai button, .pc-primary { padding: 0 16px; border: 0; border-radius: 7px; background: var(--blue); color: #fff; font-weight: 700; cursor: pointer; }
+.pc-ai button:disabled { opacity: .6; cursor: wait; }
+.pc-ai-status { min-height: 16px; margin-top: 5px; color: var(--muted); }
+.pc-ai-status.bad { color: #b42318; }
+.pc-grid { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 16px; }
+@media (max-width: 680px) { .pc-grid { grid-template-columns: 1fr; } }
+.pc-field { display: grid; gap: 3px; margin-bottom: 8px; font-size: 12px; color: var(--muted); }
+.pc-field i, .pc-check i { font-style: normal; opacity: .8; }
+.pc-field input:not([type=color]), .pc-field select { height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--text); font: inherit; font-size: 13px; }
+.pc-row { display: flex; gap: 8px; }
+.pc-row .pc-field:first-child { flex: 1; }
+.pc-color input { width: 44px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+.pc-pins-head { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 4px; font-size: 12.5px; }
+.pc-pins-head button { padding: 3px 9px; border: 1px solid #c5d5f5; border-radius: 6px; background: var(--blue-soft); color: var(--blue); font-weight: 650; font-size: 12px; cursor: pointer; }
+.pc-pins { display: grid; gap: 4px; margin-bottom: 8px; }
+.pc-pin { display: grid; grid-template-columns: 82px minmax(0, 1fr) 86px 26px; gap: 4px; }
+.pc-pin input, .pc-pin select { height: 28px; min-width: 0; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit; font-size: 12.5px; }
+.pc-pin button { border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); cursor: pointer; }
+.pc-check { display: flex; gap: 6px; align-items: center; margin: 2px 0 10px; font-size: 12.5px; }
+.pc-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 8px; }
+.pc-note { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pc-preview { display: grid; place-items: center; min-height: 200px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: #eef2ef; background-image: radial-gradient(#d5ddd8 1px, transparent 1px); background-size: 9.6px 9.6px; }
+.pc-preview svg { max-width: 100%; height: auto; }
+.pc-errors { margin: 8px 0 0; padding-left: 18px; color: #b42318; font-size: 12px; }
+.pc-foot { display: flex; align-items: center; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.pc-foot button { height: 32px; padding: 0 14px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font-weight: 650; cursor: pointer; }
+.pc-foot .pc-primary { border: 0; background: var(--blue); color: #fff; }
+.pc-foot .pc-primary:disabled { opacity: .5; cursor: not-allowed; }
+.pc-foot .pc-delete { color: #b42318; }
+.pc-spacer { flex: 1; }

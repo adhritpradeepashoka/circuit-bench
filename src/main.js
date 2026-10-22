@@ -8,6 +8,7 @@ import { initResistorEditor } from './ui/resistor-editor.js';
 import { initLedEditor } from './ui/led-editor.js';
 import { initValueEditor } from './ui/value-editor.js';
 import { initSettingsEditor } from './ui/settings-editor.js';
+import { initPartCreator } from './ui/part-creator.js';
 import './parts/elements.js';
 import { initAiPanel } from './ui/ai-panel.js';
 import { initProjects } from './ui/projects.js';
@@ -19,7 +20,7 @@ import { WOKWI_PINS } from './core/pins.generated.js';
 const $ = id => document.getElementById(id);
 
 // Wait until the web components are defined so their geometry can be sanity-checked and they render immediately.
-await Promise.all(['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-arduino-mega', 'wokwi-lcd1602', 'wokwi-dht22', 'cb-dc-motor', 'cb-l298n', 'cb-battery', 'wokwi-led', 'wokwi-resistor', 'wokwi-pushbutton', 'wokwi-mpu6050', 'wokwi-ssd1306'].map(t => customElements.whenDefined(t)));
+await Promise.all(['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-arduino-mega', 'wokwi-lcd1602', 'wokwi-dht22', 'cb-dc-motor', 'cb-l298n', 'cb-battery', 'cb-custom-part', 'wokwi-led', 'wokwi-resistor', 'wokwi-pushbutton', 'wokwi-mpu6050', 'wokwi-ssd1306'].map(t => customElements.whenDefined(t)));
 
 // Dev safety net: the generated pin tables must match what the installed library reports.
 for (const [tag, pins] of Object.entries(WOKWI_PINS)) {
@@ -33,6 +34,7 @@ initSidebar(editor);
 const code = initCode();
 const sim = new Simulation(editor, code);
 code.setBoard(() => editor.getCircuit().uno.spec?.fqbn || null);
+initPartCreator(editor);                 // registers "My parts" before any saved circuit that uses them loads
 editor.init();
 initResistorEditor(editor);
 initLedEditor(editor);

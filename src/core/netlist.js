@@ -132,6 +132,13 @@ export function compile(state) {
       const { sda, scl, vcc } = PART_DEFS[part.type].i2c, v = netOf(part.id, vcc[0]);
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, sda), b: v, ohms: 4700 });
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, scl), b: v, ohms: 4700 });
+    } else if (PART_DEFS[part.type].custom) {
+      const { kind, roles, ohms, color } = PART_DEFS[part.type].spec.behaviour, r = role => netOf(part.id, roles[role]);
+      if (kind === 'resistor') elements.push({ kind: 'R', partId: part.id, a: r('a'), b: r('b'), ohms });
+      else if (kind === 'led') elements.push({ kind: 'LED', partId: part.id, a: r('anode'), k: r('cathode'), vf: ledVf(color), rd: ledRd(color) });
+      else if (kind === 'button') elements.push({ kind: 'SW', partId: part.id, a: r('a'), b: r('b') });
+      else if (kind === 'analog-sensor') elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('out'), frac: Math.min(1, Math.max(0, (part.level ?? 50) / 100)) });
+      else if (kind === 'digital-sensor') elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('out'), frac: 1, momentary: true });
     } else if (part.type === 'dht') {
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, 'SDA'), b: netOf(part.id, 'VCC'), ohms: 10000 });   // the module's pull-up on DATA
     } else if (part.type === 'dc-motor') {

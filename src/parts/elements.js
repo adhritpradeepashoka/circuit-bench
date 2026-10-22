@@ -2,6 +2,8 @@
 // Plain custom elements (no framework) sized in CSS px; their pin positions live in PART_DEFS (src/core/parts.js),
 // so these files only draw. Each one is a tiny SVG with a few live properties the simulator sets.
 
+import { layoutSpec } from '../core/custom-parts.js';
+
 const svgNS = 'http://www.w3.org/2000/svg';
 
 export const MOTOR_W = 120, MOTOR_H = 120;
@@ -112,3 +114,42 @@ class Battery extends CbElement {
 for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery]]) {
   if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
 }
+
+/** A student-made part (src/core/custom-parts.js): drawn from its spec — body, name, pins with their labels. */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+export function customPartSVG(spec, { lit = 0 } = {}) {
+  const { w, h, pins } = layoutSpec(spec);
+  const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
+  const kind = spec.behaviour.kind;
+  const leads = pins.map(p => {
+    const end = { left: [inset, p.y], right: [w - inset, p.y], top: [p.x, inset], bottom: [p.x, h - inset] }[p.side];
+    return `<line x1="${p.x}" y1="${p.y}" x2="${end[0]}" y2="${end[1]}" stroke="#9aa3ab" stroke-width="2.2"/><rect x="${p.x - 2.4}" y="${p.y - 2.4}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"/>`;
+  }).join('');
+  const labels = pins.map(p => {
+    const pos = { left: [inset + 3, p.y + 2.2, 'start'], right: [w - inset - 3, p.y + 2.2, 'end'], top: [p.x, inset + 8, 'middle'], bottom: [p.x, h - inset - 3.5, 'middle'] }[p.side];
+    const vertical = p.side === 'top' || p.side === 'bottom';
+    return `<text x="${pos[0]}" y="${pos[1]}" text-anchor="${vertical ? 'start' : pos[2]}" font-size="5.6" font-family="monospace" fill="${spec.textColor}" opacity=".85"${vertical ? ` transform="rotate(-90 ${pos[0]} ${pos[1]})" dx="0"` : ''}>${esc(p.id)}</text>`;
+  }).join('');
+  const color = { red: '#ff3b30', green: '#34c759', blue: '#3b82f6', yellow: '#ffd60a', orange: '#ff9f0a', white: '#ffffff' }[spec.behaviour.color] || '#ff3b30';
+  const extra = kind === 'led'
+    ? `<circle class="cp-led" cx="${w / 2}" cy="${h / 2 - 7}" r="6" fill="${color}" opacity="${0.25 + 0.75 * lit}" stroke="#0003"/>${lit ? `<circle cx="${w / 2}" cy="${h / 2 - 7}" r="11" fill="${color}" opacity="${0.35 * lit}"/>` : ''}`
+    : kind === 'button' || kind === 'digital-sensor' ? `<circle class="cp-cap" cx="${w / 2}" cy="${h / 2 - 7}" r="6.5" fill="#20262c" stroke="#0006"/>` : '';
+  const nameY = kind === 'led' || kind === 'button' || kind === 'digital-sensor' ? h / 2 + 8 : h / 2 + 3;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    ${leads}
+    <rect x="${inset}" y="${inset}" width="${bw}" height="${bh}" rx="5" fill="${spec.color}" stroke="#0005"/>
+    ${extra}
+    <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}">${esc(spec.label)}</text>
+    ${labels}
+  </svg>`;
+}
+class CustomPart extends HTMLElement {
+  constructor() { super(); this._spec = null; this._lit = 0; }
+  set spec(s) { this._spec = s; this.render(); }
+  get spec() { return this._spec; }
+  set lit(v) { v = Math.round(Math.max(0, Math.min(1, Number(v) || 0)) * 10) / 10; if (v === this._lit) return; this._lit = v; this.render(); }
+  get lit() { return this._lit; }
+  connectedCallback() { this.style.display = 'inline-block'; this.render(); }
+  render() { if (this._spec) this.innerHTML = customPartSVG(this._spec, { lit: this._lit }); }
+}
+if (globalThis.customElements && !customElements.get('cb-custom-part')) customElements.define('cb-custom-part', CustomPart);

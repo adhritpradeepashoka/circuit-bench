@@ -239,6 +239,9 @@ export class Simulation {
       } else if (part.type === 'ldr-module') {
         const el = root.querySelector('wokwi-photoresistor-sensor'), m = result.modules?.get(part.id);
         if (el && m) { if (el.ledPower !== m.powered) el.ledPower = m.powered; if (el.ledDO !== m.out) el.ledDO = m.out; }
+      } else if (PART_DEFS[part.type]?.custom) {
+        const el = root.querySelector('cb-custom-part');
+        if (el && PART_DEFS[part.type].spec.behaviour.kind === 'led') el.lit = Math.min(1, (result.ledCurrent.get(part.id) || 0) / LED_FULL_A);
       } else if (part.type === 'dc-motor') {
         const el = root.matches?.('cb-dc-motor') ? root : root.querySelector('cb-dc-motor');
         if (el) el.rpm = motorRpm(result.motorVolts?.get(part.id) || 0);
@@ -265,6 +268,7 @@ export class Simulation {
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
       if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; } }
       if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
+      if (PART_DEFS[part.type]?.custom) { const el = root?.querySelector('cb-custom-part'); if (el) el.lit = 0; }
       if (part.type === 'dc-motor') { const el = root?.matches?.('cb-dc-motor') ? root : root?.querySelector('cb-dc-motor'); if (el) el.rpm = 0; }
       if (part.type === 'l298n') { const el = root?.matches?.('cb-l298n') ? root : root?.querySelector('cb-l298n'); if (el) { el.ledPower = false; el.channels = ['', '']; } }
       if (part.type === 'lcd1602') { const el = root?.querySelector('wokwi-lcd1602'); if (el) { el.characters = new Uint8Array(32).fill(32); el.backlight = false; el.cursor = false; el.blink = false; el._drawn = null; } }

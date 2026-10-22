@@ -4,6 +4,7 @@ import { WOKWI_ELEMENTS_VERSION } from './pins.generated.js';
 import { DEFAULT_OHMS, MIN_OHMS, MAX_OHMS } from './resistance.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { WIRE_KINDS, LEGACY_WIRE_KIND } from './wire-kinds.js';
+import { validatePartSpec, registerCustomPart, specsUsed } from './custom-parts.js';
 
 /** Per-part editable properties (ohms, LED colour, switch position) — the keys come from PART_DEFS[type].props. */
 const num = (lo, hi) => (v, d) => (Number.isFinite(+v) && v !== null && v !== '' ? Math.min(hi, Math.max(lo, +v)) : d);
@@ -42,6 +43,7 @@ export function toProjectFile(state) {
     format: FORMAT,
     version: VERSION,
     libraries: { '@wokwi/elements': WOKWI_ELEMENTS_VERSION, avr8js: '0.21.1' },
+    ...(specsUsed(state.parts).length ? { customParts: specsUsed(state.parts) } : {}),   // student-made parts travel with the project
     parts: state.parts.map(p => ({ id: p.id, type: p.type, x: +p.x.toFixed(2), y: +p.y.toFixed(2), rotate: p.rot || 0, ...propsOf(p) })),
     wires: state.wires.map(w => ({
       id: w.id, from: { part: w.a.part, pin: w.a.pin }, to: { part: w.b.part, pin: w.b.pin },
@@ -56,6 +58,11 @@ export function toProjectFile(state) {
 
 export function fromProjectFile(data) {
   if (!data || data.format !== FORMAT || !Array.isArray(data.parts) || !Array.isArray(data.wires)) throw new Error('This file is not a Virtual Lab project.');
+  // Student-made parts the project carries: validated (data only, never code), then added to the catalogue.
+  for (const raw of Array.isArray(data.customParts) ? data.customParts.slice(0, 50) : []) {
+    const v = validatePartSpec(raw);
+    if (v.ok && v.spec.id === raw.id) registerCustomPart(v.spec);
+  }
   const ids = new Set();
   const parts = data.parts.map(p => {
     if (!PART_DEFS[p.type]) throw new Error(`Unknown part type "${p.type}".`);

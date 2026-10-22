@@ -263,7 +263,7 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'My parts']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
   for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro', 'OLED Display 128×64 (SSD1306)']) assert.ok(names.includes(n), `${n} in catalogue`);
   for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306', 'arduino-nano', 'arduino-mega', 'dht', 'lcd1602', 'dc-motor', 'l298n', 'battery']) {
@@ -1482,4 +1482,57 @@ test('ui: motor control — L298N + battery + DC motor; the example ramps the mo
   assert.deepEqual(JSON.parse(JSON.stringify(snap.drivers[0])), { id: 'drv', powered: true, motorA: 'rev', motorB: 'stopped' });
   sim.stop();
   assert.equal(motorEl().rpm, 0);
+});
+
+test('ui: Part Creator — build a part by hand, save & place it, it lands in My parts; edit it; or describe it and the AI fills the form', async () => {
+  const { w, editor } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  const calls = [];
+  const fakeCreate = async ({ description }) => { calls.push(description); return { ok: true, note: 'DO is simplified', spec: { id: 'custom-ignored-1', name: 'Buzzer', label: 'BZ', color: '#111111', textColor: '#ffffff', description: 'Active buzzer', breadboard: true, pins: [{ id: '+', label: '+', side: 'bottom' }, { id: '-', label: '-', side: 'bottom' }], behaviour: { kind: 'resistor', roles: { a: '+', b: '-' }, ohms: 42 } } }; };
+  const pc = w.__lab.initPartCreator(editor, { createPart: fakeCreate });
+  const set = (id, v, ev = 'input') => { const e = $(id); e.value = v; e.dispatchEvent(new w.Event(ev, { bubbles: true })); };
+
+  $('createPartBtn').click();
+  assert.equal($('partModal').hidden, false);
+  assert.equal($('pcSave').disabled, true, 'needs a name first');
+  assert.match($('pcErrors').textContent, /name/);
+  set('pcName', 'Moisture probe'); set('pcLabel', 'SOIL');
+  assert.equal($('pcSave').disabled, false);
+  assert.ok($('pcPreview').querySelector('svg'), 'live preview');
+  // rename a pin: the role that pointed at it follows
+  const firstPinName = $('pcPins').querySelector('input');
+  firstPinName.value = 'V+'; firstPinName.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal($('pcRole-vcc').value, 'V+');
+  $('pcSave').click();
+  assert.equal($('partModal').hidden, true);
+  const placed = editor.state.parts.find(p => p.type.startsWith('custom-'));
+  assert.ok(placed, 'placed on the workbench');
+  assert.ok(editor.els.get(placed.id).querySelector('cb-custom-part svg'));
+  const cards = [...doc.querySelectorAll('#catalog .part-card b')].map(b => b.textContent);
+  assert.ok(cards.includes('Moisture probe'));
+  assert.equal(pc.library().length, 1);
+  // its saved copy is in the project file
+  assert.equal(editor.exportProject().customParts[0].name, 'Moisture probe');
+
+  // edit: rename + remove a pin; the wire to that pin goes, the rest stays
+  editor.state.wires.push({ id: 'wx', a: { part: placed.id, pin: 'OUT' }, b: { part: 'uno-1', pin: 'A0' }, style: 'straight', color: '#000', width: 2 });
+  editor.emit('edit-part', placed.type);
+  assert.match($('partTitle').textContent, /Edit/);
+  set('pcName', 'Soil probe');
+  $('pcSave').click();
+  assert.ok([...doc.querySelectorAll('#catalog .part-card b')].some(b => b.textContent === 'Soil probe'));
+  assert.ok(editor.state.wires.some(w2 => w2.id === 'wx'), 'pin still exists → wire kept');
+
+  // AI path
+  $('createPartBtn').click();
+  set('pcDescribe', 'an active buzzer with + and -');
+  $('pcAiGo').click();
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(calls, ['an active buzzer with + and -']);
+  assert.equal($('pcName').value, 'Buzzer');
+  assert.equal($('pcKind').value, 'resistor'); assert.equal($('pcOhms').value, '42');
+  assert.match($('pcAiStatus').textContent, /DO is simplified/);
+  $('pcSave').click();
+  assert.ok([...doc.querySelectorAll('#catalog .part-card b')].some(b => b.textContent === 'Buzzer'));
+  assert.equal(pc.library().length, 2);
 });

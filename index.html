@@ -214,6 +214,48 @@
     </aside>
   </main>
 </div>
+<div class="modal" id="partModal" role="dialog" aria-modal="true" aria-labelledby="partTitle" hidden>
+  <div class="modal-card part-card-modal">
+    <div class="modal-head"><h2 id="partTitle">Create a part</h2><button type="button" class="pane-x" id="partClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <div class="pc-body">
+      <div class="pc-ai">
+        <label for="pcDescribe"><b>✨ Describe it</b> — the AI fills in the form below (you can still change anything)</label>
+        <div class="pc-ai-row">
+          <textarea id="pcDescribe" rows="2" maxlength="1500" placeholder="e.g. a KY-038 sound sensor module with VCC, GND, analog out and digital out"></textarea>
+          <button type="button" id="pcAiGo">Make it</button>
+        </div>
+        <div class="pc-ai-status" id="pcAiStatus" aria-live="polite"></div>
+      </div>
+      <div class="pc-grid">
+        <div class="pc-form">
+          <label class="pc-field"><span>Name</span><input id="pcName" maxlength="40" placeholder="Sound sensor"></label>
+          <div class="pc-row">
+            <label class="pc-field"><span>Text on the part</span><input id="pcLabel" maxlength="16" placeholder="KY-038"></label>
+            <label class="pc-field pc-color"><span>Colour</span><input type="color" id="pcColor" value="#2b6cb0"></label>
+            <label class="pc-field pc-color"><span>Text</span><input type="color" id="pcTextColor" value="#ffffff"></label>
+          </div>
+          <label class="pc-field"><span>Description <i>(optional — the AI reads it too)</i></span><input id="pcDesc" maxlength="200"></label>
+          <div class="pc-pins-head"><b>Pins</b><button type="button" id="pcAddPin">+ Add pin</button></div>
+          <div id="pcPins" class="pc-pins"></div>
+          <label class="pc-check"><input type="checkbox" id="pcBreadboard"> Plugs into a breadboard <i>(pins on the bottom edge)</i></label>
+          <label class="pc-field"><span>What it does</span><select id="pcKind"></select></label>
+          <div id="pcRoles" class="pc-roles"></div>
+          <div class="pc-note" id="pcKindNote"></div>
+        </div>
+        <div class="pc-side">
+          <div class="pc-preview" id="pcPreview"></div>
+          <ul class="pc-errors" id="pcErrors"></ul>
+        </div>
+      </div>
+    </div>
+    <div class="pc-foot">
+      <button type="button" class="pc-delete" id="pcDelete" hidden>Remove from My parts</button>
+      <span class="pc-spacer"></span>
+      <button type="button" id="pcCancel">Cancel</button>
+      <button type="button" class="pc-primary" id="pcSave">Save &amp; place</button>
+    </div>
+  </div>
+</div>
 <div class="modal" id="projectsModal" role="dialog" aria-modal="true" aria-labelledby="projectsTitle" hidden>
   <div class="modal-card">
     <div class="modal-head"><h2 id="projectsTitle">My projects</h2><button type="button" class="pane-x" id="projectsClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>

@@ -3,6 +3,7 @@ import { createModelElement, DRAG_MIME } from './editor.js';
 import { formatOhms } from '../core/resistance.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { sidePanes } from './side-panes.js';
+import { customTypes, BEHAVIOURS } from '../core/custom-parts.js';
 
 const $ = id => document.getElementById(id);
 const BLURB = {
@@ -51,8 +52,12 @@ export function initSidebar(editor) {
     const host = $('catalog');
     host.innerHTML = '';
     const q = query.trim().toLowerCase();
-    const items = CATALOG_ORDER.map(t => PART_DEFS[t]).filter(d => !q || `${d.name} ${d.category} ${KEYWORDS[d.type] || ''}`.toLowerCase().includes(q));
-    for (const cat of [...new Set(items.map(d => d.category))]) {
+    const blurb = d => BLURB[d.type] || (d.custom ? d.spec.description || BEHAVIOURS[d.spec.behaviour.kind].label : '');
+    const items = [...CATALOG_ORDER, ...customTypes()].map(t => PART_DEFS[t]).filter(d => !q || `${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`.toLowerCase().includes(q));
+    const showCreate = !q || 'my parts create make new custom part creator'.includes(q) || items.some(d => d.custom);
+    const cats = [...new Set(items.map(d => d.category))];
+    if (showCreate && !cats.includes('My parts')) cats.push('My parts');
+    for (const cat of cats) {
       const h = document.createElement('div');
       h.className = 'group-title'; h.textContent = cat;
       host.append(h);
@@ -61,14 +66,31 @@ export function initSidebar(editor) {
         card.className = 'part-card'; card.draggable = true; card.tabIndex = 0; card.setAttribute('role', 'button');
         card.setAttribute('aria-label', `Add ${def.name}`);
         const copy = document.createElement('span');
-        copy.className = 'copy'; copy.innerHTML = `<b>${def.name}</b><span>${BLURB[def.type]}</span>`;
+        copy.className = 'copy';
+        const nm = document.createElement('b'); nm.textContent = def.name;
+        const bl = document.createElement('span'); bl.textContent = blurb(def);
+        copy.append(nm, bl);
         const add = document.createElement('span');
         add.className = 'add'; add.textContent = 'Add';
-        card.append(thumb(def.type), copy, add);
+        card.append(thumb(def.type), copy);
+        if (def.custom) {
+          const edit = document.createElement('button');
+          edit.type = 'button'; edit.className = 'edit-part'; edit.title = `Edit ${def.name}`; edit.setAttribute('aria-label', `Edit ${def.name}`); edit.textContent = '✎';
+          edit.addEventListener('click', e => { e.stopPropagation(); editor.emit('edit-part', def.type); });
+          card.append(edit);
+        }
+        card.append(add);
         card.addEventListener('click', () => editor.addPart(def.type));
         card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); editor.addPart(def.type); } });
         card.addEventListener('dragstart', e => { e.dataTransfer.setData(DRAG_MIME, def.type); e.dataTransfer.effectAllowed = 'copy'; });
         host.append(card);
+      }
+      if (cat === 'My parts' && showCreate) {
+        const mk = document.createElement('button');
+        mk.type = 'button'; mk.className = 'create-part'; mk.id = 'createPartBtn';
+        mk.innerHTML = '<span class="plus">+</span><span><b>Create a part</b><span>Draw your own, or describe it to the AI</span></span>';
+        mk.addEventListener('click', () => editor.emit('create-part'));
+        host.append(mk);
       }
     }
     if (!items.length) { const d = document.createElement('div'); d.className = 'empty'; d.textContent = 'No matching parts'; host.append(d); }
@@ -82,7 +104,9 @@ export function initSidebar(editor) {
       const row = document.createElement('button');
       row.type = 'button';
       row.className = `workspace-row${editor.sel?.kind === 'part' && editor.sel.id === p.id ? ' sel' : ''}`;
-      row.innerHTML = `<span class="dot"></span><span>${PART_DEFS[p.type].name}${p.type === 'resistor' ? ` · ${formatOhms(p.ohms)}` : p.type === 'led' ? ` · ${LED_COLORS[p.color]?.name || ''}` : ''}</span>`;
+      const dot = document.createElement('span'); dot.className = 'dot';
+      const txt = document.createElement('span'); txt.textContent = `${PART_DEFS[p.type].name}${p.type === 'resistor' ? ` · ${formatOhms(p.ohms)}` : p.type === 'led' ? ` · ${LED_COLORS[p.color]?.name || ''}` : ''}`;
+      row.append(dot, txt);
       row.addEventListener('click', () => { editor.select({ kind: 'part', id: p.id }); editor.status(`${PART_DEFS[p.type].name} selected`); });
       host.append(row);
     }
@@ -100,6 +124,7 @@ export function initSidebar(editor) {
   $('main').addEventListener('transitionend', e => { if (e.propertyName.startsWith('grid-template-columns')) { editor.positionWireEditor(); } });
 
   editor.on('workspace', renderWorkspace);
+  editor.on('catalog', renderCatalog);
   editor.on('select', renderWorkspace);
   renderCatalog(); renderWorkspace();
   return { setCollapsed };

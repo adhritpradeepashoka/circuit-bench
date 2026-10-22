@@ -20,6 +20,7 @@
 import { BOARD_SPECS, DEFAULT_BOARD } from '../src/core/boards.js';
 import { RequestError } from './compile-service.mjs';
 import { describeCatalog } from '../src/core/ai-actions.js';
+import { BEHAVIOURS, validatePartSpec, describeCustomSpecs } from '../src/core/custom-parts.js';
 
 const LIMITS = { promptChars: 4_000, codeChars: 20_000 };
 const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire';
@@ -133,7 +134,9 @@ function buildPrompt({ instruction, circuit, code, context, history }) {
   const diagnosticsBlock = diagnostics
     ? `\n\nLive diagnostics from the student's browser — this is what ACTUALLY happened, so treat it as ground truth over what the code or circuit "should" do. When the student asks why something doesn't work, find the cause in these readings (a pin that's LOW when it should be HIGH, an analogRead value on the wrong side of a threshold, a compile error, an open lead, a wiring problem) and name the specific reading in your explanation. If the last compile FAILED, fixing those errors comes first, whatever else was asked:\n${diagnostics}`
     : '';
-  const circuitText = JSON.stringify(circuit ?? { parts: [], wires: [] });
+  const customLines = describeCustomSpecs(circuit?.customParts);
+  const customBlock = customLines ? `\nParts the student made themselves (use them exactly like the ones above):\n${customLines}` : '';
+  const circuitText = JSON.stringify(circuit ? { ...circuit, customParts: undefined, nets: undefined, seated: undefined } : { parts: [], wires: [] });
   const parts = circuit?.parts ?? [];
   const recipes = SENSOR_RECIPES
     .filter(r => parts.some(p => p.type === r.type) || r.keywords.test(instruction || ''))
@@ -150,7 +153,7 @@ The circuit's board is the ${board.name} (${board.chip === 'atmega2560' ? 'ATmeg
 You directly control the circuit, not just the firmware. Placing a part, moving it, wiring two pins together, or removing something is not a physical act you are being asked to describe or hand off — it is a data edit you make yourself by emitting the matching action(s) below, and the simulator applies it immediately. When the instruction asks for a circuit change (add/move/rotate/wire/remove), you MUST do it via "actions" — never reply that this "can't be done by you", that it requires "physically" connecting something, or tell the student to do it themselves; any of those means you are refusing a request you are fully able to carry out. Only decline a circuit change (actions: [], explained why) when it is genuinely impossible with the real catalogue below — an unknown part, a pin that doesn't exist, or a truly ambiguous target with no reasonable reading — never because wiring "sounds physical".
 
 Parts you can place, and their real pin/property names (use these exact ids — nothing else exists). Where a part lists an electrical note after " — ", that note states its real analog behavior and OVERRIDES whatever direction you'd normally assume (e.g. most temperature/light sensors you've seen read HIGHER for MORE of the quantity — these may not; read each note literally and write comparisons that match it, not the usual assumption):
-${describeCatalog()}${recipeBlock}
+${describeCatalog()}${customBlock}${recipeBlock}
 
 Current circuit (parts with their id/type/position, and wires as {from:{part,pin}, to:{part,pin}}):
 ${circuitText}
@@ -251,9 +254,34 @@ const PROVIDERS = {
   },
 };
 
+/** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
+export function buildPartPrompt(description, problems = null) {
+  const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}`).join('\n');
+  return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data. You cannot write code for it — the simulator only offers the behaviours listed below, so pick the closest one (or "none" if nothing fits, e.g. a connector or a module the simulator can't model) and say so in "note".
+
+Behaviours:
+${kinds}
+Extra fields: "resistor" needs "ohms" (1 – 10000000). "led" takes "color": one of red, green, blue, yellow, orange, white.
+
+Student's description: ${String(description).slice(0, 1500)}
+${problems ? `\nYour previous answer was rejected for these reasons — fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}
+Reply with EXACTLY ONE fenced \`\`\`json block and nothing else:
+{
+  "name": "<part name, max 40 chars>",
+  "label": "<short text printed on the part, max 16 chars>",
+  "description": "<one sentence: what it is and how to wire it>",
+  "color": "<#rrggbb body colour that looks like the real part>",
+  "textColor": "<#rrggbb, readable on that colour>",
+  "pins": [ { "id": "<pin name as printed on the real part: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
+  "breadboard": <true only if the real part plugs into a breadboard; then every pin must be on "bottom">,
+  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <number, resistor only>, "color": "<led only>" },
+  "note": "<if the behaviour is only an approximation of the real part, say what is simplified — else empty>"
+}
+Use the real part's pin names and order. 1–24 pins.`;
+}
+
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
-  async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini' }) {
-    if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
+  function needKey(userKey, provider) {
     const p = PROVIDERS[provider];
     if (!p) throw new RequestError(`Unknown AI provider "${provider}".`);
     if (!userKey) {
@@ -261,7 +289,9 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
       err.needsKey = true;
       throw err;
     }
-    const prompt = buildPrompt({ instruction, circuit, code, context, history });
+    return p;
+  }
+  async function ask(p, userKey, prompt) {
     let res;
     try {
       res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt) });
@@ -273,7 +303,31 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
       const msg = p.errorMessage(body) || `HTTP ${res.status}`;
       throw new RequestError(`${p.label} error: ${msg}`, statusFor(res.status, msg));
     }
-    const text = p.text(body);
+    return p.text(body);
+  }
+
+  /** Describe a part in words → a validated part spec (one repair round if the first answer doesn't validate). */
+  async function createPart({ description, userKey, provider = 'gemini' }) {
+    if (!description || !String(description).trim()) throw new RequestError('Describe the part you want to make.');
+    const p = needKey(userKey, provider);
+    let problems = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const text = await ask(p, userKey, buildPartPrompt(description, problems));
+      const m = matchJsonFence(text);
+      const raw = m ? tryParseJson(m[1]) : null;
+      if (!raw) { problems = ['The reply had no valid json block.']; continue; }
+      const v = validatePartSpec(raw);
+      if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300) };
+      problems = v.errors;
+    }
+    throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')} Try describing it differently, or build it in the Part Creator.`, 502);
+  }
+
+  async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini' }) {
+    if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
+    const p = needKey(userKey, provider);
+    const prompt = buildPrompt({ instruction, circuit, code, context, history });
+    const text = await ask(p, userKey, prompt);
     const result = parseReply(text);
     // actions:[] + code:null is not automatically a failure: a model that correctly decides nothing
     // needs to change (the sketch already does what was asked, or the circuit already has the part)
@@ -286,5 +340,5 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     return { ok: true, ...result };
   }
 
-  return { generateCode };
+  return { generateCode, createPart };
 }

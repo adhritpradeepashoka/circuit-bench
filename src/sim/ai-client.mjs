@@ -10,10 +10,21 @@ export function getStoredProvider() { try { return localStorage.getItem(PROVIDER
 export function setStoredProvider(provider) { try { localStorage.setItem(PROVIDER_STORAGE, provider); } catch { /* ignore */ } }
 
 /** Mirrors compileEndpoint() in compile-client.js: ?compiler=URL, window.VLAB_COMPILE_URL, or same-origin. */
-function aiEndpoint(loc = globalThis.location, win = globalThis) {
-  try { const q = new URLSearchParams(loc?.search || '').get('compiler'); if (q) return q.replace(/\/?$/, '/api/ai/generate-code'); } catch { /* ignore */ }
-  if (win.VLAB_COMPILE_URL) return win.VLAB_COMPILE_URL.replace(/\/api\/compile$/, '') + '/api/ai/generate-code';
-  return loc?.protocol === 'file:' ? null : '/api/ai/generate-code';
+function aiEndpoint(loc = globalThis.location, win = globalThis, path = '/api/ai/generate-code') {
+  try { const q = new URLSearchParams(loc?.search || '').get('compiler'); if (q) return q.replace(/\/?$/, path); } catch { /* ignore */ }
+  if (win.VLAB_COMPILE_URL) return win.VLAB_COMPILE_URL.replace(/\/api\/compile$/, '') + path;
+  return loc?.protocol === 'file:' ? null : path;
+}
+
+/** Describe a part → { ok, spec, note } (a validated part spec), or { ok:false, error, needsKey? }. */
+export async function createPart({ description, userKey = getStoredKey(), provider = getStoredProvider(), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal } = {}) {
+  if (!userKey) return { ok: false, needsKey: true, error: 'Add a free AI key first (open ✨ Ask AI → Settings) — then describe your part again.' };
+  if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask.' };
+  let res;
+  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description, userKey, provider }), signal }); }
+  catch (err) { if (err?.name === 'AbortError') throw err; return { ok: false, error: `Could not reach ${endpoint}.` }; }
+  let body = null; try { body = await res.json(); } catch { /* ignore */ }
+  return body || { ok: false, error: `No usable response (HTTP ${res.status}).` };
 }
 
 /**
