@@ -9,6 +9,7 @@
 import { PART_DEFS } from './parts.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { SETTINGS } from './controls.js';
+import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
 const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 24;
@@ -26,6 +27,12 @@ export const BEHAVIOURS = {
     roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', common: 'Common pin (SIG / Z)', enable: 'Enable (EN, active LOW — optional)' },
     lists: { select: 'Select pins, S0 first', channels: 'Channel pins, C0 first' },
     note: 'The common pin is joined (≈ 70 Ω) to channel n, where n is the binary number on the select pins (S0 = 1, S1 = 2, S2 = 4, S3 = 8). Works both ways, analog or digital, like a CD74HC4067 / 74HC4051. With EN HIGH (or no power) nothing is connected.',
+  },
+  logic: {
+    label: 'Rules (a chip: gates, shift register, counter, latch…)', roles: ['vcc', 'gnd'], optional: ['enable'],
+    roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', enable: 'Output enable (active LOW — optional)' },
+    rules: true,
+    note: 'You write what the chip remembers and what it drives, as arithmetic. A pin reads 1 above half the supply; rising(CLK) is true on the clock edge that just happened.',
   },
   'digital-sensor': { label: 'Digital sensor (on / off)', roles: ['vcc', 'gnd', 'out'], roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', out: 'Signal out' }, note: 'OUT is HIGH while it is triggered (click it while running), LOW otherwise.' },
 };
@@ -97,6 +104,11 @@ export function validatePartSpec(raw, { id } = {}) {
       behaviour.ohms = ohms >= 1 && ohms <= 1e7 ? +ohms.toPrecision(4) : 1000;
     }
     if (kind === 'led') behaviour.color = b.color in LED_COLORS ? b.color : DEFAULT_LED_COLOR;
+    if (kind === 'logic') {
+      const v = validateLogicBehaviour(b, pins.map(p => p.id), behaviour.roles);
+      if (v.ok) Object.assign(behaviour, { vars: v.behaviour.vars, rules: v.behaviour.rules, outputs: v.behaviour.outputs, analog: v.behaviour.analog });
+      else errors.push(...v.errors);
+    }
   }
   const breadboard = !!raw.breadboard;
   if (breadboard && pins.some(p => p.side !== 'bottom')) errors.push('To plug into a breadboard, every pin has to be on the bottom edge.');
@@ -140,13 +152,14 @@ export function partDefFromSpec(spec) {
   const { w, h, pins } = layoutSpec(spec);
   const k = spec.behaviour.kind;
   const props = k === 'analog-sensor' ? { level: 50 } : undefined;
+  const logic = k === 'logic' ? compileLogic(spec) : null;
   const roleText = [...Object.entries(spec.behaviour.roles).map(([r, p]) => `${p} = ${BEHAVIOURS[k].roleLabels[r]}`),
     ...Object.keys(BEHAVIOURS[k].lists || {}).map(l => `${BEHAVIOURS[k].lists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
   return {
     type: spec.id, name: spec.name, category: 'My parts', tag: 'cb-custom-part', custom: true, spec,
-    w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}),
+    w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}), ...(logic ? { logic } : {}),
     interactive: k === 'button' || k === 'digital-sensor',
-    aiNote: `Student-made part. ${BEHAVIOURS[k].note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
+    aiNote: `Student-made part. ${BEHAVIOURS[k].note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
   };
 }
 

@@ -13,6 +13,8 @@
 //   • DC motor        – a resistive load (≈ 20 Ω running); its speed follows the voltage across it
 //   • L298N           – two H-bridges: when powered (12V−GND ≥ 4.5 V) and enabled, each OUT is driven to (12V − 1.4 V) or GND by its IN
 //   • PIR sensor      – powers up when VCC−GND ≥ 4.5 V; OUT is a 3.3 V / 100 Ω source (relative to its GND) while motion is triggered
+import { logicDrive } from './logic.js';
+
 export const VCC = 5;
 const G_SOURCE = 1000;      // S  (1 mΩ)
 const G_PIN = 1 / 25;       // S  (ATmega328P output ≈ 25 Ω)
@@ -24,6 +26,7 @@ const G_PIR = 1 / 100;      // S  (module output ≈ 100 Ω)
 const PIR_OUT_V = 3.3, PIR_MIN_SUPPLY = 4.5;
 const G_CMP = 1 / 500;      // S  (comparator output on sensor modules)
 const CMP_MIN_SUPPLY = 3.0;
+const G_LOGIC = 1 / 40;     // S  (a CMOS output stage)
 const G_MUX = 1 / 70;       // S  (CD74HC4067 on-resistance)
 const G_BAT = 1 / 0.5;      // S  (battery internal resistance)
 const G_DRV = 1 / 1.5;      // S  (H-bridge output)
@@ -80,6 +83,7 @@ export function solve(circuit, drive) {
   circuit.elements.forEach(e => {
     if (e.kind === 'PIR') { use(e.vcc); use(e.out); use(e.gnd); }
     else if (e.kind === 'CMP' || e.kind === 'SRC') { use(e.vcc); use(e.gnd); use(e.out); if (e.ao != null) use(e.ao); }
+    else if (e.kind === 'LOGIC') { for (const n of Object.values(e.nets)) use(n); }
     else if (e.kind === 'MUX') { for (const k of [e.vcc, e.gnd, e.common, ...e.sel, ...e.ch]) use(k); if (e.en != null) use(e.en); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
@@ -93,6 +97,8 @@ export function solve(circuit, drive) {
   const cmps = circuit.elements.filter(e => e.kind === 'CMP');
   const cmpOn = new Map(cmps.map(c => [c.partId, false])), cmpHigh = new Map(cmps.map(c => [c.partId, false]));
   const srcs = circuit.elements.filter(e => e.kind === 'SRC'), srcOn = new Map(srcs.map(s => [s.partId, false]));
+  const logics = circuit.elements.filter(e => e.kind === 'LOGIC');
+  const logicOut = new Map(logics.map(l => [l.partId, new Map()]));     // partId → Map<pinId, volts above its own GND>
   const muxes = circuit.elements.filter(e => e.kind === 'MUX'), muxCh = new Map(muxes.map(m => [m.partId, -1]));   // -1 = nothing connected
   const drvs = circuit.elements.filter(e => e.kind === 'DRV');
   const drvKey = d => drvs.indexOf(d);
@@ -113,6 +119,15 @@ export function solve(circuit, drive) {
       if (e.kind === 'R' || e.kind === 'MOT') stamp(e.a, e.b, 1 / e.ohms);
       else if (e.kind === 'BAT') {
         if (e.a !== e.b) { stamp(e.a, e.b, G_BAT); b[idx.get(e.a)] += G_BAT * e.v; b[idx.get(e.b)] -= G_BAT * e.v; }
+      } else if (e.kind === 'LOGIC') {
+        const g = idx.get(e.gnd), driven = logicOut.get(e.partId);
+        for (const [pin, volts] of driven) {
+          const net = e.nets[pin];
+          if (net == null || !idx.has(net) || idx.get(net) === g) continue;
+          const i = idx.get(net), v = x[g] + volts;
+          A[i][i] += G_LOGIC; A[g][g] += G_LOGIC; A[i][g] -= G_LOGIC; A[g][i] -= G_LOGIC;
+          b[i] += G_LOGIC * v; b[g] -= G_LOGIC * v;
+        }
       } else if (e.kind === 'MUX') {
         const ch = muxCh.get(e.partId);
         if (ch >= 0 && ch < e.ch.length) stamp(e.common, e.ch[ch], G_MUX);
@@ -168,6 +183,12 @@ export function solve(circuit, drive) {
       const on2 = supply >= CMP_MIN_SUPPLY, hi = on2 && x[idx.get(c.ao)] - x[idx.get(c.gnd)] > supply / 2;
       if (on2 !== cmpOn.get(c.partId)) { cmpOn.set(c.partId, on2); changed = true; }
       if (hi !== cmpHigh.get(c.partId)) { cmpHigh.set(c.partId, hi); changed = true; }
+    }
+    for (const l of logics) {
+      const entry = drive.logic?.get(l.partId);
+      const next = entry ? logicDrive(entry.compiled, entry.state, l.roles, pin => (l.nets[pin] != null && idx.has(l.nets[pin]) ? x[idx.get(l.nets[pin])] : null)) : new Map();
+      const prev = logicOut.get(l.partId);
+      if (next.size !== prev.size || [...next].some(([k, v]) => Math.abs((prev.get(k) ?? NaN) - v) > 0.01)) { logicOut.set(l.partId, next); changed = true; }
     }
     for (const m of muxes) {
       const g = x[idx.get(m.gnd)], supply = x[idx.get(m.vcc)] - g, hi = net => x[idx.get(net)] - g > supply / 2;
@@ -233,7 +254,7 @@ export function solve(circuit, drive) {
     const st = drvState[drvKey(d)];
     if (!st.powered && d.ch.some((c, k) => st.ch[k].a || st.ch[k].b)) warnings.push({ partId: d.partId, text: 'The L298N has no motor power: connect its 12V terminal to a battery (or VIN) and its GND to the Arduino GND' });
   }
-  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, muxChannels: new Map(muxCh), warnings };
+  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, muxChannels: new Map(muxCh), logicOut, warnings };
 }
 
 /**
@@ -273,7 +294,7 @@ export function solveDrive(circuit, drive) {
   const motorVolts = new Map();
   for (const id of dominant.res.motorVolts.keys()) motorVolts.set(id, runs.reduce((s, r) => s + r.w * (r.res.motorVolts.get(id) || 0), 0));
   // a PWM'd driver: show the direction it has most of the time
-  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, muxChannels: dominant.res.muxChannels, warnings };
+  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, muxChannels: dominant.res.muxChannels, logicOut: dominant.res.logicOut, warnings };
 }
 
 /** A small 6 V hobby motor: ≈ 250 rpm at 6 V, nothing below the ≈ 0.6 V it takes to overcome friction. Sign = direction. */

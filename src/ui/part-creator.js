@@ -3,6 +3,7 @@
 // (src/core/custom-parts.js): it can only describe a part, never run code. Saved parts live in "My parts"
 // (this browser) and travel inside any project that uses them.
 import { BEHAVIOURS, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
+import { FUNCTIONS } from '../core/expr.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { customPartSVG } from '../parts/elements.js';
@@ -93,6 +94,104 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       f.append(el('span', { textContent: 'Light colour' }), sel); fields.push(f);
     }
     rolesEl.replaceChildren(...fields);
+    paintLogic();
+  }
+
+  /** The rules editor: what the chip remembers, what changes it, and what it drives. */
+  function paintLogic() {
+    const host = $('pcLogic');
+    if (draft.behaviour.kind !== 'logic') { host.replaceChildren(); return; }
+    const b = draft.behaviour;
+    b.vars ||= {}; b.rules ||= []; b.outputs ||= {}; b.analog ||= [];
+    const redraw = () => { paintLogic(); preview(); };
+    const expr = (value, placeholder, onChange) => {
+      const i = el('input', { className: 'pc-expr', value: value ?? '', placeholder, spellcheck: false });
+      i.addEventListener('input', () => { onChange(i.value); preview(); });
+      return i;
+    };
+    const section = (title, hint, addLabel, onAdd) => {
+      const h = el('div', { className: 'pc-pins-head' });
+      const left = el('b', { textContent: title });
+      if (hint) { const s = el('i', { textContent: ` ${hint}` }); left.append(s); }
+      const add = el('button', { type: 'button', textContent: addLabel });
+      add.addEventListener('click', () => { onAdd(); redraw(); });
+      h.append(left, add);
+      return h;
+    };
+    const rows = [];
+
+    rows.push(section('Memory', 'what it remembers', '+ Add', () => {
+      let n = 1; while (`n${n}` in draft.behaviour.vars) n++;
+      draft.behaviour.vars[`n${n}`] = 0;
+    }));
+    for (const [name, value] of Object.entries(b.vars)) {
+      const row = el('div', { className: 'pc-logic-row' });
+      const nm = el('input', { value: name, maxLength: 24, placeholder: 'name', spellcheck: false });
+      nm.addEventListener('change', () => {
+        const next = nm.value.trim(); if (!next || next === name) return;
+        const entries = Object.entries(draft.behaviour.vars).map(([k, v]) => [k === name ? next : k, v]);
+        draft.behaviour.vars = Object.fromEntries(entries);
+        for (const r of draft.behaviour.rules) if (name in (r.set || {})) { r.set[next] = r.set[name]; delete r.set[name]; }
+        redraw();
+      });
+      const val = el('input', { type: 'number', value: String(value), title: 'Value at power-up' });
+      val.addEventListener('input', () => { draft.behaviour.vars[name] = Number(val.value) || 0; preview(); });
+      const del = el('button', { type: 'button', textContent: '×', ariaLabel: `Remove ${name}` });
+      del.addEventListener('click', () => { delete draft.behaviour.vars[name]; redraw(); });
+      row.append(nm, el('span', { className: 'pc-eq', textContent: 'starts at' }), val, del);
+      rows.push(row);
+    }
+
+    rows.push(section('Rules', 'when this happens, set that', '+ Add', () => draft.behaviour.rules.push({ when: '', set: {} })));
+    b.rules.forEach((rule, ri) => {
+      const box = el('div', { className: 'pc-rule' });
+      const head = el('div', { className: 'pc-logic-row' });
+      head.append(el('span', { className: 'pc-eq', textContent: 'when' }), expr(rule.when, 'rising(CLK)', v => { rule.when = v; }));
+      const delRule = el('button', { type: 'button', textContent: '×', ariaLabel: `Remove rule ${ri + 1}` });
+      delRule.addEventListener('click', () => { draft.behaviour.rules.splice(ri, 1); redraw(); });
+      head.append(delRule);
+      box.append(head);
+      for (const [name, e] of Object.entries(rule.set || {})) {
+        const row = el('div', { className: 'pc-logic-row pc-set' });
+        const sel = el('select', { ariaLabel: 'Which memory value' });
+        for (const v of Object.keys(b.vars)) sel.append(el('option', { value: v, textContent: v }));
+        sel.value = name;
+        sel.addEventListener('change', () => { const val = rule.set[name]; delete rule.set[name]; rule.set[sel.value] = val; redraw(); });
+        const del = el('button', { type: 'button', textContent: '×', ariaLabel: `Remove ${name}` });
+        del.addEventListener('click', () => { delete rule.set[name]; redraw(); });
+        row.append(sel, el('span', { className: 'pc-eq', textContent: '=' }), expr(e, 'shift * 2 + DS', v => { rule.set[name] = v; }), del);
+        box.append(row);
+      }
+      const addSet = el('button', { type: 'button', className: 'pc-mini', textContent: '+ set a memory value' });
+      addSet.disabled = !Object.keys(b.vars).length;
+      addSet.title = addSet.disabled ? 'Add a memory value first' : '';
+      addSet.addEventListener('click', () => { const free = Object.keys(b.vars).find(v => !(v in rule.set)) || Object.keys(b.vars)[0]; rule.set[free] = ''; redraw(); });
+      box.append(addSet);
+      rows.push(box);
+    });
+
+    rows.push(section('Drives', 'what each pin puts out', '+ Add', () => {
+      const free = draft.pins.find(p => !(p.id in draft.behaviour.outputs) && p.id !== draft.behaviour.roles.vcc && p.id !== draft.behaviour.roles.gnd);
+      if (free) draft.behaviour.outputs[free.id] = '';
+    }));
+    for (const [pin, e] of Object.entries(b.outputs)) {
+      const row = el('div', { className: 'pc-logic-row' });
+      const sel = el('select', { ariaLabel: 'Which pin' });
+      for (const p of draft.pins) sel.append(el('option', { value: p.id, textContent: p.id }));
+      sel.value = pin;
+      sel.addEventListener('change', () => { const v = draft.behaviour.outputs[pin]; delete draft.behaviour.outputs[pin]; draft.behaviour.outputs[sel.value] = v; redraw(); });
+      const del = el('button', { type: 'button', textContent: '×', ariaLabel: `Stop driving ${pin}` });
+      del.addEventListener('click', () => { delete draft.behaviour.outputs[pin]; draft.behaviour.analog = draft.behaviour.analog.filter(a => a !== pin); redraw(); });
+      const an = el('input', { type: 'checkbox', checked: b.analog.includes(pin), title: 'Drive volts instead of HIGH/LOW' });
+      an.addEventListener('change', () => { draft.behaviour.analog = an.checked ? [...draft.behaviour.analog, pin] : draft.behaviour.analog.filter(a => a !== pin); preview(); });
+      const anLabel = el('label', { className: 'pc-analog', title: 'Drive volts instead of HIGH/LOW' });
+      anLabel.append(an, el('span', { textContent: 'V' }));
+      row.append(sel, el('span', { className: 'pc-eq', textContent: '=' }), expr(e, '(latch >> 0) & 1', v => { draft.behaviour.outputs[pin] = v; }), anLabel, del);
+      rows.push(row);
+    }
+
+    rows.push(el('div', { className: 'pc-note', textContent: `In an expression: pin names (1 above half the supply), your memory names, numbers, + - * / % & | ^ ~ << >>, comparisons, ? :, and ${Object.keys(FUNCTIONS).join(', ')}. rising(PIN) is true on the edge that just happened.` }));
+    host.replaceChildren(...rows);
   }
 
   function paintForm() {
@@ -162,7 +261,17 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     const keepId = draft.id;
     draft = { ...clone(res.spec), id: editing || keepId };
     paintForm();
-    status.textContent = `Here it is — check the pins, then save.${res.note ? ` Note: ${res.note}` : ''}`;
+    status.replaceChildren(el('span', { textContent: `Here it is — check the pins, then save.${res.note ? ` Note: ${res.note}` : ''}` }));
+    if (res.sources?.length) {
+      const list = el('span', { className: 'pc-sources' });
+      list.append(el('span', { textContent: ' Looked at: ' }));
+      res.sources.slice(0, 4).forEach((s, i) => {
+        if (i) list.append(el('span', { textContent: ', ' }));
+        const a = el('a', { href: s.url, textContent: s.title || s.url, target: '_blank', rel: 'noreferrer noopener' });
+        list.append(a);
+      });
+      status.append(list);
+    }
   }
 
   $('pcName').addEventListener('input', e => { draft.name = e.target.value; preview(); });

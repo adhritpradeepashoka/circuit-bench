@@ -563,3 +563,17 @@ button { cursor: pointer; }
 .pc-foot .pc-delete { color: #b42318; }
 .pc-spacer { flex: 1; }
 .pc-roles .pc-wide { grid-column: 1 / -1; }
+.pc-logic { margin-top: 10px; }
+.pc-logic-row { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; }
+.pc-logic-row input, .pc-logic-row select { height: 28px; min-width: 0; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; background: #fff; font: inherit; font-size: 12.5px; }
+.pc-logic-row input[type=number] { width: 72px; }
+.pc-logic-row > button { flex: none; width: 26px; height: 28px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--muted); cursor: pointer; }
+.pc-expr { flex: 1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.pc-eq { flex: none; font-size: 11.5px; color: var(--muted); }
+.pc-rule { padding: 6px; margin-bottom: 5px; border: 1px solid var(--line); border-radius: 8px; background: #fbfcfb; }
+.pc-rule .pc-set { padding-left: 16px; }
+.pc-mini { padding: 2px 8px; border: 1px dashed var(--line); border-radius: 6px; background: none; color: var(--muted); font-size: 11.5px; cursor: pointer; }
+.pc-mini:disabled { opacity: .5; cursor: not-allowed; }
+.pc-analog { display: flex; align-items: center; gap: 2px; font-size: 11px; color: var(--muted); }
+.pc-analog input { width: 13px; height: 13px; }
+.pc-sources a { color: var(--blue); }

@@ -240,45 +240,88 @@ const PROVIDERS = {
     label: 'Gemini',
     url: key => `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
     headers: () => ({ 'content-type': 'application/json' }),
-    body: prompt => JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 } }),
+    // search: Google Search grounding, so a part lookup is based on the real datasheet instead of recall.
+    body: (prompt, search) => JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 },
+      ...(search ? { tools: [{ google_search: {} }] } : {}),
+    }),
     errorMessage: body => body?.error?.message,
     text: body => body?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '',
+    sources: body => (body?.candidates?.[0]?.groundingMetadata?.groundingChunks || []).map(c => ({ title: c?.web?.title, url: c?.web?.uri })),
   },
   groq: {
     label: 'Groq',
     url: () => 'https://api.groq.com/openai/v1/chat/completions',
     headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
     // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
-    body: prompt => JSON.stringify({ model: 'openai/gpt-oss-120b', temperature: 0.2, messages: [{ role: 'user', content: prompt }] }),
+    body: (prompt, search) => JSON.stringify({
+      model: 'openai/gpt-oss-120b', temperature: 0.2, messages: [{ role: 'user', content: prompt }],
+      ...(search ? { tools: [{ type: 'browser_search' }] } : {}),
+    }),
     errorMessage: body => body?.error?.message,
     text: body => body?.choices?.[0]?.message?.content || '',
+    sources: body => (body?.choices?.[0]?.message?.executed_tools || []).flatMap(t => (Array.isArray(t?.search_results?.results) ? t.search_results.results : [])).map(r => ({ title: r?.title, url: r?.url })),
   },
 };
 
 /** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
 export function buildPartPrompt(description, problems = null) {
   const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}`).join('\n');
-  return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data. You cannot write code for it — the simulator only offers the behaviours listed below, so pick the closest one (or "none" if nothing fits, e.g. a connector or a module the simulator can't model) and say so in "note".
+  return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data.
+
+FIRST: if the part is a real, named component (a chip, a module, a breakout board), look it up on the web and use its ACTUAL pinout — the real pin names, in the real order, from the datasheet — and its real behaviour. Do not work from memory if you can check. Getting the pin names and order right matters more than anything else here, because the student will wire it up by those names.
+
+Then describe it with one of the behaviours below. Pick "logic" for any chip whose behaviour is digital and definable (gates, shift registers, counters, flip-flops, latches, decoders, drivers). Use "none" only as a last resort, for something genuinely unmodellable here (an RF module, a microcontroller, a regulator, an I2C/SPI peripheral with an internal register map) — and then say what is missing in "note".
 
 Behaviours:
 ${kinds}
 Extra fields: "resistor" needs "ohms" (1 – 10000000). "led" takes "color": one of red, green, blue, yellow, orange, white.
 
+THE "logic" BEHAVIOUR — how to write rules
+A logic part is described by three things, all written as arithmetic expressions (NOT code — there are no statements, no loops, no assignment inside an expression):
+  "vars":    { "<name>": <starting number> }   what the chip remembers. Omit or {} for a part with no memory (plain gates).
+  "rules":   [ { "when": "<expression>", "set": { "<var>": "<expression>" } } ]   run in order, every time any input changes.
+  "outputs": { "<pin id>": "<expression>" }    what each driven pin puts out: 0 = LOW, anything else = HIGH.
+  "analog":  [ "<pin id>" ]                    optional: these outputs are VOLTS above GND instead of HIGH/LOW.
+In an expression you may use:
+  - any pin name → 1 when that pin is above half the supply, else 0 (only pins whose id is letters, digits and _ can be named in an expression, so prefer names like "Q0", "OE", "MR")
+  - any of your own "vars" names → its current number
+  - v(PIN) → that pin's actual voltage above GND
+  - rising(PIN) / falling(PIN) / changed(PIN) → 1 on the edge that just happened
+  - numbers (12, 0x1F, 0b1010), + - * / %, & | ^ ~ << >>, == != < <= > >=, && || !, a ? b : c
+  - min, max, abs, floor, ceil, round, clamp(x,lo,hi), select(cond,a,b)
+Nothing else exists: no function calls of your own, no strings, no arrays, no property access. Every pin you name must be one of the pins you listed. Power the part through its "vcc" and "gnd" roles; below 2 V it switches off and forgets its vars. An optional "enable" role is an active-LOW output enable.
+
+Worked example — a 74HC595 serial-in / parallel-out shift register:
+  "pins": [ {"id":"Q1"},{"id":"Q2"},{"id":"Q3"},{"id":"Q4"},{"id":"Q5"},{"id":"Q6"},{"id":"Q7"},{"id":"GND"},{"id":"Q7S"},{"id":"MR"},{"id":"SHCP"},{"id":"STCP"},{"id":"OE"},{"id":"DS"},{"id":"Q0"},{"id":"VCC"} ],
+  "behaviour": {
+    "kind": "logic",
+    "roles": { "vcc": "VCC", "gnd": "GND", "enable": "OE" },
+    "vars": { "shift": 0, "latch": 0 },
+    "rules": [
+      { "when": "!MR", "set": { "shift": "0" } },
+      { "when": "rising(SHCP) && MR", "set": { "shift": "(shift * 2 + DS) % 256" } },
+      { "when": "rising(STCP)", "set": { "latch": "shift" } }
+    ],
+    "outputs": { "Q0": "latch & 1", "Q1": "(latch >> 1) & 1", "Q2": "(latch >> 2) & 1", "Q3": "(latch >> 3) & 1", "Q4": "(latch >> 4) & 1", "Q5": "(latch >> 5) & 1", "Q6": "(latch >> 6) & 1", "Q7": "(latch >> 7) & 1", "Q7S": "(shift >> 7) & 1" }
+  }
+A quad NAND gate (74HC00) needs no vars and no rules at all — just "outputs": { "Y1": "!(A1 && B1)", ... }.
+
 Student's description: ${String(description).slice(0, 1500)}
-${problems ? `\nYour previous answer was rejected for these reasons — fix them:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}
-Reply with EXACTLY ONE fenced \`\`\`json block and nothing else:
+${problems ? `\nYour previous answer was rejected by the simulator for these reasons — fix them and reply again:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}
+Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
 {
   "name": "<part name, max 40 chars>",
   "label": "<short text printed on the part, max 16 chars>",
   "description": "<one sentence: what it is and how to wire it>",
   "color": "<#rrggbb body colour that looks like the real part>",
   "textColor": "<#rrggbb, readable on that colour>",
-  "pins": [ { "id": "<pin name as printed on the real part: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
+  "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
   "breadboard": <true only if the real part plugs into a breadboard; then every pin must be on "bottom">,
-  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <number, resistor only>, "color": "<led only>", "select": [<mux only>], "channels": [<mux only>] },
-  "note": "<if the behaviour is only an approximation of the real part, say what is simplified — else empty>"
+  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <resistor only>, "color": "<led only>", "select": [<mux only>], "channels": [<mux only>], "vars": {<logic only>}, "rules": [<logic only>], "outputs": {<logic only>}, "analog": [<logic only>] },
+  "note": "<anything the simulator can't reproduce about the real part — timing, drive current, analog detail — else empty>"
 }
-Use the real part's pin names and order. 1–24 pins.`;
+For a DIP chip put pin 1 at the top of the left side and run anticlockwise, as on the real package. 1–24 pins.`;
 }
 
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
@@ -292,19 +335,27 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     }
     return p;
   }
-  async function ask(p, userKey, prompt) {
+  /**
+   * One call to the provider. `search` asks it to look things up on the web first (Google Search grounding /
+   * Groq browser search); keys and plans differ, so if the provider rejects the tool we quietly try again
+   * without it rather than failing the student's request.
+   */
+  async function ask(p, userKey, prompt, { search = false } = {}) {
     let res;
     try {
-      res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt) });
+      res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search) });
     } catch {
       throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
     }
     let body; try { body = await res.json(); } catch { body = null; }
     if (!res.ok) {
       const msg = p.errorMessage(body) || `HTTP ${res.status}`;
+      if (search && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false });
       throw new RequestError(`${p.label} error: ${msg}`, statusFor(res.status, msg));
     }
-    return p.text(body);
+    const sources = [];
+    for (const s of p.sources?.(body) || []) if (s?.url && !sources.some(x => x.url === s.url)) sources.push({ title: String(s.title || s.url).slice(0, 120), url: String(s.url).slice(0, 500) });
+    return { text: p.text(body), sources: sources.slice(0, 6), searched: search && sources.length > 0 };
   }
 
   /** Describe a part in words → a validated part spec (one repair round if the first answer doesn't validate). */
@@ -313,12 +364,12 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     const p = needKey(userKey, provider);
     let problems = null;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const text = await ask(p, userKey, buildPartPrompt(description, problems));
+      const { text, sources, searched } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true });
       const m = matchJsonFence(text);
       const raw = m ? tryParseJson(m[1]) : null;
       if (!raw) { problems = ['The reply had no valid json block.']; continue; }
       const v = validatePartSpec(raw);
-      if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300) };
+      if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300), sources, searched };
       problems = v.errors;
     }
     throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')} Try describing it differently, or build it in the Part Creator.`, 502);
@@ -328,7 +379,7 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = needKey(userKey, provider);
     const prompt = buildPrompt({ instruction, circuit, code, context, history });
-    const text = await ask(p, userKey, prompt);
+    const { text } = await ask(p, userKey, prompt);
     const result = parseReply(text);
     // actions:[] + code:null is not automatically a failure: a model that correctly decides nothing
     // needs to change (the sketch already does what was asked, or the circuit already has the part)

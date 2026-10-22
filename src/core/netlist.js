@@ -141,6 +141,14 @@ export function compile(state) {
       else if (kind === 'mux') {
         const b = PART_DEFS[part.type].spec.behaviour, n = pin => netOf(part.id, pin);
         elements.push({ kind: 'MUX', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), common: r('common'), en: roles.enable ? r('enable') : null, sel: b.select.map(n), ch: b.channels.map(n) });
+      } else if (kind === 'logic') {
+        const def = PART_DEFS[part.type];
+        elements.push({
+          kind: 'LOGIC', partId: part.id, partType: part.type, vcc: r('vcc'), gnd: r('gnd'),
+          roles, nets: Object.fromEntries(def.pins.map(q => [q.id, netOf(part.id, q.id)])),
+          outputs: (def.logic?.outputs || []).map(o => o.pin),
+        });
+        if (!def.logic) issues.push({ partId: part.id, text: `${def.name}: its rules could not be read, so it does nothing` });
       } else if (kind === 'digital-sensor') elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('out'), frac: 1, momentary: true });
     } else if (part.type === 'dht') {
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, 'SDA'), b: netOf(part.id, 'VCC'), ohms: 10000 });   // the module's pull-up on DATA

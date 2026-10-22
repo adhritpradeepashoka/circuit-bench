@@ -11,6 +11,7 @@ import { PART_DEFS } from '../src/core/parts.js';
 import { pinWorld, placeFlex as placeFlexTest, allPinsWorld as allPinsWorldTest } from '../src/core/geometry.js';
 import { compileSketch } from '../src/sim/compile-client.js';
 import { DEFAULT_SKETCH, EXAMPLES } from '../src/sim/examples.js';
+import { compileLogic, createLogicState, tickLogic, logicDrive } from '../src/core/logic.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = await build({ entryPoints: [join(root, 'test/fixtures/ui-entry.js')], bundle: true, write: false, format: 'iife', platform: 'browser', loader: { '.css': 'empty' } });
@@ -1535,4 +1536,63 @@ test('ui: Part Creator — build a part by hand, save & place it, it lands in My
   $('pcSave').click();
   assert.ok([...doc.querySelectorAll('#catalog .part-card b')].some(b => b.textContent === 'Buzzer'));
   assert.equal(pc.library().length, 2);
+});
+
+test('ui: the rules editor builds a working chip — memory, rules and driven pins, with bad expressions explained', () => {
+  const { w, editor } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false, error: 'not used here' }) });
+  const set = (el2, v, ev = 'input') => { el2.value = v; el2.dispatchEvent(new w.Event(ev, { bubbles: true })); };
+
+  $('createPartBtn').click();
+  set($('pcName'), 'D flip-flop');
+  for (const id of ['VCC', 'GND', 'CLK', 'D', 'Q']) {
+    if (!$('pcPins').querySelector(`input[value="${id}"]`)) $('pcAddPin').click();
+  }
+  const names = [...$('pcPins').querySelectorAll('.pc-pin input:first-child')];
+  ['VCC', 'GND', 'CLK', 'D', 'Q'].forEach((id, i) => set(names[i], id));
+  set($('pcKind'), 'logic', 'change');
+  assert.ok($('pcLogic').textContent.includes('Memory'), 'the rules editor appears');
+  set($('pcRole-vcc'), 'VCC', 'change'); set($('pcRole-gnd'), 'GND', 'change');
+
+  // memory: q starts at 0
+  $('pcLogic').querySelectorAll('.pc-pins-head button')[0].click();
+  const varRow = $('pcLogic').querySelector('.pc-logic-row');
+  set(varRow.querySelector('input'), 'q', 'change');
+  // rule: on a rising clock, q = D
+  $('pcLogic').querySelectorAll('.pc-pins-head button')[1].click();
+  const rule = $('pcLogic').querySelector('.pc-rule');
+  set(rule.querySelector('.pc-expr'), 'rising(CLK)');
+  rule.querySelector('.pc-mini').click();
+  const setRow = $('pcLogic').querySelector('.pc-rule .pc-set');
+  set(setRow.querySelector('.pc-expr'), 'D');
+  // drive Q
+  $('pcLogic').querySelectorAll('.pc-pins-head button')[2].click();
+  const outRow = [...$('pcLogic').querySelectorAll('.pc-logic-row')].pop();
+  set(outRow.querySelector('select'), 'Q', 'change');
+  set([...$('pcLogic').querySelectorAll('.pc-logic-row')].pop().querySelector('.pc-expr'), 'q');
+  assert.equal($('pcErrors').textContent, '', $('pcErrors').textContent);
+  assert.equal($('pcSave').disabled, false);
+
+  // a typo is explained in plain words instead of being saved
+  set([...$('pcLogic').querySelectorAll('.pc-logic-row')].pop().querySelector('.pc-expr'), 'qq + nope(');
+  assert.equal($('pcSave').disabled, true);
+  assert.match($('pcErrors').textContent, /Output Q/);
+  set([...$('pcLogic').querySelectorAll('.pc-logic-row')].pop().querySelector('.pc-expr'), 'q');
+
+  $('pcSave').click();
+  assert.equal($('partModal').hidden, true);
+  const placed = editor.state.parts.find(p => p.type.startsWith('custom-'));
+  assert.ok(placed);
+  const saved = editor.exportProject().customParts[0];
+  assert.deepEqual(JSON.parse(JSON.stringify(saved.behaviour.rules)), [{ when: 'rising(CLK)', set: { q: 'D' } }]);
+  assert.deepEqual({ ...saved.behaviour.outputs }, { Q: 'q' });
+  const compiled = compileLogic(saved);                      // the saved data really is simulatable
+  assert.equal(compiled.outputs.length, 1);
+  const state = createLogicState(compiled), v = { VCC: 5, GND: 0, CLK: 0, D: 5 };
+  const read = pin => v[pin] ?? null;
+  tickLogic(compiled, state, saved.behaviour.roles, read);
+  v.CLK = 5; tickLogic(compiled, state, saved.behaviour.roles, read);
+  assert.equal(state.vars.q, 1, 'the clock edge latched D');
+  assert.ok(logicDrive(compiled, state, saved.behaviour.roles, read).get('Q') > 4.5);
 });

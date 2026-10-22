@@ -76,13 +76,17 @@ test('AI part creation: the reply must pass the validator; one repair round with
     '```json\n' + JSON.stringify({ ...sound, note: 'DO is not simulated' }) + '\n```',
   ];
   const prompts = [];
-  const fetchImpl = async (_u, o) => { prompts.push(JSON.parse(o.body).contents[0].parts[0].text); const text = replies.shift(); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text }] } }] }) }; };
+  const bodies = [];
+  const fetchImpl = async (_u, o) => { const b = JSON.parse(o.body); bodies.push(b); prompts.push(b.contents[0].parts[0].text); const text = replies.shift(); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text }] }, groundingMetadata: { groundingChunks: [{ web: { title: 'KY-038 datasheet', uri: 'https://example.com/ky038' } }] } }] }) }; };
   const ai = createAiService({ fetchImpl });
   const r = await ai.createPart({ description: 'KY-038 sound sensor', userKey: 'k' });
   assert.equal(r.ok, true); assert.equal(r.spec.name, 'Sound sensor'); assert.equal(r.note, 'DO is not simulated');
   assert.equal(prompts.length, 2);
+  assert.deepEqual(bodies[0].tools, [{ google_search: {} }], 'the part lookup asks the model to search the web');
+  assert.deepEqual(r.sources, [{ title: 'KY-038 datasheet', url: 'https://example.com/ky038' }]);
   assert.match(prompts[1], /previous answer was rejected[\s\S]*Signal out: pick which pin/);
-  assert.match(buildPartPrompt('x'), /cannot write code/);
+  assert.match(buildPartPrompt('x'), /look it up on the web/);
+  assert.match(buildPartPrompt('x'), /no statements, no loops, no assignment/);
   await assert.rejects(ai.createPart({ description: '', userKey: 'k' }), /Describe the part/);
   await assert.rejects(ai.createPart({ description: 'x' }), /API key/);
 });
@@ -125,4 +129,96 @@ test('multiplexer behaviour: the select pins pick which channel reaches SIG; EN 
   const unpowered = compile({ parts, wires: base.filter(w => w.id !== 'p') });
   assert.equal(solveDrive(unpowered, { pins: new Map([['6', 'L']]), pressed: new Set(), duty: new Map() }).muxChannels.get('mx'), -1);
   assert.match(describeCustomSpecs([s]), /Select pins, S0 first: S0, S1, S2, S3/);
+});
+
+// ── the rules language ──────────────────────────────────────────────────
+import { parseExpr, runExpr } from '../src/core/expr.js';
+import { compileLogic, createLogicState, tickLogic, logicDrive } from '../src/core/logic.js';
+
+test('expressions: arithmetic only — no code can reach out of one, however it is written', () => {
+  const ctx = { get: n => ({ a: 3, b: 4 }[n] ?? 0), pin: () => 0 };
+  assert.equal(runExpr('(a + b) * 2 % 10', ctx), 4);
+  assert.equal(runExpr('a > b ? 1 : 0b101 & 0x3', ctx), 1);
+  assert.equal(runExpr('clamp(a * 9, 0, 10) + min(a, b)', ctx), 13);
+  assert.equal(runExpr('1 / 0', ctx), 0, 'no infinities leak out');
+  for (const bad of ['fetch("x")', 'globalThis.x', 'A-B.C', 'a.constructor', 'a = 2', '[1,2]', '`x`', 'a ? 1', 'import(1)', '()=>1', 'eval(1)', 'a["b"]']) {
+    assert.throws(() => parseExpr(bad), undefined, `${bad} is rejected`);
+  }
+  // A bare word like "window" is only ever a name to look up — there is no object behind it, and a part
+  // that mentions one is refused when it's neither a pin nor one of its own memory values.
+  assert.equal(runExpr('window + 1', { get: () => undefined, pin: () => 0 }), 1);
+  assert.deepEqual([...parseExpr('window').names], ['window']);
+  assert.throws(() => parseExpr('a'.padEnd(401, '+a')), /too long/);
+  assert.throws(() => parseExpr('('.repeat(60) + '1' + ')'.repeat(60)), /too deeply/);
+});
+
+const sr595 = () => ({
+  name: '74HC595 shift register', pins: ['VCC', 'GND', 'OE', 'MR', 'DS', 'SHCP', 'STCP', 'Q0', 'Q1', 'Q2'].map(id => ({ id })),
+  behaviour: {
+    kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND', enable: 'OE' }, vars: { shift: 0, latch: 0 },
+    rules: [{ when: '!MR', set: { shift: '0' } }, { when: 'rising(SHCP) && MR', set: { shift: '(shift * 2 + DS) % 256' } }, { when: 'rising(STCP)', set: { latch: 'shift' } }],
+    outputs: { Q0: 'latch & 1', Q1: '(latch >> 1) & 1', Q2: '(latch >> 2) & 1' },
+  },
+});
+
+test('rules parts: a 74HC595 written as rules really shifts, latches, clears and honours its enable pin', () => {
+  const spec = validatePartSpec({ ...sr595(), id: 'custom-595-u' }).spec;
+  const compiled = compileLogic(spec), state = createLogicState(compiled);
+  const roles = spec.behaviour.roles;
+  const v = { VCC: 5, GND: 0, OE: 0, MR: 5, DS: 0, SHCP: 0, STCP: 0 };
+  const read = p => v[p] ?? null;
+  const tick = () => tickLogic(compiled, state, roles, read);
+  const out = () => { const d = logicDrive(compiled, state, roles, read); return ['Q0', 'Q1', 'Q2'].map(p => (d.has(p) ? (d.get(p) > 2.5 ? 1 : 0) : null)); };
+  tick();
+  for (const bit of [1, 0, 1]) { v.DS = bit * 5; v.SHCP = 0; tick(); v.SHCP = 5; tick(); }     // MSB first → 0b101
+  assert.equal(state.vars.shift, 5);
+  assert.deepEqual(out(), [0, 0, 0], 'nothing on the outputs until it is latched');
+  v.STCP = 0; tick(); v.STCP = 5; tick();
+  assert.equal(state.vars.latch, 5);
+  assert.deepEqual(out(), [1, 0, 1]);
+  v.OE = 5;
+  assert.deepEqual(out(), [null, null, null], 'OE HIGH lets the outputs go');
+  v.OE = 0; v.MR = 0; tick();
+  assert.equal(state.vars.shift, 0, 'MR LOW clears it');
+  v.VCC = 0; tick();
+  assert.deepEqual(out(), [null, null, null]);
+  assert.deepEqual(state.vars, { shift: 0, latch: 0 }, 'losing power forgets everything');
+});
+
+test('rules parts: a NAND gate needs no memory, and a bad rule is reported rather than loaded', () => {
+  const nand = validatePartSpec({ name: '74HC00', pins: ['VCC', 'GND', 'A', 'B', 'Y'].map(id => ({ id })), behaviour: { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, outputs: { Y: '!(A && B)' } } });
+  assert.ok(nand.ok, nand.errors?.join());
+  const compiled = compileLogic(nand.spec), state = createLogicState(compiled);
+  const v = { VCC: 5, GND: 0, A: 5, B: 5 };
+  const drive = () => logicDrive(compiled, state, { vcc: 'VCC', gnd: 'GND' }, p => v[p] ?? null).get('Y');
+  assert.ok(drive() < 0.5); v.B = 0; assert.ok(drive() > 4.5);
+  const bad = validatePartSpec({ name: 'x', pins: ['VCC', 'GND', 'Y'].map(id => ({ id })), behaviour: { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: { n: 0 }, rules: [{ when: 'rising(NOPE)', set: { missing: '1' } }], outputs: { Y: 'n', GND: '1' } } });
+  assert.equal(bad.ok, false);
+  assert.ok(bad.errors.some(e => /no pin called “NOPE”/.test(e)), bad.errors.join());
+  assert.ok(bad.errors.some(e => /“missing” isn't one of this part's memory values/.test(e)));
+  assert.ok(bad.errors.some(e => /GND is the power pin/.test(e)));
+});
+
+test('rules parts: wired to an Arduino, the shift register drives a real LED from the solver', () => {
+  const spec = validatePartSpec({ ...sr595(), id: 'custom-595-s' }).spec;
+  registerCustomPart(spec);
+  const compiled = compileLogic(spec), state = createLogicState(compiled);
+  const W = (id, a, ap, b, bp) => ({ id, a: { part: a, pin: ap }, b: { part: b, pin: bp }, style: 'straight', color: '#000', width: 2 });
+  const parts = [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0, rot: 0 }, { id: 'sr', type: spec.id, x: 500, y: 0, rot: 0 },
+    { id: 'r', type: 'resistor', x: 900, y: 0, rot: 0, ohms: 220 }, { id: 'led', type: 'led', x: 1100, y: 0, rot: 0, color: 'red' }];
+  const c = compile({
+    parts,
+    wires: [W('v', 'uno-1', '5V', 'sr', 'VCC'), W('g', 'uno-1', 'GND.1', 'sr', 'GND'), W('oe', 'uno-1', 'GND.2', 'sr', 'OE'), W('mr', 'uno-1', '5V', 'sr', 'MR'),
+      W('d', 'uno-1', '2', 'sr', 'DS'), W('c1', 'uno-1', '3', 'sr', 'SHCP'), W('l', 'uno-1', '4', 'sr', 'STCP'),
+      W('q', 'sr', 'Q0', 'r', '1'), W('rl', 'r', '2', 'led', 'A'), W('lg', 'led', 'C', 'uno-1', 'GND.3')],
+  });
+  const logic = new Map([['sr', { compiled, state }]]);
+  let res = null;
+  const read = pin => (res ? res.voltage(c.netOf('sr', pin)) : pin === 'VCC' || pin === 'MR' ? 5 : 0);
+  const set = pins => { res = solveDrive(c, { pins: new Map(Object.entries(pins)), pressed: new Set(), duty: new Map(), logic }); tickLogic(compiled, state, spec.behaviour.roles, read); res = solveDrive(c, { pins: new Map(Object.entries(pins)), pressed: new Set(), duty: new Map(), logic }); };
+  set({ 2: 'H', 3: 'L', 4: 'L' }); set({ 2: 'H', 3: 'H', 4: 'L' });        // shift a 1 in
+  assert.ok((res.ledCurrent.get('led') || 0) < 1e-5, 'not latched yet');
+  set({ 2: 'L', 3: 'L', 4: 'L' }); set({ 2: 'L', 3: 'L', 4: 'H' });        // latch
+  assert.ok(res.ledCurrent.get('led') > 0.008, `Q0 lights the LED: ${res.ledCurrent.get('led')}`);
+  assert.equal(res.logicOut.get('sr').get('Q0') > 2.5, true);
 });

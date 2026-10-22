@@ -12,6 +12,7 @@ import { Lcd1602 } from '../parts/lcd1602.js';
 import { Dht } from '../parts/dht.js';
 import { dhtParts } from '../core/digital.js';
 import { motorRpm } from '../core/solver.js';
+import { createLogicState, tickLogic, MIN_SUPPLY } from '../core/logic.js';
 
 const I2C_MODELS = { mpu6050: () => new Mpu6050(), ssd1306: () => new Ssd1306(), lcd1602: () => new Lcd1602() };
 
@@ -80,6 +81,8 @@ export class Simulation {
     }
     this.code.setRunning?.(true);
     this.models = new Map(); this.i2cInfo = []; this.i2cVersion = -1; this.dhts = new Map(); this.dhtInfo = [];
+    this.logicInfo = []; this.logicStates = new Map(); this.logicPorts = []; this.logicMap = new Map();
+    this.onLogicPort = () => this.logicTick();
     this.i2cPrepare();                                  // attach I²C devices before setup() runs its Wire.begin()/begin() calls
     this.running = true; this.paused = false; this.error = null; this.lastSig = ''; this.result = null;
     this.editor.setRunning(true);
@@ -99,6 +102,7 @@ export class Simulation {
     for (const id of [...this.pressed]) this.editor.setButtonPressed(id, false);
     this.pressed.clear();
     this.editor.setRunning(false); this.editor.probe = null;
+    this.logicDetach(); this.logicInfo = []; this.logicStates = new Map(); this.logicMap = new Map();
     for (const m of this.dhts?.values() || []) m.detach();
     this.dhts = new Map(); this.dhtInfo = [];
     this.mcu = null; this.result = null;
@@ -155,7 +159,8 @@ export class Simulation {
     if (sig === this.lastSig && this.result) return;
     this.lastSig = sig;
     this.modes = modes;
-    this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty });
+    this.logicTick();                                   // inputs that aren't MCU pins (a switch, another chip) settle here
+    this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty, logic: this.logicMap });
     const digitalDriven = new Set(this.dhtInfo.filter(d => d.attached).map(d => d.pin.name));   // a DHT times its own line, cycle by cycle
     for (const pin of circuit.uno.pins) {
       const m = modes.get(pin.name);
@@ -181,6 +186,7 @@ export class Simulation {
       for (const id of [...this.models.keys()]) if (!this.i2cInfo.some(d => d.partId === id)) this.models.delete(id);
       for (const d of this.i2cInfo) if (!this.models.has(d.partId)) this.models.set(d.partId, I2C_MODELS[d.type]());
       this.mcu.i2c.setDevices(new Map(this.i2cInfo.filter(d => d.attached).map(d => [d.address, this.models.get(d.partId)])));
+      this.logicPrepare(circuit);
       this.dhtInfo = dhtParts(circuit, this.editor.state.parts);
       for (const [id, m] of [...this.dhts]) if (!this.dhtInfo.some(d => d.partId === id && d.model === m.model)) { m.detach(); this.dhts.delete(id); }
       for (const d of this.dhtInfo) {
@@ -193,6 +199,48 @@ export class Simulation {
     for (const d of this.i2cInfo) {
       const m = this.models.get(d.partId);
       if (m instanceof Mpu6050) m.setPose(this.editor.partById(d.partId) || {}, this.mcu.seconds);
+    }
+  }
+
+  /** Student-made "rules" parts (src/core/logic.js): give each one its state, and watch the MCU pins it listens to. */
+  logicPrepare(circuit) {
+    this.logicDetach();
+    this.logicInfo = [];
+    for (const e of circuit.elements.filter(x => x.kind === 'LOGIC')) {
+      const compiled = PART_DEFS[e.partType]?.logic;
+      if (!compiled) continue;
+      const state = this.logicStates.get(e.partId) || createLogicState(compiled);
+      const mcu = new Map();
+      for (const [pin, net] of Object.entries(e.nets)) {
+        const bp = circuit.uno.pins.find(p => p.net === net && p.port);
+        if (bp) mcu.set(pin, bp);
+      }
+      this.logicInfo.push({ ...e, compiled, state, mcu });
+    }
+    this.logicStates = new Map(this.logicInfo.map(i => [i.partId, i.state]));
+    this.logicMap = new Map(this.logicInfo.map(i => [i.partId, { compiled: i.compiled, state: i.state }]));
+    // A clock from the firmware can pulse thousands of times inside one animation frame, so listen to the
+    // port itself rather than sampling once a frame — the chip sees every edge exactly as the sketch sent it.
+    const ports = new Set(this.logicInfo.flatMap(i => [...i.mcu.values()].map(p => p.port)));
+    for (const name of ports) {
+      const port = this.mcu?.ports[name];
+      if (port) { port.addListener(this.onLogicPort); this.logicPorts.push(port); }
+    }
+  }
+  logicDetach() {
+    for (const p of this.logicPorts) p.removeListener(this.onLogicPort);
+    this.logicPorts = [];
+  }
+  /** One evaluation of every rules-part, with MCU-driven pins read straight from the chip. */
+  logicTick() {
+    for (const info of this.logicInfo) {
+      const read = pin => {
+        const bp = info.mcu.get(pin);
+        if (bp) { const m = this.mcu.pinMode(bp); if (m === 'H') return 5; if (m === 'L') return 0; }
+        const net = info.nets[pin];
+        return net == null ? null : this.result?.voltage(net) ?? (bp ? null : null);
+      };
+      tickLogic(info.compiled, info.state, info.roles, read);
     }
   }
 
@@ -308,12 +356,21 @@ export class Simulation {
     });
     const dht = this.dhtInfo.map(d => ({ id: d.partId, ...(this.dhts.get(d.partId)?.summary() || { model: d.model }), dataPin: d.pin ? `D${d.pin.name}`.replace(/^DA/, 'A') : null, ...(d.problems.length ? { problems: d.problems } : {}) }));
     const motors = [...(this.result.motorVolts || [])].map(([id, v]) => ({ id, volts: r2(v), rpm: motorRpm(v) }));
+    const logic = this.logicInfo.map(i => {
+      const out = this.result.logicOut?.get(i.partId);
+      const supply = (this.result.voltage(i.nets[i.roles.vcc]) ?? 0) - (this.result.voltage(i.nets[i.roles.gnd]) ?? 0);
+      return {
+        id: i.partId, type: i.partType, powered: supply >= MIN_SUPPLY,
+        memory: Object.fromEntries(Object.entries(i.state.vars).map(([k, v]) => [k, r2(v)])),
+        driving: out && out.size ? Object.fromEntries([...out].map(([p, v]) => [p, v > 2.5 ? 'HIGH' : v < 0.7 ? 'LOW' : `${r2(v)} V`])) : null,
+      };
+    });
     const muxes = [...(this.result.muxChannels || [])].map(([id, ch]) => ({ id, channel: ch >= 0 ? ch : null }));
     const drivers = [...(this.result.drivers || [])].map(([id, d]) => ({ id, powered: d.powered, motorA: d.ch[0] || 'stopped', motorB: d.ch[1] || 'stopped' }));
     const unanswered = this.i2cUnanswered();
     return {
       running: true, paused: this.paused, seconds: r2(this.mcu.seconds), board: this.boardName, chip: this.chipName,
-      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(muxes.length ? { muxes } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
+      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(muxes.length ? { muxes } : {}), ...(logic.length ? { logic } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
       warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
     };
   }

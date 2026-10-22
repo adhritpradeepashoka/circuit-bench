@@ -67,13 +67,40 @@ pressing anywhere else on a part moves it. Wire-only mode (`W`) is still there f
 
 ### Part Creator: make your own parts
 
-Parts → My parts → **Create a part**. Give it a name, colour and pins (on any side, or all on the bottom edge to plug
-into a breadboard), and pick what it does from a fixed menu: just connections, a resistor/load, an LED, a push button,
-an analog sensor (a slider sets OUT = VCC × position) or a digital sensor (click to trigger). Or type a description and
-**Make it**: the AI fills in the same form (`POST /api/ai/create-part`). A part is a declarative spec — never code —
-and every spec, typed, imported or AI-made, goes through `validatePartSpec()` in `src/core/custom-parts.js`. Saved parts
-stay in this browser's "My parts" and are embedded in any project file that uses them (`customParts`), so a shared
-project opens with its parts. The AI chat sees them in its catalogue and can place and wire them.
+Parts → My parts → **Create a part**. Give it a name, colour and pins (on any side, or all on the bottom edge to
+plug into a breadboard), then say what it does. Simple parts pick a ready-made behaviour: just connections, a
+resistor/load, an LED, a push button, an analog sensor (a slider sets OUT = VCC × position), a digital sensor
+(click to trigger), or a multiplexer (select pins pick which channel reaches the common pin).
+
+**Rules parts.** A menu of behaviours always runs out, so a part can instead be described by *rules* — enough for
+most discrete logic: gates, shift registers, counters, flip-flops, latches, decoders. A rules part says what it
+remembers (`vars`), what changes it (`rules`: `when` an expression is true, `set` a value) and what it drives
+(`outputs`: one expression per pin). For example a 74HC595:
+
+```json
+"vars":    { "shift": 0, "latch": 0 },
+"rules":   [ { "when": "rising(SHCP) && MR", "set": { "shift": "(shift * 2 + DS) % 256" } },
+             { "when": "rising(STCP)",       "set": { "latch": "shift" } } ],
+"outputs": { "Q0": "latch & 1", "Q1": "(latch >> 1) & 1" }
+```
+
+Those expressions are **not code**. `src/core/expr.js` parses them into a tree of numbers and arithmetic and
+evaluates that tree directly — no `eval`, no `Function`, no strings, no property access, no loops, and the only
+callable names are a fixed list (`min`, `max`, `abs`, `clamp`, `v`, `rising`, `falling`, `changed`, …). The worst a
+hostile expression can do is return a wrong number. Depth, length and node count are capped so it can't hang the
+page. A pin reads 1 above half the supply; below 2 V the part switches off and forgets its state, like a real chip.
+
+Rules parts are evaluated on **every MCU pin change**, not once per frame, so a `shiftOut()` burst of thousands of
+clock pulses inside one animation frame is seen edge by edge exactly as the firmware sent it.
+
+**Describe it to the AI.** Type what the part is and press *Make it*: the AI searches the web for the real
+datasheet first (Google Search grounding on Gemini, browser search on Groq), so it uses the actual pin names and
+order, then fills in the same form — including the rules for a logic chip. It shows which pages it used. Its reply
+is a spec like any other: it goes through `validatePartSpec()`, and if it doesn't check out the AI gets the exact
+reasons and one repair round. Nothing the AI returns is ever executed.
+
+Saved parts stay in this browser's "My parts" and are embedded in any project file that uses them (`customParts`),
+so a shared project opens with its parts. The AI chat sees them in its catalogue and can place and wire them.
 
 ### Boards: Uno, Nano, Mega 2560
 
