@@ -24,6 +24,7 @@ const G_PIR = 1 / 100;      // S  (module output ≈ 100 Ω)
 const PIR_OUT_V = 3.3, PIR_MIN_SUPPLY = 4.5;
 const G_CMP = 1 / 500;      // S  (comparator output on sensor modules)
 const CMP_MIN_SUPPLY = 3.0;
+const G_MUX = 1 / 70;       // S  (CD74HC4067 on-resistance)
 const G_BAT = 1 / 0.5;      // S  (battery internal resistance)
 const G_DRV = 1 / 1.5;      // S  (H-bridge output)
 const DRV_DROP = 1.4, DRV_MIN_SUPPLY = 4.5, LOGIC_HIGH = 2.3;
@@ -79,6 +80,7 @@ export function solve(circuit, drive) {
   circuit.elements.forEach(e => {
     if (e.kind === 'PIR') { use(e.vcc); use(e.out); use(e.gnd); }
     else if (e.kind === 'CMP' || e.kind === 'SRC') { use(e.vcc); use(e.gnd); use(e.out); if (e.ao != null) use(e.ao); }
+    else if (e.kind === 'MUX') { for (const k of [e.vcc, e.gnd, e.common, ...e.sel, ...e.ch]) use(k); if (e.en != null) use(e.en); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
   });
@@ -91,6 +93,7 @@ export function solve(circuit, drive) {
   const cmps = circuit.elements.filter(e => e.kind === 'CMP');
   const cmpOn = new Map(cmps.map(c => [c.partId, false])), cmpHigh = new Map(cmps.map(c => [c.partId, false]));
   const srcs = circuit.elements.filter(e => e.kind === 'SRC'), srcOn = new Map(srcs.map(s => [s.partId, false]));
+  const muxes = circuit.elements.filter(e => e.kind === 'MUX'), muxCh = new Map(muxes.map(m => [m.partId, -1]));   // -1 = nothing connected
   const drvs = circuit.elements.filter(e => e.kind === 'DRV');
   const drvKey = d => drvs.indexOf(d);
   const drvState = drvs.map(() => ({ powered: false, ch: [{ en: false, a: false, b: false }, { en: false, a: false, b: false }] }));
@@ -110,6 +113,9 @@ export function solve(circuit, drive) {
       if (e.kind === 'R' || e.kind === 'MOT') stamp(e.a, e.b, 1 / e.ohms);
       else if (e.kind === 'BAT') {
         if (e.a !== e.b) { stamp(e.a, e.b, G_BAT); b[idx.get(e.a)] += G_BAT * e.v; b[idx.get(e.b)] -= G_BAT * e.v; }
+      } else if (e.kind === 'MUX') {
+        const ch = muxCh.get(e.partId);
+        if (ch >= 0 && ch < e.ch.length) stamp(e.common, e.ch[ch], G_MUX);
       } else if (e.kind === 'SRC') {
         // a student-made sensor: OUT = frac × (VCC − GND) through 100 Ω, only while it has a supply (digital: only while triggered)
         const supply = x[idx.get(e.vcc)] - x[idx.get(e.gnd)];
@@ -162,6 +168,11 @@ export function solve(circuit, drive) {
       const on2 = supply >= CMP_MIN_SUPPLY, hi = on2 && x[idx.get(c.ao)] - x[idx.get(c.gnd)] > supply / 2;
       if (on2 !== cmpOn.get(c.partId)) { cmpOn.set(c.partId, on2); changed = true; }
       if (hi !== cmpHigh.get(c.partId)) { cmpHigh.set(c.partId, hi); changed = true; }
+    }
+    for (const m of muxes) {
+      const g = x[idx.get(m.gnd)], supply = x[idx.get(m.vcc)] - g, hi = net => x[idx.get(net)] - g > supply / 2;
+      const ch = supply < 2 || (m.en != null && hi(m.en)) ? -1 : m.sel.reduce((n, s, i) => n | (hi(s) ? 1 << i : 0), 0);
+      if (ch !== muxCh.get(m.partId)) { muxCh.set(m.partId, ch); changed = true; }
     }
     for (const s of srcs) {
       const next = x[idx.get(s.vcc)] - x[idx.get(s.gnd)] >= 2.5;
@@ -222,7 +233,7 @@ export function solve(circuit, drive) {
     const st = drvState[drvKey(d)];
     if (!st.powered && d.ch.some((c, k) => st.ch[k].a || st.ch[k].b)) warnings.push({ partId: d.partId, text: 'The L298N has no motor power: connect its 12V terminal to a battery (or VIN) and its GND to the Arduino GND' });
   }
-  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, warnings };
+  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, muxChannels: new Map(muxCh), warnings };
 }
 
 /**
@@ -262,7 +273,7 @@ export function solveDrive(circuit, drive) {
   const motorVolts = new Map();
   for (const id of dominant.res.motorVolts.keys()) motorVolts.set(id, runs.reduce((s, r) => s + r.w * (r.res.motorVolts.get(id) || 0), 0));
   // a PWM'd driver: show the direction it has most of the time
-  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, warnings };
+  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, muxChannels: dominant.res.muxChannels, warnings };
 }
 
 /** A small 6 V hobby motor: ≈ 250 rpm at 6 V, nothing below the ≈ 0.6 V it takes to overcome friction. Sign = direction. */

@@ -562,3 +562,4 @@ button { cursor: pointer; }
 .pc-foot .pc-primary:disabled { opacity: .5; cursor: not-allowed; }
 .pc-foot .pc-delete { color: #b42318; }
 .pc-spacer { flex: 1; }
+.pc-roles .pc-wide { grid-column: 1 / -1; }

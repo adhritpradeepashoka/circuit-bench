@@ -308,11 +308,12 @@ export class Simulation {
     });
     const dht = this.dhtInfo.map(d => ({ id: d.partId, ...(this.dhts.get(d.partId)?.summary() || { model: d.model }), dataPin: d.pin ? `D${d.pin.name}`.replace(/^DA/, 'A') : null, ...(d.problems.length ? { problems: d.problems } : {}) }));
     const motors = [...(this.result.motorVolts || [])].map(([id, v]) => ({ id, volts: r2(v), rpm: motorRpm(v) }));
+    const muxes = [...(this.result.muxChannels || [])].map(([id, ch]) => ({ id, channel: ch >= 0 ? ch : null }));
     const drivers = [...(this.result.drivers || [])].map(([id, d]) => ({ id, powered: d.powered, motorA: d.ch[0] || 'stopped', motorB: d.ch[1] || 'stopped' }));
     const unanswered = this.i2cUnanswered();
     return {
       running: true, paused: this.paused, seconds: r2(this.mcu.seconds), board: this.boardName, chip: this.chipName,
-      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
+      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(muxes.length ? { muxes } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
       warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
     };
   }

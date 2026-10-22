@@ -101,6 +101,7 @@ export function describeContext(context) {
         for (const p of list(d.problems, 5)) out.push(`    problem: ${str(p, 200)}`);
       }
       for (const m of list(s.motors, 6)) if (m && typeof m === 'object') out.push(`  Motor ${str(m.id, 30)}: ${Number(m.volts)} V across it, ${Number(m.rpm) ? `${Math.abs(Number(m.rpm))} rpm ${Number(m.rpm) > 0 ? 'forward' : 'reverse'}` : 'not turning'}`);
+      for (const m of list(s.muxes, 6)) if (m && typeof m === 'object') out.push(`  Multiplexer ${str(m.id, 30)}: ${m.channel == null ? 'no channel connected (unpowered or EN HIGH)' : `common pin joined to channel ${Number(m.channel)}`}`);
       for (const d of list(s.drivers, 6)) if (d && typeof d === 'object') out.push(`  Motor driver ${str(d.id, 30)}: ${d.powered ? 'powered' : 'NO motor power'}; motor A ${str(d.motorA, 10)}, motor B ${str(d.motorB, 10)}`);
       const ua = list(s.i2cUnanswered, 8).map(a => str(a, 6));
       if (ua.length) out.push(`  I²C: the sketch addressed ${ua.join(', ')}, and nothing on the bus has that address`);
@@ -256,7 +257,7 @@ const PROVIDERS = {
 
 /** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
 export function buildPartPrompt(description, problems = null) {
-  const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}`).join('\n');
+  const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}`).join('\n');
   return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data. You cannot write code for it — the simulator only offers the behaviours listed below, so pick the closest one (or "none" if nothing fits, e.g. a connector or a module the simulator can't model) and say so in "note".
 
 Behaviours:
@@ -274,7 +275,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else:
   "textColor": "<#rrggbb, readable on that colour>",
   "pins": [ { "id": "<pin name as printed on the real part: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
   "breadboard": <true only if the real part plugs into a breadboard; then every pin must be on "bottom">,
-  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <number, resistor only>, "color": "<led only>" },
+  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <number, resistor only>, "color": "<led only>", "select": [<mux only>], "channels": [<mux only>] },
   "note": "<if the behaviour is only an approximation of the real part, say what is simplified — else empty>"
 }
 Use the real part's pin names and order. 1–24 pins.`;

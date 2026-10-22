@@ -21,6 +21,12 @@ export const BEHAVIOURS = {
   led: { label: 'Light (an LED inside)', roles: ['anode', 'cathode'], roleLabels: { anode: 'Anode (+)', cathode: 'Cathode (−)' }, note: 'Lights up when current flows from + to −. Needs a series resistor like any LED.' },
   button: { label: 'Push button (press it while running)', roles: ['a', 'b'], roleLabels: { a: 'Contact 1', b: 'Contact 2' }, note: 'Joins the two contacts while you hold it down in the running simulation.' },
   'analog-sensor': { label: 'Analog sensor (a slider sets its output)', roles: ['vcc', 'gnd', 'out'], roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', out: 'Signal out' }, note: 'OUT = VCC × the slider position. Read it with analogRead().' },
+  mux: {
+    label: 'Multiplexer (select pins pick a channel)', roles: ['vcc', 'gnd', 'common'], optional: ['enable'],
+    roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', common: 'Common pin (SIG / Z)', enable: 'Enable (EN, active LOW — optional)' },
+    lists: { select: 'Select pins, S0 first', channels: 'Channel pins, C0 first' },
+    note: 'The common pin is joined (≈ 70 Ω) to channel n, where n is the binary number on the select pins (S0 = 1, S1 = 2, S2 = 4, S3 = 8). Works both ways, analog or digital, like a CD74HC4067 / 74HC4051. With EN HIGH (or no power) nothing is connected.',
+  },
   'digital-sensor': { label: 'Digital sensor (on / off)', roles: ['vcc', 'gnd', 'out'], roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', out: 'Signal out' }, note: 'OUT is HIGH while it is triggered (click it while running), LOW otherwise.' },
 };
 
@@ -60,6 +66,31 @@ export function validatePartSpec(raw, { id } = {}) {
       used.add(pin.id);
       behaviour.roles[role] = pin.id;
     }
+    for (const role of BEHAVIOURS[kind].optional || []) {
+      const want = String(b.roles?.[role] ?? '');
+      if (!want) continue;
+      const pin = pins.find(p => p.id === want);
+      if (!pin) { errors.push(`${BEHAVIOURS[kind].roleLabels[role]}: there is no pin "${want}".`); continue; }
+      if (used.has(pin.id)) { errors.push(`Pin ${pin.id} already has another job.`); continue; }
+      used.add(pin.id); behaviour.roles[role] = pin.id;
+    }
+    for (const [list, what] of Object.entries(BEHAVIOURS[kind].lists || {})) {
+      const ids = (Array.isArray(b[list]) ? b[list] : String(b[list] ?? '').split(/[\s,]+/)).map(v => String(v).trim()).filter(Boolean);
+      const out = [];
+      for (const want of ids.slice(0, 16)) {
+        const pin = pins.find(p => p.id === want);
+        if (!pin) { errors.push(`${what}: there is no pin "${want}".`); continue; }
+        if (used.has(pin.id)) { errors.push(`Pin ${pin.id} already has another job.`); continue; }
+        used.add(pin.id); out.push(pin.id);
+      }
+      behaviour[list] = out;
+    }
+    if (kind === 'mux') {
+      const s = behaviour.select.length, c = behaviour.channels.length;
+      if (s < 1 || s > 4) errors.push('A multiplexer needs 1–4 select pins.');
+      if (c < 2) errors.push('A multiplexer needs at least 2 channel pins.');
+      else if (s >= 1 && c > 2 ** s) errors.push(`${s} select pin${s > 1 ? 's' : ''} can only pick ${2 ** s} channels, but there are ${c}.`);
+    }
     if (kind === 'resistor') {
       const ohms = Number(b.ohms);
       if (!(ohms >= 1 && ohms <= 1e7)) errors.push('Resistance must be between 1 Ω and 10 MΩ.');
@@ -85,7 +116,10 @@ export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.rando
 export function layoutSpec(spec) {
   const by = s => spec.pins.filter(p => p.side === s);
   const horiz = Math.max(by('top').length, by('bottom').length), vert = Math.max(by('left').length, by('right').length);
-  const w = Math.max(MIN_W, Math.ceil((horiz + 1) * PITCH + PAD * 2 + (vert ? 2 * PITCH : 0)));
+  // side pins print their names inside the body, so leave room for them either side of the part's own label
+  const longest = side => Math.max(0, ...by(side).map(p => p.id.length));
+  const textRoom = vert ? Math.ceil((longest('left') + longest('right')) * 3.6 + String(spec.label || '').length * 5.6 + 34) : 0;
+  const w = Math.max(MIN_W, textRoom, Math.ceil((horiz + 1) * PITCH + PAD * 2 + (vert ? 2 * PITCH : 0)));
   const h = Math.max(MIN_H, Math.ceil((vert + 1) * PITCH + PAD * 2 + (horiz ? 2 * PITCH : 0)));
   const along = (n, len) => { const start = (len - (n - 1) * PITCH) / 2; return i => +(start + i * PITCH).toFixed(2); };
   const pins = [];
@@ -106,7 +140,8 @@ export function partDefFromSpec(spec) {
   const { w, h, pins } = layoutSpec(spec);
   const k = spec.behaviour.kind;
   const props = k === 'analog-sensor' ? { level: 50 } : undefined;
-  const roleText = Object.entries(spec.behaviour.roles).map(([r, p]) => `${p} = ${BEHAVIOURS[k].roleLabels[r]}`).join(', ');
+  const roleText = [...Object.entries(spec.behaviour.roles).map(([r, p]) => `${p} = ${BEHAVIOURS[k].roleLabels[r]}`),
+    ...Object.keys(BEHAVIOURS[k].lists || {}).map(l => `${BEHAVIOURS[k].lists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
   return {
     type: spec.id, name: spec.name, category: 'My parts', tag: 'cb-custom-part', custom: true, spec,
     w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}),

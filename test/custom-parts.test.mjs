@@ -86,3 +86,43 @@ test('AI part creation: the reply must pass the validator; one repair round with
   await assert.rejects(ai.createPart({ description: '', userKey: 'k' }), /Describe the part/);
   await assert.rejects(ai.createPart({ description: 'x' }), /API key/);
 });
+
+const mux16 = () => ({
+  name: 'CD74HC4067 16-channel mux', label: '74HC4067',
+  pins: [...Array.from({ length: 16 }, (_, i) => ({ id: `C${i}`, side: 'left' })), ...['S0', 'S1', 'S2', 'S3', 'SIG', 'EN', 'VCC', 'GND'].map(id => ({ id, side: 'right' }))],
+  behaviour: { kind: 'mux', roles: { vcc: 'VCC', gnd: 'GND', common: 'SIG', enable: 'EN' }, select: ['S0', 'S1', 'S2', 'S3'], channels: Array.from({ length: 16 }, (_, i) => `C${i}`) },
+});
+
+test('multiplexer behaviour: validated (select bits vs channel count, no pin with two jobs), accepts "S0, S1" text lists', () => {
+  assert.ok(validatePartSpec(mux16()).ok, validatePartSpec(mux16()).errors?.join());
+  const few = mux16(); few.behaviour.select = ['S0', 'S1'];
+  assert.match(validatePartSpec(few).errors.join(), /2 select pins can only pick 4 channels, but there are 16/);
+  const dup = mux16(); dup.behaviour.channels = ['C0', 'SIG'];
+  assert.match(validatePartSpec(dup).errors.join(), /SIG already has another job/);
+  const text = mux16(); text.behaviour.select = 'S0, S1, S2, S3'; delete text.behaviour.roles.enable;
+  const v = validatePartSpec(text);
+  assert.deepEqual(v.spec.behaviour.select, ['S0', 'S1', 'S2', 'S3']); assert.equal(v.spec.behaviour.roles.enable, undefined, 'EN is optional');
+});
+
+test('multiplexer behaviour: the select pins pick which channel reaches SIG; EN HIGH or no power disconnects it', () => {
+  const s = validatePartSpec({ ...mux16(), id: 'custom-mux-t' }).spec; registerCustomPart(s);
+  const W = (id, a, ap, b, bp) => ({ id, a: { part: a, pin: ap }, b: { part: b, pin: bp }, style: 'straight', color: '#000', width: 2 });
+  const parts = [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0, rot: 0 }, { id: 'mx', type: s.id, x: 500, y: 0, rot: 0 }, { id: 'pot', type: 'potentiometer', x: 900, y: 0, rot: 0, level: 30 }];
+  const base = [W('p', 'uno-1', '5V', 'mx', 'VCC'), W('g', 'uno-1', 'GND.1', 'mx', 'GND'), W('sig', 'mx', 'SIG', 'uno-1', 'A0'),
+    W('s0', 'uno-1', '2', 'mx', 'S0'), W('s1', 'uno-1', '3', 'mx', 'S1'), W('s2', 'uno-1', '4', 'mx', 'S2'), W('s3', 'uno-1', '5', 'mx', 'S3'), W('en', 'uno-1', '6', 'mx', 'EN'),
+    W('c0', 'mx', 'C0', 'uno-1', '5V'), W('c5', 'mx', 'C5', 'pot', 'SIG'), W('pv', 'pot', 'VCC', 'uno-1', '5V'), W('pg', 'pot', 'GND', 'uno-1', 'GND.2')];
+  const c = compile({ parts, wires: base });
+  const a0 = c.uno.pins.find(p => p.name === 'A0').net;
+  const read = sel => { const pins = new Map([['6', 'L']]); [2, 3, 4, 5].forEach((p, i) => pins.set(String(p), sel & (1 << i) ? 'H' : 'L')); return solveDrive(c, { pins, pressed: new Set(), duty: new Map() }); };
+  let r = read(0);
+  assert.ok(r.voltage(a0) > 4.9, `C0 = 5 V: ${r.voltage(a0)}`); assert.equal(r.muxChannels.get('mx'), 0);
+  r = read(5);
+  assert.ok(Math.abs(r.voltage(a0) - 1.5) < 0.1, `C5 = pot at 30 %: ${r.voltage(a0)}`);
+  r = read(9);                                                  // C9: nothing there → floating
+  assert.ok(Math.abs(r.voltage(a0) ?? 0) < 0.1);
+  const off = solveDrive(c, { pins: new Map([['2', 'L'], ['3', 'L'], ['4', 'L'], ['5', 'L'], ['6', 'H']]), pressed: new Set(), duty: new Map() });
+  assert.equal(off.muxChannels.get('mx'), -1, 'EN HIGH disables');
+  const unpowered = compile({ parts, wires: base.filter(w => w.id !== 'p') });
+  assert.equal(solveDrive(unpowered, { pins: new Map([['6', 'L']]), pressed: new Set(), duty: new Map() }).muxChannels.get('mx'), -1);
+  assert.match(describeCustomSpecs([s]), /Select pins, S0 first: S0, S1, S2, S3/);
+});

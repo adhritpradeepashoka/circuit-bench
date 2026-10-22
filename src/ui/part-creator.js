@@ -47,6 +47,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       id.addEventListener('input', () => {
         const old = p.id; p.id = id.value.trim().replace(/\s+/g, '_');
         for (const r of Object.keys(draft.behaviour.roles)) if (draft.behaviour.roles[r] === old) draft.behaviour.roles[r] = p.id;
+        for (const l of ['select', 'channels']) if (Array.isArray(draft.behaviour[l])) draft.behaviour[l] = draft.behaviour[l].map(v => (v === old ? p.id : v));
         paintRoles(); preview();
       });
       label.addEventListener('input', () => { p.label = label.value.trim() || p.id; preview(); });
@@ -61,16 +62,22 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     const b = BEHAVIOURS[draft.behaviour.kind];
     kindSel.value = draft.behaviour.kind;
     $('pcKindNote').textContent = b.note;
-    const fields = b.roles.map(role => {
+    const fields = [...b.roles, ...(b.optional || [])].map(role => {
       const f = el('label', { className: 'pc-field' });
       const sel = el('select', { id: `pcRole-${role}` });
-      sel.append(el('option', { value: '', textContent: '— pick a pin —' }));
+      sel.append(el('option', { value: '', textContent: (b.optional || []).includes(role) ? '— none —' : '— pick a pin —' }));
       for (const p of draft.pins) if (p.id) sel.append(el('option', { value: p.id, textContent: p.id }));
       sel.value = draft.behaviour.roles[role] || '';
       sel.addEventListener('change', () => { draft.behaviour.roles[role] = sel.value; preview(); });
       f.append(el('span', { textContent: b.roleLabels[role] }), sel);
       return f;
     });
+    for (const [list, what] of Object.entries(b.lists || {})) {
+      const f = el('label', { className: 'pc-field pc-wide' });
+      const inp = el('input', { id: `pcList-${list}`, value: (draft.behaviour[list] || []).join(', '), placeholder: list === 'select' ? 'S0, S1, S2, S3' : 'C0, C1, C2, …' });
+      inp.addEventListener('input', () => { draft.behaviour[list] = inp.value.split(/[\s,]+/).filter(Boolean); preview(); });
+      f.append(el('span', { textContent: `${what} (comma-separated)` }), inp); fields.push(f);
+    }
     if (draft.behaviour.kind === 'resistor') {
       const f = el('label', { className: 'pc-field' });
       const inp = el('input', { id: 'pcOhms', type: 'number', min: 1, max: 1e7, value: draft.behaviour.ohms ?? 1000 });
@@ -171,7 +178,14 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   kindSel.addEventListener('change', () => {
     const kind = kindSel.value, roles = {};
     BEHAVIOURS[kind].roles.forEach((r, i) => { roles[r] = draft.pins.find(p => p.id.toLowerCase() === r)?.id || draft.pins[i]?.id || ''; });
-    draft.behaviour = { kind, roles, ...(kind === 'resistor' ? { ohms: 1000 } : {}), ...(kind === 'led' ? { color: 'red' } : {}) };
+    const byNum = re => draft.pins.filter(p => re.test(p.id)).sort((a, c) => +a.id.replace(/\D/g, '') - +c.id.replace(/\D/g, '')).map(p => p.id);
+    if (kind === 'mux') {                    // guess the usual CD74HC4067 / 74HC4051 names
+      const pick = re => draft.pins.find(p => re.test(p.id))?.id || '';
+      Object.assign(roles, { vcc: pick(/^(vcc|vdd|5v)$/i), gnd: pick(/^(gnd|vss)$/i), common: pick(/^(sig|z|com|common)$/i) });
+      const en = pick(/^(en|e|inh)$/i); if (en) roles.enable = en;
+    }
+    draft.behaviour = { kind, roles, ...(kind === 'resistor' ? { ohms: 1000 } : {}), ...(kind === 'led' ? { color: 'red' } : {}),
+      ...(kind === 'mux' ? { select: byNum(/^S\d+$/i), channels: byNum(/^(C|Y|CH)\d+$/i) } : {}) };
     paintRoles(); preview();
   });
   $('pcAddPin').addEventListener('click', () => {
