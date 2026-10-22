@@ -44,7 +44,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   $('pcPackage').replaceChildren(...Object.entries(PACKAGES).filter(([, v]) => !v.hidden).map(([k, v]) => { const o = document.createElement('option'); o.value = k; o.textContent = v.label; return o; }));
   const KIND_GROUPS = [
     ['Basics', ['none', 'resistor', 'variable-resistor', 'led', 'led-array', 'switch', 'button']],
-    ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'relay', 'capacitor', 'inductor']],
+    ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'opamp', 'relay', 'capacitor', 'inductor']],
     ['Sound, motors & motion', ['buzzer', 'motor', 'servo', 'stepper']],
     ['Sensors & inputs', ['analog-sensor', 'digital-sensor', 'ultrasonic', 'encoder']],
     ['Chips', ['mux', 'logic']],

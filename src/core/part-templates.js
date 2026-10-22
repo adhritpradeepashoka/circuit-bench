@@ -29,6 +29,8 @@ export const TEMPLATES = [
   { group: 1, id: 'd-1n4148', ...mod('Signal diode 1N4148', '1N4148', '#c9a24b', [['A', 'Anode'], ['K', 'Cathode']], { kind: 'diode', roles: { anode: 'A', cathode: 'K' }, vf: 0.7, imax: 200 }, { textColor: '#222' }) },
   { group: 1, id: 'd-schottky', ...mod('Schottky diode 1N5819', '1N5819', '#444', [['A', 'Anode'], ['K', 'Cathode']], { kind: 'diode', roles: { anode: 'A', cathode: 'K' }, vf: 0.3, imax: 1000 }, { description: 'Only 0.3 V drop — good for flyback protection.' }) },
   { group: 1, id: 'd-zener', ...mod('Zener diode 5.1 V', 'ZENER', '#3b6ea5', [['A', 'Anode'], ['K', 'Cathode']], { kind: 'diode', roles: { anode: 'A', cathode: 'K' }, vf: 0.7, vz: 5.1, imax: 500 }, { description: 'Put it backwards across a supply, with a resistor in series, to hold 5.1 V.' }) },
+  { group: 1, id: 'opamp-lm358', ...mod('Op-amp (LM358-style)', 'LM358', '#2b2f36', [['IN+', 'Non-inverting input (+)'], ['IN-', 'Inverting input (−)'], ['OUT', 'Output'], ['V+', 'Supply +'], ['V-', 'Supply − / GND']], { kind: 'opamp', roles: { inp: 'IN+', inn: 'IN-', out: 'OUT', vcc: 'V+', vee: 'V-' }, dropHigh: 1.5, dropLow: 0.05, minSupply: 3 }, { description: 'One op-amp of a general-purpose chip. Single supply (V− to GND); the output reaches about 1.5 V below V+. Feedback resistor from OUT to IN− sets the gain.' }) },
+  { group: 1, id: 'opamp-rr', ...mod('Op-amp rail-to-rail (MCP6001)', 'MCP6001', '#2b2f36', [['IN+', 'Non-inverting input (+)'], ['IN-', 'Inverting input (−)'], ['OUT', 'Output'], ['V+', 'Supply +'], ['V-', 'Supply − / GND']], { kind: 'opamp', roles: { inp: 'IN+', inn: 'IN-', out: 'OUT', vcc: 'V+', vee: 'V-' }, dropHigh: 0.03, dropLow: 0.03, minSupply: 1.8 }, { description: '1.8–6 V op-amp whose output swings almost the full supply — a good match for a 5 V Arduino ADC.' }) },
   { group: 1, id: 'q-2n2222', ...mod('NPN transistor 2N2222', '2N2222', '#222', [['E', 'Emitter'], ['B', 'Base'], ['C', 'Collector']], { kind: 'npn', roles: { base: 'B', collector: 'C', emitter: 'E' }, beta: 100, imax: 600 }, { description: 'Arduino pin → 1 kΩ → base; emitter to GND; the load goes between the supply and the collector.' }) },
   { group: 1, id: 'q-bc547', ...mod('NPN transistor BC547', 'BC547', '#222', [['C', 'Collector'], ['B', 'Base'], ['E', 'Emitter']], { kind: 'npn', roles: { base: 'B', collector: 'C', emitter: 'E' }, beta: 200, imax: 100 }, { description: 'Small signal transistor, 100 mA max.' }) },
   { group: 1, id: 'q-2n2907', ...mod('PNP transistor 2N2907', '2N2907', '#222', [['E', 'Emitter'], ['B', 'Base'], ['C', 'Collector']], { kind: 'pnp', roles: { base: 'B', collector: 'C', emitter: 'E' }, beta: 100, imax: 600 }, { description: 'Switches the high side: emitter to the supply, base pulled low to turn on.' }) },
@@ -108,7 +110,7 @@ function chipCounter() {
 export const POPULAR = {
   'stepper': 'Motors', 'fan': 'Motors',
   'hall': 'Sensors',
-  'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors',
+  'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors', 'opamp-lm358': 'Semiconductors', 'opamp-rr': 'Semiconductors',
   'reg-7805': 'Power', 'cap-100n': 'Passives', 'cap-100u': 'Passives', 'ind-10mh': 'Passives',
   'ic-74hc595': 'Chips',
 };

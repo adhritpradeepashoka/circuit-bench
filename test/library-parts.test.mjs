@@ -278,3 +278,24 @@ test('native Wokwi inputs: keypad keys, DIP switches, the joystick dividers and 
   const gas = level => run([bat('b', 5), { id: 'gs', type: 'gas-sensor', x: 0, y: 0, rot: 0, level }], [W('b', '+', 'gs', 'VCC'), W('b', '-', 'gs', 'GND')]);
   near(gas(20).v('gs', 'DOUT'), 5, 0.3, 'low gas: DOUT high'); near(gas(80).v('gs', 'DOUT'), 0, 0.3, 'lots of gas: DOUT low'); near(gas(80).v('gs', 'AOUT'), 4, 0.2);
 });
+
+test('op-amp: non-inverting amplifier gain 1+Rf/Rg, a follower, rail clipping, a comparator, and no output without a supply', () => {
+  const r = (id, ohms) => res(id, ohms);
+  const oa = { id: 'oa', type: 'custom-opamp-lm358', x: 0, y: 0, rot: 0 };
+  // 5 V supply; input 0.2 V from a divider (b: 5 V, 24 k over 1 k); gain 1 + 10k/1k = 11 → 2.2 V
+  const amp = (vin, rf = 10000) => run([bat('b', 5), r('ra', 24000), r('rb', 1000), r('rf', rf), r('rg', 1000), oa],
+    [W('b', '+', 'oa', 'V+'), W('b', '-', 'oa', 'V-'), W('b', '+', 'ra', '1'), W('ra', '2', 'rb', '1'), W('rb', '2', 'b', '-'), W('ra', '2', 'oa', 'IN+'),
+      W('oa', 'OUT', 'rf', '1'), W('rf', '2', 'oa', 'IN-'), W('rf', '2', 'rg', '1'), W('rg', '2', 'b', '-')]);
+  near(amp().v('oa', 'OUT'), 2.2, 0.05, 'gain of 11');
+  // a follower (OUT wired to IN−) repeats the input
+  const fol = run([bat('b', 5), r('ra', 24000), r('rb', 1000), oa], [W('b', '+', 'oa', 'V+'), W('b', '-', 'oa', 'V-'), W('b', '+', 'ra', '1'), W('ra', '2', 'rb', '1'), W('rb', '2', 'b', '-'), W('ra', '2', 'oa', 'IN+'), W('oa', 'OUT', 'oa', 'IN-')]);
+  near(fol.v('oa', 'OUT'), 0.2, 0.02, 'follower');
+  // too much gain clips below V+ (LM358: 1.5 V short of the rail) — ratio 1+100k/1k × 0.2 V = 20 V wants more than 3.5 V
+  near(amp(0, 100000).v('oa', 'OUT'), 3.5, 0.1, 'clips 1.5 V under the rail');
+  // a comparator: no feedback, IN+ above IN− → high rail; below → low
+  const cmp = (vp, vn) => run([bat('b', 5), bat('p', vp), bat('n', vn), oa], [W('b', '+', 'oa', 'V+'), W('b', '-', 'oa', 'V-'), W('p', '+', 'oa', 'IN+'), W('n', '+', 'oa', 'IN-')]);
+  near(cmp(3, 2).v('oa', 'OUT'), 3.5, 0.1, 'high'); near(cmp(2, 3).v('oa', 'OUT'), 0.05, 0.1, 'low');
+  // no supply → the output is not driven
+  const dead = run([bat('b', 1), oa, r('rl', 1000)], [W('b', '+', 'oa', 'V+'), W('b', '-', 'oa', 'V-'), W('oa', 'OUT', 'rl', '1'), W('rl', '2', 'b', '-')]);
+  assert.ok(Math.abs(dead.v('oa', 'OUT')) < 0.2, 'unpowered op-amp does not drive');
+});

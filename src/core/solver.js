@@ -27,6 +27,8 @@ const PIR_OUT_V = 3.3, PIR_MIN_SUPPLY = 4.5;
 const G_CMP = 1 / 500;      // S  (comparator output on sensor modules)
 const CMP_MIN_SUPPLY = 3.0;
 const G_LOGIC = 1 / 40;     // S  (a CMOS output stage)
+const G_OA = 1 / 25;        // S  (op-amp output resistance ≈ 25 Ω)
+const OA_GAIN = 1e5;        // open-loop voltage gain
 const G_MUX = 1 / 70;       // S  (CD74HC4067 on-resistance)
 const G_BAT = 1 / 0.5;      // S  (battery internal resistance)
 const G_DRV = 1 / 1.5;      // S  (H-bridge output)
@@ -91,6 +93,7 @@ export function solve(circuit, drive) {
     else if (e.kind === 'Q') { for (const n of [e.b, e.c, e.e, e.g, e.d, e.s]) if (n != null) use(n); }
     else if (e.kind === 'RLY') { for (const n of [e.ca, e.cb, e.com, e.no, e.nc, e.pole2?.com, e.pole2?.no, e.pole2?.nc]) if (n != null) use(n); }
     else if (e.kind === 'REG') { use(e.vin); use(e.gnd); use(e.out); }
+    else if (e.kind === 'OA') { for (const k of [e.p, e.n, e.out, e.vcc, e.vee]) use(k); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
   });
@@ -114,6 +117,7 @@ export function solve(circuit, drive) {
   const qs = circuit.elements.filter(e => e.kind === 'Q'), qState = new Map(qs.map(q => [q.partId, 0]));              // 0 off · 1 active/on · 2 saturated
   const rlys = circuit.elements.filter(e => e.kind === 'RLY'), rlyOn = new Map(rlys.map(r => [r.partId, false]));
   const regs = circuit.elements.filter(e => e.kind === 'REG'), regState = new Map(regs.map(r => [r.partId, { v: 0, i: 0, iin: 0 }]));
+  const oas = circuit.elements.filter(e => e.kind === 'OA'), oaState = new Map(oas.map(o => [o.partId, 'lin']));   // 'off' (no supply) · 'lin' (amplifying) · 'hi' / 'lo' (stuck at a rail)
   const dt = drive.dt > 0 ? drive.dt : 0, prior = drive.reactive || new Map();
   const reactive = new Map();
   const bjtNodes = q => (q.type === 'pnp' ? { p: q.e, n: q.b, hi: q.e, lo: q.c } : { p: q.b, n: q.e, hi: q.c, lo: q.e });
@@ -206,6 +210,16 @@ export function solve(circuit, drive) {
         const lt = dt > 0 ? e.henries / dt : 0, g = 1 / (e.rs + lt), i0 = prior.get(e.partId)?.i ?? 0, is = g * lt * i0;
         if (e.a !== e.b) { stamp(e.a, e.b, g); b[idx.get(e.a)] -= is; b[idx.get(e.b)] += is; }
       }
+      else if (e.kind === 'OA') {
+        const st = oaState.get(e.partId), o = idx.get(e.out), g = G_OA;
+        if (st === 'lin') {      // a voltage-controlled voltage source: out = gain × (+ − −), through the output resistance
+          const ip = idx.get(e.p), im = idx.get(e.n);
+          A[o][o] += g; A[o][ip] -= g * OA_GAIN; A[o][im] += g * OA_GAIN;
+        } else if (st === 'hi' || st === 'lo') {
+          const rail = st === 'hi' ? x[idx.get(e.vcc)] - e.dropHigh : x[idx.get(e.vee)] + e.dropLow;
+          A[o][o] += g; b[o] += g * rail;
+        }
+      }
       else if (e.kind === 'SW') { if (e.closed || (!e.fixed && drive.pressed.has(e.partId))) stamp(e.a, e.b, G_SWITCH); }
       else if (e.kind === 'PIR' && powered.get(e.partId)) {
         const v = drive.pressed.has(e.partId) ? PIR_OUT_V : 0;      // idle output is driven low once powered
@@ -262,6 +276,12 @@ export function solve(circuit, drive) {
       const iout = target > 0 && st.v > 0 ? Math.max(0, G_REG * (st.v - vo)) : 0;
       const iin = r.mode === 'switching' ? (target * iout) / (0.85 * Math.max(supply, 1)) : iout;
       if (Math.abs(target - st.v) > 0.005 || Math.abs(iin - st.iin) > 0.002 || Math.abs(iout - (st.i || 0)) > 0.002) { st.v = target; st.iin = iin; st.i = iout; if (settle) changed = true; }
+    }
+    for (const o of oas) {
+      const vcc = x[idx.get(o.vcc)], vee = x[idx.get(o.vee)], want = OA_GAIN * (x[idx.get(o.p)] - x[idx.get(o.n)]);
+      const hi = vcc - o.dropHigh, lo = vee + o.dropLow;
+      const next = vcc - vee < o.minSupply ? 'off' : want > hi ? 'hi' : want < lo ? 'lo' : 'lin';
+      if (next !== oaState.get(o.partId)) { oaState.set(o.partId, next); changed = true; }
     }
     for (const p of pirs) {
       const next = x[idx.get(p.vcc)] - x[idx.get(p.gnd)] >= PIR_MIN_SUPPLY;

@@ -189,6 +189,16 @@ export const EXTRA_BEHAVIOURS = {
     ],
     note: 'HORZ and VERT are voltage dividers that sit at half the supply in the middle and move towards VCC or GND as the stick moves. SEL pulls to GND while the stick is pressed, so use INPUT_PULLUP. Drag the stick, or use the sliders in the right-click panel.',
   },
+  opamp: {
+    label: 'Op-amp (amplifies the difference between its two inputs)',
+    ...roles({ inp: 'Non-inverting input (+)', inn: 'Inverting input (−)', out: 'Output', vcc: 'Positive supply (V+)', vee: 'Negative supply (V− / GND)' }),
+    params: [
+      { key: 'dropHigh', label: 'Output stops this far below V+', unit: 'V', min: 0, max: 5, step: 0.05, def: 1.5 },
+      { key: 'dropLow', label: 'Output stops this far above V−', unit: 'V', min: 0, max: 5, step: 0.05, def: 0.05 },
+      { key: 'minSupply', label: 'Needs at least this supply', unit: 'V', min: 1, max: 30, step: 0.1, def: 3 },
+    ],
+    note: 'Open-loop gain 100 000: the output tries to make (+) and (−) equal, so with negative feedback (a resistor from OUT to −) it amplifies by a known ratio, and with none it is a comparator that swings to a supply rail. The output cannot go past its supply (less the "stops this far" margins). Gain-bandwidth, slew rate and input offset are not modelled.',
+  },
   stepper: {
     label: 'Stepper motor (counts the coil pattern the sketch sends)',
     ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)' }),

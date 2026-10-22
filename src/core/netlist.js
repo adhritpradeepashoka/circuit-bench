@@ -145,6 +145,10 @@ export function compile(state) {
           elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('dout'), frac: (bh.doutActive === 'high' ? above : !above) ? 1 : 0 });
         }
       }
+      else if (kind === 'opamp') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply });
+      }
       else if (kind === 'keypad') {
         const bh = PART_DEFS[part.type].spec.behaviour, cols = bh.cols.length;
         bh.rows.forEach((rp, i) => bh.cols.forEach((cp, j) => {
