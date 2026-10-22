@@ -448,3 +448,17 @@ test('models: NVIDIA — when every favourite is retired, it keeps going through
   assert.equal(asked.at(-1), 'acme/new-chat-model');
   assert.ok(!asked.some(m => /embed|rerank/.test(m)));
 });
+
+test('speed: thinking is turned down where supported; a model that rejects the hint gets the same request without it; the reply says which model and how long', async () => {
+  const bodies = [];
+  const g = createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') return { ok: false, status: 500, json: async () => ({}) }; bodies.push(JSON.parse(o.body)); return bodies.length === 1 ? { ok: false, status: 400, json: async () => ({ error: { message: 'Unknown name "thinkingLevel": Cannot find field.' } }) } : fakeGeminiText(okJson)(); } });
+  const r = await g.generateCode({ instruction: 'x', userKey: 'gkey-123456' });
+  assert.equal(r.ok, true);
+  assert.ok(bodies[0].generationConfig.thinkingConfig, 'first try asks for low thinking');
+  assert.equal(bodies[1].generationConfig.thinkingConfig, undefined, 'then plain');
+  assert.equal(r.meta.provider, 'Gemini'); assert.match(r.meta.model, /gemini/); assert.equal(typeof r.meta.ms, 'number');
+  let sent;
+  const q = createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') return { ok: false, status: 500, json: async () => ({}) }; sent = JSON.parse(o.body); return oaiReply(okJson); } });
+  await q.generateCode({ instruction: 'x', userKey: 'groq-123456', provider: 'groq' });
+  assert.equal(sent.reasoning_effort, 'low');
+});

@@ -234,6 +234,7 @@ export function initAiPanel(editor, code, sim = null) {
         messages.push({ id: ++seq, role: 'error', text: res.error || 'Something went wrong.' });
         return;
       }
+      if (res.meta) setStatus(`${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s${res.meta.tried ? ` (${res.meta.tried} unavailable model${res.meta.tried > 1 ? 's' : ''} skipped)` : ''}`);
       const o = outcome(circuit, res);
       const hasEdit = !!(res.code || o.circuitEdit);
       const summary = [];

@@ -253,15 +253,17 @@ function statusFor(httpStatus, message) {
 const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
 
 /** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
-function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false, anyChat = false }) {
+function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false, anyChat = false, effort = '' }) {
   return {
     label, models, keyUrl, hint, prefer, onlyFree, anyFree, anyChat, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'),
     listHeaders: key => ({ authorization: `Bearer ${key}` }),
     listIds: body => (Array.isArray(body?.data) ? body.data : []).filter(m => !onlyFree || m?.id === 'openrouter/free' || /:free$/.test(m?.id || '') || (m?.pricing && Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0)).map(m => m?.id).filter(Boolean),
     url: () => url,
     headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
-    body: (prompt, useSearch, model) => JSON.stringify({
+    body: (prompt, useSearch, model, fast) => JSON.stringify({
       model, temperature: 0.2, messages: [{ role: 'user', content: prompt }],
+      ...(fast && effort === 'reasoning_effort' && /gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}),
+      ...(fast && effort === 'reasoning' ? { reasoning: { effort: 'low' } } : {}),
       ...(useSearch && search ? { tools: [{ type: 'browser_search' }] } : {}),
     }),
     errorMessage: body => body?.error?.message || (typeof body?.error === 'string' ? body.error : '') || body?.detail || body?.message,
@@ -283,8 +285,10 @@ export const PROVIDERS = {
     url: (key, model) => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
     headers: () => ({ 'content-type': 'application/json' }),
     // search: Google Search grounding, so a part lookup is based on the real datasheet instead of recall.
-    body: (prompt, search) => JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.2 },
+    // fast: Gemini 2.5/3.x "think" before answering by default, which is most of the wait; edits don't need it
+    body: (prompt, search, model, fast) => JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, ...(fast && /flash/.test(model) ? { thinkingConfig: /gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' } } : {}) },
       ...(search ? { tools: [{ google_search: {} }] } : {}),
     }),
     errorMessage: body => body?.error?.message,
@@ -292,11 +296,11 @@ export const PROVIDERS = {
     sources: body => (body?.candidates?.[0]?.groundingMetadata?.groundingChunks || []).map(c => ({ title: c?.web?.title, url: c?.web?.uri })),
   },
   // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
-  groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
+  groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, effort: 'reasoning_effort', prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
   nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], anyChat: true, prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
   // openrouter/free is OpenRouter's own router: it hands the request to whichever free model is up right now, so it survives retirements.
-  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free'], onlyFree: true, anyFree: true, prefer: [/^openrouter\/free$/, /^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^(?:openai\/gpt-oss-(\d+)b|qwen\/qwen[\d.]*-(\d+)b[\w.-]*|deepseek\/deepseek-(?:chat|v)[\w.-]*|mistralai\/mistral[\w.-]*|google\/gemma-(\d+)[\w.-]*):free$/] }),
+  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['openrouter/free', 'meta-llama/llama-3.3-70b-instruct:free'], effort: 'reasoning', onlyFree: true, anyFree: true, prefer: [/^openrouter\/free$/, /^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^(?:openai\/gpt-oss-(\d+)b|qwen\/qwen[\d.]*-(\d+)b[\w.-]*|deepseek\/deepseek-(?:chat|v)[\w.-]*|mistralai\/mistral[\w.-]*|google\/gemma-(\d+)[\w.-]*):free$/] }),
 };
 /** What the browser needs to draw the provider picker. */
 export const PROVIDER_LIST = Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, models: p.models }));
@@ -417,11 +421,11 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
   async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
     const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
     const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, p.anyChat ? 16 : 8), ...p.models].filter(Boolean))].slice(0, p.anyChat ? 16 : 10);   // a model the student typed is the only one tried
-    const tried = [];
-    let res, body, msg;
+    const tried = [], t0 = now();
+    let res, body, msg, fast = true;
     for (let i = 0; i < wanted.length; i++) {
       try {
-        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i]) });
+        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i], fast) });
       } catch {
         throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
       }
@@ -430,7 +434,9 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
         if (!String(p.text(body) || '').trim() && i < wanted.length - 1) { tried.push(wanted[i]); continue; }   // an empty answer (a reasoning model that ran out of room): try the next model
         break;
       }
-      msg = p.errorMessage(body) || `HTTP ${res.status}`; tried.push(wanted[i]);
+      msg = p.errorMessage(body) || `HTTP ${res.status}`;
+      if (fast && res.status === 400 && /reason|thinking|effort|unknown (field|param)|unrecognized|unexpected|extra inputs|invalid json payload/i.test(msg) && !/key/i.test(msg)) { fast = false; i--; continue; }   // this model doesn't take the speed-up hint: same model, plain request
+      tried.push(wanted[i]);
       if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model });
       if (i < wanted.length - 1 && modelGone(res.status, msg)) continue;            // that model isn't available to this key — try the next one
       throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ` — none of ${tried.length > 1 ? `the ${tried.length} models I tried (${tried.slice(0, 4).join(', ')}${tried.length > 4 ? '…' : ''})` : `“${tried[0]}”`} is open to this key. Type a model your account can use in the AI settings, or pick another provider.` : ''}`, statusFor(res.status, msg));
@@ -438,7 +444,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     if (!typed) works.set(keyId(p, userKey), wanted[Math.min(tried.length, wanted.length - 1)]);
     const sources = [];
     for (const s of p.sources?.(body) || []) if (s?.url && !sources.some(x => x.url === s.url)) sources.push({ title: String(s.title || s.url).slice(0, 120), url: String(s.url).slice(0, 500) });
-    return { text: p.text(body), sources: sources.slice(0, 6), searched: search && sources.length > 0 };
+    return { text: p.text(body), sources: sources.slice(0, 6), searched: search && sources.length > 0, meta: { provider: p.label, model: wanted[Math.min(tried.length, wanted.length - 1)], ms: Math.max(0, now() - t0), tried: tried.length } };
   }
 
   /** Describe a part in words → a validated part spec (one repair round if the first answer doesn't validate). */
@@ -462,7 +468,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = needKey(userKey, provider);
     const prompt = buildPrompt({ instruction, circuit, code, context, history });
-    const { text } = await ask(p, userKey, prompt, { model });
+    const { text, meta } = await ask(p, userKey, prompt, { model });
     const result = parseReply(text);
     // actions:[] + code:null is not automatically a failure: a model that correctly decides nothing
     // needs to change (the sketch already does what was asked, or the circuit already has the part)
@@ -472,7 +478,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     if (!result || (!result.code && !result.actions.length && !result.explanation.trim())) {
       throw new RequestError('The AI did not return a usable edit — try rephrasing the instruction.', 502);
     }
-    return { ok: true, ...result };
+    return { ok: true, ...result, meta };
   }
 
   return { generateCode, createPart };
