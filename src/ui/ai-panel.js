@@ -148,9 +148,21 @@ export function initAiPanel(editor, code, sim = null) {
   const setStatus = msg => { status.textContent = msg || ''; };
   const hasKey = () => !!getStoredKey();
   let picking = false;           // the provider picker was opened on purpose (even though the current provider has a key)
-  function refreshKeyUi() { keyRow.hidden = hasKey() && !picking; if (!keyRow.hidden) paintProvider(); }
+  function refreshKeyUi() { keyRow.hidden = hasKey() && !picking; paintProvider(); }
+  const select = $('aiProviderSelect');
+  function paintSelect() {
+    const cur = getStoredProvider();
+    select.replaceChildren(...PROVIDER_IDS.map(id => { const o = document.createElement('option'); o.value = id; o.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ' (no key)'}`; o.selected = id === cur; return o; }));
+  }
+  select.addEventListener('change', () => {
+    setStoredProvider(select.value); keyInput.value = '';
+    if (hasKey()) { picking = false; setStatus(`Using ${PROVIDER_INFO[select.value].label}.`); } else setStatus(`${PROVIDER_INFO[select.value].label} needs a key — get one below.`);
+    refreshKeyUi(); paintProvider();
+  });
   function paintProvider() {
+    paintSelect();
     const cur = getStoredProvider(), info = PROVIDER_INFO[cur];
+    $('aiGetKey').href = info.keyUrl; $('aiGetKey').textContent = `Get a ${info.label} key ↗`;
     tabsEl.replaceChildren(...PROVIDER_IDS.map(id => {
       const b = document.createElement('button');
       b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = id; b.id = `aiProvider-${id}`;
@@ -180,6 +192,7 @@ export function initAiPanel(editor, code, sim = null) {
     setStatus(`${PROVIDER_INFO[cur].label} ${v ? 'key saved' : 'selected'} — only in this browser.`);
     if (promptEl.value.trim()) send(); else promptEl.focus();
   });
+  keyInput.addEventListener('paste', () => setTimeout(() => { if (/^[\w.-]{20,}$/.test(keyInput.value.trim())) $('aiKeySave').click(); }, 0));   // pasting a key saves it: no extra click
   $('aiForgetKey').addEventListener('click', () => { picking = !picking; refreshKeyUi(); setStatus(''); if (picking) keyInput.focus(); });
 
   /* ── composer ────────────────────────── */

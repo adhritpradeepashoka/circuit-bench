@@ -1070,6 +1070,19 @@ test('ui: AI providers — each keeps its own key, switching is one click, and t
   doc.getElementById('aiForgetKey').click(); pick('nvidia');
   prompt.value = 'again'; doc.getElementById('aiGenerate').click(); await flush();
   assert.equal(sent.at(-1).provider, 'nvidia'); assert.equal(sent.at(-1).userKey, 'nv-key'); assert.equal(sent.at(-1).model, 'meta/llama-3.1-70b-instruct');
+  // the dropdown under the chat box switches provider without opening anything
+  const sel = doc.getElementById('aiProviderSelect');
+  assert.equal(sel.value, 'nvidia');
+  assert.ok([...sel.options].find(o => o.value === 'groq').textContent.includes('✓'));
+  sel.value = 'groq'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+  prompt.value = 'third'; doc.getElementById('aiGenerate').click(); await flush();
+  assert.equal(sent.at(-1).provider, 'groq');
+  sel.value = 'meta'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal(doc.getElementById('aiKeyRow').hidden, false, 'no key for Meta: the key box opens');
+  assert.match(doc.getElementById('aiGetKey').href, /llama\.developer\.meta\.com/);
+  const ki = doc.getElementById('aiKeyInput'); ki.value = 'pasted-key-1234567890abcdef';
+  ki.dispatchEvent(new w.Event('paste', { bubbles: true })); await new Promise(r => setTimeout(r, 5));
+  assert.equal(doc.getElementById('aiKeyRow').hidden, true, 'pasting a key saves it straight away');
 });
 
 test('ui: My projects — first run adopts your existing work, new projects start clean, switching restores each one’s circuit and code, and it all survives a reload', async () => {
