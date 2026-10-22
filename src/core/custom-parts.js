@@ -10,10 +10,10 @@ import { PART_DEFS } from './parts.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
-import { EXTRA_BEHAVIOURS, cleanParams } from './behaviours-extra.js';
+import { EXTRA_BEHAVIOURS, ICON_KINDS, cleanParams } from './behaviours-extra.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
-const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 64;
+const PAD = 14, MIN_W = 76, MIN_H = 56, ICON_MIN_H = 76, MAX_PINS = 64;
 const DIP_PAD = 13;
 
 /**
@@ -55,7 +55,11 @@ export const BEHAVIOURS = {
 Object.assign(BEHAVIOURS, EXTRA_BEHAVIOURS);
 
 const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
-const hexColor = (v, d) => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v).toLowerCase() : d);
+const hexColor = (v, d) => {
+  const t = String(v).trim().toLowerCase();
+  if (/^#[0-9a-f]{6}$/.test(t)) return t;
+  return /^#[0-9a-f]{3}$/.test(t) ? `#${t[1]}${t[1]}${t[2]}${t[2]}${t[3]}${t[3]}` : d;      // #abc → #aabbcc
+};
 
 /**
  * Checks and normalises a spec. Unknown fields are dropped; anything that would make an unusable part is an error.
@@ -170,7 +174,7 @@ export function layoutSpec(spec) {
   const longest = side => Math.max(0, ...by(side).map(p => p.id.length));
   const textRoom = vert ? Math.ceil((longest('left') + longest('right')) * 3.6 + String(spec.label || '').length * 5.6 + 34) : 0;
   const w = Math.max(MIN_W, textRoom, Math.ceil((horiz + 1) * PITCH + PAD * 2 + (vert ? 2 * PITCH : 0)));
-  const h = Math.max(MIN_H, Math.ceil((vert + 1) * PITCH + PAD * 2 + (horiz ? 2 * PITCH : 0)));
+  const h = Math.max(ICON_KINDS.has(spec.behaviour?.kind) ? ICON_MIN_H : MIN_H, Math.ceil((vert + 1) * PITCH + PAD * 2 + (horiz ? 2 * PITCH : 0)));   // a part with a symbol in the middle needs room for it above the pin names
   const along = (n, len) => { const start = (len - (n - 1) * PITCH) / 2; return i => +(start + i * PITCH).toFixed(2); };
   const pins = [];
   for (const side of SIDES) {

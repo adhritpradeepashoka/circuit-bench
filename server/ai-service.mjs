@@ -103,6 +103,12 @@ export function describeContext(context) {
       for (const m of list(s.motors, 6)) if (m && typeof m === 'object') out.push(`  Motor ${str(m.id, 30)}: ${Number(m.volts)} V across it, ${Number(m.rpm) ? `${Math.abs(Number(m.rpm))} rpm ${Number(m.rpm) > 0 ? 'forward' : 'reverse'}` : 'not turning'}`);
       for (const m of list(s.muxes, 6)) if (m && typeof m === 'object') out.push(`  Multiplexer ${str(m.id, 30)}: ${m.channel == null ? 'no channel connected (unpowered or EN HIGH)' : `common pin joined to channel ${Number(m.channel)}`}`);
       for (const d of list(s.drivers, 6)) if (d && typeof d === 'object') out.push(`  Motor driver ${str(d.id, 30)}: ${d.powered ? 'powered' : 'NO motor power'}; motor A ${str(d.motorA, 10)}, motor B ${str(d.motorB, 10)}`);
+      for (const e of list(s.library, 24)) {
+        if (!e || typeof e !== 'object') continue;
+        const bits = Object.entries(e).filter(([k, v]) => !['id', 'name', 'kind', 'problems'].includes(k) && (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')).map(([k, v]) => `${str(k, 20)}=${str(String(v), 30)}`);
+        out.push(`  ${str(e.name, 40) || str(e.kind, 20)} (${str(e.kind, 20)}, ${str(e.id, 30)}): ${bits.join(', ') || 'no live state'}`);
+        for (const p of list(e.problems, 4)) out.push(`    problem: ${str(p, 200)}`);
+      }
       const ua = list(s.i2cUnanswered, 8).map(a => str(a, 6));
       if (ua.length) out.push(`  I²C: the sketch addressed ${ua.join(', ')}, and nothing on the bus has that address`);
     }
@@ -266,16 +272,16 @@ const PROVIDERS = {
 
 /** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
 export function buildPartPrompt(description, problems = null) {
-  const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}`).join('\n');
+  const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}${b.params ? ` Numbers to set in the behaviour object: ${b.params.map(p => (p.options ? `"${p.key}" (${p.options.map(([v]) => `"${v}"`).join(' | ')}, default "${p.def}")` : `"${p.key}" (${p.label}${p.unit ? `, ${p.unit}` : ''}; ${p.min}–${p.max}, default ${p.def})`)).join('; ')}.` : ''}`).join('\n');
   return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data.
 
 FIRST: if the part is a real, named component (a chip, a module, a breakout board), look it up on the web and use its ACTUAL pinout — the real pin names, in the real order, from the datasheet — and its real behaviour. Do not work from memory if you can check. Getting the pin names and order right matters more than anything else here, because the student will wire it up by those names.
 
-Then describe it with one of the behaviours below. Pick "logic" for any chip whose behaviour is digital and definable (gates, shift registers, counters, flip-flops, latches, decoders, drivers). Use "none" only as a last resort, for something genuinely unmodellable here (an RF module, a microcontroller, a regulator, an I2C/SPI peripheral with an internal register map) — and then say what is missing in "note".
+Then describe it with one of the behaviours below. If the part IS one of the specific components — a switch, relay, potentiometer, flex/force sensor, diode or Zener, transistor or MOSFET, voltage regulator, capacitor, inductor, buzzer, motor, LED bar, servo, ultrasonic sensor, rotary encoder, stepper — use that behaviour and set its numbers from the datasheet (forward voltage, gain, threshold, output voltage, coil resistance…). Pick "logic" for any chip whose behaviour is digital and definable (gates, shift registers, counters, flip-flops, latches, decoders, drivers). Use "none" only as a last resort, for something genuinely unmodellable here (an RF module, a microcontroller, an I2C/SPI peripheral with an internal register map) — and then say what is missing in "note".
 
 Behaviours:
 ${kinds}
-Extra fields: "resistor" needs "ohms" (1 – 10000000). "led" takes "color": one of red, green, blue, yellow, orange, white.
+Extra fields: "resistor" needs "ohms" (1 – 10000000). "led" and "led-array" take "color": one of red, green, blue, yellow, orange, white. The numbers listed for a behaviour go directly inside the "behaviour" object (for example {"kind":"diode","roles":{"anode":"A","cathode":"K"},"vf":0.3}); leave them out to use the defaults.
 
 THE "logic" BEHAVIOUR — how to write rules
 A logic part is described by three things, all written as arithmetic expressions (NOT code — there are no statements, no loops, no assignment inside an expression):
@@ -319,7 +325,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
   "package": "dip" | "dip-wide" | "quad" | "module",
   "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
   "breadboard": <"module" only: true if the real part plugs into a breadboard; then every pin must be on "bottom">,
-  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <resistor only>, "color": "<led only>", "select": [<mux only>], "channels": [<mux only>], "vars": {<logic only>}, "rules": [<logic only>], "outputs": {<logic only>}, "analog": [<logic only>] },
+  "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "<the behaviour's own numbers, e.g. vf, beta, vout, uF>": <number or choice>, "ohms": <resistor only>, "color": "<led / led-array only>", "segments": [<led-array only>], "coils": [<stepper only>], "select": [<mux only>], "channels": [<mux only>], "vars": {<logic only>}, "rules": [<logic only>], "outputs": {<logic only>}, "analog": [<logic only>] },
   "note": "<anything the simulator can't reproduce about the real part — timing, drive current, analog detail — else empty>"
 }
 PACKAGE — get this right or the part will be the wrong shape and unusable:

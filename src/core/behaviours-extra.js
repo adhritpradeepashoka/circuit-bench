@@ -173,6 +173,9 @@ export const EXTRA_BEHAVIOURS = {
   },
 };
 
+/** Behaviours drawn with a schematic symbol / live indicator in the middle of the part (see iconSVG in src/parts/elements.js). */
+export const ICON_KINDS = new Set(['switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper']);
+
 /** Behaviours that need the firmware's pin timing (not just the solved voltages). */
 export const TIMED_KINDS = new Set(['servo', 'ultrasonic', 'stepper']);
 

@@ -2,6 +2,7 @@
 // Plain custom elements (no framework) sized in CSS px; their pin positions live in PART_DEFS (src/core/parts.js),
 // so these files only draw. Each one is a tiny SVG with a few live properties the simulator sets.
 
+import { ICON_KINDS } from '../core/behaviours-extra.js';
 import { layoutSpec } from '../core/custom-parts.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';
@@ -124,7 +125,6 @@ const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;'
  * contact, a servo's horn, a motor's blades, a bar graph's lit segments.
  *   st = { lit: 0–1, aux: number (angle in degrees, or rpm), levels: number[] (per-LED brightness) }
  */
-const ICON_KINDS = new Set(['switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper']);
 function iconSVG(spec, st, cx, cy, fg) {
   const kind = spec.behaviour.kind, b = spec.behaviour, lit = st.lit || 0, aux = st.aux || 0;
   const line = `stroke="${fg}" stroke-width="1.4" fill="none" stroke-linecap="round" stroke-linejoin="round"`;
@@ -210,8 +210,8 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   const extra = kind === 'led'
     ? `<circle class="cp-led" cx="${w / 2}" cy="${h / 2 - 7}" r="6" fill="${color}" opacity="${0.25 + 0.75 * lit}" stroke="#0003"/>${lit ? `<circle cx="${w / 2}" cy="${h / 2 - 7}" r="11" fill="${color}" opacity="${0.35 * lit}"/>` : ''}`
     : kind === 'button' || kind === 'digital-sensor' ? `<circle class="cp-cap" cx="${w / 2}" cy="${h / 2 - 7}" r="6.5" fill="#20262c" stroke="#0006"/>`
-    : ICON_KINDS.has(kind) ? iconSVG(spec, { lit, aux, levels }, w / 2, h / 2 - 8, spec.textColor) : '';
-  const nameY = kind === 'led' || kind === 'button' || kind === 'digital-sensor' || ICON_KINDS.has(kind) ? h / 2 + 12 : h / 2 + 3;
+    : ICON_KINDS.has(kind) ? iconSVG(spec, { lit, aux, levels }, w / 2, h / 2 - 16, spec.textColor) : '';
+  const nameY = ICON_KINDS.has(kind) ? h / 2 + 5 : kind === 'led' || kind === 'button' || kind === 'digital-sensor' ? h / 2 + 8 : h / 2 + 3;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     ${leads}
     <rect x="${inset}" y="${inset}" width="${bw}" height="${bh}" rx="5" fill="${spec.color}" stroke="#0005"/>
