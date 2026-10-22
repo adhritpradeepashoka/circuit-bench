@@ -245,9 +245,11 @@ function statusFor(httpStatus, message) {
 const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
 
 /** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
-function openAiLike({ label, url, models, search = false, keyUrl, hint }) {
+function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false }) {
   return {
-    label, models, keyUrl, hint,
+    label, models, keyUrl, hint, prefer, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'), onlyFree,
+    listHeaders: key => ({ authorization: `Bearer ${key}` }),
+    listIds: body => (Array.isArray(body?.data) ? body.data : []).map(m => m?.id).filter(Boolean),
     url: () => url,
     headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
     body: (prompt, useSearch, model) => JSON.stringify({
@@ -265,7 +267,11 @@ function openAiLike({ label, url, models, search = false, keyUrl, hint }) {
 export const PROVIDERS = {
   gemini: {
     label: 'Gemini',
-    models: ['gemini-3.8-flash', 'gemini-2.5-flash'],      // Google retires models for new keys without much warning, so there's a fallback
+    models: ['gemini-3.8-flash', 'gemini-2.5-flash'],      // last-resort list; the live list from Google (see discover()) wins
+    prefer: [/^gemini-(\d+(?:\.\d+)?)-flash$/, /^gemini-(\d+(?:\.\d+)?)-flash-lite$/, /^gemini-(\d+(?:\.\d+)?)-pro$/],
+    listUrl: key => `https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(key)}`,
+    listHeaders: () => ({}),
+    listIds: body => (Array.isArray(body?.models) ? body.models : []).filter(m => (m?.supportedGenerationMethods || []).includes('generateContent')).map(m => String(m.name || '').replace(/^models\//, '')),
     url: (key, model) => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
     headers: () => ({ 'content-type': 'application/json' }),
     // search: Google Search grounding, so a part lookup is based on the real datasheet instead of recall.
@@ -278,10 +284,10 @@ export const PROVIDERS = {
     sources: body => (body?.candidates?.[0]?.groundingMetadata?.groundingChunks || []).map(c => ({ title: c?.web?.title, url: c?.web?.uri })),
   },
   // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
-  groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true }),
-  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'] }),
-  meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'] }),
-  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'] }),
+  groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
+  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'], prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/] }),
+  meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
+  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'], onlyFree: true, prefer: [/^meta-llama\/llama-(\d+(?:\.\d+)?)-70b-instruct:free$/, /^google\/gemini-(\d+(?:\.\d+)?)-flash.*:free$/, /^(?:openai\/gpt-oss-\d+b|qwen\/[\w.-]+):free$/] }),
 };
 /** What the browser needs to draw the provider picker. */
 export const PROVIDER_LIST = Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, models: p.models }));
@@ -353,7 +359,34 @@ PACKAGE — get this right or the part will be the wrong shape and unusable:
 1–64 pins.`;
 }
 
-export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
+/** Model ids a provider offers, best first: for each "prefer" pattern, the newest version (highest number in the id) first. */
+export function rankModels(p, ids) {
+  const seen = new Set(), out = [];
+  const pool = ids.filter(id => !/preview|exp(erimental)?\b|image|tts|audio|live|embed|guard|whisper|vision|moderation|robotics|thinking|-8b|-1b|-3b/i.test(id) || (p.onlyFree && /:free$/.test(id)));
+  for (const re of p.prefer || []) {
+    const hit = pool.filter(id => re.test(id) && (!p.onlyFree || /:free$/.test(id))).map(id => ({ id, v: parseFloat(id.match(re)?.[1] ?? '0') || 0 }));
+    hit.sort((a, b) => b.v - a.v || a.id.length - b.id.length);
+    for (const { id } of hit) if (!seen.has(id)) { seen.add(id); out.push(id); }
+  }
+  return out;
+}
+
+export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
+  // Free models come and go (Google closed gemini-2.5-flash to new keys; Groq retires models) — so ask the provider
+  // which models THIS key can use, newest first, and remember the answer for a while. The built-in list is the fallback.
+  const found = new Map();
+  async function discover(p, userKey) {
+    if (!p.prefer || !p.listUrl) return [];
+    const ck = `${p.label}:${userKey.slice(-6)}:${userKey.length}`, hit = found.get(ck);
+    if (hit && now() - hit.at < 30 * 60 * 1000) return hit.ids;
+    let ids = [];
+    try {
+      const res = await fetchImpl(p.listUrl(userKey), { method: 'GET', headers: p.listHeaders(userKey) });
+      if (res?.ok) ids = rankModels(p, p.listIds(await res.json()));
+    } catch { /* offline listing: use the built-in list */ }
+    found.set(ck, { at: now(), ids });
+    return ids;
+  }
   function needKey(userKey, provider) {
     const p = PROVIDERS[provider];
     if (!p) throw new RequestError(`Unknown AI provider "${provider}".`);
@@ -370,7 +403,8 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
    * without it rather than failing the student's request.
    */
   async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
-    const wanted = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? [String(model)] : p.models;   // a model the student typed is the only one tried
+    const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
+    const wanted = typed ? [typed] : [...new Set([...(await discover(p, userKey)).slice(0, 4), ...p.models])];   // a model the student typed is the only one tried
     let res, body, msg;
     for (let i = 0; i < wanted.length; i++) {
       try {

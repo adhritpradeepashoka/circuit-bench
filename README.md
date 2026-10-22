@@ -167,7 +167,8 @@ warnings (and a summary of what changed) before deciding whether to Apply.
 NVIDIA ([build.nvidia.com](https://build.nvidia.com/settings/api-keys)), Meta Llama ([llama.developer.meta.com](https://llama.developer.meta.com/))
 or OpenRouter ([openrouter.ai/keys](https://openrouter.ai/keys)). Each provider keeps its own saved key, so switching is one click
 (✨ Ask AI → "AI provider…"), and you can type any model id to override the built-in list (Google and others retire models without
-warning; the built-ins fall through to the next model when one is gone). it's stored
+warning, so the server asks each provider which models your key can use, picks the newest free one — never a preview, TTS or
+image model — and caches the answer for 30 minutes; the built-in list is only the fallback). it's stored
 in their browser only (`localStorage`) and sent with each request, so CircuitBench's own server never sees or pays for anyone's
 usage. Nothing needs configuring server-side for this to work. (A server-funded free quota before asking for a key is the intended
 next step — `server/ai-service.mjs` is written so that slots in as a second way to satisfy the same request, without the client

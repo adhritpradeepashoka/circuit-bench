@@ -351,7 +351,7 @@ test('providers: NVIDIA, Meta Llama and OpenRouter each hit their own OpenAI-com
 
 test('providers: a model that is gone for this key (Gemini 2.5 no longer open to new users) falls through to the next model on the list', async () => {
   const urls = [];
-  const ai = createAiService({ fetchImpl: async u => { urls.push(u); return urls.length === 1 ? { ok: false, status: 404, json: async () => ({ error: { message: 'This model models/gemini-3.8-flash is no longer available to new users.' } }) } : fakeGeminiText(okJson)(); } });
+  const ai = createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') return { ok: false, status: 500, json: async () => ({}) }; urls.push(u); return urls.length === 1 ? { ok: false, status: 404, json: async () => ({ error: { message: 'This model models/gemini-3.8-flash is no longer available to new users.' } }) } : fakeGeminiText(okJson)(); } });
   const res = await ai.generateCode({ instruction: 'blink', userKey: 'k' });
   assert.equal(res.ok, true);
   assert.equal(urls.length, 2);
@@ -367,4 +367,33 @@ test('providers: a model id the student typed is the only one tried, and a gone 
   const ai2 = createAiService({ fetchImpl: async (u, o) => { sent = JSON.parse(o.body); return oaiReply(okJson); } });
   await ai2.generateCode({ instruction: 'blink', userKey: 'k', provider: 'nvidia', model: 'nvidia/some-model' });
   assert.equal(sent.model, 'nvidia/some-model');
+});
+
+test('models: the newest free model THIS key can use is discovered from the provider and cached; previews/tts/image models are skipped', async () => {
+  const calls = [];
+  let t = 0;
+  const list = { models: ['gemini-2.5-flash', 'gemini-3.9-flash', 'gemini-4.0-flash-preview-05', 'gemini-3.9-flash-preview-tts', 'gemini-3.9-flash-image', 'gemini-3.9-pro', 'embedding-001'].map(n => ({ name: `models/${n}`, supportedGenerationMethods: n === 'embedding-001' ? ['embedContent'] : ['generateContent'] })) };
+  const ai = createAiService({ now: () => t, fetchImpl: async (u, o) => { calls.push([o.method, u]); return o.method === 'GET' ? { ok: true, status: 200, json: async () => list } : fakeGeminiText(okJson)(); } });
+  await ai.generateCode({ instruction: 'blink', userKey: 'abcdef123456' });
+  assert.equal(calls[0][0], 'GET'); assert.match(calls[0][1], /v1beta\/models\?/);
+  assert.match(calls[1][1], /models\/gemini-3\.9-flash:generateContent/, `used ${calls[1][1]}`);
+  await ai.generateCode({ instruction: 'blink again', userKey: 'abcdef123456' });
+  assert.equal(calls.filter(c => c[0] === 'GET').length, 1, 'the model list is cached');
+  t += 31 * 60 * 1000;
+  await ai.generateCode({ instruction: 'much later', userKey: 'abcdef123456' });
+  assert.equal(calls.filter(c => c[0] === 'GET').length, 2, 'and refreshed after a while');
+});
+
+test('models: OpenAI-style hosts list /models too; OpenRouter only ever uses :free models; a failed listing falls back to the built-in list', async () => {
+  let chosen;
+  const mk = ids => createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') return { ok: true, status: 200, json: async () => ({ data: ids.map(id => ({ id })) }) }; chosen = JSON.parse(o.body).model; return oaiReply(okJson); } });
+  await mk(['llama-3.3-70b-versatile', 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'whisper-large-v3']).generateCode({ instruction: 'x', userKey: 'k1', provider: 'groq' });
+  assert.equal(chosen, 'openai/gpt-oss-120b');
+  await mk(['meta/llama-3.1-70b-instruct', 'meta/llama-3.3-70b-instruct', 'meta/llama-4-maverick-17b-128e-instruct']).generateCode({ instruction: 'x', userKey: 'k2', provider: 'nvidia' });
+  assert.equal(chosen, 'meta/llama-3.3-70b-instruct');
+  await mk(['meta-llama/llama-4-maverick', 'meta-llama/llama-3.3-70b-instruct', 'meta-llama/llama-3.3-70b-instruct:free', 'meta-llama/llama-3.1-70b-instruct:free']).generateCode({ instruction: 'x', userKey: 'k3', provider: 'openrouter' });
+  assert.equal(chosen, 'meta-llama/llama-3.3-70b-instruct:free');
+  const down = createAiService({ fetchImpl: async (u, o) => { if (o.method === 'GET') throw new Error('offline'); chosen = JSON.parse(o.body).model; return oaiReply(okJson); } });
+  await down.generateCode({ instruction: 'x', userKey: 'k4', provider: 'groq' });
+  assert.equal(chosen, 'openai/gpt-oss-120b');
 });
