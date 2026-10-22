@@ -1,12 +1,18 @@
 // The Workspaces dialog: built-in workspaces, your own (saved from a project) and imported ones. Starting a project
 // in a workspace gives it that workspace's starting board; the parts menu then leads with its sections.
-import { setActiveWorkspace, listWorkspaces, saveWorkspace, removeWorkspace, parseWorkspaceFile, workspaceFromProject, workspaceFile } from '../core/workspaces.js';
+import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace, listWorkspaces, saveWorkspace, removeWorkspace, parseWorkspaceFile, workspaceFromProject, workspaceFile } from '../core/workspaces.js';
 import { specsUsed } from '../core/custom-parts.js';
+
+function showHint() {
+  const h = activeWorkspace().hint || BUILTIN_WORKSPACES[0].hint, card = document.getElementById('hintCard');
+  if (!card || !h) return;
+  card.replaceChildren(Object.assign(document.createElement('b'), { textContent: h.title }), Object.assign(document.createElement('span'), { textContent: h.text }));
+}
 
 export function initWorkspaces({ editor, code, projects }) {
   const $ = id => document.getElementById(id);
   const modal = $('workspacesModal'), list = $('wsList');
-  projects.onSwitch(p => { setActiveWorkspace(p.workspace); editor.emit('catalog'); });      // the parts menu leads with the open project's workspace
+  projects.onSwitch(p => { setActiveWorkspace(p.workspace); showHint(); editor.emit('catalog'); });      // the parts menu leads with the open project's workspace
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const btn = (label, fn, title) => { const b = el('button', 'proj-act', label); b.type = 'button'; if (title) b.title = title; b.addEventListener('click', fn); return b; };
