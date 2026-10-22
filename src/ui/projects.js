@@ -45,7 +45,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     clearTimeout(timer); timer = 0;
     if (!current || suspended) return;
     try { current = await store.save({ ...current, data: workingData(), updatedAt: Date.now() }); }
-    catch { editor.status('Could not save the project — this browser\'s storage is full or blocked. Download it from Export to keep a copy.'); }
+    catch { editor.status('Could not save the project — this browser\'s storage is full or blocked. Download it from the File menu to keep a copy.'); }
     if (!modal.hidden) renderList();
   }
   const scheduleSave = () => { if (!current || suspended) return; clearTimeout(timer); timer = setTimeout(saveNow, SAVE_DELAY); };

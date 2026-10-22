@@ -301,7 +301,7 @@ also drive a DOUT pin that flips at a threshold, like the comparator on the real
 
 ## Importing a circuit board (KiCad)
 
-Export ▾ → **Import PCB (KiCad .kicad_pcb)…** turns a board you designed in KiCad into a part: drawn at true size from the
+File ▾ → **Import PCB (KiCad .kicad_pcb)…** turns a board you designed in KiCad into a part: drawn at true size from the
 real outline, pads and copper tracks, with a connection point on every node that reaches a header pad. Connectivity
 comes from net names when the file has them and otherwise from the copper itself (pads and track ends that touch are one
 node — `src/core/kicad-import.js`), so boards drawn without a schematic, like electrode arrays, import too. The board is
