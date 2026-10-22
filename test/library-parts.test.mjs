@@ -316,3 +316,19 @@ test('logic parts in the catalogue: gates follow their truth tables from a batte
   near(out('not', { A: 0 }).get('Y'), 5, 0.1); near(out('not', { A: 1 }).get('Y'), 0, 0.1);
   near(out('mux2', { A: 0, B: 1, S: 1 }).get('Y'), 5, 0.1, 'S high picks B'); near(out('mux2', { A: 0, B: 1, S: 0 }).get('Y'), 0, 0.1, 'S low picks A');
 });
+
+test('BioAmp EXG Pill and instrumentation amp: output rests at half supply, follows gain × (IN+ − IN−), clips at the rails; INA rests at REF; extra op-amps need their supply', async () => {
+  const { PART_DEFS } = await import('../src/core/parts.js');
+  assert.equal(PART_DEFS['custom-bioamp-exg-pill'].category, 'Biosignal'); assert.deepEqual(PART_DEFS['custom-bioamp-exg-pill'].pins.map(p => p.id), ['OUT', 'VCC', 'GND', 'IN+', 'IN-', 'REF']);
+  const pill = (vp, vn) => run([bat('b', 5), bat('p', vp), bat('n', vn), { id: 'px', type: 'custom-bioamp-exg-pill', x: 0, y: 0, rot: 0 }],
+    [W('b', '+', 'px', 'VCC'), W('b', '-', 'px', 'GND'), W('p', '+', 'px', 'IN+'), W('n', '+', 'px', 'IN-'), W('p', '-', 'b', '-'), W('n', '-', 'b', '-')]);
+  near(pill(0, 0).v('px', 'OUT'), 2.5, 0.05, 'idle at half supply');
+  near(pill(0.001, 0).v('px', 'OUT'), 3.5, 0.1, '1 mV × 1000 = +1 V');
+  near(pill(0, 0.001).v('px', 'OUT'), 1.5, 0.1, 'the other way');
+  near(pill(0.5, 0).v('px', 'OUT'), 4.9, 0.1, 'clips just below the rail');
+  const ina = ref => run([bat('b', 12), bat('p', 0.02), bat('r', ref), { id: 'ia', type: 'custom-inamp-ina128', x: 0, y: 0, rot: 0 }],
+    [W('b', '+', 'ia', 'V+'), W('b', '-', 'ia', 'V-'), W('p', '+', 'ia', 'IN+'), W('r', '+', 'ia', 'REF'), W('p', '-', 'b', '-'), W('r', '-', 'b', '-'), W('ia', 'IN-', 'b', '-')]);
+  near(ina(2.5).v('ia', 'OUT'), 4.5, 0.1, 'REF + 100 × 20 mV');
+  const tl = vs => run([bat('b', vs), { id: 'o', type: 'custom-opamp-tl07x', x: 0, y: 0, rot: 0 }, res('rl', 1000)], [W('b', '+', 'o', 'V+'), W('b', '-', 'o', 'V-'), W('o', 'OUT', 'rl', '1'), W('rl', '2', 'b', '-')]);
+  assert.ok(Math.abs(tl(5).v('o', 'OUT')) < 0.2, 'TL072 needs more than 5 V to wake up');
+});

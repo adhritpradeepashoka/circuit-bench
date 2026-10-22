@@ -93,7 +93,7 @@ export function solve(circuit, drive) {
     else if (e.kind === 'Q') { for (const n of [e.b, e.c, e.e, e.g, e.d, e.s]) if (n != null) use(n); }
     else if (e.kind === 'RLY') { for (const n of [e.ca, e.cb, e.com, e.no, e.nc, e.pole2?.com, e.pole2?.no, e.pole2?.nc]) if (n != null) use(n); }
     else if (e.kind === 'REG') { use(e.vin); use(e.gnd); use(e.out); }
-    else if (e.kind === 'OA') { for (const k of [e.p, e.n, e.out, e.vcc, e.vee]) use(k); }
+    else if (e.kind === 'OA') { for (const k of [e.p, e.n, e.out, e.vcc, e.vee, e.bias?.net]) if (k != null) use(k); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
   });
@@ -214,7 +214,10 @@ export function solve(circuit, drive) {
         const st = oaState.get(e.partId), o = idx.get(e.out), g = G_OA;
         if (st === 'lin') {      // a voltage-controlled voltage source: out = gain × (+ − −), through the output resistance
           const ip = idx.get(e.p), im = idx.get(e.n);
-          A[o][o] += g; A[o][ip] -= g * OA_GAIN; A[o][im] += g * OA_GAIN;
+          const gain = e.gain ?? OA_GAIN;
+          A[o][o] += g; A[o][ip] -= g * gain; A[o][im] += g * gain;
+          if (e.bias?.mode === 'mid') { A[o][idx.get(e.vcc)] -= g / 2; A[o][idx.get(e.vee)] -= g / 2; }
+          else if (e.bias?.mode === 'ref') A[o][idx.get(e.bias.net)] -= g;
         } else if (st === 'hi' || st === 'lo') {
           const rail = st === 'hi' ? x[idx.get(e.vcc)] - e.dropHigh : x[idx.get(e.vee)] + e.dropLow;
           A[o][o] += g; b[o] += g * rail;
@@ -278,7 +281,9 @@ export function solve(circuit, drive) {
       if (Math.abs(target - st.v) > 0.005 || Math.abs(iin - st.iin) > 0.002 || Math.abs(iout - (st.i || 0)) > 0.002) { st.v = target; st.iin = iin; st.i = iout; if (settle) changed = true; }
     }
     for (const o of oas) {
-      const vcc = x[idx.get(o.vcc)], vee = x[idx.get(o.vee)], want = OA_GAIN * (x[idx.get(o.p)] - x[idx.get(o.n)]);
+      const vcc = x[idx.get(o.vcc)], vee = x[idx.get(o.vee)];
+      const rest = o.bias?.mode === 'mid' ? (vcc + vee) / 2 : o.bias?.mode === 'ref' ? x[idx.get(o.bias.net)] : 0;
+      const want = rest + (o.gain ?? OA_GAIN) * (x[idx.get(o.p)] - x[idx.get(o.n)]);
       const hi = vcc - o.dropHigh, lo = vee + o.dropLow;
       const next = vcc - vee < o.minSupply ? 'off' : want > hi ? 'hi' : want < lo ? 'lo' : 'lin';
       if (next !== oaState.get(o.partId)) { oaState.set(o.partId, next); changed = true; }

@@ -189,6 +189,7 @@ function iconSVG(spec, st, cx, cy, fg) {
 export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   const { w, h, pins } = layoutSpec(spec);
   if (spec.package === 'board' && spec.board) return boardSVG(spec, w, h, pins);
+  if (spec.package === 'sprite' && spec.sprite) return spriteSVG(spec, w, h, pins);
   if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
   const kind = spec.behaviour.kind;
@@ -221,6 +222,29 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
     <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
       stroke="${spec.color}" stroke-width="${quad ? 2.2 : 0}" paint-order="stroke">${esc(spec.label)}</text>
   </svg>`;
+}
+/** Simple pictures of real modules (a "sprite"): the board, its header pins and connector, with each pin lead ending on its connection point. */
+function spriteSVG(spec, w, h, pins) {
+  const lbl = pins.map(p => `<text x="${p.x < w / 2 ? p.x + 24 : p.x - 8}" y="${p.y + 2.2}" text-anchor="${p.x < w / 2 ? 'start' : 'end'}" font-size="5.6" font-family="monospace" fill="#fff" stroke="#3a1c6e" stroke-width="1.6" paint-order="stroke">${esc(p.id)}</text>`).join('');
+  if (spec.sprite.art === 'bioamp-pill') {
+    // the Upside Down Labs BioAmp EXG Pill: a purple board, a 3-pin header out of the left edge and a white 3-pin connector on the right
+    const left = pins.filter(p => p.x < w / 2), right = pins.filter(p => p.x >= w / 2);
+    const bx = 20, bw = w - 40, by = 8, bh = h - 16;
+    const header = `<rect x="2" y="${by + 6}" width="${bx + 6}" height="${bh - 12}" rx="1.5" fill="#1b1b1f"/>` + left.map(p => `<rect x="0" y="${p.y - 1.6}" width="${bx + 4}" height="3.2" fill="#c9ccd1" stroke="#8b9096" stroke-width=".5"/>`).join('');
+    const conn = `<rect x="${w - 34}" y="${by + 4}" width="32" height="${bh - 8}" rx="3" fill="#f3f1ea" stroke="#b9b5a6"/>` + right.map(p => `<rect x="${w - 8}" y="${p.y - 1.8}" width="7" height="3.6" rx="1" fill="#c9a227"/>`).join('');
+    const smd = Array.from({ length: 9 }, (_, i) => `<rect x="${bx + 14 + i * 5.6}" y="${by + 3.2}" width="3.4" height="2.2" fill="#d9b44a"/><rect x="${bx + 14 + i * 5.6}" y="${by + bh - 5.4}" width="3.4" height="2.2" fill="#d9b44a"/>`).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      ${header}
+      <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="3.5" fill="${spec.color}" stroke="#2a1055"/>
+      ${smd}
+      <rect x="${w / 2 - 12}" y="${h / 2 - 11}" width="24" height="22" rx="1.5" fill="#26262c" stroke="#111"/>
+      ${Array.from({ length: 6 }, (_, i) => `<rect x="${w / 2 - 12 + i * 4 + 0.8}" y="${h / 2 - 13}" width="1.6" height="2.2" fill="#c9ccd1"/><rect x="${w / 2 - 12 + i * 4 + 0.8}" y="${h / 2 + 10.8}" width="1.6" height="2.2" fill="#c9ccd1"/>`).join('')}
+      <text x="${bx + 6}" y="${by + 11}" font-size="4.4" font-family="sans-serif" font-weight="700" fill="#e9d8ff">Upside Down Labs</text>
+      <text x="${bx + 6}" y="${by + 17}" font-size="3.8" font-family="sans-serif" fill="#e9d8ff">BioAmp EXG Pill</text>
+      ${conn}${lbl}
+    </svg>`;
+  }
+  return '';
 }
 /** An imported KiCad board, drawn at true size: the outline, the copper tracks, the pads (square SMD electrodes, round header holes) and a pin lead on each connection point. */
 function boardSVG(spec, w, h, pins) {

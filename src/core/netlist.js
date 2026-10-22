@@ -149,6 +149,10 @@ export function compile(state) {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply });
       }
+      else if (kind === 'inamp') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply, gain: bh.gain, bias: bh.bias === 'ref' && roles.ref ? { mode: 'ref', net: r('ref') } : { mode: bh.bias === 'zero' ? 'zero' : bh.bias === 'ref' ? 'zero' : 'mid' } });
+      }
       else if (kind === 'keypad') {
         const bh = PART_DEFS[part.type].spec.behaviour, cols = bh.cols.length;
         bh.rows.forEach((rp, i) => bh.cols.forEach((cp, j) => {

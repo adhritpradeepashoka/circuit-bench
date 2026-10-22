@@ -199,6 +199,18 @@ export const EXTRA_BEHAVIOURS = {
     ],
     note: 'Open-loop gain 100 000: the output tries to make (+) and (−) equal, so with negative feedback (a resistor from OUT to −) it amplifies by a known ratio, and with none it is a comparator that swings to a supply rail. The output cannot go past its supply (less the "stops this far" margins). Gain-bandwidth, slew rate and input offset are not modelled.',
   },
+  inamp: {
+    label: 'Instrumentation / bio-signal amplifier (fixed gain on the difference of two inputs)',
+    ...roles({ inp: 'Input + (IN+)', inn: 'Input − (IN−)', out: 'Output', vcc: 'Positive supply (V+)', vee: 'Negative supply (GND / V−)' }, { ref: 'Reference pin (REF — optional)' }),
+    params: [
+      { key: 'gain', label: 'Gain', unit: '×', min: 1, max: 100000, step: 1, def: 100 },
+      { key: 'bias', label: 'Output rests at', options: [['mid', 'Half the supply (single-supply bio amps)'], ['ref', 'The REF pin voltage (INA128 style)'], ['zero', 'Ground / V− (no offset)']], def: 'mid' },
+      { key: 'dropHigh', label: 'Output stops this far below V+', unit: 'V', min: 0, max: 5, step: 0.05, def: 0.1 },
+      { key: 'dropLow', label: 'Output stops this far above V−', unit: 'V', min: 0, max: 5, step: 0.05, def: 0.1 },
+      { key: 'minSupply', label: 'Needs at least this supply', unit: 'V', min: 1, max: 40, step: 0.1, def: 3 },
+    ],
+    note: 'Output = rest level + gain × (IN+ − IN−), limited to the supply. The rest level is half the supply, the REF pin, or ground, as chosen. Input impedance is very high. Filtering and noise are not modelled.',
+  },
   stepper: {
     label: 'Stepper motor (counts the coil pattern the sketch sends)',
     ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)' }),
