@@ -399,6 +399,14 @@ export class Editor {
     this.syncParts(); this.markDirty(); this.commit();
     this.status(`${def.name} added — ${this.describePlacement(part)}`);
   }
+  /** The extra parts a workspace starts a new project with, at the given spots (world px). */
+  addStarter(list) {
+    for (const s of list || []) {
+      const def = PART_DEFS[s.type]; if (!def) continue;
+      this.state.parts.push({ id: uid(s.type.replace(/^custom-/, '').slice(0, 6)), type: s.type, rot: s.rot || 0, ...(def.props || {}), x: s.x, y: s.y });
+    }
+    this.sel = null; this.syncParts(); this.markDirty(); this.commit(); this.fit();
+  }
   describePlacement(part) {
     if (!PART_DEFS[part.type].insertable) return 'drag to position';
     const c = this.getCircuit();

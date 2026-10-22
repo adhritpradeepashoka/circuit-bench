@@ -31,6 +31,7 @@
       <input type="file" id="importFile" accept="application/json,.json" hidden>
       <input type="file" id="importPcbFile" accept=".kicad_pcb" hidden>
     </div>
+    <button id="workspacesBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Workspaces: Electronics, Bioelectronics, your own and community ones">Workspaces</button>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
       <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span></div><p class="account-note">Only your name and picture are shown here, in this browser. CircuitBench doesn't store your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
@@ -279,6 +280,20 @@
     </form>
     <ul class="proj-list" id="projList"></ul>
     <p class="proj-note" id="projNote">Projects are saved in this browser automatically.</p>
+  </div>
+</div>
+<div class="modal" id="workspacesModal" role="dialog" aria-modal="true" aria-labelledby="workspacesTitle" hidden>
+  <div class="modal-card ws-card">
+    <div class="modal-head"><h2 id="workspacesTitle">Workspaces</h2><button type="button" class="pane-x" id="workspacesClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <p class="proj-note">A workspace is an environment for a project: its own parts, a starting board and a menu that leads with what you need.</p>
+    <div class="ws-list" id="wsList"></div>
+    <form class="proj-new ws-save" id="wsSaveForm">
+      <input id="wsSaveName" placeholder="Save this project as a workspace — name it" autocomplete="off" maxlength="40" aria-label="Workspace name">
+      <button type="submit">Save as workspace</button>
+      <button type="button" id="wsImport">Import file…</button>
+    </form>
+    <input type="file" id="wsImportFile" accept="application/json,.json" hidden>
+    <p class="proj-note" id="wsNote">Community workspaces from GitHub are coming. For now you can share a workspace as a file.</p>
   </div>
 </div>
 <script type="module" src="/src/main.js"></script>

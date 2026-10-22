@@ -211,6 +211,21 @@ export const EXTRA_BEHAVIOURS = {
     ],
     note: 'Output = rest level + gain × (IN+ − IN−), limited to the supply. The rest level is half the supply, the REF pin, or ground, as chosen. Input impedance is very high. Filtering and noise are not modelled.',
   },
+  'signal-source': {
+    label: 'Biosignal source (electrodes on a body: ECG, EMG, EEG, EOG)',
+    ...roles({ pos: 'Electrode + (IN+)', neg: 'Electrode − (IN−)', ref: 'Reference electrode (REF)' }),
+    props: { signal: 'ecg', bpm: 70, effort: 50, scale: 100, contact: 5, hum: 0, attached: 1 },
+    settings: [
+      { key: 'signal', label: 'Signal', kind: 'select', options: [['ecg', 'ECG — heartbeat'], ['emg', 'EMG — muscle'], ['eeg', 'EEG — brain'], ['eog', 'EOG — eyes'], ['sine', 'Test sine 10 Hz']] },
+      { key: 'bpm', label: 'Heart rate (ECG)', kind: 'range', min: 40, max: 180, step: 1, fmt: v => `${Math.round(v)} bpm` },
+      { key: 'effort', label: 'Muscle effort (EMG)', kind: 'range', min: 0, max: 100, step: 1, fmt: v => `${Math.round(v)} %` },
+      { key: 'scale', label: 'Signal strength', kind: 'range', min: 0, max: 300, step: 5, fmt: v => `${Math.round(v)} %` },
+      { key: 'contact', label: 'Electrode contact resistance', kind: 'range', min: 1, max: 100, step: 1, fmt: v => `${Math.round(v)} kΩ` },
+      { key: 'hum', label: 'Mains hum (50 Hz pickup)', kind: 'range', min: 0, max: 100, step: 1, fmt: v => `${Math.round(v)} %` },
+      { key: 'attached', label: 'Electrodes', kind: 'select', options: [[1, 'On the body'], [0, 'Peeled off']] },
+    ],
+    note: 'A simulated body: the voltage between IN+ and IN− follows the chosen biosignal (a typical, illustrative waveform — not a medical measurement). Wire the three electrodes to an amplifier such as the BioAmp EXG Pill. Poor contact plus mains hum adds 50 Hz interference, like a real bench.',
+  },
   stepper: {
     label: 'Stepper motor (counts the coil pattern the sketch sends)',
     ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)' }),

@@ -224,6 +224,28 @@ void loop() {
   delay(2000);
 }
 ` },
+  ecg: { name: 'Heartbeat monitor (BioAmp EXG Pill)', code: `// Biosignal monitor: BioAmp EXG Pill OUT → A0, VCC → 5V, GND → GND, electrodes on the body source.
+// Samples at 250 Hz and prints the signal with its slow drift removed (open the Serial monitor).
+// The R wave of each heartbeat shows up as the tall spike. (Simulated, illustrative signal — not medical data.)
+
+const unsigned long SAMPLE_US = 4000;   // 4 ms = 250 samples per second
+unsigned long nextSample;
+float baseline = 512;
+
+void setup() {
+  Serial.begin(115200);
+  nextSample = micros();
+}
+
+void loop() {
+  if ((long)(micros() - nextSample) >= 0) {
+    nextSample += SAMPLE_US;
+    int raw = analogRead(A0);
+    baseline += (raw - baseline) / 100.0;      // slow average = the amplifier's resting level
+    Serial.println((int)(raw - baseline));
+  }
+}
+` },
   motor: { name: 'Motor control (L298N)', code: `// DC motor through an L298N driver: speed ramps up, then the motor reverses.
 // L298N: IN1 → D8, IN2 → D7, ENA → D9 (PWM), OUT1/OUT2 → the motor,
 //        12V → battery +, GND → battery − AND the Arduino GND.

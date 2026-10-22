@@ -239,8 +239,7 @@ function spriteSVG(spec, w, h, pins) {
       ${smd}
       <rect x="${w / 2 - 12}" y="${h / 2 - 11}" width="24" height="22" rx="1.5" fill="#26262c" stroke="#111"/>
       ${Array.from({ length: 6 }, (_, i) => `<rect x="${w / 2 - 12 + i * 4 + 0.8}" y="${h / 2 - 13}" width="1.6" height="2.2" fill="#c9ccd1"/><rect x="${w / 2 - 12 + i * 4 + 0.8}" y="${h / 2 + 10.8}" width="1.6" height="2.2" fill="#c9ccd1"/>`).join('')}
-      <text x="${bx + 6}" y="${by + 11}" font-size="4.4" font-family="sans-serif" font-weight="700" fill="#e9d8ff">Upside Down Labs</text>
-      <text x="${bx + 6}" y="${by + 17}" font-size="3.8" font-family="sans-serif" fill="#e9d8ff">BioAmp EXG Pill</text>
+      <text x="${w / 2}" y="${by + bh - 2.4}" text-anchor="middle" font-size="3.6" font-family="sans-serif" font-weight="700" fill="#e9d8ff">Upside Down Labs · BioAmp EXG Pill</text>
       ${conn}${lbl}
     </svg>`;
   }

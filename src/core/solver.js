@@ -93,6 +93,7 @@ export function solve(circuit, drive) {
     else if (e.kind === 'Q') { for (const n of [e.b, e.c, e.e, e.g, e.d, e.s]) if (n != null) use(n); }
     else if (e.kind === 'RLY') { for (const n of [e.ca, e.cb, e.com, e.no, e.nc, e.pole2?.com, e.pole2?.no, e.pole2?.nc]) if (n != null) use(n); }
     else if (e.kind === 'REG') { use(e.vin); use(e.gnd); use(e.out); }
+    else if (e.kind === 'BIO') { use(e.pos); use(e.neg); use(e.ref); }
     else if (e.kind === 'OA') { for (const k of [e.p, e.n, e.out, e.vcc, e.vee, e.bias?.net]) if (k != null) use(k); }
     else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
@@ -209,6 +210,11 @@ export function solve(circuit, drive) {
       } else if (e.kind === 'IND') {
         const lt = dt > 0 ? e.henries / dt : 0, g = 1 / (e.rs + lt), i0 = prior.get(e.partId)?.i ?? 0, is = g * lt * i0;
         if (e.a !== e.b) { stamp(e.a, e.b, g); b[idx.get(e.a)] -= is; b[idx.get(e.b)] += is; }
+      }
+      else if (e.kind === 'BIO') {      // two electrodes, each a Thevenin source (± half the signal, through the skin contact) against the reference electrode
+        const v = drive.signals?.get(e.partId) ?? 0, gc = 1 / e.rc;
+        stamp(e.pos, e.ref, gc); b[idx.get(e.pos)] += gc * v / 2; b[idx.get(e.ref)] -= gc * v / 2;
+        stamp(e.neg, e.ref, gc); b[idx.get(e.neg)] -= gc * v / 2; b[idx.get(e.ref)] += gc * v / 2;
       }
       else if (e.kind === 'OA') {
         const st = oaState.get(e.partId), o = idx.get(e.out), g = G_OA;

@@ -5,6 +5,8 @@
 import { WORKSPACES, DEFAULT_WORKSPACE, newProject, uniqueName, cleanName, createLocalStore } from '../core/projects.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { fromProjectFile } from '../core/project.js';
+import { getWorkspace } from '../core/workspaces.js';
+import { EXAMPLES } from '../sim/examples.js';
 
 // Which project is open is per *tab* (sessionStorage), so two tabs can work on different projects without
 // trading places; localStorage only remembers the last one opened, for the next new tab.
@@ -32,11 +34,15 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   const announce = () => switchListeners.forEach(fn => fn(current));
   const workingData = () => ({ ...editor.exportProject(), ...code.exportState() });
 
-  wsSelect.replaceChildren(...Object.entries(WORKSPACES).map(([id, w]) => {
-    const o = document.createElement('option'); o.value = id; o.disabled = !w.available;
-    o.textContent = w.available ? w.name : `${w.name} — coming soon`; return o;
-  }));
-  wsSelect.value = DEFAULT_WORKSPACE;
+  const fillWorkspaces = () => {
+    const keep = wsSelect.value;
+    wsSelect.replaceChildren(...Object.entries(WORKSPACES).map(([id, w]) => {
+      const o = document.createElement('option'); o.value = id; o.disabled = !w.available;
+      o.textContent = w.available ? w.name : `${w.name} — coming soon`; return o;
+    }));
+    wsSelect.value = WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE;
+  };
+  fillWorkspaces();
 
   function paintName() { $('projectName').textContent = current?.name || 'Untitled project'; document.title = current ? `${current.name} — CircuitBench` : 'CircuitBench'; }
 
@@ -87,12 +93,18 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   async function create({ name, workspace = DEFAULT_WORKSPACE, data = null, board } = {}) {
     await saveNow();
     const taken = (await store.list()).map(m => m.name);
+    const ws = getWorkspace(workspace);
+    if (!data && ws.starter?.project) data = JSON.parse(JSON.stringify(ws.starter.project));      // a workspace saved from a whole project starts as that project
     const p = newProject({ name: uniqueName(cleanName(name), taken), workspace, data });
     if (!data) { p.data = null; if (board) p.board = board; }
     await store.save(p);
     current = null;                  // open() should not re-save the project we're leaving twice
     await open(p.id);
-    if (!data) await saveNow();      // persist the fresh default circuit + sketch
+    if (!data) {
+      if (ws.starter?.extra?.length) editor.addStarter(ws.starter.extra);                                  // the workspace's own starting parts
+      const ex = EXAMPLES[ws.starter?.sketch]; if (ex) code.importState({ sketch: ex.code });
+      await saveNow();      // persist the fresh default circuit + sketch
+    }
     return current;
   }
 
@@ -160,7 +172,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   });
 
   function openModal({ focusNew = false } = {}) {
-    modal.hidden = false; confirmDelete = null; renaming = null; renderList();
+    fillWorkspaces(); modal.hidden = false; confirmDelete = null; renaming = null; renderList();
     (focusNew ? nameInput : $('projectsClose')).focus();
   }
   function close() { modal.hidden = true; }

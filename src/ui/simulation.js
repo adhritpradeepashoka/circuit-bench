@@ -15,6 +15,7 @@ import { Servo, Ultrasonic, Stepper, FreqProbe } from '../parts/timed.js';
 import { Sound } from './audio.js';
 import { visualTarget } from '../parts/skins.js';
 import { motorRpm } from '../core/solver.js';
+import { signalAt } from '../core/signals.js';
 import { createLogicState, tickLogic, MIN_SUPPLY } from '../core/logic.js';
 
 const I2C_MODELS = { mpu6050: () => new Mpu6050(), ssd1306: () => new Ssd1306(), lcd1602: () => new Lcd1602() };
@@ -175,14 +176,26 @@ export class Simulation {
     this.i2cPrepare(); this.i2cVisuals();               // an OLED redraws whenever the firmware changed its RAM, even if no pin did
     // A capacitor or coil changes with TIME, so a circuit that has one is solved every frame (not only when a pin changes)
     const reactive = circuit.elements.some(e => e.kind === 'CAP' || e.kind === 'IND');
-    if (!reactive && sig === this.lastSig && this.result) return;
+    const bios = circuit.elements.filter(e => e.kind === 'BIO');         // a biosignal source changes with time too, so the circuit is solved every frame
+    if (!reactive && !bios.length && sig === this.lastSig && this.result) return;
     this.lastSig = sig;
     this.modes = modes;
     this.logicTick();                                   // inputs that aren't MCU pins (a switch, another chip) settle here
     const now = this.mcu.seconds, dt = reactive ? Math.min(0.1, Math.max(1e-5, now - this.lastSolveAt)) : 0;
     this.lastSolveAt = now;
-    this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty, logic: this.logicMap, dt, reactive: this.reactive });
+    const signalOf = e => signalAt(this.editor.partById(e.partId) || {}, now);
+    const signals = new Map(bios.map(e => [e.partId, signalOf(e)]));
+    const driveOf = sg => ({ pins: modes, pressed: this.pressed, duty, logic: this.logicMap, dt, reactive: this.reactive, signals: sg });
+    this.result = solveDrive(circuit, driveOf(signals));
     if (reactive) this.reactive = new Map(this.result.reactive);
+    // How much each analog pin moves per volt of each electrode signal — lets the ADC follow the waveform at the instant of every analogRead()
+    const slopes = [];
+    for (const e of bios) {
+      const bumped = new Map(signals); bumped.set(e.partId, signals.get(e.partId) + 1e-4);
+      const r2 = solveDrive(circuit, driveOf(bumped));
+      slopes.push({ e, s0: signals.get(e.partId), k: new Map(circuit.uno.pins.filter(p => p.adc != null).map(p => [p.adc, ((r2.voltage(p.net) ?? 0) - (this.result.voltage(p.net) ?? 0)) / 1e-4])) });
+    }
+    this.slopes = slopes;
     const digitalDriven = new Set([...this.dhtInfo.filter(d => d.attached).map(d => d.pin.name),            // a DHT times its own line, cycle by cycle
       ...this.timedInfo.filter(t => t.attached && t.kind === 'ultrasonic').map(t => t.pins.echo.name)]);   // so does an ultrasonic sensor's ECHO
     for (const pin of circuit.uno.pins) {
@@ -195,7 +208,10 @@ export class Simulation {
     for (const pin of circuit.uno.pins) {                 // ADC: every analog pin sees the solved net voltage
       if (pin.adc == null) continue;
       const v = this.result.voltage(pin.net);
-      this.mcu.setAnalog(pin.adc, v == null ? 0 : v);
+      if (this.slopes?.some(sl => Math.abs(sl.k.get(pin.adc) || 0) > 1e-6)) {
+        const v0 = v == null ? 0 : v, parts = this.slopes.filter(sl => Math.abs(sl.k.get(pin.adc) || 0) > 1e-6);
+        this.mcu.setAnalogWave(pin.adc, t => v0 + parts.reduce((a, sl) => a + sl.k.get(pin.adc) * (signalAt(this.editor.partById(sl.e.partId) || {}, t) - sl.s0), 0));
+      } else this.mcu.setAnalog(pin.adc, v == null ? 0 : v);
     }
     this.applyVisuals(circuit);
   }

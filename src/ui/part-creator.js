@@ -46,7 +46,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     ['Basics', ['none', 'resistor', 'variable-resistor', 'led', 'led-array', 'switch', 'button']],
     ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'opamp', 'inamp', 'relay', 'capacitor', 'inductor']],
     ['Sound, motors & motion', ['buzzer', 'motor', 'servo', 'stepper']],
-    ['Sensors & inputs', ['analog-sensor', 'digital-sensor', 'ultrasonic', 'encoder']],
+    ['Sensors & inputs', ['analog-sensor', 'digital-sensor', 'ultrasonic', 'encoder', 'signal-source']],
     ['Chips', ['mux', 'logic']],
   ];
   const kindOption = k => { const o = document.createElement('option'); o.value = k; o.textContent = BEHAVIOURS[k].label; return o; };

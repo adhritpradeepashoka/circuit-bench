@@ -20,6 +20,7 @@ const clean = {
   volts: num(1.5, 12),     // battery
   dist: num(2, 400),       // ultrasonic sensor, cm
   phase: v => ((+v || 0) & 3),   // rotary encoder quadrature phase
+  signal: v => (['ecg', 'emg', 'eeg', 'eog', 'sine'].includes(v) ? v : 'ecg'), bpm: num(40, 180), effort: num(0, 100), scale: num(0, 300), contact: num(1, 100), hum: num(0, 100), attached: v => (+v === 0 ? 0 : 1),   // biosignal source
   keys: v => ((+v || 0) & 0xffff), bits: v => ((+v || 0) & 0xffff),   // keypad: one bit per key; DIP bank: one bit per switch
   jx: num(0, 100), jy: num(0, 100), jsel: v => (+v ? 1 : 0),   // joystick
   len: num(38.4, 600),     // resistor lead spacing (world px)

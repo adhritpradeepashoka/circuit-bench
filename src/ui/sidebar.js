@@ -4,6 +4,7 @@ import { formatOhms } from '../core/resistance.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { sidePanes } from './side-panes.js';
 import { customTypes, builtinTypes, BEHAVIOURS } from '../core/custom-parts.js';
+import { menuFirst } from '../core/workspaces.js';
 
 const $ = id => document.getElementById(id);
 const BLURB = {
@@ -55,7 +56,8 @@ export function initSidebar(editor) {
     const blurb = d => BLURB[d.type] || (d.custom ? d.spec.description || BEHAVIOURS[d.spec.behaviour.kind].label : '');
     const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => !q || `${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`.toLowerCase().includes(q));
     const showCreate = !q || 'my parts create make new custom part creator'.includes(q) || items.some(d => d.custom && !d.builtin);
-    const cats = [...new Set(items.map(d => d.category))];
+    const first = menuFirst();
+    const cats = [...new Set(items.map(d => d.category))].sort((a, b) => (first.includes(a) ? first.indexOf(a) : 99) - (first.includes(b) ? first.indexOf(b) : 99));      // the active workspace's sections lead the menu
     if (showCreate && !cats.includes('My parts')) cats.push('My parts');
     for (const cat of cats) {
       const h = document.createElement('div');
@@ -73,7 +75,7 @@ export function initSidebar(editor) {
         const add = document.createElement('span');
         add.className = 'add'; add.textContent = 'Add';
         card.append(thumb(def.type), copy);
-        if (def.custom && !def.builtin) {
+        if (def.custom && !def.builtin && !def.fromWorkspace) {
           const edit = document.createElement('button');
           edit.type = 'button'; edit.className = 'edit-part'; edit.title = `Edit ${def.name}`; edit.setAttribute('aria-label', `Edit ${def.name}`); edit.textContent = '✎';
           edit.addEventListener('click', e => { e.stopPropagation(); editor.emit('edit-part', def.type); });

@@ -14,4 +14,6 @@ import { initProjects } from '../../src/ui/projects.js';
 import { initMpuInspector } from '../../src/ui/mpu-inspector.js';
 import { initTour } from '../../src/ui/tour.js';
 import { initAccount } from '../../src/ui/account.js';
-window.__lab = { Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initSettingsEditor, initPartCreator, initAiPanel, initProjects, initMpuInspector, initTour, initAccount };
+import { initWorkspaces } from '../../src/ui/workspaces.js';
+import * as workspaceCore from '../../src/core/workspaces.js';
+window.__lab = { initWorkspaces, workspaceCore, Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initSettingsEditor, initPartCreator, initAiPanel, initProjects, initMpuInspector, initTour, initAccount };

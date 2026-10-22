@@ -597,3 +597,12 @@ button { cursor: pointer; }
 @keyframes cp-spin { to { transform: rotate(360deg); } }
 .pc-template { margin-bottom: 8px; }
 .pc-template i { font-weight: 400; opacity: .7; }
+
+/* Workspaces dialog */
+.top-btn { height: 34px; padding: 0 13px; border: 1px solid #36424a; border-radius: 8px; background: var(--ink-2); color: var(--ink-text); cursor: pointer; }
+.top-btn:hover { background: #2b353b; }
+.ws-card { max-width: 640px; }
+.ws-list { padding: 0 18px; overflow-y: auto; max-height: 46vh; }
+.ws-group { margin: 12px 0 4px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+.ws-row { border: 1px solid var(--line); margin-bottom: 6px; }
+.ws-save { border-top: 1px solid var(--line); border-bottom: 0; padding-top: 12px; margin-top: 8px; }

@@ -1895,3 +1895,55 @@ test('ui: a KiCad board imported as a part travels in the project, is drawn as t
   assert.ok(svg.includes('<circle') && svg.includes('P1'), 'drawn as the round board with its pins');
   assert.equal(editor.exportProject().wires.length, 2, 'wires to the board survive a save');
 });
+
+test('ui: a firmware analogRead() sees the ECG moving while it runs — a BioAmp Pill fed by a biosignal source swings the ADC far above and below its half-supply rest level', async () => {
+  const { editor, sim, code } = boot();
+  const file = editor.exportProject();
+  file.parts.push({ id: 'bs', type: 'custom-signal-source', x: 700, y: 40, rotate: 0, signal: 'ecg', bpm: 70, scale: 100 }, { id: 'px', type: 'custom-bioamp-exg-pill', x: 900, y: 40, rotate: 0 });
+  file.wires = [wire('a', 'uno-1', '5V', 'px', 'VCC'), wire('b', 'uno-1', 'GND.1', 'px', 'GND'), wire('c', 'uno-1', 'A0', 'px', 'OUT'),
+    wire('d', 'bs', 'E+', 'px', 'IN+'), wire('e', 'bs', 'E-', 'px', 'IN-'), wire('f', 'bs', 'REF', 'px', 'REF')];
+  editor.importProject(file);
+  code.source = sketch('bio-ecg');
+  await sim.start(); sim.step();
+  for (let t = 0; t < 3.4; t += 0.05) { sim.mcu.run(0.05 * 16e6); sim.step(); sim.animate(0.05); }
+  const m = /max=(\d+) min=(\d+)/.exec(code.serial.text.replace(/\r/g, '')) || /max=(\d+) min=(\d+)/.exec(sim.mcu.serialText?.() || '');
+  assert.ok(m, `the sketch reported: ${JSON.stringify(code.serial.text)}`);
+  const [hi, lo] = [+m[1], +m[2]];
+  assert.ok(hi - lo > 100, `ECG swing is visible at the ADC (max ${hi}, min ${lo})`);
+  assert.ok(lo > 300 && hi < 900, `it rests near half supply (≈512) and does not clip (max ${hi}, min ${lo})`);
+  sim.stop();
+});
+
+test('ui: Workspaces — a Bioelectronics project starts with the signal source and BioAmp Pill on the board and the sketch loaded, the menu leads with Biosignal, and saved/imported workspaces are checked and reusable', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
+  w.__lab.initWorkspaces({ editor, code, projects });
+  const titles = () => [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
+  assert.notEqual(titles()[0], 'Biosignal', 'the plain Electronics workspace does not lead with it');
+  doc.getElementById('workspacesBtn').click();
+  assert.equal(doc.getElementById('workspacesModal').hidden, false);
+  assert.ok([...doc.querySelectorAll('#wsList .ws-row b')].some(b => b.textContent === 'Bioelectronics'), 'built-in workspaces are listed');
+  await projects.create({ name: 'Heart', workspace: 'bioelectronics' }); await flush(); await flush();
+  assert.equal(projects.current.workspace, 'bioelectronics');
+  const types = editor.state.parts.map(p => p.type);
+  assert.ok(types.includes('arduino-uno') && types.includes('custom-signal-source') && types.includes('custom-bioamp-exg-pill'), `starter parts: ${types}`);
+  assert.match(code.source, /BioAmp EXG Pill/, 'and the heartbeat sketch');
+  assert.equal(titles()[0], 'Biosignal', 'the menu leads with the workspace’s section');
+  // save the open project as a workspace → listed under Mine → starts new projects as that board
+  doc.getElementById('wsSaveName').value = 'My heart lab';
+  doc.getElementById('wsSaveForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
+  const mine = w.__lab.workspaceCore.listWorkspaces().find(x => x.name === 'My heart lab');
+  assert.ok(mine && !mine.builtin && mine.starter.project.parts.length >= 4);
+  assert.ok(w.localStorage.getItem('circuitbench:workspaces').includes('My heart lab'), 'kept in this browser');
+  await projects.create({ name: 'From mine', workspace: mine.id }); await flush(); await flush();
+  assert.equal(editor.state.parts.filter(p => p.type === 'custom-bioamp-exg-pill').length, 1);
+  // a hostile / broken file is refused; a good one with its own part is imported
+  const { validateWorkspace } = w.__lab.workspaceCore;
+  assert.equal(validateWorkspace({ format: 'nope' }).ok, false);
+  assert.equal(validateWorkspace({ format: 'circuitbench-workspace', name: 'X', starter: { extra: [{ type: 'no-such-part', x: 0, y: 0 }] } }).ok, false, 'unknown starter parts are rejected');
+  const good = validateWorkspace({ format: 'circuitbench-workspace', name: 'Pico lab', menuFirst: ['Pico lab'], parts: [{ name: 'Test gizmo', pins: [{ id: 'A' }, { id: 'B' }], behaviour: { kind: 'resistor', roles: { a: 'A', b: 'B' }, ohms: 100 } }] });
+  assert.ok(good.ok, good.errors?.join(';'));
+  assert.equal(w.__lab.workspaceCore.saveWorkspace(good.workspace, w.localStorage).ok, true);
+  assert.ok(Object.values(w.__lab.workspaceCore.listWorkspaces()).some(x => x.parts.length === 1));
+});

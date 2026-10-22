@@ -149,6 +149,9 @@ export function compile(state) {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply });
       }
+      else if (kind === 'signal-source') {
+        if (part.attached !== 0) elements.push({ kind: 'BIO', partId: part.id, pos: r('pos'), neg: r('neg'), ref: r('ref'), rc: 2000 + 1000 * Math.max(1, part.contact ?? 5) });
+      }
       else if (kind === 'inamp') {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply, gain: bh.gain, bias: bh.bias === 'ref' && roles.ref ? { mode: 'ref', net: r('ref') } : { mode: bh.bias === 'zero' ? 'zero' : bh.bias === 'ref' ? 'zero' : 'mid' } });

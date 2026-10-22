@@ -332,3 +332,18 @@ test('BioAmp EXG Pill and instrumentation amp: output rests at half supply, foll
   const tl = vs => run([bat('b', vs), { id: 'o', type: 'custom-opamp-tl07x', x: 0, y: 0, rot: 0 }, res('rl', 1000)], [W('b', '+', 'o', 'V+'), W('b', '-', 'o', 'V-'), W('o', 'OUT', 'rl', '1'), W('rl', '2', 'b', '-')]);
   assert.ok(Math.abs(tl(5).v('o', 'OUT')) < 0.2, 'TL072 needs more than 5 V to wake up');
 });
+
+test('biosignal source through the BioAmp Pill: the ADC-side voltage follows the ECG, strength scales it, a peeled-off electrode gives a flat line at half supply', async () => {
+  const { signalAt, ecgBeat } = await import('../src/core/signals.js');
+  // the textbook shape: R peak is the largest positive point (~1 mV), S/Q dips are negative, nothing is NaN
+  const samples = Array.from({ length: 1000 }, (_, i) => ecgBeat(i / 1000));
+  near(Math.max(...samples), 0.001, 0.0002, 'R peak ≈ 1 mV'); assert.ok(Math.min(...samples) < -0.0001 && samples.every(Number.isFinite));
+  near(signalAt({ signal: 'ecg', bpm: 60 }, 0.31), signalAt({ signal: 'ecg', bpm: 60 }, 1.31), 5e-5, 'periodic with the heart rate (plus a slow breathing sway)');
+  assert.ok(Math.abs(signalAt({ signal: 'emg', effort: 0 }, 0.5)) < 1e-9, 'a relaxed muscle is silent');
+  assert.ok(Math.abs(signalAt({ signal: 'emg', effort: 100 }, 0.5)) + Math.abs(signalAt({ signal: 'emg', effort: 100 }, 0.51)) > 0, 'a tensed one is not');
+  const chain = (vs, part = {}) => run([bat('b', 5), { id: 'bs', type: 'custom-signal-source', x: 0, y: 0, rot: 0, ...part }, { id: 'px', type: 'custom-bioamp-exg-pill', x: 0, y: 0, rot: 0 }],
+    [W('b', '+', 'px', 'VCC'), W('b', '-', 'px', 'GND'), W('bs', 'E+', 'px', 'IN+'), W('bs', 'E-', 'px', 'IN-'), W('bs', 'REF', 'px', 'REF')], { signals: new Map([['bs', vs]]) });
+  near(chain(0).v('px', 'OUT'), 2.5, 0.05, 'idle at half supply');
+  near(chain(0.001).v('px', 'OUT'), 3.5, 0.1, '1 mV × 1000');
+  near(chain(0.001, { attached: 0 }).v('px', 'OUT'), 2.5, 0.05, 'peeled-off electrodes pick nothing up');
+});

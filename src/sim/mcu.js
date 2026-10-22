@@ -62,7 +62,17 @@ export class Mcu {
   }
   get baud() { return this.usart.baudRate || 0; }
   /** Volts (0–5) presented to ADC channel n (A0 = 0 …). */
-  setAnalog(channel, volts) { if (channel < this.adc.channelValues.length) this.adc.channelValues[channel] = Math.max(0, Math.min(5, volts)); }
+  setAnalog(channel, volts) {
+    if (channel >= this.adc.channelValues.length) return;
+    if (this.waves?.has(channel)) { this.waves.delete(channel); Object.defineProperty(this.adc.channelValues, channel, { value: 0, writable: true, configurable: true, enumerable: true }); }
+    this.adc.channelValues[channel] = Math.max(0, Math.min(5, volts));
+  }
+  /** An analog input that keeps changing WHILE the firmware runs (a biosignal): each analogRead sees the voltage at the moment of the conversion, not the value from the last frame. */
+  setAnalogWave(channel, volts) {
+    if (channel >= this.adc.channelValues.length) return;
+    (this.waves ||= new Set()).add(channel);
+    Object.defineProperty(this.adc.channelValues, channel, { get: () => Math.max(0, Math.min(5, volts(this.seconds))), set: () => {}, configurable: true, enumerable: true });
+  }
   /**
    * If `pin` (Arduino number) is currently producing PWM (analogWrite), the duty cycle 0–1; otherwise null.
    * Read from the timer registers, not sampled from the fast waveform — the DC solver uses the average.
