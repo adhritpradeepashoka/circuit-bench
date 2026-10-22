@@ -223,6 +223,12 @@
           <textarea id="pcDescribe" rows="2" maxlength="1500" placeholder="e.g. a KY-038 sound sensor module with VCC, GND, analog out and digital out"></textarea>
           <button type="button" id="pcAiGo">Make it</button>
         </div>
+        <div class="pc-ai-opts">
+          <label>AI <select id="pcProvider" aria-label="AI provider"></select></label>
+          <input id="pcModel" type="text" placeholder="Model (optional)" autocomplete="off" spellcheck="false" aria-label="Model id (optional)">
+          <input id="pcKey" type="password" placeholder="Paste your key for this provider" autocomplete="off" spellcheck="false" aria-label="API key" hidden>
+          <a id="pcGetKey" href="#" target="_blank" rel="noopener" hidden>Get a key ↗</a>
+        </div>
         <div class="pc-ai-status" id="pcAiStatus" aria-live="polite"></div>
       </div>
       <div class="pc-grid">

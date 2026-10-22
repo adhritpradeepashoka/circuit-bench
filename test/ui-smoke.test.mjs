@@ -1085,6 +1085,22 @@ test('ui: AI providers — each keeps its own key, switching is one click, and t
   assert.equal(doc.getElementById('aiKeyRow').hidden, true, 'pasting a key saves it straight away');
 });
 
+test('ui: Part Creator — pick which AI makes the part (shared with the chat); a provider without a key asks for one right there, and pasting it saves it', () => {
+  const { w, editor } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false }) });
+  editor.emit('create-part');
+  assert.deepEqual([...$('pcProvider').options].map(o => o.value), ['gemini', 'groq', 'nvidia', 'meta', 'openrouter']);
+  $('pcProvider').value = 'groq'; $('pcProvider').dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal(w.localStorage.getItem('virtual-lab:ai-provider'), 'groq');
+  assert.equal($('pcKey').hidden, false, 'no Groq key yet');
+  assert.match($('pcGetKey').href, /console\.groq\.com/);
+  $('pcKey').value = 'gsk_abcdefghijklmnopqrstuvwxyz'; $('pcKey').dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal($('pcKey').hidden, true);
+  assert.equal(w.localStorage.getItem('virtual-lab:ai-key:groq'), 'gsk_abcdefghijklmnopqrstuvwxyz');
+  assert.ok([...$('pcProvider').options].find(o => o.value === 'groq').textContent.includes('✓'));
+});
+
 test('ui: My projects — first run adopts your existing work, new projects start clean, switching restores each one’s circuit and code, and it all survives a reload', async () => {
   const { w, editor, code, sim } = boot();
   const doc = w.document;

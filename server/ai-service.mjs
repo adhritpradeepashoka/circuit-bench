@@ -458,12 +458,12 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     const p = needKey(userKey, provider);
     let problems = null;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const { text, sources, searched } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true, model });
+      const { text, sources, searched, meta } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true, model });
       const m = matchJsonFence(text);
       const raw = m ? tryParseJson(m[1]) : null;
       if (!raw) { problems = ['The reply had no valid json block.']; continue; }
       const v = validatePartSpec(raw);
-      if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300), sources, searched };
+      if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300), sources, searched, meta };
       problems = v.errors;
     }
     throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')} Try describing it differently, or build it in the Part Creator.`, 502);

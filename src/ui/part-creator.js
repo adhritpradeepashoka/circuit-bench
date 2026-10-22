@@ -8,7 +8,7 @@ import { TEMPLATES as ALL_TEMPLATES, TEMPLATE_GROUPS, POPULAR } from '../core/pa
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { customPartSVG } from '../parts/elements.js';
-import { createPart as defaultCreatePart } from '../sim/ai-client.mjs';
+import { createPart as defaultCreatePart, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS } from '../sim/ai-client.mjs';
 
 const LIBRARY = 'circuitbench:my-parts';
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -257,6 +257,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   }
 
   function open(type = null, prefill = null) {
+    if (typeof paintProvider === 'function') paintProvider();
     editing = type && PART_DEFS[type]?.custom ? type : null;
     draft = editing ? clone(PART_DEFS[editing].spec) : blank();
     $('partTitle').textContent = editing ? `Edit “${PART_DEFS[editing].name}”` : 'Create a part';
@@ -298,20 +299,37 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     close();
   }
 
+  // Which AI makes the part: the same provider / keys / model as the chat (they share the one saved setting)
+  const provSel = $('pcProvider'), provModel = $('pcModel'), provKey = $('pcKey'), provGet = $('pcGetKey');
+  function paintProvider() {
+    const cur = getStoredProvider(), info = PROVIDER_INFO[cur];
+    provSel.replaceChildren(...PROVIDER_IDS.map(id => el('option', { value: id, textContent: `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ' (no key)'}`, selected: id === cur })));
+    provModel.placeholder = `Model (optional, default ${info.model})`; provModel.value = getStoredModel(cur);
+    const need = !getStoredKey(cur);
+    provKey.hidden = !need; provGet.hidden = !need; provKey.value = '';
+    provGet.href = info.keyUrl; provGet.textContent = `Get a ${info.label} key ↗`;
+  }
+  provSel.addEventListener('change', () => { setStoredProvider(provSel.value); paintProvider(); });
+  provModel.addEventListener('change', () => setStoredModel(provModel.value.trim()));
+  provKey.addEventListener('input', () => { const v = provKey.value.trim(); if (/^[\w.-]{20,}$/.test(v)) { setStoredKey(v); paintProvider(); $('pcAiStatus').textContent = `${PROVIDER_INFO[getStoredProvider()].label} key saved — only in this browser.`; $('pcAiStatus').className = 'pc-ai-status'; } });
+  paintProvider();
+
   async function askAi() {
     const description = $('pcDescribe').value.trim();
     const status = $('pcAiStatus');
     if (!description) { status.textContent = 'Describe the part first — what it is and which pins it has.'; status.className = 'pc-ai-status bad'; return; }
     aiBusy?.abort(); aiBusy = new AbortController();
-    $('pcAiGo').disabled = true; status.className = 'pc-ai-status'; status.textContent = 'Designing your part…';
+    setStoredModel(provModel.value.trim());
+    $('pcAiGo').disabled = true; status.className = 'pc-ai-status'; status.textContent = `Designing your part with ${PROVIDER_INFO[getStoredProvider()].label}…`;
     let res;
     try { res = await createPart({ description, signal: aiBusy.signal }); } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
     finally { $('pcAiGo').disabled = false; }
+    if (!res?.ok && res?.needsKey) { paintProvider(); provKey.focus(); res = { ...res, error: `Paste your ${PROVIDER_INFO[getStoredProvider()].label} key above (or pick a provider that has one), then try again.` }; }
     if (!res?.ok) { status.textContent = res?.error || 'The AI could not make that part.'; status.className = 'pc-ai-status bad'; return; }
     const keepId = draft.id;
     draft = { ...clone(res.spec), id: editing || keepId };
     paintForm();
-    status.replaceChildren(el('span', { textContent: `Here it is — check the pins, then save.${res.note ? ` Note: ${res.note}` : ''}` }));
+    status.replaceChildren(el('span', { textContent: `Here it is — check the pins, then save.${res.meta ? ` (${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s)` : ''}${res.note ? ` Note: ${res.note}` : ''}` }));
     if (res.sources?.length) {
       const list = el('span', { className: 'pc-sources' });
       list.append(el('span', { textContent: ' Looked at: ' }));
