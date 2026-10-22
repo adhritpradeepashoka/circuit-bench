@@ -99,7 +99,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dist = fileURLToPath(new URL('../dist', import.meta.url));
   const staticDir = await stat(dist).then(() => dist, () => null);
   const compiler = createCompiler();
-  const server = createServer({ compiler, staticDir, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: process.env.GOOGLE_CLIENT_ID || null }, log: m => console.log(`[vlab] ${m}`) });
+  const server = createServer({ compiler, staticDir, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: process.env.GOOGLE_CLIENT_ID || '137986291175-5s42d2u26q1029oo1v5dhged48dg79fb.apps.googleusercontent.com' }, log: m => console.log(`[vlab] ${m}`) });
   server.listen(port, host, async () => {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);
