@@ -242,6 +242,7 @@ export class Editor {
         if (model && model.value !== p.pos) model.value = p.pos;
       } else if (PART_DEFS[p.type]?.custom) {
         const kind = PART_DEFS[p.type].spec.behaviour.kind, model = visualTarget(root, PART_DEFS[p.type]);
+        const skinEl = PART_DEFS[p.type].skin && model?.el; if (skinEl) SKINS[PART_DEFS[p.type].skin]?.apply?.(skinEl, p);
         if (model && kind === 'switch') model.lit = p.pos ? 1 : 0;                           // the lever shows which way it is flipped
         else if (model && kind === 'encoder' && !this.running) model.aux = this.encAngle?.get(p.id) ?? 0;
       } else if (p.type === 'potentiometer') {
@@ -257,6 +258,53 @@ export class Editor {
     part[key] = value;
     this.applyPartValues(); this.markDirty(); this.renderOverlay();
     if (commit) this.commit();
+  }
+  /** Where a pointer is on a part, in the element's own millimetres (undoes the part's rotation about its centre). */
+  localMm(part, e) {
+    const w = this.toWorld(e), { w: pw, h: ph } = PART_DEFS[part.type], a = -((part.rot || 0) * Math.PI) / 180;
+    const dx = w.x - (part.x + pw / 2), dy = w.y - (part.y + ph / 2), MM = 96 / 25.4;
+    return { x: (dx * Math.cos(a) - dy * Math.sin(a) + pw / 2) / MM, y: (dx * Math.sin(a) + dy * Math.cos(a) + ph / 2) / MM };
+  }
+  /** Click handling for the Wokwi input parts whose controls are drawn inside the element: keypad keys, DIP switches, the joystick. Returns true when it used the click. */
+  beginPartInput(e, part, kind) {
+    const m = this.localMm(part, e), id = part.id;
+    if (kind === 'keypad') {
+      const cx = [7, 22, 37, 52], ry = [10.7, 25, 39.3, 53.6];
+      const c = cx.findIndex(x => m.x >= x && m.x <= x + 11.2), r = ry.findIndex(y => m.y >= y && m.y <= y + 11);
+      if (c < 0 || r < 0) return false;
+      e.preventDefault();
+      const bit = 1 << (r * 4 + c), keys = PART_DEFS[part.type].skin ? ['1', '2', '3', 'A', '4', '5', '6', 'B', '7', '8', '9', 'C', '*', '0', '#', 'D'] : [];
+      const set = on => { part.keys = on ? (part.keys | bit) : (part.keys & ~bit); this.applyPartValues(); this.markDirty(); };
+      set(true); this.status(`Keypad: key ${keys[r * 4 + c] ?? ''} held down`);
+      this.track(() => {}, () => set(false));
+      return true;
+    }
+    if (kind === 'switch-bank') {
+      const off = [0, 9.6, 19.4, 29.1, 38.5, 48.1, 57.7, 67.3];
+      const i = off.findIndex(x => m.x >= x + 3.7 && m.x <= x + 11.5);
+      if (i < 0 || m.y < 14 || m.y > 36) return false;
+      e.preventDefault();
+      part.bits ^= 1 << i; this.applyPartValues(); this.markDirty(); this.commit();
+      this.status(`DIP switch ${i + 1} is now ${(part.bits >> i) & 1 ? 'ON' : 'OFF'}`);
+      return true;
+    }
+    if (kind === 'joystick') {
+      const w = 27.2, h = 31.8;
+      if (m.x < 0 || m.x > w || m.y < 0 || m.y > 27) return false;
+      e.preventDefault();
+      const s0 = { x: e.clientX, y: e.clientY }; let moved = false;
+      const move = ev => {
+        if (!moved && Math.hypot(ev.clientX - s0.x, ev.clientY - s0.y) < 4) return;
+        moved = true; const q = this.localMm(part, ev);
+        part.jx = Math.round(Math.min(100, Math.max(0, (q.x / w) * 100))); part.jy = Math.round(Math.min(100, Math.max(0, (q.y / 24) * 100)));
+        this.applyPartValues(); this.markDirty();
+      };
+      this.status('Joystick: drag to move the stick, or just click to press it');
+      part.jsel = 1; this.applyPartValues(); this.markDirty();
+      this.track(ev => { if (part.jsel && !moved) { move(ev); if (moved) { part.jsel = 0; } } else move(ev); }, () => { part.jsel = 0; part.jx = 50; part.jy = 50; this.applyPartValues(); this.markDirty(); });
+      return true;
+    }
+    return false;
   }
   /** A student-made switch: click flips it (works while the simulation runs too). */
   toggleCustomSwitch(part) {
@@ -538,6 +586,9 @@ export class Editor {
       this.setButtonPressed(id, true);
       this.track(() => {}, () => this.setButtonPressed(id, false));
       return;
+    }
+    if ((custom === 'keypad' && this.running) || custom === 'switch-bank' || (custom === 'joystick' && this.running)) {
+      if (this.beginPartInput(e, part, custom)) return;       // clicked a key / switch / the stick: operate it instead of dragging the part
     }
     if (custom === 'encoder' && this.running) {                                              // left = back, right = forward, middle = press the shaft
       e.preventDefault();

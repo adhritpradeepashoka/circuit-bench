@@ -1856,3 +1856,15 @@ test('ui: the catalogue’s real Wokwi parts — a wokwi-servo follows the Servo
   assert.ok(lit > 3, `segment 3 lit ${lit} times`);
   sim.stop();
 });
+
+test('ui: the real Wokwi keypad, DIP switch, joystick, gas and flame sensors are in the catalogue, draw as their elements, and clicks operate them', () => {
+  const { editor } = boot();
+  for (const [id, tag] of [['keypad-4x4', 'wokwi-membrane-keypad'], ['dip-switch-8', 'wokwi-dip-switch-8'], ['joystick', 'wokwi-analog-joystick'], ['gas-sensor', 'wokwi-gas-sensor'], ['flame-sensor', 'wokwi-flame-sensor']]) {
+    assert.ok(PART_DEFS[id]?.native && PART_DEFS[id].tag === tag, `${id} is the real ${tag}`);
+  }
+  const file = editor.exportProject();
+  file.parts.push({ id: 'kp', type: 'keypad-4x4', x: 700, y: 40, rotate: 0 }, { id: 'dp', type: 'dip-switch-8', x: 900, y: 40, rotate: 0, bits: 5 });
+  editor.importProject(file);
+  assert.ok(editor.els.get('kp').querySelector('wokwi-membrane-keypad'));
+  assert.deepEqual([...editor.els.get('dp').querySelector('wokwi-dip-switch-8').values], [1, 0, 1, 0, 0, 0, 0, 0], 'saved switch positions are drawn');
+});

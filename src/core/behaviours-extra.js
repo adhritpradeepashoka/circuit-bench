@@ -165,6 +165,30 @@ export const EXTRA_BEHAVIOURS = {
     props: { phase: 0 },
     note: 'While running, click the left side to turn one notch anticlockwise, the right side for clockwise, and the middle to press the shaft. A and B pull to the common pin in the quadrature pattern real encoders give, so use INPUT_PULLUP on them.',
   },
+  keypad: {
+    label: 'Matrix keypad (rows × columns of push keys)',
+    ...roles({}),
+    lists: { rows: 'Row pins, row 1 first', cols: 'Column pins, column 1 first' },
+    props: { keys: 0 },
+    note: 'Pressing a key joins its row pin to its column pin. Scan it like a real keypad: drive one row at a time (or use INPUT_PULLUP on the rows and pull one column LOW) and read the others. Click a key while the simulation runs.',
+  },
+  'switch-bank': {
+    label: 'DIP switch bank (each switch joins two pins)',
+    ...roles({}),
+    lists: { a: 'Side A pins, switch 1 first', b: 'Side B pins, switch 1 first (same order)' },
+    props: { bits: 0 },
+    note: 'Switch n joins A-pin n to B-pin n when it is flipped ON. Click a switch to flip it (works while the simulation runs). Wire one side to GND or 5V and the other to Arduino pins with INPUT_PULLUP.',
+  },
+  joystick: {
+    label: 'Analog joystick (two potentiometers and a push button)',
+    ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)', horz: 'Horizontal out (HORZ)', vert: 'Vertical out (VERT)' }, { sel: 'Push button (SEL — optional)' }),
+    props: { jx: 50, jy: 50, jsel: 0 },
+    settings: [
+      { key: 'jx', label: 'Horizontal', min: 0, max: 100, step: 1, fmt: pct },
+      { key: 'jy', label: 'Vertical', min: 0, max: 100, step: 1, fmt: pct },
+    ],
+    note: 'HORZ and VERT are voltage dividers that sit at half the supply in the middle and move towards VCC or GND as the stick moves. SEL pulls to GND while the stick is pressed, so use INPUT_PULLUP. Drag the stick, or use the sliders in the right-click panel.',
+  },
   stepper: {
     label: 'Stepper motor (counts the coil pattern the sketch sends)',
     ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)' }),
@@ -175,7 +199,7 @@ export const EXTRA_BEHAVIOURS = {
 };
 
 /** Behaviours drawn with a schematic symbol / live indicator in the middle of the part (see iconSVG in src/parts/elements.js). */
-export const ICON_KINDS = new Set(['switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper']);
+export const ICON_KINDS = new Set(['switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper', 'keypad', 'switch-bank', 'joystick']);
 
 /** Behaviours that need the firmware's pin timing (not just the solved voltages). */
 export const TIMED_KINDS = new Set(['servo', 'ultrasonic', 'stepper']);

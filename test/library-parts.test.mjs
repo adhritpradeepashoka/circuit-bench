@@ -259,3 +259,22 @@ test('native Wokwi parts: the DPDT relay switches both poles together; the bar g
   const bad = validatePartSpec({ name: 'B', pins: [{ id: 'A1' }, { id: 'A2' }], behaviour: { kind: 'led-array', roles: {}, segments: ['A1', 'A2'] } });
   assert.equal(bad.ok, false); assert.ok(bad.errors.some(e => /common pin|second pin/.test(e)));
 });
+
+test('native Wokwi inputs: keypad keys, DIP switches, the joystick dividers and the sensors\' DOUT comparator', () => {
+  const r = (id, ohms) => res(id, ohms);
+  // keypad: R2 is fed 5 V; pressing key (row 2, column 3) = bit 6 puts that voltage on C3 (through a 1 k to GND)
+  const pad = keys => run([bat('b', 5), r('rl', 1000), { id: 'kp', type: 'keypad-4x4', x: 0, y: 0, rot: 0, keys }],
+    [W('b', '+', 'kp', 'R2'), W('kp', 'C3', 'rl', '1'), W('rl', '2', 'b', '-')]);
+  near(pad(0).v('rl', '1'), 0, 0.1, 'no key: C3 floats low'); near(pad(1 << 6).v('rl', '1'), 5, 0.2, 'key held: R2 joins C3');
+  near(pad(1 << 5).v('rl', '1'), 0, 0.1, 'a different key does nothing to C3');
+  // DIP: switch 4 joins 4a to 4b
+  const dip = bits => run([bat('b', 5), r('rl', 1000), { id: 'dp', type: 'dip-switch-8', x: 0, y: 0, rot: 0, bits }],
+    [W('b', '+', 'dp', '4a'), W('dp', '4b', 'rl', '1'), W('rl', '2', 'b', '-')]);
+  near(dip(0).v('rl', '1'), 0, 0.1); near(dip(1 << 3).v('rl', '1'), 5, 0.2);
+  // joystick: HORZ sits at half supply in the middle and follows jx; SEL pulls to GND when pressed
+  const joy = p => run([bat('b', 5), { id: 'jy', type: 'joystick', x: 0, y: 0, rot: 0, ...p }], [W('b', '+', 'jy', 'VCC'), W('b', '-', 'jy', 'GND')]);
+  near(joy({}).v('jy', 'HORZ'), 2.5, 0.1); near(joy({ jx: 100 }).v('jy', 'HORZ'), 5, 0.1); near(joy({ jy: 0 }).v('jy', 'VERT'), 0, 0.1);
+  // gas sensor: DOUT is LOW above the threshold, HIGH below it (and AOUT follows the level)
+  const gas = level => run([bat('b', 5), { id: 'gs', type: 'gas-sensor', x: 0, y: 0, rot: 0, level }], [W('b', '+', 'gs', 'VCC'), W('b', '-', 'gs', 'GND')]);
+  near(gas(20).v('gs', 'DOUT'), 5, 0.3, 'low gas: DOUT high'); near(gas(80).v('gs', 'DOUT'), 0, 0.3, 'lots of gas: DOUT low'); near(gas(80).v('gs', 'AOUT'), 4, 0.2);
+});

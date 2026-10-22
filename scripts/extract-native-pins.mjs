@@ -15,7 +15,7 @@ rmSync(entry);
 const dom = new JSDOM('<!doctype html><body></body>', { runScripts: 'outside-only', pretendToBeVisual: true });
 dom.window.eval(out.outputFiles[0].text);
 
-const TAGS = ['wokwi-servo', 'wokwi-hc-sr04', 'wokwi-ky-040', 'wokwi-buzzer', 'wokwi-led-bar-graph', 'wokwi-ks2e-m-dc5', 'wokwi-tilt-switch', 'wokwi-small-sound-sensor', 'wokwi-big-sound-sensor', 'wokwi-slide-potentiometer'];
+const TAGS = ['wokwi-servo', 'wokwi-hc-sr04', 'wokwi-ky-040', 'wokwi-buzzer', 'wokwi-led-bar-graph', 'wokwi-ks2e-m-dc5', 'wokwi-tilt-switch', 'wokwi-small-sound-sensor', 'wokwi-big-sound-sensor', 'wokwi-slide-potentiometer', 'wokwi-membrane-keypad', 'wokwi-dip-switch-8', 'wokwi-analog-joystick', 'wokwi-gas-sensor', 'wokwi-flame-sensor'];
 const body = TAGS.map(tag => {
   const pins = dom.window.document.createElement(tag).pinInfo || [];
   if (!pins.length) throw new Error(`${tag}: no pinInfo`);

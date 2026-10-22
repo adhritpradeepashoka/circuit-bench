@@ -137,7 +137,33 @@ export function compile(state) {
       if (kind === 'resistor') elements.push({ kind: 'R', partId: part.id, a: r('a'), b: r('b'), ohms });
       else if (kind === 'led') elements.push({ kind: 'LED', partId: part.id, a: r('anode'), k: r('cathode'), vf: ledVf(color), rd: ledRd(color) });
       else if (kind === 'button') elements.push({ kind: 'SW', partId: part.id, a: r('a'), b: r('b') });
-      else if (kind === 'analog-sensor') elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('out'), frac: Math.min(1, Math.max(0, (part.level ?? 50) / 100)) });
+      else if (kind === 'analog-sensor') {
+        const level = Math.min(100, Math.max(0, part.level ?? 50)), bh = PART_DEFS[part.type].spec.behaviour;
+        elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('out'), frac: level / 100 });
+        if (roles.dout) {      // the module's comparator: DOUT flips when the level passes the threshold
+          const above = level >= (bh.threshold ?? 50);
+          elements.push({ kind: 'SRC', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), out: r('dout'), frac: (bh.doutActive === 'high' ? above : !above) ? 1 : 0 });
+        }
+      }
+      else if (kind === 'keypad') {
+        const bh = PART_DEFS[part.type].spec.behaviour, cols = bh.cols.length;
+        bh.rows.forEach((rp, i) => bh.cols.forEach((cp, j) => {
+          if (((part.keys ?? 0) >> (i * 4 + j)) & 1) elements.push({ kind: 'SW', partId: part.id, a: netOf(part.id, rp), b: netOf(part.id, cp), closed: true, fixed: true });
+        }));
+      }
+      else if (kind === 'switch-bank') {
+        const bh = PART_DEFS[part.type].spec.behaviour;
+        bh.a.forEach((ap, i) => { if (((part.bits ?? 0) >> i) & 1) elements.push({ kind: 'SW', partId: part.id, a: netOf(part.id, ap), b: netOf(part.id, bh.b[i]), closed: true, fixed: true }); });
+      }
+      else if (kind === 'joystick') {
+        const div = (pin, level) => {
+          const f = Math.min(1, Math.max(0, level / 100));
+          elements.push({ kind: 'R', partId: part.id, a: r('vcc'), b: r(pin), ohms: Math.max(1, 10000 * (1 - f)) });
+          elements.push({ kind: 'R', partId: part.id, a: r(pin), b: r('gnd'), ohms: Math.max(1, 10000 * f) });
+        };
+        div('horz', part.jx ?? 50); div('vert', part.jy ?? 50);
+        if (roles.sel && part.jsel) elements.push({ kind: 'SW', partId: part.id, a: r('sel'), b: r('gnd'), closed: true, fixed: true });
+      }
       else if (kind === 'mux') {
         const b = PART_DEFS[part.type].spec.behaviour, n = pin => netOf(part.id, pin);
         elements.push({ kind: 'MUX', partId: part.id, vcc: r('vcc'), gnd: r('gnd'), common: r('common'), en: roles.enable ? r('enable') : null, sel: b.select.map(n), ch: b.channels.map(n) });

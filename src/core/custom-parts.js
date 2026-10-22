@@ -38,7 +38,15 @@ export const BEHAVIOURS = {
   resistor: { label: 'Resistor / load between two pins', roles: ['a', 'b'], roleLabels: { a: 'Terminal 1', b: 'Terminal 2' }, note: 'A fixed resistance between two pins (a heater, a buzzer coil, a speaker…).' },
   led: { label: 'Light (an LED inside)', roles: ['anode', 'cathode'], roleLabels: { anode: 'Anode (+)', cathode: 'Cathode (−)' }, note: 'Lights up when current flows from + to −. Needs a series resistor like any LED.' },
   button: { label: 'Push button (press it while running)', roles: ['a', 'b'], roleLabels: { a: 'Contact 1', b: 'Contact 2' }, note: 'Joins the two contacts while you hold it down in the running simulation.' },
-  'analog-sensor': { label: 'Analog sensor (a slider sets its output)', roles: ['vcc', 'gnd', 'out'], roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', out: 'Signal out' }, note: 'OUT = VCC × the slider position. Read it with analogRead().' },
+  'analog-sensor': {
+    label: 'Analog sensor (a slider sets its output)', roles: ['vcc', 'gnd', 'out'], optional: ['dout'],
+    roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', out: 'Signal out', dout: 'Digital out (DOUT — optional comparator output)' },
+    params: [
+      { key: 'threshold', label: 'DOUT switches at', unit: '%', min: 0, max: 100, step: 1, def: 50 },
+      { key: 'doutActive', label: 'DOUT is active', options: [['high', 'HIGH above the threshold'], ['low', 'LOW above the threshold (most modules)']], def: 'low' },
+    ],
+    note: 'OUT = VCC × the slider position. Read it with analogRead(). If it has a DOUT pin, DOUT flips when the slider passes the threshold, like the comparator on a real module.',
+  },
   mux: {
     label: 'Multiplexer (select pins pick a channel)', roles: ['vcc', 'gnd', 'common'], optional: ['enable'],
     roleLabels: { vcc: 'Power (VCC)', gnd: 'Ground (GND)', common: 'Common pin (SIG / Z)', enable: 'Enable (EN, active LOW — optional)' },
@@ -146,6 +154,8 @@ export function validatePartSpec(raw, { id } = {}) {
       if (behaviour.segments.length < 1) errors.push('An LED array needs at least one LED pin.');
       if (behaviour.cathodes.length ? behaviour.cathodes.length !== behaviour.segments.length : !behaviour.roles.common) errors.push(behaviour.cathodes.length ? 'Give each LED its own second pin (the lists must be the same length).' : 'An LED array needs a common pin, or a second pin for every LED.');
     }
+    if (kind === 'keypad' && (behaviour.rows.length < 1 || behaviour.cols.length < 1)) errors.push('A keypad needs at least one row pin and one column pin.');
+    if (kind === 'switch-bank' && (behaviour.a.length < 1 || behaviour.a.length !== behaviour.b.length)) errors.push('A switch bank needs the same number of pins on side A and side B (at least one each).');
     if (kind === 'stepper' && behaviour.coils.length !== 4) errors.push('A stepper motor needs exactly 4 coil input pins (IN1…IN4).');
     if (kind === 'logic') {
       const v = validateLogicBehaviour(b, pins.map(p => p.id), behaviour.roles);
@@ -259,7 +269,7 @@ export function partDefFromSpec(spec) {
   return {
     type: spec.id, name: spec.name, category: BUILTIN_CATEGORY.get(spec.id) || 'My parts', tag: 'cb-custom-part', custom: true, spec, ...(BUILTIN_CATEGORY.has(spec.id) ? { builtin: true } : {}),
     w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}), ...(logic ? { logic } : {}),
-    interactive: k === 'button' || k === 'digital-sensor' || !!B.toggle || k === 'encoder',
+    interactive: k === 'button' || k === 'digital-sensor' || !!B.toggle || k === 'encoder' || k === 'keypad' || k === 'switch-bank' || k === 'joystick',
     aiNote: `Student-made part. ${B.note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${paramText ? ` Settings: ${paramText}.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
   };
 }

@@ -12,6 +12,21 @@ export const SKINS = {
   'wokwi-ks2e-m-dc5': {},
   'wokwi-tilt-switch': {},
   'wokwi-hc-sr04': {},
+  // Interactive inputs: `apply` paints the part's saved state (keys held, switches flipped, stick position) on the element.
+  'wokwi-membrane-keypad': {
+    init: el => { el.connector = true; },
+    apply: (el, p) => {
+      const paint = () => el.shadowRoot?.querySelectorAll('[data-key-name]').forEach(g => {
+        const i = el.keys.findIndex(k => String(k).toUpperCase() === g.dataset.keyName);
+        g.classList.toggle('pressed', i >= 0 && !!((p.keys >> i) & 1));
+      });
+      paint(); el.updateComplete?.then(paint);
+    },
+  },
+  'wokwi-dip-switch-8': { apply: (el, p) => { el.values = Array.from({ length: 8 }, (_, i) => (p.bits >> i) & 1); } },
+  'wokwi-analog-joystick': { apply: (el, p) => { el.xValue = ((p.jx ?? 50) - 50) / 50; el.yValue = ((p.jy ?? 50) - 50) / 50; el.pressed = !!p.jsel; } },
+  'wokwi-gas-sensor': { set: (el, s) => { el.ledPower = !!s.powered; } },
+  'wokwi-flame-sensor': { set: (el, s) => { el.ledPower = !!s.powered; } },
 };
 
 const state = new WeakMap();
