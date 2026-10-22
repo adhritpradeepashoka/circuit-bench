@@ -89,10 +89,18 @@ export function describeContext(context) {
         if (d.accelG) bits.push(`accel ${['x', 'y', 'z'].map(k => `${k}=${Number(d.accelG[k]) || 0} g`).join(' ')}`);
         if (d.gyroDps) bits.push(`gyro ${['x', 'y', 'z'].map(k => `${k}=${Number(d.gyroDps[k]) || 0} °/s`).join(' ')}`);
         if (d.tempC != null) bits.push(`temp ${Number(d.tempC)} °C`);
+        if (Array.isArray(d.text)) bits.push(d.displayOn ? `LCD shows "${str(d.text[0], 16)}" / "${str(d.text[1], 16)}"${d.backlight ? '' : ' (backlight off)'}` : 'LCD display off / never initialised');
         if (d.on != null) bits.push(d.on ? `display on, ${Number(d.litPixels) || 0} pixels lit${d.inverted ? ', inverted' : ''}` : 'display off / never initialised');
         out.push(`  I²C: ${bits.join('; ')}`);
         for (const p of list(d.problems, 5)) out.push(`    problem: ${str(p, 200)}`);
       }
+      for (const d of list(s.dht, 6)) {
+        if (!d || typeof d !== 'object') continue;
+        out.push(`  ${str(d.model, 6)} sensor ${str(d.id, 30)}: set to ${Number(d.tempC)} °C, ${Number(d.humidity)} %RH; DATA on ${str(d.dataPin, 6) || 'no pin'}; ${Number(d.reads) || 0} successful reads so far${d.problem ? ` — ${str(d.problem, 120)} (the sketch's DHT type must match the part's model)` : ''}`);
+        for (const p of list(d.problems, 5)) out.push(`    problem: ${str(p, 200)}`);
+      }
+      for (const m of list(s.motors, 6)) if (m && typeof m === 'object') out.push(`  Motor ${str(m.id, 30)}: ${Number(m.volts)} V across it, ${Number(m.rpm) ? `${Math.abs(Number(m.rpm))} rpm ${Number(m.rpm) > 0 ? 'forward' : 'reverse'}` : 'not turning'}`);
+      for (const d of list(s.drivers, 6)) if (d && typeof d === 'object') out.push(`  Motor driver ${str(d.id, 30)}: ${d.powered ? 'powered' : 'NO motor power'}; motor A ${str(d.motorA, 10)}, motor B ${str(d.motorB, 10)}`);
       const ua = list(s.i2cUnanswered, 8).map(a => str(a, 6));
       if (ua.length) out.push(`  I²C: the sketch addressed ${ua.join(', ')}, and nothing on the bus has that address`);
     }

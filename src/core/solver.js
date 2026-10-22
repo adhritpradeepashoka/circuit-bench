@@ -9,6 +9,9 @@
 //   • LED             – piecewise-linear diode: per-colour Vf (red ≈ 1.9 V … blue/white ≈ 3.1 V), 5 Ω dynamic resistance above it
 //   • slide switch    – a switch that is always joined to one throw (state comes from the part)
 //   • sensor-module comparator (LDR DO) – HIGH when AO is above half the supply, only while powered
+//   • battery         – a voltage source between its terminals (0.5 Ω internal resistance)
+//   • DC motor        – a resistive load (≈ 20 Ω running); its speed follows the voltage across it
+//   • L298N           – two H-bridges: when powered (12V−GND ≥ 4.5 V) and enabled, each OUT is driven to (12V − 1.4 V) or GND by its IN
 //   • PIR sensor      – powers up when VCC−GND ≥ 4.5 V; OUT is a 3.3 V / 100 Ω source (relative to its GND) while motion is triggered
 export const VCC = 5;
 const G_SOURCE = 1000;      // S  (1 mΩ)
@@ -21,6 +24,9 @@ const G_PIR = 1 / 100;      // S  (module output ≈ 100 Ω)
 const PIR_OUT_V = 3.3, PIR_MIN_SUPPLY = 4.5;
 const G_CMP = 1 / 500;      // S  (comparator output on sensor modules)
 const CMP_MIN_SUPPLY = 3.0;
+const G_BAT = 1 / 0.5;      // S  (battery internal resistance)
+const G_DRV = 1 / 1.5;      // S  (H-bridge output)
+const DRV_DROP = 1.4, DRV_MIN_SUPPLY = 4.5, LOGIC_HIGH = 2.3;
 const G_MIN = 1e-9;         // S  to ground on every node: keeps floating nets solvable
 
 export const LIMITS = { pinA: 0.04, ledA: 0.03 };
@@ -70,7 +76,12 @@ export function solve(circuit, drive) {
   const idx = new Map();
   const use = n => { if (!idx.has(n)) idx.set(n, idx.size); return idx.get(n); };
   sources.forEach(s => use(s.net));
-  circuit.elements.forEach(e => { if (e.kind === 'PIR') { use(e.vcc); use(e.out); use(e.gnd); } else if (e.kind === 'CMP') { use(e.vcc); use(e.gnd); use(e.ao); use(e.out); } else { use(e.a); use(e.b ?? e.k); } });
+  circuit.elements.forEach(e => {
+    if (e.kind === 'PIR') { use(e.vcc); use(e.out); use(e.gnd); }
+    else if (e.kind === 'CMP') { use(e.vcc); use(e.gnd); use(e.ao); use(e.out); }
+    else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
+    else { use(e.a); use(e.b ?? e.k); }
+  });
   const n = idx.size;
   const leds = circuit.elements.filter(e => e.kind === 'LED');
   const ledId = l => l.id ?? l.partId;
@@ -79,6 +90,9 @@ export function solve(circuit, drive) {
   const powered = new Map(pirs.map(p => [p.partId, false]));
   const cmps = circuit.elements.filter(e => e.kind === 'CMP');
   const cmpOn = new Map(cmps.map(c => [c.partId, false])), cmpHigh = new Map(cmps.map(c => [c.partId, false]));
+  const drvs = circuit.elements.filter(e => e.kind === 'DRV');
+  const drvKey = d => drvs.indexOf(d);
+  const drvState = drvs.map(() => ({ powered: false, ch: [{ en: false, a: false, b: false }, { en: false, a: false, b: false }] }));
 
   let x = new Float64Array(n);
   for (let iter = 0; iter < 40; iter++) {
@@ -92,7 +106,23 @@ export function solve(circuit, drive) {
       A[i][i] += g; A[j][j] += g; A[i][j] -= g; A[j][i] -= g;
     };
     for (const e of circuit.elements) {
-      if (e.kind === 'R') stamp(e.a, e.b, 1 / e.ohms);
+      if (e.kind === 'R' || e.kind === 'MOT') stamp(e.a, e.b, 1 / e.ohms);
+      else if (e.kind === 'BAT') {
+        if (e.a !== e.b) { stamp(e.a, e.b, G_BAT); b[idx.get(e.a)] += G_BAT * e.v; b[idx.get(e.b)] -= G_BAT * e.v; }
+      } else if (e.kind === 'DRV') {
+        const st = drvState[drvKey(e)];
+        if (!st.powered) continue;
+        const v = Math.max(0, x[idx.get(e.vs)] - x[idx.get(e.gnd)] - DRV_DROP);
+        e.ch.forEach((c, k) => {
+          const s = st.ch[k];
+          if (!s.en) return;                                   // disabled: outputs float (the motor coasts)
+          for (const [out, hi] of [[c.out1, s.a], [c.out2, s.b]]) {
+            if (out === e.gnd) continue;
+            stamp(out, e.gnd, G_DRV);
+            b[idx.get(out)] += G_DRV * (hi ? v : 0); b[idx.get(e.gnd)] -= G_DRV * (hi ? v : 0);
+          }
+        });
+      }
       else if (e.kind === 'SW') { if (e.closed || drive.pressed.has(e.partId)) stamp(e.a, e.b, G_SWITCH); }
       else if (e.kind === 'PIR' && powered.get(e.partId)) {
         const v = drive.pressed.has(e.partId) ? PIR_OUT_V : 0;      // idle output is driven low once powered
@@ -124,6 +154,16 @@ export function solve(circuit, drive) {
       const on2 = supply >= CMP_MIN_SUPPLY, hi = on2 && x[idx.get(c.ao)] - x[idx.get(c.gnd)] > supply / 2;
       if (on2 !== cmpOn.get(c.partId)) { cmpOn.set(c.partId, on2); changed = true; }
       if (hi !== cmpHigh.get(c.partId)) { cmpHigh.set(c.partId, hi); changed = true; }
+    }
+    for (const d of drvs) {
+      const st = drvState[drvKey(d)], g = x[idx.get(d.gnd)];
+      const p = x[idx.get(d.vs)] - g >= DRV_MIN_SUPPLY;
+      if (p !== st.powered) { st.powered = p; changed = true; }
+      d.ch.forEach((c, k) => {
+        const s = st.ch[k], high = n => x[idx.get(n)] - g > LOGIC_HIGH;
+        const next = { en: c.en == null ? true : high(c.en), a: high(c.in1), b: high(c.in2) };
+        if (next.en !== s.en || next.a !== s.a || next.b !== s.b) { st.ch[k] = next; changed = true; }
+      });
     }
     if (!changed) break;
   }
@@ -161,7 +201,16 @@ export function solve(circuit, drive) {
   for (const p of pirs) if (!powered.get(p.partId)) warnings.push({ partId: p.partId, text: 'A PIR sensor has no supply (VCC − GND is below 4.5 V)' });
   const pirPowered = new Map(powered);
   const modules = new Map(cmps.map(c => [c.partId, { powered: cmpOn.get(c.partId), out: cmpHigh.get(c.partId) }]));
-  return { voltage, ledCurrent, pirPowered, modules, warnings };
+  const motorVolts = new Map(circuit.elements.filter(e => e.kind === 'MOT').map(e => [e.partId, x[idx.get(e.a)] - x[idx.get(e.b)]]));
+  const drivers = new Map(drvs.map(d => {
+    const st = drvState[drvKey(d)];
+    return [d.partId, { powered: st.powered, ch: st.ch.map(s => (!st.powered || !s.en || s.a === s.b ? '' : s.a ? 'fwd' : 'rev')) }];
+  }));
+  for (const d of drvs) {
+    const st = drvState[drvKey(d)];
+    if (!st.powered && d.ch.some((c, k) => st.ch[k].a || st.ch[k].b)) warnings.push({ partId: d.partId, text: 'The L298N has no motor power: connect its 12V terminal to a battery (or VIN) and its GND to the Arduino GND' });
+  }
+  return { voltage, ledCurrent, pirPowered, modules, motorVolts, drivers, warnings };
 }
 
 /**
@@ -198,5 +247,16 @@ export function solveDrive(circuit, drive) {
     for (const r of runs) { const v = r.res.voltage(net); if (v == null) return null; s += r.w * v; }
     return s;
   };
-  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, warnings };
+  const motorVolts = new Map();
+  for (const id of dominant.res.motorVolts.keys()) motorVolts.set(id, runs.reduce((s, r) => s + r.w * (r.res.motorVolts.get(id) || 0), 0));
+  // a PWM'd driver: show the direction it has most of the time
+  return { voltage, ledCurrent, pirPowered: dominant.res.pirPowered, modules: dominant.res.modules, motorVolts, drivers: dominant.res.drivers, warnings };
+}
+
+/** A small 6 V hobby motor: ≈ 250 rpm at 6 V, nothing below the ≈ 0.6 V it takes to overcome friction. Sign = direction. */
+export const MOTOR_RATED_V = 6, MOTOR_RATED_RPM = 250;
+export function motorRpm(volts) {
+  const v = Math.abs(volts || 0);
+  if (v < 0.6) return 0;
+  return Math.sign(volts) * Math.round(Math.min(1.6, (v - 0.6) / (MOTOR_RATED_V - 0.6)) * MOTOR_RATED_RPM);
 }

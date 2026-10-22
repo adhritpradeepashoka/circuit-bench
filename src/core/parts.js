@@ -130,9 +130,49 @@ export const PART_DEFS = {
     i2c: { sda: 'DATA', scl: 'CLK', vcc: ['VIN', '3V3'], gnd: ['GND'], address: 0x3c },
     aiNote: 'I²C at 0x3C. Wire VIN→5V, GND→GND, DATA→A4 (SDA), CLK→A5 (SCL). Libraries available: Wire, Adafruit_SSD1306 + Adafruit_GFX (use display.begin(SSD1306_SWITCHCAPVCC, 0x3C), and call display.display() after drawing).',
   },
+  lcd1602: {
+    type: 'lcd1602', name: 'LCD 16×2 (I²C backpack)', category: 'Displays', tag: 'wokwi-lcd1602',
+    w: 80 * MM, h: 36 * MM,
+    pins: [['GND', 4, 32, 'GND'], ['VCC', 4, 41.5, 'VCC (5 V)'], ['SDA', 4, 51, 'SDA (I²C data)'], ['SCL', 4, 60.5, 'SCL (I²C clock)']].map(([id, x, y, label]) => ({ id, label, x, y, kind: 'pin' })),
+    groups: [], insertable: false, layer: 2,
+    i2c: { sda: 'SDA', scl: 'SCL', vcc: ['VCC'], gnd: ['GND'], address: 0x27 },
+    aiNote: 'HD44780 16×2 character LCD on a PCF8574 I²C backpack at address 0x27. Wire GND→GND, VCC→5V, SDA→the board\'s SDA pin, SCL→its SCL pin. Library available: LiquidCrystal_I2C (LiquidCrystal_I2C lcd(0x27, 16, 2); then lcd.init(); lcd.backlight(); lcd.setCursor(col, row); lcd.print(...)). lcd.init() takes about 1 s. Custom characters with lcd.createChar(0..7, bytes) and lcd.write(n) — call lcd.setCursor() after createChar, or the next print goes into character memory instead of the screen.',
+  },
+  dht: {
+    type: 'dht', name: 'DHT22 / DHT11 Temp + Humidity', category: 'Sensors', tag: 'wokwi-dht22',
+    w: 15.1 * MM, h: 30.885 * MM,
+    pins: [['VCC', 15, 114.9, 'VCC (3.3–5 V)'], ['SDA', 24.5, 114.9, 'DATA (to a digital pin)'], ['NC', 34.1, 114.9, 'NC (not connected)'], ['GND', 43.8, 114.9, 'GND']].map(([id, x, y, label]) => ({ id, label, x, y, kind: 'pin' })),
+    groups: [], insertable: true, layer: 2, props: { model: 'DHT22', temp: 24, humidity: 40 },
+    aiNote: 'Single-wire digital sensor (not analog, not I²C). Wire VCC→5V, GND→GND, DATA→any digital pin. The "model" prop is DHT22 or DHT11 — the sketch must say the same type. Library available: DHT sensor library (#include <DHT.h>; DHT dht(pin, DHT22); dht.begin(); dht.readTemperature(); dht.readHumidity(); — returns NaN when the read fails, and the sensor can only be read every 2 s). The student sets temperature/humidity by right-clicking it.',
+  },
+  'dc-motor': {
+    type: 'dc-motor', name: 'DC Motor', category: 'Motors', tag: 'cb-dc-motor',
+    w: 120, h: 120,
+    pins: [{ id: '1', label: 'Motor + (red)', x: 44, y: 116, kind: 'pin' }, { id: '2', label: 'Motor − (black)', x: 76, y: 116, kind: 'pin' }],
+    groups: [], insertable: false, layer: 2,
+    aiNote: '3–6 V hobby motor (≈ 20 Ω, ~250 rpm at 6 V). It reverses when its two leads are swapped. NEVER wire it straight to an Arduino pin (it needs far more than 40 mA) — drive it through an l298n motor driver: OUT1/OUT2 (or OUT3/OUT4) to the motor.',
+  },
+  l298n: {
+    type: 'l298n', name: 'L298N Motor Driver', category: 'Motors', tag: 'cb-l298n',
+    w: 170, h: 172,
+    pins: [
+      ['OUT1', 7, 60, 'OUT1 (motor A)'], ['OUT2', 7, 80, 'OUT2 (motor A)'], ['OUT3', 163, 60, 'OUT3 (motor B)'], ['OUT4', 163, 80, 'OUT4 (motor B)'],
+      ['12V', 30, 164, '12V (motor supply in)'], ['GND', 50, 164, 'GND'], ['5V', 70, 164, '5V (logic)'],
+      ['ENA', 92, 166, 'ENA (enable A — PWM sets speed)'], ['IN1', 101.6, 166, 'IN1'], ['IN2', 111.2, 166, 'IN2'], ['IN3', 120.8, 166, 'IN3'], ['IN4', 130.4, 166, 'IN4'], ['ENB', 140, 166, 'ENB (enable B — PWM sets speed)'],
+    ].map(([id, x, y, label]) => ({ id, label, x, y, kind: 'pin' })),
+    groups: [], insertable: false, layer: 2,
+    aiNote: 'Dual H-bridge. Motor A: IN1/IN2 set direction (HIGH/LOW = forward, LOW/HIGH = reverse, both the same = stop), ENA enables it (analogWrite on ENA sets the speed; left unconnected, its jumper keeps it fully on). Motor B: IN3/IN4/ENB → OUT3/OUT4. Power: 12V from a battery (6–12 V) or the board\'s VIN, and GND MUST be shared with the Arduino\'s GND. Outputs drop ≈ 1.4 V. Wire ENA/ENB to PWM pins if speed control is wanted.',
+  },
+  battery: {
+    type: 'battery', name: 'Battery (9 V)', category: 'Power', tag: 'cb-battery',
+    w: 76, h: 128,
+    pins: [{ id: '+', label: '+ (positive)', x: 23, y: 9, kind: 'pin' }, { id: '-', label: '− (negative)', x: 51, y: 10, kind: 'pin' }],
+    groups: [], insertable: false, layer: 2, props: { volts: 9 },
+    aiNote: 'A DC supply between + and −; "volts" prop (1.5–12, default 9). Its − must be joined to the Arduino GND when it powers something the Arduino controls.',
+  },
 };
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'mpu6050', 'ssd1306'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

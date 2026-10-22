@@ -10,7 +10,7 @@ import { JSDOM } from 'jsdom';
 import { PART_DEFS } from '../src/core/parts.js';
 import { pinWorld, placeFlex as placeFlexTest, allPinsWorld as allPinsWorldTest } from '../src/core/geometry.js';
 import { compileSketch } from '../src/sim/compile-client.js';
-import { DEFAULT_SKETCH } from '../src/sim/examples.js';
+import { DEFAULT_SKETCH, EXAMPLES } from '../src/sim/examples.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = await build({ entryPoints: [join(root, 'test/fixtures/ui-entry.js')], bundle: true, write: false, format: 'iife', platform: 'browser', loader: { '.css': 'empty' } });
@@ -263,10 +263,10 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
   for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro', 'OLED Display 128×64 (SSD1306)']) assert.ok(names.includes(n), `${n} in catalogue`);
-  for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306']) {
+  for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306', 'arduino-nano', 'arduino-mega', 'dht', 'lcd1602', 'dc-motor', 'l298n', 'battery']) {
     editor.addPart(type);
     assert.ok(editor.state.parts.some(p => p.type === type));
     assert.ok(editor.els.get(editor.state.parts.find(p => p.type === type).id).querySelector(PART_DEFS[type].tag), `${type} renders ${PART_DEFS[type].tag}`);
@@ -1411,4 +1411,75 @@ test('ui: wire types — a Normal / Hookup / Alligator / Automatic menu on the s
   delete file.wires[0].kind;
   editor.importProject(file);
   assert.equal(editor.state.wires[0].kind, 'normal');
+});
+
+test('ui: weather station — DHT22 + 16×2 LCD run the real libraries; right-click the DHT to change the weather and the LCD follows', async () => {
+  const { w, editor, sim, code } = boot();
+  const doc = w.document;
+  w.__lab.initSettingsEditor(editor);
+  const file = editor.exportProject();
+  const W = (id, a, ap, b, bp) => ({ id, from: { part: a, pin: ap }, to: { part: b, pin: bp }, style: 'straight', color: '#2f6cf0', width: 2 });
+  file.parts.push({ id: 'dht1', type: 'dht', x: 700, y: 40, rotate: 0, model: 'DHT22', temp: 21.5, humidity: 48 }, { id: 'lcd1', type: 'lcd1602', x: 700, y: 260, rotate: 0 });
+  file.wires = [W('w1', 'uno-1', '2', 'dht1', 'SDA'), W('w2', 'uno-1', '5V', 'dht1', 'VCC'), W('w3', 'uno-1', 'GND.1', 'dht1', 'GND'),
+    W('w4', 'uno-1', 'A4', 'lcd1', 'SDA'), W('w5', 'uno-1', 'A5', 'lcd1', 'SCL'), W('w6', 'dht1', 'VCC', 'lcd1', 'VCC'), W('w7', 'dht1', 'GND', 'lcd1', 'GND')];
+  editor.importProject(file);
+  const lcdEl = () => editor.els.get('lcd1').querySelector('wokwi-lcd1602');
+  assert.equal(lcdEl().getAttribute('pins'), 'i2c');
+  const glass = () => { const c = lcdEl().characters; return [0, 1].map(r => String.fromCharCode(...[...c.slice(r * 16, r * 16 + 16)].map(x => (x < 16 ? 0xb0 : x)))); };
+  const tick = s => { for (let t = 0; t < s; t += 0.05) { sim.mcu.run(0.05 * 16e6); sim.step(); } code.serial.flush(); };
+
+  code.source = EXAMPLES.weather.code;
+  await sim.start(); assert.ok(sim.running);
+  tick(1.6);
+  assert.match(code.serial.text, /21\.5 C, 48 %/);
+  assert.deepEqual(glass(), ['Weather station ', '21.5°C  48%     ']);
+  assert.equal(lcdEl().backlight, true);
+  const snap = sim.snapshot();
+  assert.deepEqual(JSON.parse(JSON.stringify(snap.dht[0])), { id: 'dht1', model: 'DHT22', tempC: 21.5, humidity: 48, reads: snap.dht[0].reads, dataPin: 'D2' });
+  assert.deepEqual([...snap.i2c.find(d => d.id === 'lcd1').text], ['Weather station ', '21.5?C  48%     ']);
+
+  // right-click → settings; the sketch reads the new values within its 2 s loop
+  editor.emit('part-context', { part: editor.partById('dht1'), clientX: 300, clientY: 200 });
+  const box = doc.getElementById('setEditor');
+  assert.equal(box.hidden, false);
+  const t = doc.getElementById('set-temp'); t.value = '-3.5'; t.dispatchEvent(new w.Event('change', { bubbles: true }));
+  const h = doc.getElementById('set-humidity'); h.value = '90'; h.dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal(editor.partById('dht1').temp, -3.5);
+  tick(2.2);
+  assert.equal(glass()[1], '-3.5°C  90%     ');
+  // DHT11 in the circuit, DHT22 in the sketch → garbage, like the real thing; mismatch is visible to the AI via model
+  const sel = doc.getElementById('set-model'); sel.value = 'DHT11'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
+  assert.equal(editor.partById('dht1').model, 'DHT11');
+  tick(2.2);
+  assert.equal(sim.snapshot().dht[0].model, 'DHT11');
+  sim.stop();
+  assert.equal(glass()[0].trim(), '', 'LCD clears when stopped');
+});
+
+test('ui: motor control — L298N + battery + DC motor; the example ramps the motor forward then reverse; the AI snapshot has its speed', async () => {
+  const { editor, sim, code } = boot();
+  const file = editor.exportProject();
+  const W = (id, a, ap, b, bp) => ({ id, from: { part: a, pin: ap }, to: { part: b, pin: bp }, style: 'straight', color: '#2f6cf0', width: 2 });
+  file.parts.push({ id: 'drv', type: 'l298n', x: 700, y: 40, rotate: 0 }, { id: 'mot', type: 'dc-motor', x: 950, y: 40, rotate: 0 }, { id: 'bat', type: 'battery', x: 700, y: 300, rotate: 0, volts: 9 });
+  file.wires = [W('w1', 'uno-1', '8', 'drv', 'IN1'), W('w2', 'uno-1', '7', 'drv', 'IN2'), W('w3', 'uno-1', '9', 'drv', 'ENA'), W('w4', 'drv', 'OUT1', 'mot', '1'), W('w5', 'drv', 'OUT2', 'mot', '2'),
+    W('w6', 'bat', '+', 'drv', '12V'), W('w7', 'bat', '-', 'drv', 'GND'), W('w8', 'drv', 'GND', 'uno-1', 'GND.1')];
+  editor.importProject(file);
+  const motorEl = () => editor.els.get('mot').querySelector('cb-dc-motor') || editor.els.get('mot');
+  const tick = s => { for (let t = 0; t < s; t += 0.05) { sim.mcu.run(0.05 * 16e6); sim.step(); } code.serial.flush(); };
+  code.source = EXAMPLES.motor.code;
+  await sim.start();
+  tick(1.5);                                     // speed 102 (40 %) around now
+  const slow = motorEl().rpm;
+  assert.ok(slow > 0, `turning forward: ${slow}`);
+  tick(1.9);                                     // 255
+  const fast = motorEl().rpm;
+  assert.ok(fast > slow, `faster: ${slow} → ${fast}`);
+  assert.equal(editor.els.get('drv').querySelector('cb-l298n')?.ledPower ?? editor.els.get('drv').ledPower, true);
+  tick(2.6);                                     // into the reverse ramp
+  assert.ok(motorEl().rpm < 0, `reverse: ${motorEl().rpm}`);
+  const snap = sim.snapshot();
+  assert.equal(snap.motors[0].id, 'mot'); assert.ok(snap.motors[0].rpm < 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(snap.drivers[0])), { id: 'drv', powered: true, motorA: 'rev', motorB: 'stopped' });
+  sim.stop();
+  assert.equal(motorEl().rpm, 0);
 });

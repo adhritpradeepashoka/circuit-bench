@@ -6,7 +6,7 @@ import { isMcuBoard, boardPowerPin } from '../core/boards.js';
 import { wireGeometry, paramFromHandle } from '../core/wirepath.js';
 import { wireArt, resolveWireKind, DEFAULT_WIRE_KIND, LEGACY_WIRE_KIND, WIRE_KINDS, WIRE_KIND_ICONS, WIRE_KIND_ORDER } from '../core/wire-kinds.js';
 import { snapshot, restore, toProjectFile, fromProjectFile } from '../core/project.js';
-import { CONTROLS, partLabel } from '../core/controls.js';
+import { CONTROLS, SETTINGS, partLabel } from '../core/controls.js';
 
 export const DRAG_MIME = 'application/x-virtual-lab-part';
 const STORAGE_KEY = 'virtual-lab:v0.1:workspace';
@@ -61,6 +61,8 @@ export function createModelElement(type, part = null) {
   if (type === 'seven-segment') { el.setAttribute('color', '#ff3b30'); el.setAttribute('offColor', '#3a3a3a'); }
   if (type === 'resistor') el.setAttribute('value', String(part?.ohms ?? def.ohms));
   if (type === 'pushbutton') el.setAttribute('color', 'green');
+  if (type === 'lcd1602') { el.setAttribute('pins', 'i2c'); el.backlight = false; el.characters = new Uint8Array(32).fill(32); }
+  if (type === 'battery') el.volts = part?.volts ?? def.props.volts;
   return el;
 }
 
@@ -220,7 +222,10 @@ export class Editor {
     for (const p of this.state.parts) {
       const root = this.els.get(p.id);
       if (!root) continue;
-      if (p.type === 'resistor') {
+      if (p.type === 'battery') {
+        const model = root.matches?.('cb-battery') ? root : root.querySelector('cb-battery');
+        if (model) model.volts = p.volts;
+      } else if (p.type === 'resistor') {
         const model = root.querySelector('wokwi-resistor');
         if (model && model.value !== String(p.ohms)) model.value = String(p.ohms);
       } else if (p.type === 'led') {
@@ -400,7 +405,7 @@ export class Editor {
       if (this.draft) { e.preventDefault(); return; }
       if (e.target.closest?.('.part-editor')) return;
       const partEl = e.target.closest?.('.part'), part = partEl && this.partById(partEl.dataset.id);
-      if (part && (part.type === 'resistor' || part.type === 'led' || CONTROLS[part.type] || PART_DEFS[part.type]?.inspector)) {          // right-click → edit value / colour
+      if (part && (part.type === 'resistor' || part.type === 'led' || CONTROLS[part.type] || SETTINGS[part.type] || PART_DEFS[part.type]?.inspector)) {          // right-click → edit value / colour
         e.preventDefault();
         this.select({ kind: 'part', id: part.id });
         this.emit('part-context', { part, clientX: e.clientX, clientY: e.clientY });

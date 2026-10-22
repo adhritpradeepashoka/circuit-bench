@@ -9,6 +9,11 @@ const BLURB = {
   'arduino-uno': 'ATmega328P board',
   'arduino-nano': 'Small Uno · plugs into a breadboard',
   'arduino-mega': 'ATmega2560 · 54 digital, 16 analog pins',
+  dht: 'Temperature + humidity · right-click to set',
+  lcd1602: '2 lines of text over I²C (0x27)',
+  'dc-motor': 'Spins with the voltage across it',
+  l298n: 'Dual H-bridge: direction + PWM speed',
+  battery: '1.5–12 V supply · right-click to set',
   breadboard: '400 tie points',
   led: '5 mm, right-click to set colour',
   resistor: '¼ W, ±5 %, bendable legs, right-click for value',
@@ -23,7 +28,7 @@ const BLURB = {
   mpu6050: 'I²C, right-click to tilt it in 3D',
   ssd1306: 'I²C graphics display, 0x3C',
 };
-const KEYWORDS = { led: 'diode light', resistor: 'ohm resistance value 220 pullup', pushbutton: 'switch button input', 'rgb-led': 'rgb colour multicolor tricolor light', 'slide-switch': 'switch toggle spdt input', 'seven-segment': 'display digit number 7 segment 7seg numeric', 'pir-sensor': 'motion sensor pir hc-sr501 presence detector', potentiometer: 'pot knob dial trimmer analog variable resistor volume', 'ldr-module': 'ldr light sensor photoresistor brightness lux analog', 'ntc-sensor': 'temperature thermistor ntc sensor heat analog', breadboard: 'protoboard solderless', 'arduino-uno': 'mcu atmega328p microcontroller', 'arduino-nano': 'nano mcu atmega328p microcontroller small breadboard', 'arduino-mega': 'mega 2560 atmega2560 mcu microcontroller big many pins', mpu6050: 'mpu6050 mpu-6050 gy-521 accelerometer gyroscope gyro imu tilt motion orientation i2c', ssd1306: 'oled display screen ssd1306 128x64 graphics lcd i2c' };
+const KEYWORDS = { led: 'diode light', resistor: 'ohm resistance value 220 pullup', pushbutton: 'switch button input', 'rgb-led': 'rgb colour multicolor tricolor light', 'slide-switch': 'switch toggle spdt input', 'seven-segment': 'display digit number 7 segment 7seg numeric', 'pir-sensor': 'motion sensor pir hc-sr501 presence detector', potentiometer: 'pot knob dial trimmer analog variable resistor volume', 'ldr-module': 'ldr light sensor photoresistor brightness lux analog', 'ntc-sensor': 'temperature thermistor ntc sensor heat analog', breadboard: 'protoboard solderless', 'arduino-uno': 'mcu atmega328p microcontroller', 'arduino-nano': 'nano mcu atmega328p microcontroller small breadboard', 'arduino-mega': 'mega 2560 atmega2560 mcu microcontroller big many pins', mpu6050: 'mpu6050 mpu-6050 gy-521 accelerometer gyroscope gyro imu tilt motion orientation i2c', ssd1306: 'oled display screen ssd1306 128x64 graphics lcd i2c', dht: 'dht dht11 dht22 am2302 temperature humidity weather sensor', lcd1602: 'lcd 16x2 1602 character display text screen i2c liquidcrystal', 'dc-motor': 'motor dc spin wheel fan robot', l298n: 'l298n motor driver h-bridge h bridge robot', battery: 'battery 9v power supply cell aa' };
 
 export function initSidebar(editor) {
   let query = '';

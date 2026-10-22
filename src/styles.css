@@ -310,6 +310,11 @@ button { cursor: pointer; }
 
 /* ── analog value editor (potentiometer / light / temperature) ── */
 .value-editor { width: 250px; }
+.settings-editor { width: 270px; }
+.settings-editor .set-field { display: block; margin-top: 8px; }
+.settings-editor .set-field > span { display: flex; justify-content: space-between; gap: 8px; }
+.settings-editor input[type=range] { width: 100%; accent-color: var(--blue); margin: 3px 0 0; }
+.settings-editor select { width: 100%; height: 30px; margin-top: 4px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
 .value-editor input[type=range] { width: 100%; accent-color: var(--blue); margin: 3px 0 0; }
 .ve-presets { grid-template-columns: repeat(3, 1fr); }
 .ve-presets button { font-family: var(--ui); font-size: 11px; }

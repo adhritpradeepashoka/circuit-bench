@@ -22,6 +22,8 @@ class UnionFind {
 
 import { BOARD_SPECS, boardPowerPin, mainBoard } from './boards.js';
 
+export const MOTOR_OHMS = 20;      // a small 3–6 V hobby motor, running
+
 /**
  * Build the electrical model from the editor state:
  *   • breadboard internal strips and rails            (from the part definition)
@@ -130,6 +132,20 @@ export function compile(state) {
       const { sda, scl, vcc } = PART_DEFS[part.type].i2c, v = netOf(part.id, vcc[0]);
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, sda), b: v, ohms: 4700 });
       elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, scl), b: v, ohms: 4700 });
+    } else if (part.type === 'dht') {
+      elements.push({ kind: 'R', partId: part.id, a: netOf(part.id, 'SDA'), b: netOf(part.id, 'VCC'), ohms: 10000 });   // the module's pull-up on DATA
+    } else if (part.type === 'dc-motor') {
+      elements.push({ kind: 'MOT', partId: part.id, a: netOf(part.id, '1'), b: netOf(part.id, '2'), ohms: MOTOR_OHMS });
+    } else if (part.type === 'battery') {
+      elements.push({ kind: 'BAT', partId: part.id, a: netOf(part.id, '+'), b: netOf(part.id, '-'), v: part.volts ?? 9 });
+      if (netOf(part.id, '+') === netOf(part.id, '-')) issues.push({ partId: part.id, text: 'The battery\'s + and − are connected together: that is a short circuit.' });
+    } else if (part.type === 'l298n') {
+      const n = pin => netOf(part.id, pin), alone = pin => nets[n(pin)].keys.length === 1;      // nothing on ENA → its jumper holds the channel enabled
+      elements.push({
+        kind: 'DRV', partId: part.id, vs: n('12V'), gnd: n('GND'),
+        ch: [{ in1: n('IN1'), in2: n('IN2'), en: alone('ENA') ? null : n('ENA'), out1: n('OUT1'), out2: n('OUT2') },
+          { in1: n('IN3'), in2: n('IN4'), en: alone('ENB') ? null : n('ENB'), out1: n('OUT3'), out2: n('OUT4') }],
+      });
     } else if (part.type === 'pir-sensor') {
       elements.push({ kind: 'PIR', partId: part.id, vcc: netOf(part.id, 'VCC'), out: netOf(part.id, 'OUT'), gnd: netOf(part.id, 'GND') });
     }
@@ -154,6 +170,10 @@ export function compile(state) {
     if (nets[netOfKey.get(key)].keys.some(k => k !== key && !isBoard(splitKey(k).partId))) continue;
     openLeads.push({ partId: part.id, pin, text: part.type === 'resistor' ? `Resistor ${formatOhms(part.ohms || 220)}: ${name} is not connected to anything, so no current flows through it` : `LED: ${name} is not connected to anything` });
   }
+
+  // A motor straight on an I/O pin: it would need far more current than the pin can give.
+  const ioNets = new Map(uno.pins.filter(p => p.port).map(p => [p.net, p.label]));
+  for (const e of elements) if (e.kind === 'MOT') for (const t of [e.a, e.b]) if (ioNets.has(t)) issues.push({ partId: e.partId, text: `A DC motor is wired straight to ${ioNets.get(t)}: an Arduino pin can't power a motor (40 mA max) — drive it through an L298N motor driver` });
 
   return { nets, netOf, netOfKey, elements, uno, attachments, issues, openLeads };
 }

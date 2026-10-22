@@ -22,6 +22,22 @@ export const CONTROLS = {
   },
 };
 
+// Parts with several settings (right-click → a small panel with one row per field).
+export const SETTINGS = {
+  dht: {
+    title: 'DHT sensor', note: 'The sketch reads these values over the DATA wire — they change live while it runs.',
+    fields: [
+      { key: 'model', label: 'Model', kind: 'select', options: [['DHT22', 'DHT22 (−40…80 °C, 0.1° steps)'], ['DHT11', 'DHT11 (0…50 °C, whole degrees)']] },
+      { key: 'temp', label: 'Temperature', kind: 'range', min: -40, max: 80, step: 0.5, fmt: v => `${(+v).toFixed(1)} °C` },
+      { key: 'humidity', label: 'Humidity', kind: 'range', min: 0, max: 100, step: 1, fmt: v => `${Math.round(v)} %` },
+    ],
+  },
+  battery: {
+    title: 'Battery', note: 'Motors run faster on a higher voltage. An L298N needs at least ~5 V.',
+    fields: [{ key: 'volts', label: 'Voltage', kind: 'range', min: 1.5, max: 12, step: 0.5, fmt: v => `${(+v).toFixed(1)} V`, presets: [['AA', 1.5], ['4×AA', 6], ['9 V', 9], ['12 V', 12]] }],
+  },
+};
+
 /** Slider position 0–100 ↔ value (linear, or log10 for lux). */
 export const toValue = (c, s) => (c.log ? Math.pow(10, Math.log10(c.min) + (Math.log10(c.max) - Math.log10(c.min)) * s / 100) : c.min + (c.max - c.min) * s / 100);
 export const toSlider = (c, v) => (c.log ? 100 * (Math.log10(v) - Math.log10(c.min)) / (Math.log10(c.max) - Math.log10(c.min)) : 100 * (v - c.min) / (c.max - c.min));
@@ -29,6 +45,8 @@ export const toSlider = (c, v) => (c.log ? 100 * (Math.log10(v) - Math.log10(c.m
 /** Short text drawn next to a part on the canvas, or null. */
 export function partLabel(part) {
   if (part.type === 'resistor') return formatOhms(part.ohms);
+  if (part.type === 'dht') return `${part.model || 'DHT22'} · ${(+(part.temp ?? 24)).toFixed(1)} °C · ${Math.round(part.humidity ?? 40)} %`;
+  if (part.type === 'battery') return `${(+(part.volts ?? 9)).toFixed(1)} V`;
   const c = CONTROLS[part.type];
   return c ? c.fmt(part[c.key]) : null;
 }

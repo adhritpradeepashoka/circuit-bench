@@ -137,6 +137,11 @@ autosave, JSON export/import. Breadboard topology is real (A–E and F–J per c
 | Arduino Uno R3, solderless breadboard | real ATmega328P |
 | Arduino Nano | same chip as the Uno; plugs into the breadboard; A6/A7 are analog-input only |
 | Arduino Mega 2560 | real ATmega2560: 54 digital pins, A0–A15, timers 0–5 (PWM on D2–D13, D44–D46), I²C on D20/D21 |
+| DHT22 / DHT11 | single-wire protocol timed in CPU cycles, so the real Adafruit `DHT` library reads it; right-click to set model, temperature, humidity |
+| LCD 16×2 (I²C) | PCF8574 backpack at 0x27 + HD44780 in 4-bit mode; the real `LiquidCrystal_I2C` library drives it, custom characters included |
+| L298N motor driver | two H-bridges: IN1/IN2 direction, ENA/ENB enable (PWM = speed; unconnected = jumper on), outputs ≈ supply − 1.4 V |
+| DC motor | ≈ 20 Ω load, ~250 rpm at 6 V; spins on screen with speed and direction; flagged if wired straight to a pin |
+| Battery | 1.5–12 V source (0.5 Ω internal); right-click to set the voltage |
 | LED | right-click → colour (red, yellow, orange, green, blue, white); colour sets forward voltage (≈1.9 V … 3.1 V) |
 | RGB LED | common cathode; each colour is its own diode |
 | Resistor | **bendable legs**: it stretches and turns to fit exactly between any two holes (minimum 4 pitches, the body length) — drop it and both leads snap dead-centre into the nearest free holes; select it and drag either lead handle to move just that leg (Alt = no hole snapping). Right-click → value (`220`, `4.7k`, `4k7`, `1M`, `330 ohm`; colour bands follow; 1 Ω – 10 MΩ) |

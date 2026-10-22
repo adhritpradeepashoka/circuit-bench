@@ -8,8 +8,12 @@ import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { i2cParts, i2cHex } from '../core/i2c.js';
 import { Mpu6050 } from '../parts/mpu6050.js';
 import { Ssd1306, OLED_W, OLED_H } from '../parts/ssd1306.js';
+import { Lcd1602 } from '../parts/lcd1602.js';
+import { Dht } from '../parts/dht.js';
+import { dhtParts } from '../core/digital.js';
+import { motorRpm } from '../core/solver.js';
 
-const I2C_MODELS = { mpu6050: () => new Mpu6050(), ssd1306: () => new Ssd1306() };
+const I2C_MODELS = { mpu6050: () => new Mpu6050(), ssd1306: () => new Ssd1306(), lcd1602: () => new Lcd1602() };
 
 const $ = id => document.getElementById(id);
 const LED_FULL_A = 0.010;   // ≈ full brightness at 10 mA
@@ -75,7 +79,7 @@ export class Simulation {
       this.mcu.usart.onConfigurationChange = () => serial.setBaud(Math.round(this.mcu.baud));
     }
     this.code.setRunning?.(true);
-    this.models = new Map(); this.i2cInfo = []; this.i2cVersion = -1;
+    this.models = new Map(); this.i2cInfo = []; this.i2cVersion = -1; this.dhts = new Map(); this.dhtInfo = [];
     this.i2cPrepare();                                  // attach I²C devices before setup() runs its Wire.begin()/begin() calls
     this.running = true; this.paused = false; this.error = null; this.lastSig = ''; this.result = null;
     this.editor.setRunning(true);
@@ -95,6 +99,8 @@ export class Simulation {
     for (const id of [...this.pressed]) this.editor.setButtonPressed(id, false);
     this.pressed.clear();
     this.editor.setRunning(false); this.editor.probe = null;
+    for (const m of this.dhts?.values() || []) m.detach();
+    this.dhts = new Map(); this.dhtInfo = [];
     this.mcu = null; this.result = null;
     this.code.setRunning?.(false);
     this.resetVisuals();
@@ -150,9 +156,10 @@ export class Simulation {
     this.lastSig = sig;
     this.modes = modes;
     this.result = solveDrive(circuit, { pins: modes, pressed: this.pressed, duty });
+    const digitalDriven = new Set(this.dhtInfo.filter(d => d.attached).map(d => d.pin.name));   // a DHT times its own line, cycle by cycle
     for (const pin of circuit.uno.pins) {
       const m = modes.get(pin.name);
-      if (pin.port && (m === 'Z' || m === 'U')) {
+      if (pin.port && (m === 'Z' || m === 'U') && !digitalDriven.has(pin.name)) {
         const v = this.result.voltage(pin.net);
         this.mcu.setInput(pin, v == null ? m === 'U' : v > 2.5);
       }
@@ -174,7 +181,15 @@ export class Simulation {
       for (const id of [...this.models.keys()]) if (!this.i2cInfo.some(d => d.partId === id)) this.models.delete(id);
       for (const d of this.i2cInfo) if (!this.models.has(d.partId)) this.models.set(d.partId, I2C_MODELS[d.type]());
       this.mcu.i2c.setDevices(new Map(this.i2cInfo.filter(d => d.attached).map(d => [d.address, this.models.get(d.partId)])));
+      this.dhtInfo = dhtParts(circuit, this.editor.state.parts);
+      for (const [id, m] of [...this.dhts]) if (!this.dhtInfo.some(d => d.partId === id && d.model === m.model)) { m.detach(); this.dhts.delete(id); }
+      for (const d of this.dhtInfo) {
+        if (!this.dhts.has(d.partId)) this.dhts.set(d.partId, new Dht(d.model));
+        const m = this.dhts.get(d.partId);
+        if (d.attached) m.attach(this.mcu, d.pin); else m.detach();
+      }
     }
+    for (const d of this.dhtInfo) { const p = this.editor.partById(d.partId); if (p) this.dhts.get(d.partId)?.setValues({ temp: p.temp ?? 24, humidity: p.humidity ?? 40 }); }
     for (const d of this.i2cInfo) {
       const m = this.models.get(d.partId);
       if (m instanceof Mpu6050) m.setPose(this.editor.partById(d.partId) || {}, this.mcu.seconds);
@@ -186,7 +201,17 @@ export class Simulation {
       const root = this.editor.els.get(d.partId), m = this.models.get(d.partId);
       if (!root || !m) continue;
       if (d.type === 'mpu6050') { const el = root.querySelector('wokwi-mpu6050'); const on = !d.problems.some(p => /power|GND/.test(p)); if (el && el.led1 !== on) el.led1 = on; }
-      else if (d.type === 'ssd1306') {
+      else if (d.type === 'lcd1602') {
+        const el = root.querySelector('wokwi-lcd1602');
+        if (el && el._drawn !== m.version) {
+          el._drawn = m.version;
+          if (!el._baseFont) el._baseFont = el.font;
+          el.font = m.font(el._baseFont);
+          el.characters = m.characters();
+          el.backlight = m.backlight;
+          const c = m.cursor(); el.cursor = c.show; el.blink = c.blink && m.displayOn; el.cursorX = c.x; el.cursorY = c.y;
+        }
+      } else if (d.type === 'ssd1306') {
         const el = root.querySelector('wokwi-ssd1306');
         if (el?.imageData && el._drawn !== m.version) { el._drawn = m.version; m.renderRGBA(el.imageData.data); el.redraw?.(); }
       }
@@ -214,6 +239,12 @@ export class Simulation {
       } else if (part.type === 'ldr-module') {
         const el = root.querySelector('wokwi-photoresistor-sensor'), m = result.modules?.get(part.id);
         if (el && m) { if (el.ledPower !== m.powered) el.ledPower = m.powered; if (el.ledDO !== m.out) el.ledDO = m.out; }
+      } else if (part.type === 'dc-motor') {
+        const el = root.matches?.('cb-dc-motor') ? root : root.querySelector('cb-dc-motor');
+        if (el) el.rpm = motorRpm(result.motorVolts?.get(part.id) || 0);
+      } else if (part.type === 'l298n') {
+        const el = root.matches?.('cb-l298n') ? root : root.querySelector('cb-l298n'), d = result.drivers?.get(part.id);
+        if (el) { el.ledPower = !!d?.powered; el.channels = d?.ch || ['', '']; }
       } else if (BOARD_SPECS[part.type]) {
         const el = root.querySelector(PART_DEFS[part.type].tag);
         if (!el) continue;
@@ -234,6 +265,9 @@ export class Simulation {
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
       if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; } }
       if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
+      if (part.type === 'dc-motor') { const el = root?.matches?.('cb-dc-motor') ? root : root?.querySelector('cb-dc-motor'); if (el) el.rpm = 0; }
+      if (part.type === 'l298n') { const el = root?.matches?.('cb-l298n') ? root : root?.querySelector('cb-l298n'); if (el) { el.ledPower = false; el.channels = ['', '']; } }
+      if (part.type === 'lcd1602') { const el = root?.querySelector('wokwi-lcd1602'); if (el) { el.characters = new Uint8Array(32).fill(32); el.backlight = false; el.cursor = false; el.blink = false; el._drawn = null; } }
       if (part.type === 'ssd1306') { const el = root?.querySelector('wokwi-ssd1306'); if (el?.imageData) { el.imageData.data.fill(0); for (let i = 3; i < el.imageData.data.length; i += 4) el.imageData.data[i] = 255; el._drawn = null; el.redraw?.(); } }
     }
   }
@@ -265,13 +299,16 @@ export class Simulation {
       const m = this.models.get(d.partId), e = { id: d.partId, type: d.type, address: i2cHex(d.address), onBus: d.attached };
       if (d.problems.length) e.problems = d.problems;
       if (m instanceof Mpu6050) { const r = m.readings(); e.asleep = m.asleep; e.accelG = Object.fromEntries(Object.entries(r.accel).map(([k, v]) => [k, r2(v)])); e.gyroDps = Object.fromEntries(Object.entries(r.gyro).map(([k, v]) => [k, r2(v)])); e.tempC = r2(r.tempC); }
-      if (m instanceof Ssd1306) Object.assign(e, m.summary());
+      if (m instanceof Ssd1306 || m instanceof Lcd1602) Object.assign(e, m.summary());
       return e;
     });
+    const dht = this.dhtInfo.map(d => ({ id: d.partId, ...(this.dhts.get(d.partId)?.summary() || { model: d.model }), dataPin: d.pin ? `D${d.pin.name}`.replace(/^DA/, 'A') : null, ...(d.problems.length ? { problems: d.problems } : {}) }));
+    const motors = [...(this.result.motorVolts || [])].map(([id, v]) => ({ id, volts: r2(v), rpm: motorRpm(v) }));
+    const drivers = [...(this.result.drivers || [])].map(([id, d]) => ({ id, powered: d.powered, motorA: d.ch[0] || 'stopped', motorB: d.ch[1] || 'stopped' }));
     const unanswered = this.i2cUnanswered();
     return {
       running: true, paused: this.paused, seconds: r2(this.mcu.seconds), board: this.boardName, chip: this.chipName,
-      pins, leds, pressed: [...this.pressed], i2c, ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
+      pins, leds, pressed: [...this.pressed], i2c, ...(dht.length ? { dht } : {}), ...(motors.length ? { motors, drivers } : {}), ...(unanswered.length ? { i2cUnanswered: unanswered } : {}),
       warnings: [...new Set(this.result.warnings.map(w => w.text))], issues, error: this.error,
     };
   }

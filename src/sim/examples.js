@@ -188,4 +188,63 @@ void loop() {
   delay(100);
 }
 ` },
+  weather: { name: 'Weather station (DHT22 + LCD)', code: `// Weather station: a DHT22 measures temperature and humidity, a 16×2 I²C LCD shows them.
+// DHT22: VCC → 5V, GND → GND, DATA → D2.   LCD: GND → GND, VCC → 5V, SDA → A4, SCL → A5.
+// Right-click the DHT22 to change the weather.
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <DHT.h>
+
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+DHT dht(2, DHT22);
+byte degree[8] = {0b00110, 0b01001, 0b01001, 0b00110, 0b00000, 0b00000, 0b00000, 0b00000};
+
+void setup() {
+  Serial.begin(9600);
+  dht.begin();
+  lcd.init();
+  lcd.backlight();
+  lcd.createChar(0, degree);
+  lcd.setCursor(0, 0);             // after createChar, writes go to character memory until the cursor is set again
+  lcd.print("Weather station");
+}
+
+void loop() {
+  float t = dht.readTemperature();
+  float h = dht.readHumidity();
+  lcd.setCursor(0, 1);
+  if (isnan(t) || isnan(h)) {
+    lcd.print("Sensor error    ");
+    Serial.println("DHT read failed - check the DATA wire");
+  } else {
+    lcd.print(t, 1); lcd.write(0); lcd.print("C  ");
+    lcd.print(h, 0); lcd.print("%   ");
+    Serial.print(t, 1); Serial.print(" C, "); Serial.print(h, 0); Serial.println(" %");
+  }
+  delay(2000);
+}
+` },
+  motor: { name: 'Motor control (L298N)', code: `// DC motor through an L298N driver: speed ramps up, then the motor reverses.
+// L298N: IN1 → D8, IN2 → D7, ENA → D9 (PWM), OUT1/OUT2 → the motor,
+//        12V → battery +, GND → battery − AND the Arduino GND.
+const int IN1 = 8, IN2 = 7, ENA = 9;
+
+void drive(int speed) {            // -255 … 255
+  digitalWrite(IN1, speed > 0);
+  digitalWrite(IN2, speed < 0);
+  analogWrite(ENA, abs(speed));
+}
+
+void setup() {
+  pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT); pinMode(ENA, OUTPUT);
+  Serial.begin(9600);
+}
+
+void loop() {
+  for (int s = 0; s <= 255; s += 51) { drive(s); Serial.print("speed "); Serial.println(s); delay(600); }
+  drive(0); delay(500);
+  for (int s = 0; s >= -255; s -= 51) { drive(s); Serial.print("speed "); Serial.println(s); delay(600); }
+  drive(0); delay(500);
+}
+` },
 };
