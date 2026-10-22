@@ -46,3 +46,11 @@ test('loadLocal reuses the engine for the same model', async () => {
   await loadLocal('a', { factory: f }); await loadLocal('a', { factory: f });
   assert.equal(n, 1);
 });
+
+test('pickBuild falls back to the f32 build without shader-f16', async () => {
+  const { pickBuild } = await import('../src/sim/webllm.mjs');
+  const nav = f16 => ({ gpu: { requestAdapter: async () => ({ features: new Set(f16 ? ['shader-f16'] : []) }) } });
+  assert.match(await pickBuild('Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC', nav(true)), /q4f16_1/);
+  assert.match(await pickBuild('Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC', nav(false)), /q4f32_1/);
+  await assert.rejects(pickBuild('m', { gpu: { requestAdapter: async () => null } }), /adapter/i);
+});

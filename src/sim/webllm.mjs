@@ -18,7 +18,17 @@ export function getLocalModel() { try { const m = localStorage.getItem(MODEL_STO
 export function setLocalModel(id) { try { localStorage.setItem(MODEL_STORAGE, id); } catch { /* ignore */ } }
 
 let engine = null, engineModel = null, loading = null;
+/** The q4f16 builds need the GPU's shader-f16 feature; many laptops lack it, so use the q4f32 build of the same model there. */
+export async function pickBuild(modelId, nav = globalThis.navigator) {
+  try {
+    const adapter = await nav.gpu.requestAdapter();
+    if (!adapter) throw new Error('No WebGPU adapter (graphics driver or browser setting)');
+    if (!adapter.features.has('shader-f16')) return modelId.replace('q4f16_1', 'q4f32_1');
+  } catch (err) { if (/adapter/i.test(err?.message)) throw err; }
+  return modelId;
+}
 async function defaultFactory(modelId, onProgress) {
+  modelId = await pickBuild(modelId);
   const web = await import('@mlc-ai/web-llm');
   return web.CreateMLCEngine(modelId, { initProgressCallback: p => onProgress?.(p) }, { context_window_size: CONTEXT });
 }
