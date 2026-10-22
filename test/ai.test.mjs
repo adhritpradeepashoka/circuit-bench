@@ -462,3 +462,19 @@ test('speed: thinking is turned down where supported; a model that rejects the h
   await q.generateCode({ instruction: 'x', userKey: 'groq-123456', provider: 'groq' });
   assert.equal(sent.reasoning_effort, 'low');
 });
+
+const hang = signal => new Promise((_, rej) => { const keep = setTimeout(() => {}, 5000); signal.addEventListener('abort', () => { clearTimeout(keep); rej(signal.reason); }); });   // AbortSignal.timeout's own timer does not keep node alive
+
+test('timeouts: a model that hangs is abandoned after its own timeout and the next one is tried; the whole walk has a budget and ends with a clear 504', async () => {
+  const asked = [];
+  const slowFirst = createAiService({ attemptMs: 50, fetchImpl: async (u, o) => {
+    if (o.method === 'GET') return { ok: true, status: 200, json: async () => ({ data: [{ id: 'meta/llama-3.3-70b-instruct' }, { id: 'meta/llama-3.1-70b-instruct' }] }) };
+    asked.push(JSON.parse(o.body).model);
+    if (asked.length === 1) return hang(o.signal);
+    return oaiReply(okJson);
+  } });
+  const r = await slowFirst.generateCode({ instruction: 'x', userKey: 'nvapi-slowslow', provider: 'nvidia' });
+  assert.equal(r.ok, true); assert.equal(asked.length, 2);
+  const hopeless = createAiService({ attemptMs: 30, budgetMs: 4040, fetchImpl: async (u, o) => (o.method === 'GET' ? { ok: false, status: 500, json: async () => ({}) } : hang(o.signal)) });
+  await assert.rejects(() => hopeless.generateCode({ instruction: 'x', userKey: 'nvapi-hopeless', provider: 'nvidia' }), e => e instanceof RequestError && e.status === 504);
+});

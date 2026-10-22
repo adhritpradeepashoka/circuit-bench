@@ -32,6 +32,8 @@ export const providersWithKeys = () => PROVIDER_IDS.filter(p => !!getStoredKey(p
 export function getStoredModel(provider = getStoredProvider()) { try { return localStorage.getItem(MODEL_STORAGE + provider) || ''; } catch { return ''; } }
 export function setStoredModel(model, provider = getStoredProvider()) { try { model ? localStorage.setItem(MODEL_STORAGE + provider, model) : localStorage.removeItem(MODEL_STORAGE + provider); } catch { /* ignore */ } }
 
+const noReply = status => (status === 502 || status === 503 || status === 504 ? `The AI took too long and the server gave up (HTTP ${status}). Try again, or switch provider with the menu under the chat box — Groq is usually the quickest.` : `No usable response (HTTP ${status}).`);
+
 /** Mirrors compileEndpoint() in compile-client.js: ?compiler=URL, window.VLAB_COMPILE_URL, or same-origin. */
 function aiEndpoint(loc = globalThis.location, win = globalThis, path = '/api/ai/generate-code') {
   try { const q = new URLSearchParams(loc?.search || '').get('compiler'); if (q) return q.replace(/\/?$/, path); } catch { /* ignore */ }
@@ -47,7 +49,7 @@ export async function createPart({ description, provider = getStoredProvider(), 
   try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description, userKey, provider, model }), signal }); }
   catch (err) { if (err?.name === 'AbortError') throw err; return { ok: false, error: `Could not reach ${endpoint}.` }; }
   let body = null; try { body = await res.json(); } catch { /* ignore */ }
-  return body || { ok: false, error: `No usable response (HTTP ${res.status}).` };
+  return body || { ok: false, error: noReply(res.status) };
 }
 
 /**
@@ -65,6 +67,6 @@ export async function generateCode({ instruction, circuit, code, context = null,
   }
   let body = null;
   try { body = await res.json(); } catch { /* ignore */ }
-  if (!body) return { ok: false, error: `No usable response (HTTP ${res.status}).` };
+  if (!body) return { ok: false, error: noReply(res.status) };
   return body;
 }

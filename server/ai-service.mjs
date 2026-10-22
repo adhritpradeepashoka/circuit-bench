@@ -386,7 +386,7 @@ export function rankModels(p, ids) {
   return out;
 }
 
-export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date.now() } = {}) {
+export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date.now(), attemptMs = 35000, budgetMs = 85000 } = {}) {
   // Free models come and go (Google closed gemini-2.5-flash to new keys; Groq retires models) — so ask the provider
   // which models THIS key can use, newest first, and remember the answer for a while. The built-in list is the fallback.
   const found = new Map(), works = new Map();   // works: the model that last answered for this key (listed ≠ usable: NVIDIA lists models an account can't call)
@@ -397,7 +397,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     if (hit && now() - hit.at < 30 * 60 * 1000) return hit.ids;
     let ids = [];
     try {
-      const res = await fetchImpl(p.listUrl(userKey), { method: 'GET', headers: p.listHeaders(userKey) });
+      const res = await fetchImpl(p.listUrl(userKey), { method: 'GET', headers: p.listHeaders(userKey), signal: AbortSignal.timeout(8000) });
       if (res?.ok) ids = rankModels(p, p.listIds(await res.json()));
     } catch { /* offline listing: use the built-in list */ }
     found.set(ck, { at: now(), ids });
@@ -420,13 +420,18 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
    */
   async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
     const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
-    const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, p.anyChat ? 16 : 8), ...p.models].filter(Boolean))].slice(0, p.anyChat ? 16 : 10);   // a model the student typed is the only one tried
+    const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, p.anyChat ? 8 : 6), ...p.models].filter(Boolean))].slice(0, p.anyChat ? 8 : 7);   // a model the student typed is the only one tried
     const tried = [], t0 = now();
     let res, body, msg, fast = true;
     for (let i = 0; i < wanted.length; i++) {
+      // A slow free tier can hold one request for minutes; the host in front of us gives up on the whole thing after a while.
+      // So every attempt has its own timeout, and the whole walk down the list has a budget.
+      const left = budgetMs - (now() - t0);
+      if (left < 4000) throw new RequestError(`${p.label} is taking too long right now (tried ${tried.concat(wanted[i]).slice(0, 3).join(', ')}). Try again, or switch provider with the menu under the chat box.`, 504);
       try {
-        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i], fast) });
-      } catch {
+        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i], fast), signal: AbortSignal.timeout(Math.min(attemptMs, left)) });
+      } catch (err) {
+        if (err?.name === 'TimeoutError' || err?.name === 'AbortError') { tried.push(wanted[i]); if (i < wanted.length - 1) continue; throw new RequestError(`${p.label} did not answer in time (${wanted[i]}). Try again, or switch provider with the menu under the chat box.`, 504); }
         throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
       }
       try { body = await res.json(); } catch { body = null; }
