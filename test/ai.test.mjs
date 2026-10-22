@@ -332,3 +332,39 @@ test('describeContext: compiler notes (e.g. the OLED memory warning) reach the A
   assert.match(t, /Last compile: SUCCEEDED/);
   assert.match(t, /Compiler note: Memory: 693 bytes … Only ~331 bytes are left/);
 });
+
+const oaiReply = text => ({ ok: true, status: 200, json: async () => ({ choices: [{ message: { content: text } }] }) });
+const okJson = '```json\n{"actions":[],"code":"void setup(){} void loop(){}","explanation":"ok"}\n```';
+
+test('providers: NVIDIA, Meta Llama and OpenRouter each hit their own OpenAI-compatible endpoint with the right model and bearer key', async () => {
+  for (const [provider, host, model] of [['nvidia', 'integrate.api.nvidia.com', 'meta/llama-3.3-70b-instruct'], ['meta', 'api.llama.com', 'Llama-4-Maverick-17B-128E-Instruct-FP8'], ['openrouter', 'openrouter.ai', 'meta-llama/llama-3.3-70b-instruct:free']]) {
+    let url, auth, sent;
+    const ai = createAiService({ fetchImpl: async (u, o) => { url = u; auth = o.headers.authorization; sent = JSON.parse(o.body); return oaiReply(okJson); } });
+    const res = await ai.generateCode({ instruction: 'blink', userKey: 'k-' + provider, provider });
+    assert.equal(res.ok, true, provider);
+    assert.ok(url.includes(host), `${provider} → ${url}`);
+    assert.equal(auth, 'Bearer k-' + provider);
+    assert.equal(sent.model, model);
+    assert.equal(sent.tools, undefined, 'no browser_search tool on hosts that do not have it');
+  }
+});
+
+test('providers: a model that is gone for this key (Gemini 2.5 no longer open to new users) falls through to the next model on the list', async () => {
+  const urls = [];
+  const ai = createAiService({ fetchImpl: async u => { urls.push(u); return urls.length === 1 ? { ok: false, status: 404, json: async () => ({ error: { message: 'This model models/gemini-3.8-flash is no longer available to new users.' } }) } : fakeGeminiText(okJson)(); } });
+  const res = await ai.generateCode({ instruction: 'blink', userKey: 'k' });
+  assert.equal(res.ok, true);
+  assert.equal(urls.length, 2);
+  assert.match(urls[0], /gemini-3\.8-flash/); assert.match(urls[1], /gemini-2\.5-flash/);
+});
+
+test('providers: a model id the student typed is the only one tried, and a gone model says what to do', async () => {
+  const urls = [];
+  const ai = createAiService({ fetchImpl: async u => { urls.push(u); return { ok: false, status: 404, json: async () => ({ error: { message: 'model not found' } }) }; } });
+  await assert.rejects(() => ai.generateCode({ instruction: 'blink', userKey: 'k', provider: 'groq', model: 'my/own-model' }), e => e instanceof RequestError && /another model|another provider/.test(e.message));
+  assert.equal(urls.length, 1);
+  let sent;
+  const ai2 = createAiService({ fetchImpl: async (u, o) => { sent = JSON.parse(o.body); return oaiReply(okJson); } });
+  await ai2.generateCode({ instruction: 'blink', userKey: 'k', provider: 'nvidia', model: 'nvidia/some-model' });
+  assert.equal(sent.model, 'nvidia/some-model');
+});

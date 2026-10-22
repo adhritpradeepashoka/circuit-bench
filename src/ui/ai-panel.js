@@ -5,15 +5,11 @@
 // running sim, Serial Monitor output) — see gatherContext below and describeContext in
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
-import { generateCode, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider } from '../sim/ai-client.mjs';
+import { generateCode, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { FORMAT, VERSION } from '../core/project.js';
 import { sidePanes } from './side-panes.js';
 
-const PROVIDER_HINTS = {
-  gemini: '<a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Get a free Gemini key</a> at Google AI Studio. If that page says "project creation failed" (a known Google-side bug on some accounts), switch to the Groq tab above instead.',
-  groq: '<a href="https://console.groq.com/keys" target="_blank" rel="noopener">Get a free Groq key</a> at console.groq.com — no Google account step involved.',
-};
 const CHAT_STORE = 'virtual-lab:ai-chat';
 const MAX_SAVED = 40, MAX_HISTORY = 8, MAX_SAVED_CODE = 8000;
 const SUGGESTIONS = ['Make the LED blink twice as fast', 'Add a pushbutton on pin 2 that turns the LED on', 'Why isn\'t my circuit working?'];
@@ -60,7 +56,7 @@ export function initAiPanel(editor, code, sim = null) {
   const panes = sidePanes(editor);
   const log = $('aiLog'), promptEl = $('aiPrompt'), sendBtn = $('aiGenerate'), status = $('aiStatus');
   const keyRow = $('aiKeyRow'), keyInput = $('aiKeyInput');
-  const providerTabs = keyRow.querySelectorAll('[data-provider]'), providerHint = $('aiProviderHint');
+  const tabsEl = $('aiProviderTabs'), providerHint = $('aiProviderHint'), modelInput = $('aiModelInput');
 
   let chatKey = CHAT_STORE;     // one conversation per project once projects say which one is open (setScope)
   let messages = loadChat();     // { id, role: 'user'|'assistant'|'error', text, summary?, warnings?, fatal?, code?, codeLines?, hasEdit?, state? }
@@ -151,21 +147,40 @@ export function initAiPanel(editor, code, sim = null) {
   /* ── key setup ───────────────────────── */
   const setStatus = msg => { status.textContent = msg || ''; };
   const hasKey = () => !!getStoredKey();
-  function refreshKeyUi() { keyRow.hidden = hasKey(); }
+  let picking = false;           // the provider picker was opened on purpose (even though the current provider has a key)
+  function refreshKeyUi() { keyRow.hidden = hasKey() && !picking; if (!keyRow.hidden) paintProvider(); }
   function paintProvider() {
-    const p = getStoredProvider();
-    providerTabs.forEach(b => b.classList.toggle('on', b.dataset.provider === p));
-    providerHint.innerHTML = PROVIDER_HINTS[p] || '';
+    const cur = getStoredProvider(), info = PROVIDER_INFO[cur];
+    tabsEl.replaceChildren(...PROVIDER_IDS.map(id => {
+      const b = document.createElement('button');
+      b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = id; b.id = `aiProvider-${id}`;
+      b.classList.toggle('on', id === cur); b.classList.toggle('has-key', !!getStoredKey(id));
+      b.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ''}`;
+      b.title = getStoredKey(id) ? `${PROVIDER_INFO[id].label} — key saved, click to use it` : `${PROVIDER_INFO[id].label} — needs a key`;
+      return b;
+    }));
+    providerHint.replaceChildren();
+    const a = document.createElement('a'); a.href = info.keyUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `Get a ${info.label} key`;
+    providerHint.append(a, ` — ${info.hint}`);
+    modelInput.placeholder = `Model (optional, default ${info.model})`; modelInput.value = getStoredModel(cur);
+    keyInput.placeholder = getStoredKey(cur) ? 'Saved — paste a new key to replace it' : `Paste your ${info.label} API key`;
   }
-  providerTabs.forEach(b => b.addEventListener('click', () => { setStoredProvider(b.dataset.provider); paintProvider(); }));
+  tabsEl.addEventListener('click', e => {
+    const b = e.target.closest('[data-provider]'); if (!b) return;
+    setStoredProvider(b.dataset.provider); keyInput.value = '';
+    if (hasKey()) { picking = false; setStatus(`Using ${PROVIDER_INFO[b.dataset.provider].label}.`); }
+    refreshKeyUi(); paintProvider();
+  });
   $('aiKeySave').addEventListener('click', () => {
-    const v = keyInput.value.trim();
-    if (!v) return setStatus('Paste a key first.');
-    setStoredKey(v); keyInput.value = ''; refreshKeyUi();
-    setStatus(`${getStoredProvider() === 'groq' ? 'Groq' : 'Gemini'} key saved — only in this browser.`);
+    const v = keyInput.value.trim(), cur = getStoredProvider();
+    if (v) setStoredKey(v);
+    else if (!getStoredKey(cur)) return setStatus('Paste a key first.');
+    setStoredModel(modelInput.value.trim());
+    keyInput.value = ''; picking = false; refreshKeyUi();
+    setStatus(`${PROVIDER_INFO[cur].label} ${v ? 'key saved' : 'selected'} — only in this browser.`);
     if (promptEl.value.trim()) send(); else promptEl.focus();
   });
-  $('aiForgetKey').addEventListener('click', () => { setStoredKey(''); refreshKeyUi(); setStatus(''); paintProvider(); keyInput.focus(); });
+  $('aiForgetKey').addEventListener('click', () => { picking = !picking; refreshKeyUi(); setStatus(''); if (picking) keyInput.focus(); });
 
   /* ── composer ────────────────────────── */
   const autosize = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${Math.min(promptEl.scrollHeight || 0, 150)}px`; };

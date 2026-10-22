@@ -162,9 +162,12 @@ browser — is the sole gatekeeper that validates every action against the real 
 project. A hallucinated part type or pin name is dropped with a warning instead of corrupting the circuit, and you see those
 warnings (and a summary of what changed) before deciding whether to Apply.
 
-**v0.1 is bring-your-own-key only** — each visitor pastes their own free key (Gemini at
-[aistudio.google.com/apikey](https://aistudio.google.com/apikey), or Groq at
-[console.groq.com/keys](https://console.groq.com/keys) if the Gemini flow hits Google's "project creation failed" bug); it's stored
+**v0.1 is bring-your-own-key only** — each visitor pastes their own free key for any of five providers: Gemini
+([aistudio.google.com/apikey](https://aistudio.google.com/apikey)), Groq ([console.groq.com/keys](https://console.groq.com/keys)),
+NVIDIA ([build.nvidia.com](https://build.nvidia.com/settings/api-keys)), Meta Llama ([llama.developer.meta.com](https://llama.developer.meta.com/))
+or OpenRouter ([openrouter.ai/keys](https://openrouter.ai/keys)). Each provider keeps its own saved key, so switching is one click
+(✨ Ask AI → "AI provider…"), and you can type any model id to override the built-in list (Google and others retire models without
+warning; the built-ins fall through to the next model when one is gone). it's stored
 in their browser only (`localStorage`) and sent with each request, so CircuitBench's own server never sees or pays for anyone's
 usage. Nothing needs configuring server-side for this to work. (A server-funded free quota before asking for a key is the intended
 next step — `server/ai-service.mjs` is written so that slots in as a second way to satisfy the same request, without the client

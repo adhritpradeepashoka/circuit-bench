@@ -180,12 +180,10 @@
         </div>
         <div class="ai-key-row" id="aiKeyRow" hidden>
           <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
-          <div class="ai-provider-tabs" role="tablist">
-            <button type="button" role="tab" id="aiProviderGemini" class="on" data-provider="gemini">Gemini</button>
-            <button type="button" role="tab" id="aiProviderGroq" data-provider="groq">Groq</button>
-          </div>
+          <div class="ai-provider-tabs" id="aiProviderTabs" role="tablist" aria-label="AI provider"></div>
           <p class="ai-provider-hint" id="aiProviderHint"></p>
           <input id="aiKeyInput" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
+          <input id="aiModelInput" class="ai-model-input" type="text" placeholder="Model (optional)" autocomplete="off" spellcheck="false" aria-label="Model id (optional)">
           <button id="aiKeySave" type="button">Save key</button>
         </div>
         <div class="ai-log" id="aiLog" role="log" aria-live="polite" aria-label="Conversation"></div>
@@ -193,7 +191,7 @@
           <textarea id="aiPrompt" rows="1" placeholder="Ask about your circuit, or describe a change…" aria-label="Message the AI"></textarea>
           <button type="submit" id="aiGenerate" class="ai-send" title="Send (Enter) · new line: Shift+Enter" aria-label="Send"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M8 13V3M3.5 7.5 8 3l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
         </form>
-        <div class="ai-foot"><span class="ai-status" id="aiStatus" role="status"></span><button id="aiForgetKey" type="button" class="ai-link" title="Remove the saved key">change key</button></div>
+        <div class="ai-foot"><span class="ai-status" id="aiStatus" role="status"></span><button id="aiForgetKey" type="button" class="ai-link" title="Switch AI provider, or replace a saved key">AI provider…</button></div>
       </section>
       <section class="pane parts" id="partsPanel" aria-label="Parts">
         <div class="pane-head parts-head">

@@ -8,9 +8,9 @@
 // a future "no userKey → try the house key under a quota, else ask for one" branch replaces the single
 // `if (!userKey)` check below, and callers never need to change.
 //
-// Two providers are supported because Google AI Studio's key-creation flow fails for some accounts
-// (a known, longstanding "project creation failed" bug unrelated to anything here) — Groq is a working
-// fallback that doesn't involve that step at all. Both are wrapped to the same
+// Several providers are supported (Gemini, Groq, NVIDIA, Meta Llama, OpenRouter) so a student is never stuck when one
+// account, model or free tier goes away — e.g. Google's key-creation flow fails for some accounts, and Google retires
+// models for new keys. They are all wrapped to the same
 // { ok, code, actions, explanation } shape so the rest of the app never needs to know which one answered.
 //
 // This module only asks the model for actions and parses what comes back — it never applies them.
@@ -241,10 +241,32 @@ function statusFor(httpStatus, message) {
   return 502;
 }
 
-const PROVIDERS = {
+/** Is this provider error "that model isn't there (for you)" — so try the next model on the list? */
+const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
+
+/** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
+function openAiLike({ label, url, models, search = false, keyUrl, hint }) {
+  return {
+    label, models, keyUrl, hint,
+    url: () => url,
+    headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
+    body: (prompt, useSearch, model) => JSON.stringify({
+      model, temperature: 0.2, messages: [{ role: 'user', content: prompt }],
+      ...(useSearch && search ? { tools: [{ type: 'browser_search' }] } : {}),
+    }),
+    errorMessage: body => body?.error?.message || (typeof body?.error === 'string' ? body.error : '') || body?.detail || body?.message,
+    text: body => body?.choices?.[0]?.message?.content || '',
+    sources: body => (body?.choices?.[0]?.message?.executed_tools || []).flatMap(t => (Array.isArray(t?.search_results?.results) ? t.search_results.results : [])).map(r => ({ title: r?.title, url: r?.url })),
+  };
+}
+
+// Several providers so a student isn't stuck when one account, model or free tier goes away. Each has a list of models
+// tried in order (the first one the key can actually use wins) and the student can type their own model id too.
+export const PROVIDERS = {
   gemini: {
     label: 'Gemini',
-    url: key => `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`,
+    models: ['gemini-3.8-flash', 'gemini-2.5-flash'],      // Google retires models for new keys without much warning, so there's a fallback
+    url: (key, model) => `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`,
     headers: () => ({ 'content-type': 'application/json' }),
     // search: Google Search grounding, so a part lookup is based on the real datasheet instead of recall.
     body: (prompt, search) => JSON.stringify({
@@ -255,20 +277,14 @@ const PROVIDERS = {
     text: body => body?.candidates?.[0]?.content?.parts?.map(p => p.text).join('') || '',
     sources: body => (body?.candidates?.[0]?.groundingMetadata?.groundingChunks || []).map(c => ({ title: c?.web?.title, url: c?.web?.uri })),
   },
-  groq: {
-    label: 'Groq',
-    url: () => 'https://api.groq.com/openai/v1/chat/completions',
-    headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
-    // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
-    body: (prompt, search) => JSON.stringify({
-      model: 'openai/gpt-oss-120b', temperature: 0.2, messages: [{ role: 'user', content: prompt }],
-      ...(search ? { tools: [{ type: 'browser_search' }] } : {}),
-    }),
-    errorMessage: body => body?.error?.message,
-    text: body => body?.choices?.[0]?.message?.content || '',
-    sources: body => (body?.choices?.[0]?.message?.executed_tools || []).flatMap(t => (Array.isArray(t?.search_results?.results) ? t.search_results.results : [])).map(r => ({ title: r?.title, url: r?.url })),
-  },
+  // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
+  groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true }),
+  nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct'] }),
+  meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'] }),
+  openrouter: openAiLike({ label: 'OpenRouter', url: 'https://openrouter.ai/api/v1/chat/completions', models: ['meta-llama/llama-3.3-70b-instruct:free', 'google/gemini-2.0-flash-exp:free'] }),
 };
+/** What the browser needs to draw the provider picker. */
+export const PROVIDER_LIST = Object.entries(PROVIDERS).map(([id, p]) => ({ id, label: p.label, models: p.models }));
 
 /** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
 export function buildPartPrompt(description, problems = null) {
@@ -353,18 +369,21 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
    * Groq browser search); keys and plans differ, so if the provider rejects the tool we quietly try again
    * without it rather than failing the student's request.
    */
-  async function ask(p, userKey, prompt, { search = false } = {}) {
-    let res;
-    try {
-      res = await fetchImpl(p.url(userKey), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search) });
-    } catch {
-      throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
-    }
-    let body; try { body = await res.json(); } catch { body = null; }
-    if (!res.ok) {
-      const msg = p.errorMessage(body) || `HTTP ${res.status}`;
-      if (search && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false });
-      throw new RequestError(`${p.label} error: ${msg}`, statusFor(res.status, msg));
+  async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
+    const wanted = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? [String(model)] : p.models;   // a model the student typed is the only one tried
+    let res, body, msg;
+    for (let i = 0; i < wanted.length; i++) {
+      try {
+        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i]) });
+      } catch {
+        throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
+      }
+      try { body = await res.json(); } catch { body = null; }
+      if (res.ok) break;
+      msg = p.errorMessage(body) || `HTTP ${res.status}`;
+      if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model });
+      if (i < wanted.length - 1 && modelGone(res.status, msg)) continue;            // that model isn't available to this key — try the next one
+      throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ' — try another model in the AI settings, or another provider.' : ''}`, statusFor(res.status, msg));
     }
     const sources = [];
     for (const s of p.sources?.(body) || []) if (s?.url && !sources.some(x => x.url === s.url)) sources.push({ title: String(s.title || s.url).slice(0, 120), url: String(s.url).slice(0, 500) });
@@ -372,12 +391,12 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
   }
 
   /** Describe a part in words → a validated part spec (one repair round if the first answer doesn't validate). */
-  async function createPart({ description, userKey, provider = 'gemini' }) {
+  async function createPart({ description, userKey, provider = 'gemini', model }) {
     if (!description || !String(description).trim()) throw new RequestError('Describe the part you want to make.');
     const p = needKey(userKey, provider);
     let problems = null;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const { text, sources, searched } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true });
+      const { text, sources, searched } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true, model });
       const m = matchJsonFence(text);
       const raw = m ? tryParseJson(m[1]) : null;
       if (!raw) { problems = ['The reply had no valid json block.']; continue; }
@@ -388,11 +407,11 @@ export function createAiService({ fetchImpl = globalThis.fetch } = {}) {
     throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')} Try describing it differently, or build it in the Part Creator.`, 502);
   }
 
-  async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini' }) {
+  async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini', model }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = needKey(userKey, provider);
     const prompt = buildPrompt({ instruction, circuit, code, context, history });
-    const { text } = await ask(p, userKey, prompt);
+    const { text } = await ask(p, userKey, prompt, { model });
     const result = parseReply(text);
     // actions:[] + code:null is not automatically a failure: a model that correctly decides nothing
     // needs to change (the sketch already does what was asked, or the circuit already has the part)

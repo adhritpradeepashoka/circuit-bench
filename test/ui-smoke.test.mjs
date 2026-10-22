@@ -1041,6 +1041,37 @@ test('ui: AI chat without a key shows the key setup in the pane and keeps your m
   assert.match(doc.getElementById('aiLog').textContent, /Hi!/);
 });
 
+test('ui: AI providers — each keeps its own key, switching is one click, and the chosen provider and model go to the server', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const sent = [];
+  w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Hi!' }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  const tabs = () => [...doc.querySelectorAll('#aiProviderTabs [data-provider]')];
+  assert.deepEqual(tabs().map(b => b.dataset.provider), ['gemini', 'groq', 'nvidia', 'meta', 'openrouter']);
+  const pick = id => doc.getElementById(`aiProvider-${id}`).click();
+  const save = (key, model = '') => { doc.getElementById('aiKeyInput').value = key; doc.getElementById('aiModelInput').value = model; doc.getElementById('aiKeySave').click(); };
+  pick('groq'); save('groq-key');
+  assert.equal(doc.getElementById('aiKeyRow').hidden, true);
+  doc.getElementById('aiForgetKey').click();                         // reopen the picker
+  assert.equal(doc.getElementById('aiKeyRow').hidden, false);
+  pick('nvidia'); assert.equal(doc.getElementById('aiKeyRow').hidden, false, 'no key for NVIDIA yet');
+  save('nv-key', 'meta/llama-3.1-70b-instruct');
+  assert.ok(tabs().length === 5);
+  doc.getElementById('aiForgetKey').click();
+  assert.ok(doc.getElementById('aiProvider-groq').textContent.includes('✓') && doc.getElementById('aiProvider-nvidia').textContent.includes('✓'));
+  assert.ok(!doc.getElementById('aiProvider-gemini').textContent.includes('✓'));
+  pick('groq');                                                        // a saved key: one click switches and closes the picker
+  assert.equal(doc.getElementById('aiKeyRow').hidden, true);
+  const prompt = doc.getElementById('aiPrompt');
+  prompt.value = 'hi'; doc.getElementById('aiGenerate').click(); await flush();
+  assert.equal(sent.at(-1).provider, 'groq'); assert.equal(sent.at(-1).userKey, 'groq-key');
+  doc.getElementById('aiForgetKey').click(); pick('nvidia');
+  prompt.value = 'again'; doc.getElementById('aiGenerate').click(); await flush();
+  assert.equal(sent.at(-1).provider, 'nvidia'); assert.equal(sent.at(-1).userKey, 'nv-key'); assert.equal(sent.at(-1).model, 'meta/llama-3.1-70b-instruct');
+});
+
 test('ui: My projects — first run adopts your existing work, new projects start clean, switching restores each one’s circuit and code, and it all survives a reload', async () => {
   const { w, editor, code, sim } = boot();
   const doc = w.document;
