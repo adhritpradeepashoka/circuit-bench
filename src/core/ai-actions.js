@@ -10,8 +10,8 @@ import { CONTROLS } from './controls.js';
 const uid = prefix => `${prefix}-${Math.random().toString(36).slice(2, 7)}`;
 
 /** A short, token-cheap description of what the AI is allowed to place and wire — goes straight into the prompt. */
-export function describeCatalog() {
-  const lines = Object.values(PART_DEFS).map(def => {
+export function describeCatalog(only = null) {
+  const lines = Object.values(PART_DEFS).filter(def => !only || only.has(def.type)).map(def => {
     if (def.type === 'breadboard') return `- breadboard: holes A1..J40 (A-E and F-J are separate strips per column, like a real breadboard), rails TP1-25/TN1-25 (top +/-), BP1-25/BN1-25 (bottom +/-)`;
     const pins = def.pins.map(p => p.id).join(', ');
     const props = def.props ? ` props: ${Object.keys(def.props).join(', ')}` : '';

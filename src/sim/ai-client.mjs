@@ -27,6 +27,8 @@ export function setStoredKey(key, provider = getStoredProvider()) {
     key ? localStorage.setItem(`${KEY_STORAGE}:${provider}`, key) : localStorage.removeItem(`${KEY_STORAGE}:${provider}`);
   } catch { /* ignore */ }
 }
+/** True when the student has saved their own key for any hosted provider. */
+export const hasAnyKey = () => PROVIDER_IDS.some(p => !!getStoredKey(p));
 export const providersWithKeys = () => PROVIDER_IDS.filter(p => !!getStoredKey(p));
 /** An optional model id the student typed for a provider ('' = use the built-in list). */
 export function getStoredModel(provider = getStoredProvider()) { try { return localStorage.getItem(MODEL_STORAGE + provider) || ''; } catch { return ''; } }
