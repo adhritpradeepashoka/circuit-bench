@@ -2,6 +2,7 @@
 // Plain custom elements (no framework) sized in CSS px; their pin positions live in PART_DEFS (src/core/parts.js),
 // so these files only draw. Each one is a tiny SVG with a few live properties the simulator sets.
 
+import { LOBES, MM_TO_PX } from '../core/slime.js';
 import { ICON_KINDS } from '../core/behaviours-extra.js';
 import { layoutSpec } from '../core/custom-parts.js';
 
@@ -241,6 +242,22 @@ function spriteSVG(spec, w, h, pins) {
       ${Array.from({ length: 6 }, (_, i) => `<rect x="${w / 2 - 12 + i * 4 + 0.8}" y="${h / 2 - 13}" width="1.6" height="2.2" fill="#c9ccd1"/><rect x="${w / 2 - 12 + i * 4 + 0.8}" y="${h / 2 + 10.8}" width="1.6" height="2.2" fill="#c9ccd1"/>`).join('')}
       <text x="${w / 2}" y="${by + bh - 2.4}" text-anchor="middle" font-size="3.6" font-family="sans-serif" font-weight="700" fill="#e9d8ff">Upside Down Labs · BioAmp EXG Pill</text>
       ${conn}${lbl}
+    </svg>`;
+  }
+  if (spec.sprite.art === 'slime-mold') {
+    // the organism: translucent yellow lobes joined by veins; the same lobes the model senses with (src/core/slime.js)
+    const S = MM_TO_PX, cx = w / 2, cy = h / 2;
+    const lobes = LOBES.map(l => `<circle cx="${(cx + l.x * S).toFixed(1)}" cy="${(cy + l.y * S).toFixed(1)}" r="${(l.r * S).toFixed(1)}"/>`).join('');
+    const veins = LOBES.slice(1).map((l, i) => `<path d="M${(cx + LOBES[0].x * S).toFixed(1)} ${(cy + LOBES[0].y * S).toFixed(1)} Q${(cx + l.x * S * 0.5 + (i % 2 ? 9 : -9)).toFixed(1)} ${(cy + l.y * S * 0.5 + (i % 3 ? -7 : 7)).toFixed(1)} ${(cx + l.x * S).toFixed(1)} ${(cy + l.y * S).toFixed(1)}" fill="none" stroke="#c9961a" stroke-width="${i === 0 ? 3.2 : 2}" stroke-linecap="round" opacity=".75"/>`).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+      <defs><filter id="slimeblur" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.2"/></filter></defs>
+      <g fill="#f0d23c" fill-opacity=".5" filter="url(#slimeblur)">${lobes}</g>
+      <g fill="none" stroke="#c9961a" stroke-width="1.2" opacity=".5">${LOBES.map(l => `<circle cx="${(cx + l.x * S).toFixed(1)}" cy="${(cy + l.y * S).toFixed(1)}" r="${(l.r * S).toFixed(1)}" stroke-dasharray="2 4"/>`).join('')}</g>
+      ${veins}
+      <circle cx="${(cx + LOBES[0].x * S).toFixed(1)}" cy="${(cy + LOBES[0].y * S).toFixed(1)}" r="4.2" fill="#c9961a"/>
+      <text x="${cx}" y="${cy + 3}" text-anchor="middle" font-size="9" font-weight="700" font-family="sans-serif" fill="#6b4f00">Physarum</text>
+      <rect x="${w / 2 - 1.8}" y="${h - 22}" width="3.6" height="15" fill="#c9ccd1" stroke="#8b9096" stroke-width=".5"/>
+      <text x="${w / 2 + 7}" y="${h - 10}" font-size="7" font-family="monospace" fill="#6b4f00">REF</text>
     </svg>`;
   }
   return '';

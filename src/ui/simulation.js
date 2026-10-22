@@ -16,6 +16,7 @@ import { Sound } from './audio.js';
 import { visualTarget } from '../parts/skins.js';
 import { motorRpm } from '../core/solver.js';
 import { signalAt } from '../core/signals.js';
+import { slimePotentials } from '../core/slime.js';
 import { createLogicState, tickLogic, MIN_SUPPLY } from '../core/logic.js';
 
 const I2C_MODELS = { mpu6050: () => new Mpu6050(), ssd1306: () => new Ssd1306(), lcd1602: () => new Lcd1602() };
@@ -177,7 +178,8 @@ export class Simulation {
     // A capacitor or coil changes with TIME, so a circuit that has one is solved every frame (not only when a pin changes)
     const reactive = circuit.elements.some(e => e.kind === 'CAP' || e.kind === 'IND');
     const bios = circuit.elements.filter(e => e.kind === 'BIO');         // a biosignal source changes with time too, so the circuit is solved every frame
-    if (!reactive && !bios.length && sig === this.lastSig && this.result) return;
+    const slimes = circuit.elements.filter(e => e.kind === 'SLIME');     // a slime mold's potentials drift with time too
+    if (!reactive && !bios.length && !slimes.length && sig === this.lastSig && this.result) return;
     this.lastSig = sig;
     this.modes = modes;
     this.logicTick();                                   // inputs that aren't MCU pins (a switch, another chip) settle here
@@ -185,6 +187,7 @@ export class Simulation {
     this.lastSolveAt = now;
     const signalOf = e => signalAt(this.editor.partById(e.partId) || {}, now);
     const signals = new Map(bios.map(e => [e.partId, signalOf(e)]));
+    for (const e of slimes) signals.set(e.partId, slimePotentials(e.taps, this.editor.partById(e.partId) || {}, now));
     const driveOf = sg => ({ pins: modes, pressed: this.pressed, duty, logic: this.logicMap, dt, reactive: this.reactive, signals: sg });
     this.result = solveDrive(circuit, driveOf(signals));
     if (reactive) this.reactive = new Map(this.result.reactive);

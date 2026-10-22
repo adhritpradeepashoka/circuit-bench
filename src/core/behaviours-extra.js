@@ -212,6 +212,20 @@ export const EXTRA_BEHAVIOURS = {
     props: { sp: '', sn: '', sr: '', effort: 50, scale: 100, contact: 5, hum: 0 },       // electrode sites on the Visualizer's head (blank = wired by hand)
     note: 'Output = rest level + gain × (IN+ − IN−), limited to the supply. The rest level is half the supply, the REF pin, or ground, as chosen. Input impedance is very high. Filtering and noise are not modelled.',
   },
+  'slime-mold': {
+    label: 'Slime mold (Physarum) on an electrode grid',
+    ...roles({ ref: 'Bath / reference electrode (REF)' }),
+    props: { mperiod: 60, mamp: 1.2, mspeed: 1, mstim: 0, mnoise: 40, mcontact: 5 },
+    settings: [
+      { key: 'mperiod', label: 'Oscillation period', kind: 'range', min: 10, max: 180, step: 1, fmt: v => `${Math.round(v)} s` },
+      { key: 'mamp', label: 'Amplitude', kind: 'range', min: 0, max: 10, step: 0.1, fmt: v => `${(+v).toFixed(1)} mV` },
+      { key: 'mspeed', label: 'Time speed-up (watch it in a short run)', kind: 'range', min: 1, max: 120, step: 1, fmt: v => `×${Math.round(v)}` },
+      { key: 'mstim', label: 'Stimulus: repellent ← → food', kind: 'range', min: -100, max: 100, step: 5, fmt: v => (v > 0 ? `food +${Math.round(v)}` : v < 0 ? `repellent ${Math.round(v)}` : 'none') },
+      { key: 'mnoise', label: 'Electrode noise', kind: 'range', min: 0, max: 300, step: 5, fmt: v => `${Math.round(v)} µV` },
+      { key: 'mcontact', label: 'Electrode contact resistance', kind: 'range', min: 1, max: 100, step: 1, fmt: v => `${Math.round(v)} kΩ` },
+    ],
+    note: 'Lay this over an imported electrode board (drag it on top). Each of the board’s electrode pads that the organism covers picks up its slow electrical rhythm — a wave that travels out from the pacemaker lobe — and passes it to that pad’s pin, measured against REF. Wire a pin and a reference pin to a BioAmp Pill, then read the Pill with the Arduino. A modelled, illustrative signal — not data from a real culture.',
+  },
   'signal-source': {
     label: 'Biosignal source (electrodes on a body: ECG, EMG, EEG, EOG)',
     ...roles({ pos: 'Electrode + (IN+)', neg: 'Electrode − (IN−)', ref: 'Reference electrode (REF)' }),

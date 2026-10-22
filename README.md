@@ -307,3 +307,8 @@ comes from net names when the file has them and otherwise from the copper itself
 node — `src/core/kicad-import.js`), so boards drawn without a schematic, like electrode arrays, import too. The board is
 one part (package `board`, saved in My parts and inside projects). Splitting a board's components out into separately
 simulated parts is the next step.
+
+## Bioelectronics workspace: head visualizer and slime mold
+
+- **Visualizer** (toggle next to the toolbar): a 3D head scan (“3D human head scan” by celer, CC BY — see `ATTRIBUTION.md`). Every BioAmp EXG Pill in the circuit is a channel with its own E+ and E−; drag them onto EEG / EOG / EMG sites (or pick from the lists). One reference electrode is shared. The signal each Pill receives depends on where its electrodes sit (illustrative model in `src/core/body-sites.js`, not medical data).
+- **Slime mold (Physarum)**: lay it over an imported electrode board (File → Import PCB). The pads it covers pick up its slow oscillation and pass it to their pins, measured against its REF pin; read them with Pills and an Arduino (example sketch “Slime mold electrode reader”). Model in `src/core/slime.js`; illustrative, not real culture data.

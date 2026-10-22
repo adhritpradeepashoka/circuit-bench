@@ -1,6 +1,8 @@
 import { SITE } from './body-sites.js';
 import { PART_DEFS } from './parts.js';
-import { allPinsWorld } from './geometry.js';
+import { allPinsWorld, localToWorld } from './geometry.js';
+import { tapsUnder } from './slime.js';
+import { BOARD_SCALE } from './custom-parts.js';
 import { boardHoles, holeAt } from './snap.js';
 import { ledVf, ledRd } from './led-colors.js';
 import { formatOhms } from './resistance.js';
@@ -149,6 +151,20 @@ export function compile(state) {
       else if (kind === 'opamp') {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'OA', partId: part.id, p: r('inp'), n: r('inn'), out: r('out'), vcc: r('vcc'), vee: r('vee'), dropHigh: bh.dropHigh, dropLow: bh.dropLow, minSupply: bh.minSupply });
+      }
+      else if (kind === 'slime-mold') {
+        // the organism lies over an imported board: each electrode net of the board under its centre becomes a source against the bath (REF)
+        const mid = localToWorld(part, PART_DEFS[part.type].w / 2, PART_DEFS[part.type].h / 2);
+        const under = parts.find(b => b !== part && PART_DEFS[b.type]?.spec?.board && (() => {
+          const bd = PART_DEFS[b.type]; const q = localToWorld(b, bd.w / 2, bd.h / 2); const a = -((b.rot || 0) * Math.PI) / 180;
+          const dx = mid.x - q.x, dy = mid.y - q.y, lx = dx * Math.cos(a) - dy * Math.sin(a), ly = dx * Math.sin(a) + dy * Math.cos(a);
+          return Math.abs(lx) <= bd.w / 2 && Math.abs(ly) <= bd.h / 2;
+        })());
+        if (under) {
+          const bs = PART_DEFS[under.type].spec.board, M = 6;
+          const taps = tapsUnder(bs, (x, y) => localToWorld(under, x * BOARD_SCALE + M, y * BOARD_SCALE + M), mid, part.rot, pin => netOf(under.id, pin)).filter(t => t.net != null);
+          if (taps.length) elements.push({ kind: 'SLIME', partId: part.id, ref: r('ref'), taps, rs: 2000 + 1000 * Math.max(1, part.mcontact ?? 5) });
+        }
       }
       else if (kind === 'signal-source') {
         if (part.attached !== 0) elements.push({ kind: 'BIO', partId: part.id, pos: r('pos'), neg: r('neg'), ref: r('ref'), rc: 2000 + 1000 * Math.max(1, part.contact ?? 5) });
