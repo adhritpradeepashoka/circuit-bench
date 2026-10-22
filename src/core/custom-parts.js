@@ -12,7 +12,8 @@ import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
-const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 24;
+const PAD = 14, MIN_W = 76, MIN_H = 56, MAX_PINS = 32;
+const DIP_PAD = 13;
 const SIDES = ['left', 'right', 'top', 'bottom'];
 const PIN_ID_RE = /^[A-Za-z0-9+\-_.]{1,12}$/;
 
@@ -110,14 +111,17 @@ export function validatePartSpec(raw, { id } = {}) {
       else errors.push(...v.errors);
     }
   }
-  const breadboard = !!raw.breadboard;
-  if (breadboard && pins.some(p => p.side !== 'bottom')) errors.push('To plug into a breadboard, every pin has to be on the bottom edge.');
+  const pkg = raw.package === 'dip' ? 'dip' : 'module';
+  const breadboard = pkg === 'dip' ? true : !!raw.breadboard;          // a DIP always straddles the trench
+  if (pkg === 'dip' && pins.length < 4) errors.push('A DIP chip needs at least 4 pins.');
+  if (pkg === 'dip' && pins.length % 2) errors.push('A DIP chip has the same number of pins on each side, so the total has to be even.');
+  if (pkg === 'module' && breadboard && pins.some(p => p.side !== 'bottom')) errors.push('To plug into a breadboard, every pin of a module has to be on the bottom edge (or make it a DIP chip).');
   if (errors.length) return { ok: false, errors };
   const spec = {
     id: /^custom-[a-z0-9-]{3,40}$/.test(String(raw.id)) ? raw.id : (id || newCustomId()),
     name, label: str(raw.label, 16) || name.slice(0, 16), description: str(raw.description, 200),
     color: hexColor(raw.color, '#2b6cb0'), textColor: hexColor(raw.textColor, '#ffffff'),
-    pins, behaviour, breadboard,
+    pins, behaviour, breadboard, package: pkg,
   };
   return { ok: true, spec };
 }
@@ -126,6 +130,7 @@ export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.rando
 
 /** Box size and pin positions (CSS px, local to the part) from a spec: pins sit on a 0.1" grid along their side. */
 export function layoutSpec(spec) {
+  if (spec.package === 'dip') return layoutDip(spec);
   const by = s => spec.pins.filter(p => p.side === s);
   const horiz = Math.max(by('top').length, by('bottom').length), vert = Math.max(by('left').length, by('right').length);
   // side pins print their names inside the body, so leave room for them either side of the part's own label
@@ -144,6 +149,26 @@ export function layoutSpec(spec) {
       pins.push({ id: p.id, label: p.label, x, y, kind: 'pin', side });
     });
   }
+  return { w, h, pins };
+}
+
+/**
+ * A DIP chip, laid out the way the package really is: two rows of legs 0.3" apart — exactly the width of a
+ * breadboard's centre trench, so it straddles it like the real thing — with pin 1 at the bottom left and the
+ * numbering running anticlockwise (along the bottom, then back along the top), notch on the left.
+ */
+export const DIP_ROWS = 3 * PITCH;       // 0.3 inch between the two rows of legs
+function layoutDip(spec) {
+  const n = spec.pins.length, half = Math.ceil(n / 2);
+  const w = Math.max(MIN_W, Math.round((half - 1) * PITCH + DIP_PAD * 2));
+  const h = Math.round(DIP_ROWS + DIP_PAD * 2);
+  const x0 = (w - (half - 1) * PITCH) / 2;
+  const yBot = (h + DIP_ROWS) / 2, yTop = (h - DIP_ROWS) / 2;
+  const pins = spec.pins.map((p, i) => {
+    const bottom = i < half;
+    const col = bottom ? i : n - 1 - i;                       // top row runs back from the right
+    return { id: p.id, label: p.label, x: +(x0 + col * PITCH).toFixed(2), y: bottom ? yBot : yTop, kind: 'pin', side: bottom ? 'bottom' : 'top', number: i + 1 };
+  });
   return { w, h, pins };
 }
 

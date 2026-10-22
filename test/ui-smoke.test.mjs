@@ -12,6 +12,7 @@ import { pinWorld, placeFlex as placeFlexTest, allPinsWorld as allPinsWorldTest 
 import { compileSketch } from '../src/sim/compile-client.js';
 import { DEFAULT_SKETCH, EXAMPLES } from '../src/sim/examples.js';
 import { compileLogic, createLogicState, tickLogic, logicDrive } from '../src/core/logic.js';
+import { layoutSpec, PITCH } from '../src/core/custom-parts.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = await build({ entryPoints: [join(root, 'test/fixtures/ui-entry.js')], bundle: true, write: false, format: 'iife', platform: 'browser', loader: { '.css': 'empty' } });
@@ -1595,4 +1596,35 @@ test('ui: the rules editor builds a working chip — memory, rules and driven pi
   v.CLK = 5; tickLogic(compiled, state, saved.behaviour.roles, read);
   assert.equal(state.vars.q, 1, 'the clock edge latched D');
   assert.ok(logicDrive(compiled, state, saved.behaviour.roles, read).get('Q') > 4.5);
+});
+
+test('ui: the Package dropdown turns a part into a DIP chip — two rows of legs, sides decided by pin order', () => {
+  const { w, editor } = boot();
+  const doc = w.document, $ = id => doc.getElementById(id);
+  w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false, error: 'unused' }) });
+  const set = (el2, v, ev = 'input') => { el2.value = v; el2.dispatchEvent(new w.Event(ev, { bubbles: true })); };
+
+  $('createPartBtn').click();
+  set($('pcName'), '555 timer');
+  set($('pcPackage'), 'dip', 'change');
+  assert.ok($('pcBreadboard').closest('.pc-check').hidden, 'a DIP always plugs in, so the checkbox goes away');
+  assert.match($('pcPinsHint').textContent, /datasheet order/);
+  assert.equal($('pcPins').querySelector('select'), null, 'no per-pin side chooser on a DIP');
+  assert.match($('pcPins').textContent, /pin 1/);
+  // three pins is odd, and the part can't be saved until it's a real package shape
+  assert.match($('pcErrors').textContent, /even/);
+  assert.equal($('pcSave').disabled, true);
+  $('pcAddPin').click();
+  const names = [...$('pcPins').querySelectorAll('.pc-pin input:first-child')];
+  ['GND', 'TRIG', 'OUT', 'RESET'].forEach((id, i) => set(names[i], id));
+  set($('pcKind'), 'none', 'change');
+  assert.equal($('pcErrors').textContent, '');
+  $('pcSave').click();
+
+  const saved = editor.exportProject().customParts[0];
+  assert.equal(saved.package, 'dip');
+  assert.equal(saved.breadboard, true);
+  const laid = layoutSpec(saved);
+  assert.deepEqual([...laid.pins].map(p => `${p.id}:${p.side}`), ['GND:bottom', 'TRIG:bottom', 'OUT:top', 'RESET:top']);
+  assert.ok(Math.abs(laid.pins[0].y - laid.pins[3].y - 3 * PITCH) < 1e-6, 'pin 1 and the last pin face each other 0.3" apart');
 });

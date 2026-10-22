@@ -235,7 +235,11 @@
             <label class="pc-field pc-color"><span>Text</span><input type="color" id="pcTextColor" value="#ffffff"></label>
           </div>
           <label class="pc-field"><span>Description <i>(optional — the AI reads it too)</i></span><input id="pcDesc" maxlength="200"></label>
-          <div class="pc-pins-head"><b>Pins</b><button type="button" id="pcAddPin">+ Add pin</button></div>
+          <label class="pc-field"><span>Package</span><select id="pcPackage">
+            <option value="module">Module / breakout board</option>
+            <option value="dip">DIP chip — two rows of legs over the trench</option>
+          </select></label>
+          <div class="pc-pins-head"><b>Pins</b><span class="pc-pins-hint" id="pcPinsHint"></span><button type="button" id="pcAddPin">+ Add pin</button></div>
           <div id="pcPins" class="pc-pins"></div>
           <label class="pc-check"><input type="checkbox" id="pcBreadboard"> Plugs into a breadboard <i>(pins on the bottom edge)</i></label>
           <label class="pc-field"><span>What it does</span><select id="pcKind"></select></label>

@@ -67,8 +67,12 @@ pressing anywhere else on a part moves it. Wire-only mode (`W`) is still there f
 
 ### Part Creator: make your own parts
 
-Parts → My parts → **Create a part**. Give it a name, colour and pins (on any side, or all on the bottom edge to
-plug into a breadboard), then say what it does. Simple parts pick a ready-made behaviour: just connections, a
+Parts → My parts → **Create a part**. Give it a name, colour and pins, then say what it does. **Package** decides
+the shape: a *module / breakout* places each pin on a side you choose (or a single header row along the bottom, to
+plug into a breadboard), while a *DIP chip* is laid out from the datasheet's own pin numbering — list the pins in
+order from pin 1 and they come out as two rows 0.3" apart, which is exactly the width of the breadboard's centre
+trench, with the notch and pin 1 at the left. Never put a chip's pins all in one row; that is what the package
+setting is for. Simple parts pick a ready-made behaviour: just connections, a
 resistor/load, an LED, a push button, an analog sensor (a slider sets OUT = VCC × position), a digital sensor
 (click to trigger), or a multiplexer (select pins pick which channel reaches the common pin).
 

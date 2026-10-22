@@ -316,12 +316,16 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
   "description": "<one sentence: what it is and how to wire it>",
   "color": "<#rrggbb body colour that looks like the real part>",
   "textColor": "<#rrggbb, readable on that colour>",
+  "package": "dip" | "module",
   "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
-  "breadboard": <true only if the real part plugs into a breadboard; then every pin must be on "bottom">,
+  "breadboard": <"module" only: true if the real part plugs into a breadboard; then every pin must be on "bottom">,
   "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "ohms": <resistor only>, "color": "<led only>", "select": [<mux only>], "channels": [<mux only>], "vars": {<logic only>}, "rules": [<logic only>], "outputs": {<logic only>}, "analog": [<logic only>] },
   "note": "<anything the simulator can't reproduce about the real part — timing, drive current, analog detail — else empty>"
 }
-For a DIP chip put pin 1 at the top of the left side and run anticlockwise, as on the real package. 1–24 pins.`;
+PACKAGE — get this right or the part will be unusable on a breadboard:
+  - "dip" for any through-hole chip in a DIP package (a 4051, a 74HC595, a 555, an op-amp…). Then list the pins in DATASHEET ORDER, pin 1 first, going all the way round the chip — pin 1, 2, 3 … down one side and back up the other, exactly as the datasheet numbers them. Leave "side" out: the simulator lays them out as two rows 0.3" apart that straddle the breadboard's centre trench, with the notch and pin 1 at the left. An even number of pins is required. Never put all of a chip's pins on one side.
+  - "module" for a breakout board or anything with its own header: then "side" places each pin, and "breadboard": true means a single row of pins along the bottom edge.
+1–32 pins.`;
 }
 
 export function createAiService({ fetchImpl = globalThis.fetch } = {}) {

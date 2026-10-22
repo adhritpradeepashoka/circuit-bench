@@ -119,6 +119,7 @@ for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-ba
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export function customPartSVG(spec, { lit = 0 } = {}) {
   const { w, h, pins } = layoutSpec(spec);
+  if (spec.package === 'dip') return dipSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
   const kind = spec.behaviour.kind;
   const leads = pins.map(p => {
@@ -143,6 +144,41 @@ export function customPartSVG(spec, { lit = 0 } = {}) {
     ${labels}
   </svg>`;
 }
+/**
+ * A DIP chip, drawn the way the real package looks: two rows of legs 0.3" apart (so it straddles the
+ * breadboard's trench), a notch and a dot at the pin-1 end, the part number across the middle, and each
+ * leg's name printed beside it. Pin names run along the legs because at 0.1" pitch that is the only way
+ * eight of them fit in a row — exactly how silkscreen on a real board reads.
+ */
+function dipSVG(spec, w, h, pins) {
+  const top = pins.find(p => p.side === 'top')?.y ?? 15, bot = pins.find(p => p.side === 'bottom')?.y ?? 44;
+  const bodyT = top + 1.6, bodyB = bot - 1.6, bodyX = 4.5, bodyW = w - bodyX * 2;
+  const legs = pins.map(p => {
+    const [y1, y2] = p.side === 'top' ? [bodyT, p.y - 4.2] : [bodyB, p.y + 4.2];
+    return `<rect x="${(p.x - 2.1).toFixed(2)}" y="${Math.min(y1, y2).toFixed(2)}" width="4.2" height="${Math.abs(y2 - y1).toFixed(2)}" rx="0.7" fill="#cfd5db" stroke="#8d969e" stroke-width="0.5"/>`
+      + `<rect x="${(p.x - 2.4).toFixed(2)}" y="${(p.y - 2.4).toFixed(2)}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"/>`;
+  }).join('');
+  // Both rows read bottom-to-top, like silkscreen. rotate(-90) with text-anchor="start" makes a label grow
+  // upwards from its anchor, so the anchor goes at the BOTTOM of the band each row gets: just inside the body
+  // edge for the bottom row, a band's height below the body edge for the top row. The part number is drawn
+  // last, with a halo, so it stays readable where a long pin name reaches the middle.
+  const band = 12;
+  const names = pins.map(p => {
+    const y = +(p.side === 'top' ? bodyT + band : bodyB - 2.4).toFixed(2);
+    return `<text x="${p.x}" y="${y}" text-anchor="start" font-size="3.4" font-family="monospace" fill="${spec.textColor}" opacity=".85" transform="rotate(-90 ${p.x} ${y})" dy="1.2">${esc(p.id)}</text>`;
+  }).join('');
+  const one = pins[0];
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
+    ${legs}
+    <rect x="${bodyX}" y="${bodyT.toFixed(2)}" width="${bodyW.toFixed(2)}" height="${(bodyB - bodyT).toFixed(2)}" rx="1.6" fill="${spec.color}" stroke="#0006" stroke-width="0.7"/>
+    <path d="M${bodyX} ${((bodyT + bodyB) / 2 - 3.6).toFixed(2)} a3.6 3.6 0 0 0 0 7.2z" fill="#00000038" stroke="#00000022" stroke-width="0.4"/>
+    <circle cx="${(bodyX + 3.2).toFixed(2)}" cy="${(bodyB - 3.4).toFixed(2)}" r="1.3" fill="${spec.textColor}" opacity=".7"><title>pin 1: ${esc(one.id)}</title></circle>
+    ${names}
+    <text x="${(w / 2).toFixed(2)}" y="${((bodyT + bodyB) / 2 + 2.1).toFixed(2)}" text-anchor="middle" font-size="6" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
+      stroke="${spec.color}" stroke-width="1.9" paint-order="stroke">${esc(spec.label)}</text>
+  </svg>`;
+}
+
 class CustomPart extends HTMLElement {
   constructor() { super(); this._spec = null; this._lit = 0; }
   set spec(s) { this._spec = s; this.render(); }

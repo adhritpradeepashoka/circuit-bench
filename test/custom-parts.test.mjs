@@ -222,3 +222,26 @@ test('rules parts: wired to an Arduino, the shift register drives a real LED fro
   assert.ok(res.ledCurrent.get('led') > 0.008, `Q0 lights the LED: ${res.ledCurrent.get('led')}`);
   assert.equal(res.logicOut.get('sr').get('Q0') > 2.5, true);
 });
+
+test('DIP packages: pins land in two rows 0.3" apart in datasheet order, so a chip straddles the breadboard trench', () => {
+  const ids = ['CH4', 'CH6', 'COM', 'CH7', 'CH5', 'INH', 'VEE', 'VSS', 'C', 'B', 'A', 'CH3', 'CH0', 'CH1', 'CH2', 'VDD'];
+  const v = validatePartSpec({ name: 'CD4051', package: 'dip', pins: ids.map(id => ({ id })), behaviour: { kind: 'mux', roles: { vcc: 'VDD', gnd: 'VSS', common: 'COM', enable: 'INH' }, select: ['A', 'B', 'C'], channels: ['CH0', 'CH1', 'CH2', 'CH3', 'CH4', 'CH5', 'CH6', 'CH7'] } });
+  assert.ok(v.ok, v.errors?.join());
+  assert.equal(v.spec.breadboard, true, 'a DIP always plugs in');
+  const { pins, h } = layoutSpec(v.spec);
+  const at = id => pins.find(p => p.id === id);
+  assert.equal(at('CH4').side, 'bottom'); assert.equal(at('VSS').side, 'bottom');     // pins 1–8 along the bottom
+  assert.equal(at('C').side, 'top'); assert.equal(at('VDD').side, 'top');             // 9–16 back along the top
+  assert.equal(at('CH4').x, at('VDD').x, 'pin 1 and pin 16 face each other');
+  assert.equal(at('VSS').x, at('C').x, 'pin 8 and pin 9 face each other');
+  assert.ok(Math.abs(at('CH4').y - at('VDD').y - 3 * PITCH) < 1e-6, '0.3 inch between the rows');
+  assert.equal(+(at('CH6').x - at('CH4').x).toFixed(2), PITCH, '0.1 inch along a row');
+  assert.ok(h >= 3 * PITCH, 'the body spans both rows');
+  // the shape is enforced, so a chip can't come back as one long comb of pins again
+  assert.match(validatePartSpec({ name: 'x', package: 'dip', pins: ids.slice(0, 15).map(id => ({ id })), behaviour: { kind: 'none' } }).errors.join(), /same number of pins on each side/);
+  assert.match(validatePartSpec({ name: 'x', package: 'dip', pins: [{ id: 'A' }, { id: 'B' }], behaviour: { kind: 'none' } }).errors.join(), /at least 4 pins/);
+  // a module is unchanged: a single header row along the bottom
+  const mod = validatePartSpec({ name: 'm', breadboard: true, pins: [{ id: 'VCC' }, { id: 'GND' }], behaviour: { kind: 'none' } });
+  assert.equal(mod.spec.package, 'module');
+  assert.ok(layoutSpec(mod.spec).pins.every(p => p.side === 'bottom'));
+});

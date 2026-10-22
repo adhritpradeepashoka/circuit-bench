@@ -19,7 +19,7 @@ export function loadLibrary(storage = globalThis.localStorage) {
 function saveLibrary(list, storage = globalThis.localStorage) { try { storage.setItem(LIBRARY, JSON.stringify(list)); } catch { /* full / blocked */ } }
 
 const blank = () => ({
-  id: newCustomId(), name: '', label: '', description: '', color: '#2b6cb0', textColor: '#ffffff', breadboard: false,
+  id: newCustomId(), package: 'module', name: '', label: '', description: '', color: '#2b6cb0', textColor: '#ffffff', breadboard: false,
   pins: [{ id: 'VCC', label: 'Power', side: 'bottom' }, { id: 'GND', label: 'Ground', side: 'bottom' }, { id: 'OUT', label: 'Signal out', side: 'bottom' }],
   behaviour: { kind: 'analog-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'OUT' } },
 });
@@ -41,9 +41,16 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       const row = el('div', { className: 'pc-pin' });
       const id = el('input', { value: p.id, maxLength: 12, placeholder: 'Name', ariaLabel: `Pin ${i + 1} name` });
       const label = el('input', { value: p.label === p.id ? '' : p.label, maxLength: 40, placeholder: 'What it is for', ariaLabel: `Pin ${i + 1} purpose` });
-      const side = el('select', { ariaLabel: `Pin ${i + 1} side` });
-      for (const [v, t] of SIDES) side.append(el('option', { value: v, textContent: t }));
-      side.value = p.side; side.disabled = draft.breadboard;
+      const dip = draft.package === 'dip';
+      // On a DIP the datasheet's pin number decides where a leg goes, so the side is shown, not chosen.
+      const side = dip
+        ? el('span', { className: 'pc-pin-no', textContent: `pin ${i + 1}`, title: `${i < Math.ceil(draft.pins.length / 2) ? 'Bottom' : 'Top'} row — this is where the datasheet puts it` })
+        : el('select', { ariaLabel: `Pin ${i + 1} side` });
+      if (!dip) {
+        for (const [v, t] of SIDES) side.append(el('option', { value: v, textContent: t }));
+        side.value = p.side; side.disabled = draft.breadboard;
+        side.addEventListener('change', () => { p.side = side.value; preview(); });
+      }
       const del = el('button', { type: 'button', textContent: '×', title: 'Remove pin', ariaLabel: `Remove pin ${p.id}` });
       id.addEventListener('input', () => {
         const old = p.id; p.id = id.value.trim().replace(/\s+/g, '_');
@@ -52,7 +59,6 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
         paintRoles(); preview();
       });
       label.addEventListener('input', () => { p.label = label.value.trim() || p.id; preview(); });
-      side.addEventListener('change', () => { p.side = side.value; preview(); });
       del.addEventListener('click', () => { draft.pins.splice(i, 1); paintPins(); paintRoles(); preview(); });
       row.append(id, label, side, del);
       return row;
@@ -197,7 +203,11 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   function paintForm() {
     $('pcName').value = draft.name; $('pcLabel').value = draft.label === draft.name.slice(0, 16) ? '' : draft.label;
     $('pcColor').value = draft.color; $('pcTextColor').value = draft.textColor; $('pcDesc').value = draft.description || '';
+    const dip = draft.package === 'dip';
+    $('pcPackage').value = dip ? 'dip' : 'module';
     $('pcBreadboard').checked = !!draft.breadboard;
+    $('pcBreadboard').closest('.pc-check').hidden = dip;          // a DIP always plugs in; it has nowhere else to go
+    $('pcPinsHint').textContent = dip ? `in datasheet order, pin 1 first${draft.pins.length % 2 ? ' — needs an even number' : ''}` : '';
     paintPins(); paintRoles(); preview();
   }
 
@@ -279,6 +289,11 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   $('pcColor').addEventListener('input', e => { draft.color = e.target.value; preview(); });
   $('pcTextColor').addEventListener('input', e => { draft.textColor = e.target.value; preview(); });
   $('pcDesc').addEventListener('input', e => { draft.description = e.target.value; preview(); });
+  $('pcPackage').addEventListener('change', e => {
+    draft.package = e.target.value === 'dip' ? 'dip' : 'module';
+    if (draft.package === 'dip') { draft.breadboard = true; for (const p of draft.pins) p.side = 'bottom'; }
+    paintForm();
+  });
   $('pcBreadboard').addEventListener('change', e => {
     draft.breadboard = e.target.checked;
     if (draft.breadboard) for (const p of draft.pins) p.side = 'bottom';
