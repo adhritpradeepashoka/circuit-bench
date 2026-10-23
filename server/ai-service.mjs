@@ -36,9 +36,9 @@ export const looksLikeVerdict = text => { const t = String(text || '').trim(); r
 const modelGone = (status, msg) => status === 404 || /no longer available|not found|does not exist|deprecated|decommission|not supported for|unknown model|invalid model|model_not_found/i.test(String(msg));
 
 /** An OpenAI-compatible chat endpoint (Groq, NVIDIA, Meta's Llama API, OpenRouter …): one shape, many hosts. */
-function openAiLike({ label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false, anyChat = false, effort = '' }) {
+function openAiLike({ compact = false, label, url, models, search = false, keyUrl, hint, prefer, listUrl, onlyFree = false, anyFree = false, anyChat = false, effort = '' }) {
   return {
-    label, models, keyUrl, hint, prefer, onlyFree, anyFree, anyChat, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'),
+    compact, label, models, keyUrl, hint, prefer, onlyFree, anyFree, anyChat, listUrl: () => listUrl || url.replace(/\/chat\/completions$/, '/models'),
     listHeaders: key => ({ authorization: `Bearer ${key}` }),
     listIds: body => (Array.isArray(body?.data) ? body.data : []).filter(m => !onlyFree || m?.id === 'openrouter/free' || /:free$/.test(m?.id || '') || (m?.pricing && Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0)).map(m => m?.id).filter(Boolean),
     url: () => url,
@@ -79,7 +79,7 @@ export const PROVIDERS = {
     sources: body => (body?.candidates?.[0]?.groundingMetadata?.groundingChunks || []).map(c => ({ title: c?.web?.title, url: c?.web?.uri })),
   },
   // openai/gpt-oss-120b, not llama-3.3-70b-versatile — that one needs Groq's paid tier and 404s on free accounts.
-  groq: openAiLike({ label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile'], search: true, effort: 'reasoning_effort', prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
+  groq: openAiLike({ compact: true, label: 'Groq', url: 'https://api.groq.com/openai/v1/chat/completions', models: ['openai/gpt-oss-120b', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b'], search: true, effort: 'reasoning_effort', prefer: [/^openai\/gpt-oss-(\d+)b$/, /llama-?(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^llama-(\d+(?:\.\d+)?)-70b-versatile$/] }),
   nvidia: openAiLike({ label: 'NVIDIA', url: 'https://integrate.api.nvidia.com/v1/chat/completions', models: ['meta/llama-3.3-70b-instruct', 'meta/llama-3.1-70b-instruct', 'nvidia/llama-3.1-nemotron-70b-instruct', 'meta/llama-3.1-8b-instruct'], anyChat: true, prefer: [/^meta\/llama-(\d+(?:\.\d+)?)-70b-instruct$/, /^meta\/llama-(\d+(?:\.\d+)?)-(?:maverick|scout)/, /^nvidia\/llama-[\d.]+-nemotron-(?:super-)?(?:70|49)b/, /^meta\/llama-(\d+(?:\.\d+)?)-405b-instruct$/, /^(?:deepseek-ai\/deepseek-v(\d+(?:\.\d+)?)|mistralai\/mistral-large(?:-(\d+))?|qwen\/qwen[\d.]*-(?:coder-)?(?:32|72|235)b[\w.-]*)$/, /^meta\/llama-(\d+(?:\.\d+)?)-8b-instruct$/] }),
   meta: openAiLike({ label: 'Meta Llama', url: 'https://api.llama.com/compat/v1/chat/completions', models: ['Llama-4-Maverick-17B-128E-Instruct-FP8', 'Llama-3.3-70B-Instruct'], prefer: [/^llama-(\d+(?:\.\d+)?)-maverick/i, /^llama-(\d+(?:\.\d+)?)-70b-instruct$/i] }),
   // openrouter/free is OpenRouter's own router: it hands the request to whichever free model is up right now, so it survives retirements.
@@ -188,8 +188,15 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
   async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini', model }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = needKey(userKey, provider);
-    const prompt = buildPrompt({ instruction, circuit, code, context, history });
-    const { text, meta } = await ask(p, userKey, prompt, { model });
+    // Free tiers cap tokens per minute (Groq: 8,000 on gpt-oss-120b), and the full part catalogue alone is ~9k tokens —
+    // so those providers get the compact prompt, and any provider that says the request is too big gets one compact retry.
+    let asked;
+    try { asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, compact: !!p.compact }), { model }); }
+    catch (err) {
+      if (p.compact || !/too large|tokens per minute|\bTPM\b|context (length|window)|maximum context|reduce (your|the) (message|prompt)/i.test(String(err?.message))) throw err;
+      asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, compact: true }), { model });
+    }
+    const { text, meta } = asked;
     const result = parseReply(text);
     // actions:[] + code:null is not automatically a failure: a model that correctly decides nothing
     // needs to change (the sketch already does what was asked, or the circuit already has the part)

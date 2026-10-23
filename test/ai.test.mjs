@@ -490,3 +490,23 @@ test('timeouts: a model that hangs is abandoned after its own timeout and the ne
   const hopeless = createAiService({ attemptMs: 30, budgetMs: 4040, fetchImpl: async (u, o) => (o.method === 'GET' ? { ok: false, status: 500, json: async () => ({}) } : hang(o.signal)) });
   await assert.rejects(() => hopeless.generateCode({ instruction: 'x', userKey: 'nvapi-hopeless', provider: 'nvidia' }), e => e instanceof RequestError && e.status === 504);
 });
+
+test('groq gets the compact prompt, and a too-large error retries other providers compactly', async () => {
+  const { createAiService } = await import('../server/ai-service.mjs');
+  const circuit = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }], wires: [] };
+  const sizes = { groq: [], openrouter: [] };
+  const mk = provider => async (url, opts) => {
+    const body = JSON.parse(opts.body);
+    if (/\/models$/.test(url)) return { ok: true, status: 200, json: async () => ({ data: [] }) };
+    const n = body.messages[0].content.length; sizes[provider].push(n);
+    if (provider === 'openrouter' && n > 20000) return { ok: false, status: 413, json: async () => ({ error: { message: 'Request too large: tokens per minute limit' } }) };
+    return { ok: true, status: 200, json: async () => ({ choices: [{ message: { content: '```json\n{"actions":[],"explanation":"ok"}\n```' } }] }) };
+  };
+  for (const provider of ['groq', 'openrouter']) {
+    const svc = createAiService({ fetchImpl: mk(provider) });
+    const r = await svc.generateCode({ instruction: 'blink led', circuit, code: '', userKey: 'k', provider });
+    assert.equal(r.ok, true);
+  }
+  assert.ok(sizes.groq.at(-1) < 12000, 'groq is compact on the first try');
+  assert.ok(sizes.openrouter.length >= 2 && sizes.openrouter.at(-1) < 12000, 'a too-large error gets one compact retry');
+});
