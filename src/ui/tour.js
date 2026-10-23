@@ -181,8 +181,8 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>The project you're working on. Everything saves automatically. Click here to rename it or switch to another.</p>` },
     { spots: ['#accountSlot'], title: 'Sign in with Google', skip: () => $('accountSlot')?.hidden !== false,
       body: `<p>Sign in so CircuitBench knows it's you. Your name and picture show up here. It's optional: everything works without it.</p>` },
-    { spots: ['#helpBtn'], title: 'Help, any time',
-      body: `<p>Click <b>?</b> to see this tour again, or to be guided through building a circuit.</p>` },
+    { spots: ['#settingsBtn'], title: 'Settings and help',
+      body: `<p>Click <b>⚙</b> for AI keys, themes, and to see this tour again or be guided through building a circuit.</p>` },
     { center: true, title: 'Your first project: blink an LED',
       body: `<p>The "hello world" of electronics. You'll need:</p><ul class="tour-needs"><li><b>Arduino Uno</b> (already on the bench)</li><li><b>Breadboard</b> (already on the bench)</li><li><b>1 LED</b>, the light</li><li><b>1 resistor (220 Ω)</b>, which stops too much current from burning out the LED</li><li><b>2 wires</b>, one from pin 13 and one to GND (ground)</li></ul><p>I'll point to each part and hole as you go. It takes about 3 minutes, in a new project so nothing you've made is touched.</p>`,
       nextLabel: 'Build it with me', skipLabel: 'I\'ll explore on my own', onNext: () => startGuide(), onSkip: () => showOutro() },
@@ -248,7 +248,6 @@ export function initTour({ editor, sim, code, projects }) {
   }
 
   const tourSteps = () => welcome().filter(s => !s.skip?.());
-  $('helpBtn')?.addEventListener('click', () => start(tourSteps()));
   const firstVisit = () => { try { return !localStorage.getItem(SEEN_KEY); } catch { return false; } };
 
   return {

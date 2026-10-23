@@ -1336,8 +1336,9 @@ test('ui: first-visit tour — "Welcome to CircuitBench!", one popup per button/
   assert.equal(tour.active, false);
   tour.maybeAutoStart();
   assert.equal(tour.active, false, 'not shown again once seen');
-  doc.getElementById('helpBtn').click();
-  assert.equal(tour.active, true, '? brings it back');
+  assert.equal(doc.getElementById('helpBtn'), null, 'the ? button is gone; Settings replays the tour');
+  tour.start();
+  assert.equal(tour.active, true, 'Settings brings it back');
   tour.end();
 });
 

@@ -32,6 +32,7 @@ export function initSettings({ tour, ai, status = () => {} }) {
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
 
   $('setTour').addEventListener('click', () => { close(); tour.start(); });
+  $('setGuide').addEventListener('click', () => { close(); tour.startGuide(); });
   $('setHint').addEventListener('click', () => { const c = $('hintCard'); if (c) c.hidden = false; close(); });
   $('setClearChat').addEventListener('click', () => { ai.clearChat(); status('AI chat history cleared'); });
   $('setForgetKeys').addEventListener('click', () => { for (const p of PROVIDER_IDS) setStoredKey('', p); ai.refresh(); status('All saved API keys removed from this browser'); });
