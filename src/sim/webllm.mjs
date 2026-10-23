@@ -87,3 +87,19 @@ export async function generateLocal({ instruction, circuit, code, context = null
   }
   return { ok: true, ...result, meta: { provider: 'On this device', model: (usedModel || modelId).replace(/-q\d.*$/, ''), ms: now() - t0 } };
 }
+
+/* ── managing the downloaded models (they live in the browser's cache, 1–5 GB each) ── */
+const allIds = () => LOCAL_MODELS.flatMap(m => [m.id, m.id.replace('q4f16_1', 'q4f32_1')]).concat(TINY, TINY.replace('q4f16_1', 'q4f32_1'));
+/** Which on-device models are currently downloaded in this browser. */
+export async function cachedModels({ web = null } = {}) {
+  try { web ||= await import('@mlc-ai/web-llm'); const out = []; for (const id of allIds()) if (await web.hasModelInCache(id)) out.push(id); return out; } catch { return []; }
+}
+/** Stop using the engine and delete every downloaded on-device model from this browser. Returns how many were removed. */
+export async function deleteLocalModels({ web = null } = {}) {
+  try { await engine?.unload?.(); } catch { /* ignore */ }
+  resetLocal();
+  try { web ||= await import('@mlc-ai/web-llm'); } catch { return 0; }
+  let n = 0;
+  for (const id of allIds()) { try { if (await web.hasModelInCache(id)) { await web.deleteModelAllInfoInCache(id); n++; } } catch { /* keep going */ } }
+  return n;
+}

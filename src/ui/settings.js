@@ -2,13 +2,20 @@
 // switches that don't belong on the bench. The AI key form itself is owned by ai-panel.js and lives in this dialog.
 import { THEMES, FONTS, getTheme, setTheme, getCustom, setCustom } from './theme.js';
 import { initAdmin } from './admin.js';
+import { cachedModels, deleteLocalModels } from '../sim/webllm.mjs';
 import { PROVIDER_IDS, setStoredKey } from '../sim/ai-client.mjs';
 
 export function initSettings({ tour, ai, status = () => {} }) {
   const $ = id => document.getElementById(id);
   const modal = $('settingsModal');
   const admin = initAdmin();
-  const open = () => { admin.load(); paintThemes(); modal.hidden = false; $('settingsClose').focus(); };
+  async function paintModel() {
+    const have = await cachedModels();
+    $('setModelInfo').textContent = have.length ? `Downloaded on this device: ${have.map(i => i.replace(/-q\d.*$/, '')).join(', ')}. You can delete it any time.` : 'Nothing is downloaded. The on-device model (about 1.6 GB, once) only downloads if you choose “On this device” above.';
+    $('setDeleteModel').disabled = !have.length;
+  }
+  $('setDeleteModel').addEventListener('click', async () => { $('setDeleteModel').disabled = true; const n = await deleteLocalModels(); status(n ? `Deleted ${n} downloaded model${n > 1 ? 's' : ''}` : 'No downloaded models found'); ai.refresh(); paintModel(); });
+  const open = () => { admin.load(); paintModel(); paintThemes(); modal.hidden = false; $('settingsClose').focus(); };
   const close = () => { modal.hidden = true; };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 

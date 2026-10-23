@@ -5,6 +5,7 @@
 // running sim, Serial Monitor output) — see gatherContext below and describeContext in
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
+import { quickEdit } from '../core/quick-edits.js';
 import { hasHostedAi } from '../sim/session.mjs';
 import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
@@ -154,7 +155,8 @@ export function initAiPanel(editor, code, sim = null) {
   const setPref = v => { try { localStorage.setItem(LOCAL_PREF, v === 'h' ? 'h' : v ? '1' : '0'); } catch { /* ignore */ } };
   // "Included AI": beta members (and anyone the owner allows) use the server's own key with no setup. It leads unless they chose something else.
   const hostedOn = () => hasHostedAi() && (getPref() === 'h' || getPref() === null);
-  const localOn = () => !hostedOn() && webgpuAvailable() && (getPref() === '1' || (getPref() !== '0' && getPref() !== 'h' && !hasAnyKey()));
+  // The on-device model is a 1.6 GB download, so it only ever starts when the student explicitly chooses it.
+  const localOn = () => !hostedOn() && webgpuAvailable() && getPref() === '1';
   const hasKey = () => hostedOn() || localOn() || !!getStoredKey();
   let picking = false;           // the provider picker was opened on purpose (even though the current provider has a key)
   const setupBar = $('aiSetup'), openSettings = () => $('settingsBtn')?.click();
@@ -254,7 +256,8 @@ export function initAiPanel(editor, code, sim = null) {
     const text = promptEl.value.trim();
     if (!text) return;
     if (busy) return setStatus('Wait for the current reply first.');
-    if (!hasKey()) { refreshKeyUi(); openSettings(); return setStatus('Add a free API key in Settings to start chatting.'); }
+    const quick = quickEdit(text, editor.exportProject());     // plainly worded edits are answered instantly, with no model at all
+    if (!quick && !hasKey()) { refreshKeyUi(); openSettings(); return setStatus('Add a free API key (or choose an AI) in Settings for requests like this.'); }
     setStatus('');
     const history = chatHistory(messages);
     for (const m of messages) if (m.state === 'pending') { m.state = 'superseded'; proposals.delete(m.id); }   // an older edit no longer matches the board once you've moved on
@@ -265,7 +268,8 @@ export function initAiPanel(editor, code, sim = null) {
       const circuit = editor.exportProject();
       const args = { instruction: text, circuit, code: code.source, context: gatherContext(code, sim), history };
       let res, localErr = '';
-      if (hostedOn()) {
+      if (quick) res = { ok: true, ...quick, meta: { provider: 'Instant assistant', model: 'built in', ms: 0 } };
+      else if (hostedOn()) {
         res = await generateCode({ ...args, hosted: true });
       } else if (localOn()) {
         setStatus('Starting the on-device model…');

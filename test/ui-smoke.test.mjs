@@ -2041,3 +2041,20 @@ test('ui: Community — lists updates and discussions, posts and comments for si
   assert.match(doc.querySelector('.cm-comment').textContent, /<b>bold\?<\/b>/);
   c.close(); assert.equal(doc.getElementById('communityModal').hidden, true);
 });
+
+test('ui: plainly worded edits are answered instantly with no key and no network; nothing downloads a model by itself', async () => {
+  const { w, editor, code, sim } = boot(undefined, win => { Object.defineProperty(win.navigator, 'gpu', { value: {}, configurable: true }); });
+  const doc = w.document; let fetched = 0;
+  w.fetch = async () => { fetched++; return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  assert.equal(doc.getElementById('aiSetup').hidden, false, 'no AI chosen, even though the browser has WebGPU');
+  assert.equal(doc.getElementById('aiProvider-local') && doc.getElementById('aiProvider-local').classList.contains('on'), false, 'the on-device model is never the silent default');
+  const prompt = doc.getElementById('aiPrompt'); prompt.value = 'add a red LED'; doc.getElementById('aiGenerate').click(); await flush();
+  assert.equal(fetched, 0);
+  assert.match(doc.getElementById('aiLog').textContent, /Added a LED/);
+  assert.match(doc.getElementById('aiStatus').textContent, /Instant assistant/);
+  doc.querySelector('#aiLog .msg-apply, #aiLog [data-act="apply"], #aiLog button:last-of-type')?.click();
+  prompt.value = 'make me a slime mold circuit'; doc.getElementById('aiGenerate').click(); await flush();
+  assert.equal(fetched, 0, 'a request it does not understand needs an AI, and none is set up, so it asks for one instead of downloading');
+});

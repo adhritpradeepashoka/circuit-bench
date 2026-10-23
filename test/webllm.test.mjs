@@ -74,3 +74,13 @@ test('navigator.gpu without an adapter is not usable: probe says so and the opti
   assert.match(NO_ADAPTER_HELP, /hardware acceleration/);
   assert.equal(await probeWebGPU({ gpu: { requestAdapter: async () => ({ features: new Set() }) } }), true);
 });
+
+test('deleteLocalModels removes whatever is cached and reports how many', async () => {
+  const { deleteLocalModels, cachedModels } = await import('../src/sim/webllm.mjs');
+  const cache = new Set(['Qwen2.5-Coder-3B-Instruct-q4f32_1-MLC', 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC']);
+  const web = { hasModelInCache: async id => cache.has(id), deleteModelAllInfoInCache: async id => { cache.delete(id); } };
+  assert.equal((await cachedModels({ web })).length, 2);
+  assert.equal(await deleteLocalModels({ web }), 2);
+  assert.equal(cache.size, 0);
+  assert.equal(await deleteLocalModels({ web }), 0);
+});

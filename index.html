@@ -182,7 +182,7 @@
             <button type="button" class="pane-x" id="aiClose" title="Close the AI chat" aria-label="Close the AI chat"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
           </span>
         </div>
-        <div class="ai-setup" id="aiSetup" hidden><span>AI needs a one-time setup.</span><button type="button" id="aiOpenSettings">Open AI settings</button></div>
+        <div class="ai-setup" id="aiSetup" hidden><span>Simple requests work instantly. For bigger ones, set up an AI.</span><button type="button" id="aiOpenSettings">Open AI settings</button></div>
         <div class="ai-log" id="aiLog" role="log" aria-live="polite" aria-label="Conversation"></div>
         <form class="ai-composer" id="aiComposer">
           <textarea id="aiPrompt" rows="1" placeholder="Ask about your circuit, or describe a change…" aria-label="Message the AI"></textarea>
@@ -310,6 +310,10 @@
           <a id="aiGetKey" class="ai-getkey" href="#" target="_blank" rel="noopener">Get a key ↗</a>
           <button id="aiKeySave" type="button">Save key</button>
         </div>
+      </section>
+      <section class="set-sec"><h3>On-device model</h3>
+        <p class="proj-note" id="setModelInfo">An optional model that runs inside your browser (about 1.6 GB, downloaded once, only if you choose “On this device” above).</p>
+        <div class="set-actions"><button type="button" class="proj-act" id="setDeleteModel">Delete downloaded model</button></div>
       </section>
       <section class="set-sec"><h3>Appearance</h3><div class="theme-list" id="themeList"></div>
         <div class="theme-custom" id="themeCustom" hidden>
