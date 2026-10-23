@@ -96,7 +96,7 @@ export function createTiny(manifest, buffer) {
 }
 
 /** Understand a request about this circuit → { kind:'edit', actions, code, explanation, program, confidence } | { kind:'off', explanation } | null (defer to a bigger AI). */
-export function understand(model, instruction, circuit, { minConfidence = 0.6 } = {}) {
+export function understand(model, instruction, circuit, { minConfidence = 0.9 } = {}) {
   const req = String(instruction || '').toLowerCase().replace(/\s+/g, ' ').trim();
   if (!req || req.length > 220) return null;
   const out = model.translate(`${req} | ${stateString(circuit)}`);
