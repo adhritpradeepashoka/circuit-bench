@@ -2,7 +2,8 @@ import { PART_DEFS } from './parts.js';
 import { allPinsWorld, placeFlex } from './geometry.js';
 
 export const SNAP_RADIUS = 15;  // world px: how far a lead may be from a hole and still be pulled in
-export const ALIGN_TOL = 2.8;   // world px: a lead this close to a hole is electrically *in* it
+export const STRETCH_TOL = 20;  // world px: how much a dragged resistor may stretch or squash to land both leads in holes
+export const ALIGN_TOL = 2.8;  // world px: a lead this close to a hole is electrically *in* it
 
 export function boardHoles(parts) {
   const holes = [];
@@ -76,13 +77,45 @@ function snapFlex(part, pins, holes, taken, radius) {
   let best = null;
   for (const a of c1) for (const b of c2) {
     if (a.h === b.h) continue;
-    if (Math.hypot(a.h.x - b.h.x, a.h.y - b.h.y) < def.minLen - 1e-6) continue;      // the body would not fit between them
+    const span = Math.hypot(a.h.x - b.h.x, a.h.y - b.h.y);
+    if (span < def.minLen - 1e-6) continue;                                           // the body would not fit between them
+    if (Math.abs(span - Math.max(def.minLen, part.len ?? def.len)) > STRETCH_TOL) continue;   // dragging must not snap a lead to a hole far away — use the lead handles to stretch
     const cost = a.d + b.d;
     if (!best || cost < best.cost) best = { a: a.h, b: b.h, cost };
   }
   if (!best) return null;
   const moved = placeFlex({ type: part.type, rot: part.rot, x: 0, y: 0 }, best.a, best.b);
   return { dx: 0, dy: 0, aligned: 2, d: best.cost, place: { x: moved.x, y: moved.y, len: moved.len, rot: moved.rot } };
+}
+
+/**
+ * A freshly placed part sits as high in its breadboard strips as it can: its body hangs above the board's holes, so the holes left
+ * below it stay free to wire to (a part seated on row E would cover A–D). Moves the whole part up one row at a time while *every*
+ * lead can step to the free hole directly above it in the same column and the same half (A–E / F–J). Rigid parts only.
+ */
+export function raiseInStrips(parts, part) {
+  const def = PART_DEFS[part.type];
+  if (!def.insertable || def.flex) return false;
+  const holes = boardHoles(parts);
+  const taken = occupiedHoles(parts, holes, new Set([part.id]));
+  const pins = allPinsWorld(part).filter(q => !q.pin.noInsert);
+  const seat = ps => ps.map(p => holeAt(holes, p.x, p.y, ALIGN_TOL, taken));
+  let cur = seat(pins);
+  if (!cur.length || cur.some(h => !h || !/^[A-J]\d+$/.test(h.pinId))) return false;
+  const half = id => (id[0] <= 'E' ? 'top' : 'bot'), col = id => id.slice(1);
+  let steps = 0;
+  for (; steps < 5; steps++) {
+    const next = cur.map(h => {
+      const above = holes.filter(g => g.partId === h.partId && g.x === h.x && g.y < h.y - 1e-6
+        && /^[A-J]\d+$/.test(g.pinId) && col(g.pinId) === col(h.pinId) && half(g.pinId) === half(h.pinId)
+        && !taken.has(`${g.partId}|${g.pinId}`));
+      return above.sort((a, b) => b.y - a.y)[0] || null;       // the nearest free hole above
+    });
+    if (next.some((h, i) => !h || Math.abs((cur[i].y - h.y) - (cur[0].y - next[0].y)) > 1e-6)) break;   // every lead must climb the same distance
+    const dy = next[0].y - cur[0].y;
+    part.y += dy; cur = next;
+  }
+  return steps > 0;
 }
 
 /** Apply a findSnap() result to a part: a flexible part gets its new box (x, y, len, rot); a rigid one is translated. */

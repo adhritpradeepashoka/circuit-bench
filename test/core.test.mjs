@@ -590,3 +590,35 @@ test('resistor length persists (undo snapshots, project files); older files get 
   delete file.parts[1].len; assert.equal(fromProjectFile(file).parts[1].len, 57.6);
   file.parts[1].len = 5; assert.equal(fromProjectFile(file).parts[1].len, 38.4, 'clamped to the body length');
 });
+
+test('a new LED rises to the top of its strip; a dragged resistor lets go when moved away', async () => {
+  const { raiseInStrips } = await import('../src/core/snap.js');
+  const bb = mk('bb', 'breadboard', 0, 0);
+  const led = mk('d1', 'led', 0, 0);
+  const state = { parts: [bb, led] };
+  seat(state, led, 'A', bb, 'E5');                   // dropped low, on row E
+  const before = pinWorld(led, 'A');
+  assert.ok(raiseInStrips(state.parts, led), 'should climb');
+  const after = pinWorld(led, 'A');
+  assert.ok(after.y < before.y - 1, 'moved up');
+  assert.ok(Math.abs(after.y - pinWorld(bb, 'A5').y) < 0.01, 'leads now in row A');
+  // a blocked column stops the climb
+  const led2 = mk('d2', 'led', 0, 0);
+  state.parts.push(led2);
+  seat(state, led2, 'A', bb, 'E9');
+  const blocker = mk('r9', 'resistor', 0, 0);
+  state.parts.push(blocker);
+  seat(state, blocker, '1', bb, 'C9');
+  raiseInStrips(state.parts, led2);
+  assert.ok(Math.abs(pinWorld(led2, 'A').y - pinWorld(bb, 'D9').y) < 0.01, 'stops under the part in C9');
+
+  // resistor: far-away holes do not grab its leads
+  const r = mk('r1', 'resistor', 0, 0);
+  const st2 = { parts: [bb, r] };
+  const h1 = pinWorld(bb, 'A10'), h2 = pinWorld(bb, 'A22');
+  r.x = h1.x - 2; r.y = h1.y - PART_DEFS.resistor.h / 2 + 3;
+  const len0 = r.len ?? PART_DEFS.resistor.len;
+  const s = findSnap(st2.parts, r);
+  if (s && s.place) assert.ok(Math.abs(s.place.len - len0) <= 20 + 1e-6, 'stretch is limited');
+  assert.ok(h2.x - h1.x > 100);
+});

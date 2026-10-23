@@ -1,6 +1,6 @@
 import { PART_DEFS, boardSVGMarkup } from '../core/parts.js';
 import { allPinsWorld, partBounds, pinWorld, partSize, placeFlex } from '../core/geometry.js';
-import { findSnap, applySnap, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
+import { findSnap, applySnap, raiseInStrips, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
 import { compile, pkey, splitKey } from '../core/netlist.js';
 import { SKINS, visualTarget } from '../parts/skins.js';
 import { isMcuBoard, boardPowerPin } from '../core/boards.js';
@@ -395,6 +395,7 @@ export class Editor {
     this.state.parts.push(part);
     const s = findSnap(this.state.parts, part);
     applySnap(part, s);
+    raiseInStrips(this.state.parts, part);          // sit as high in the strip as possible, so the holes below stay free for wiring
     this.sel = { kind: 'part', id: part.id };
     this.syncParts(); this.markDirty(); this.commit();
     this.status(`${def.name} added — ${this.describePlacement(part)}`);
@@ -621,6 +622,7 @@ export class Editor {
       .filter(([, hole]) => splitKey(hole).partId === id).map(([lead]) => splitKey(lead).partId))]
       .map(pid => this.partById(pid)).filter(Boolean).map(p => ({ p, x: p.x, y: p.y }));
     const origin = { x: part.x, y: part.y }, start = this.toWorld(e);
+    const shape = def.flex ? { len: part.len, rot: part.rot } : null;      // a resistor's own length and angle, before any snap stretched it
     let moved = false;
     const lift = on => { [part, ...carried.map(c => c.p)].forEach(p => this.els.get(p.id)?.classList.toggle('dragging', on)); };
     lift(true);
@@ -631,6 +633,7 @@ export class Editor {
       moved = true;
       let nx = origin.x + dx, ny = origin.y + dy;
       if (!ev.altKey) { nx = Math.round(nx / GRID) * GRID; ny = Math.round(ny / GRID) * GRID; }
+      if (shape) { part.len = shape.len; part.rot = shape.rot; }             // un-stretch every frame: the snap is re-decided from the real shape, so moving away lets go
       part.x = nx; part.y = ny;
       carried.forEach(c => { c.p.x = c.x + (nx - origin.x); c.p.y = c.y + (ny - origin.y); });
       this.snapMarks = [];
