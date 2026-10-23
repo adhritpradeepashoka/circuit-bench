@@ -717,3 +717,20 @@ button { cursor: pointer; }
 .role-badge { align-self: flex-start; margin-top: 3px; padding: 1px 8px; border-radius: 99px; background: var(--blue); color: #fff; font-style: normal; font-size: 11px; font-weight: 700; text-transform: capitalize; }
 .role-badge[hidden] { display: none; }
 .admin-list { display: grid; gap: 6px; margin-top: 8px; max-height: 240px; overflow-y: auto; }
+
+/* ── Community ── */
+.community-card { width: min(680px, 100%); }
+.cm-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.cm-tab { padding: 6px 14px; border: 1px solid var(--line); border-radius: 99px; background: transparent; font-weight: 600; }
+.cm-tab[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); color: #fff; }
+.cm-list { display: grid; gap: 6px; }
+.cm-row { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.cm-row:hover { border-color: var(--blue); }
+.cm-post h3 { margin: 4px 0; }
+.cm-text p { margin: 6px 0; line-height: 1.5; overflow-wrap: anywhere; }
+.cm-text a { color: var(--blue); }
+.cm-comments { display: grid; gap: 8px; margin: 8px 0 12px; }
+.cm-comment { padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; }
+.cm-form { display: grid; gap: 6px; margin-top: 12px; }
+.cm-form input, .cm-form textarea { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-family: inherit; }
+.cm-form button { justify-self: start; padding: 6px 14px; border: 0; border-radius: 8px; background: var(--blue); color: #fff; font-weight: 700; }

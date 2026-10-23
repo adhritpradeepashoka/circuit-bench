@@ -2010,3 +2010,34 @@ test('ui: members panel for admins, and beta members use the included AI with no
   assert.equal(call.opts.headers.authorization, 'Bearer tok');
   assert.match(doc.getElementById('aiLog').textContent, /from the server key/);
 });
+
+test('ui: Community — lists updates and discussions, posts and comments for signed-in users, and shows user text as inert text', async () => {
+  const me = { email: 'kid@example.com', name: 'Kid', role: 'user', entitlements: { admin: false } };
+  const { w } = boot(undefined, win => { win.localStorage.setItem('circuitbench:session', 'tok'); win.localStorage.setItem('circuitbench:me', JSON.stringify(me)); });
+  const doc = w.document, sent = [];
+  const posts = { update: [{ id: 1, kind: 'update', title: 'Beta is live', body: 'Hello\nsee https://example.com/x now', author: 'Boss', createdAt: 1, pinned: true, comments: 0 }], topic: [] };
+  w.fetch = async (url, opts = {}) => {
+    sent.push({ url, opts, body: opts.body ? JSON.parse(opts.body) : null });
+    const ok = b => ({ status: 200, json: async () => ({ ok: true, ...b }) });
+    if (url.startsWith('/api/community/posts?kind=')) return ok({ posts: posts[url.split('=')[1]] });
+    if (url === '/api/community/posts' && opts.method === 'POST') { const p = { id: 2, kind: 'topic', title: JSON.parse(opts.body).title, body: JSON.parse(opts.body).body, author: 'Kid', createdAt: 2, pinned: false, comments: 0 }; posts.topic.push(p); return ok({ post: p }); }
+    if (url === '/api/community/posts/2') return ok({ post: { ...posts.topic[0], mine: true, canPin: false }, comments: [{ id: 9, author: 'Boss', body: '<b>bold?</b>', createdAt: 3, mine: false }] });
+    if (url === '/api/community/posts/1') return ok({ post: { ...posts.update[0], mine: false, canPin: false }, comments: [] });
+    return ok({});
+  };
+  const c = w.__lab.initCommunity({});
+  doc.getElementById('communityBtn').click(); await flush();
+  assert.equal(doc.getElementById('communityModal').hidden, false);
+  assert.match(doc.getElementById('communityBody').textContent, /Beta is live/);
+  assert.equal(doc.getElementById('cmNewForm'), null, 'only the team writes updates');
+  [...doc.querySelectorAll('.cm-tab')][1].click(); await flush();
+  const f = doc.getElementById('cmNewForm'); assert.ok(f, 'signed-in users can start a discussion');
+  f.querySelector('input').value = 'Hi all'; f.querySelector('textarea').value = 'first!';
+  f.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true })); await flush(); await flush();
+  assert.deepEqual(sent.find(r => r.opts.method === 'POST').body, { kind: 'topic', title: 'Hi all', body: 'first!' });
+  assert.equal(sent.find(r => r.opts.method === 'POST').opts.headers.authorization, 'Bearer tok');
+  assert.match(doc.getElementById('communityBody').textContent, /Hi all/);
+  assert.equal(doc.querySelector('.cm-comment b b'), null, 'a comment containing <b> is text, not an element');
+  assert.match(doc.querySelector('.cm-comment').textContent, /<b>bold\?<\/b>/);
+  c.close(); assert.equal(doc.getElementById('communityModal').hidden, true);
+});

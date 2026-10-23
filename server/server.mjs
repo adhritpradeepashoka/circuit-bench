@@ -13,11 +13,12 @@ import { join, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCompiler, RequestError, BOARDS } from './compile-service.mjs';
 import { createAiService } from './ai-service.mjs';
+import { createCommunity, createMemoryCommunity, createPgCommunity } from './community.mjs';
 import { createAccounts, createMemoryStore, createPgStore, createSessions, createGoogleVerifier, createPresence } from './accounts.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
-export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null } = {}) {
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null, community = null } = {}) {
   // hostedAi = { provider, key, model? }: the owner's own AI key, used only for signed-in users whose role entitles them to it.
   const bearer = req => /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1] || '';
   async function readJson(req, max) {
@@ -41,7 +42,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
     list.push(now); buckets.set(ip, list);
     return list.length > 40;
   };
-  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '600', vary: 'origin' } : {};
+  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '600', vary: 'origin' } : {};
   const send = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors, ...headers }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
 
   return http.createServer(async (req, res) => {
@@ -62,6 +63,26 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
         const me = await accounts.me(bearer(req), { beat: url.pathname === '/api/presence' });
         return me ? send(res, 200, { ok: true, me: { ...me, hostedAiReady: !!hostedAi?.key } }) : send(res, 401, { ok: false, error: 'Please sign in again.' });
+      }
+      if (url.pathname.startsWith('/api/community')) {
+        if (!community) return send(res, 404, { ok: false, error: 'The community is not enabled on this server.' });
+        const parts = url.pathname.split('/').slice(3), tok = bearer(req), id = Number(parts[1]);
+        const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
+        if (req.method !== 'GET' && limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
+        if (parts[0] === 'posts' && !parts[1]) {
+          if (req.method === 'GET') return out(await community.list(url.searchParams.get('kind')));
+          if (req.method === 'POST') return out(await community.create(tok, await readJson(req, 30_000)));
+        }
+        if (parts[0] === 'posts' && Number.isInteger(id) && id > 0) {
+          if (!parts[2]) {
+            if (req.method === 'GET') return out(await community.read(id, tok));
+            if (req.method === 'PATCH') return out(await community.edit(tok, id, await readJson(req, 30_000)));
+            if (req.method === 'DELETE') return out(await community.remove(tok, id));
+          }
+          if (parts[2] === 'comments' && req.method === 'POST') return out(await community.comment(tok, id, (await readJson(req, 8_000)).body));
+        }
+        if (parts[0] === 'comments' && Number.isInteger(id) && id > 0 && req.method === 'DELETE') return out(await community.removeComment(tok, id));
+        return send(res, 404, { ok: false, error: 'Unknown endpoint.' });
       }
       if (url.pathname === '/api/admin/users') {
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
@@ -147,11 +168,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const compiler = createCompiler();
   const clientId = process.env.GOOGLE_CLIENT_ID || '137986291175-5s42d2u26q1029oo1v5dhged48dg79fb.apps.googleusercontent.com';
   // Accounts: DATABASE_URL (Supabase/Neon Postgres) keeps roles across deploys; without it they live in memory and reset on restart.
-  let store = createMemoryStore();
+  let store = createMemoryStore(), communityStore = createMemoryCommunity();
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 4 });
     store = createPgStore(pool); await store.init();
+    communityStore = createPgCommunity(pool); await communityStore.init();
   } else console.log('[vlab] WARNING: no DATABASE_URL — roles are kept in memory and reset on every restart');
   const ownerEmails = String(process.env.OWNER_EMAIL || '').split(',').map(x => x.trim()).filter(Boolean);
   if (!ownerEmails.length) console.log('[vlab] WARNING: OWNER_EMAIL is not set — nobody can administer accounts');
@@ -163,7 +185,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     freeHostedAi: process.env.FREE_HOSTED_AI === '1',
   });
   const hostedAi = process.env.HOSTED_AI_KEY ? { key: process.env.HOSTED_AI_KEY, provider: process.env.HOSTED_AI_PROVIDER || 'groq', model: process.env.HOSTED_AI_MODEL || '' } : null;
-  const server = createServer({ compiler, staticDir, accounts, hostedAi, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
+  const community = createCommunity({ accounts, store: communityStore });
+  const server = createServer({ compiler, staticDir, accounts, hostedAi, community, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
   server.listen(port, host, async () => {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);

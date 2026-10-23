@@ -32,6 +32,7 @@
       <input type="file" id="importPcbFile" accept=".kicad_pcb" hidden>
     </div>
     <button id="workspacesBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Workspaces: Electronics, Bioelectronics, your own and community ones">Workspaces</button>
+    <button id="communityBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Updates from the team and discussions with other users">Community</button>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
       <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span><em class="role-badge" id="accountRole" hidden></em></div><p class="account-note">Your Google account only proves who you are. Your name, email and role are kept by CircuitBench so beta access can follow your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
@@ -286,6 +287,12 @@
     </form>
     <input type="file" id="wsImportFile" accept="application/json,.json" hidden>
     <p class="proj-note" id="wsNote">Community workspaces from GitHub are coming. For now you can share a workspace as a file.</p>
+  </div>
+</div>
+<div class="modal" id="communityModal" role="dialog" aria-modal="true" aria-labelledby="communityTitle" hidden>
+  <div class="modal-card community-card">
+    <div class="modal-head"><h2 id="communityTitle">Community</h2><button type="button" class="pane-x" id="communityClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <div class="settings-body" id="communityBody"></div>
   </div>
 </div>
 <div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
