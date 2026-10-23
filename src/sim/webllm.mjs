@@ -5,26 +5,28 @@ import { buildPrompt, parseReply } from '../core/ai-prompt.js';
 
 export const LOCAL_PROVIDER = 'local';
 export const LOCAL_MODELS = [
-  { id: 'Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 3B', sizeMB: 2505, note: 'Best balance for most laptops (~2.5 GB download, once).' },
+  { id: 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 1.5B', sizeMB: 1630, note: 'Default: fits integrated graphics (~1.6 GB download, once), but makes more mistakes.' },
+  { id: 'Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 3B', sizeMB: 2505, note: 'Smarter; wants a graphics card or a fast laptop (~2.5 GB download, once).' },
   { id: 'Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 7B', sizeMB: 5107, note: 'Smarter, needs a strong GPU (~5 GB download, once).' },
-  { id: 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 1.5B', sizeMB: 1630, note: 'Light and fast, but makes more mistakes (~1.6 GB).' },
 ];
-export const DEFAULT_LOCAL_MODEL = LOCAL_MODELS[0].id;
+export const DEFAULT_LOCAL_MODEL = LOCAL_MODELS[0].id;   // integrated GPUs are the common case, so start with the model they can hold
+const TINY = 'Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC';
 const MODEL_STORAGE = 'virtual-lab:ai-model:local';
-const CONTEXT = 8192;
+const CONTEXT = 4096;
 
 export const webgpuAvailable = (nav = globalThis.navigator) => !!(nav && nav.gpu);
 export function getLocalModel() { try { const m = localStorage.getItem(MODEL_STORAGE); return LOCAL_MODELS.some(x => x.id === m) ? m : DEFAULT_LOCAL_MODEL; } catch { return DEFAULT_LOCAL_MODEL; } }
 export function setLocalModel(id) { try { localStorage.setItem(MODEL_STORAGE, id); } catch { /* ignore */ } }
 
-let engine = null, engineModel = null, loading = null;
+let engine = null, engineModel = null, loading = null, usedModel = null;
+const sizeOf = id => LOCAL_MODELS.find(m => m.id === id)?.sizeMB ?? (id === TINY ? 945 : 0);
 /** The q4f16 builds need the GPU's shader-f16 feature; many laptops lack it, so use the q4f32 build of the same model there. */
 export async function pickBuild(modelId, nav = globalThis.navigator) {
   try {
     const adapter = await nav.gpu.requestAdapter();
-    if (!adapter) throw new Error('No WebGPU adapter (graphics driver or browser setting)');
+    if (!adapter) { const e = new Error('No WebGPU adapter (graphics driver or browser setting)'); e.noAdapter = true; throw e; }
     if (!adapter.features.has('shader-f16')) return modelId.replace('q4f16_1', 'q4f32_1');
-  } catch (err) { if (/adapter/i.test(err?.message)) throw err; }
+  } catch (err) { if (err?.noAdapter) throw err; }
   return modelId;
 }
 async function defaultFactory(modelId, onProgress) {
@@ -37,8 +39,15 @@ export async function loadLocal(modelId = getLocalModel(), { onProgress, factory
   if (engine && engineModel === modelId) return engine;
   if (loading?.modelId === modelId) return loading.promise;
   const promise = (async () => {
-    try { engine = await factory(modelId, onProgress); engineModel = modelId; return engine; }
-    finally { loading = null; }
+    try {
+      // too big for this GPU's memory? step down a size rather than failing
+      const chain = [modelId, ...LOCAL_MODELS.map(m => m.id).filter(id => id !== modelId && sizeOf(id) < sizeOf(modelId)).reverse(), TINY].filter((id, i, a) => a.indexOf(id) === i && (id === modelId || sizeOf(id) < sizeOf(modelId)));
+      let lastErr;
+      for (const id of chain) {
+        try { engine = await factory(id, onProgress); engineModel = modelId; usedModel = id; return engine; } catch (err) { lastErr = err; if (/adapter|WebGPU is not supported/i.test(err?.message || '')) break; }
+      }
+      throw lastErr;
+    } finally { loading = null; }
   })();
   loading = { modelId, promise };
   return promise;
@@ -62,5 +71,5 @@ export async function generateLocal({ instruction, circuit, code, context = null
   if (!result || (!result.code && !result.actions.length && !result.explanation.trim())) {
     return { ok: false, error: 'The on-device model did not return a usable edit — small models struggle with big requests. Try a shorter, simpler instruction, or add a free API key for a stronger model.' };
   }
-  return { ok: true, ...result, meta: { provider: 'On this device', model: modelId.replace(/-q\d.*$/, ''), ms: now() - t0 } };
+  return { ok: true, ...result, meta: { provider: 'On this device', model: (usedModel || modelId).replace(/-q\d.*$/, ''), ms: now() - t0 } };
 }

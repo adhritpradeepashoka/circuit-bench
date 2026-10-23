@@ -185,7 +185,11 @@ export function initAiPanel(editor, code, sim = null) {
     providerHint.replaceChildren();
     if (isLocal) {
       const m = LOCAL_MODELS.find(x => x.id === getLocalModel()) || LOCAL_MODELS[0];
-      providerHint.append(`Runs a small open model (${m.label}) inside your browser using your graphics card — no key, nothing leaves your computer. ${m.note} Hosted models with your own free key are smarter on big requests.`);
+      const sel = document.createElement('select'); sel.className = 'ai-local-model'; sel.setAttribute('aria-label', 'On-device model');
+      for (const x of LOCAL_MODELS) { const o = document.createElement('option'); o.value = x.id; o.textContent = `${x.label} (~${(x.sizeMB / 1000).toFixed(1)} GB)`; o.selected = x.id === m.id; sel.append(o); }
+      sel.addEventListener('change', () => { setLocalModel(sel.value); paintProvider(); });
+      providerHint.append(sel, ' ');
+      providerHint.append(`Runs a small open model (${m.label}) inside your browser using your graphics card — no key, nothing leaves your computer. ${m.note} On integrated graphics keep the 1.5B; hosted models with your own free key are smarter on big requests.`);
       return;
     }
     const a = document.createElement('a'); a.href = info.keyUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = `Get a ${info.label} key`;

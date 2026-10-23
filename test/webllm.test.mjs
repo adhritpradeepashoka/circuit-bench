@@ -54,3 +54,12 @@ test('pickBuild falls back to the f32 build without shader-f16', async () => {
   assert.match(await pickBuild('Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC', nav(false)), /q4f32_1/);
   await assert.rejects(pickBuild('m', { gpu: { requestAdapter: async () => null } }), /adapter/i);
 });
+
+test('a model too big for the GPU steps down to a smaller one', async () => {
+  const { loadLocal, resetLocal } = await import('../src/sim/webllm.mjs');
+  resetLocal(); const tried = [];
+  const f = async id => { tried.push(id); if (!/0\.5B|1\.5B/.test(id)) throw new Error('out of memory'); return {}; };
+  await loadLocal('Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC', { factory: f });
+  assert.match(tried.at(-1), /1\.5B/);
+  assert.match(tried[0], /7B/);
+});
