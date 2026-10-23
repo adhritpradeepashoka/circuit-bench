@@ -76,6 +76,9 @@ export function quickEdit(instruction, circuit = { parts: [], wires: [] }) {
     }
   }
 
+  // "add an LED and make a circuit", "set up a button", "wire up…": building something is the tiny model's job (it wires it too) — don't just drop the bare part
+  if (/\b(circuit|wire[ds]?|wiring|connect(ed)?|hook(ed)?|set ?up|working|complete|ready|fully)\b/.test(t)) return null;
+
   const types = findTypes(t);
 
   // ── add ──

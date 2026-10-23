@@ -39,3 +39,17 @@ test('defer, off, and garbage are never executed', () => {
   assert.equal(runProgram('defer').kind, 'defer'); assert.equal(runProgram('off').kind, 'off');
   for (const bad of ['', 'rm -rf', 'add flux-capacitor', 'add led color=purple', 'add led x99', 'set led-1 ohms=5', 'add resistor ohms=-5', 'wire led-1 Q uno-1 9', 'add led; '.repeat(9), 'blink 9 5']) assert.equal(runProgram(bad, base), null, bad);
 });
+
+test('build with no pin picks a free one, wires it fully, and blink auto uses that pin', () => {
+  const x = go('build led auto; blink auto 500');
+  assert.equal(x.out.warnings.length, 0);
+  assert.equal(x.out.wires.length, 3, 'pin → resistor → LED → GND');
+  assert.match(x.r.code, /LED_PIN = 13;/);
+  // a second one goes to the next free pin, not on top of the first
+  const again = go('build led auto', { parts: x.out.parts, wires: x.out.wires });
+  assert.equal(again.out.wires.length, 6);
+  const pins = again.out.wires.filter(w => w.from.part === 'uno-1' && /^\d+$/.test(w.from.pin)).map(w => w.from.pin);
+  assert.deepEqual(pins.sort(), ['12', '13']);
+  assert.equal(go('build pot auto').out.warnings.length, 0);
+  assert.equal(go('build button').out.wires.length, 2, 'a missing pin means auto');
+});

@@ -6,8 +6,8 @@
 //   del REF [all]                      del led-2   ·   del resistor all
 //   set REF key=value [all]            set resistor-1 ohms=1000
 //   wire REF PIN REF PIN               wire uno-1 9 resistor-1 1
-//   blink PIN MS                       blink 9 500
-//   build led|button|pot PIN           a ready LED+resistor / button / potentiometer circuit on that pin
+//   blink PIN MS                       blink 9 500   ·   blink auto 500 (the pin the last `build led` picked)
+//   build led|button|pot PIN|auto      a ready LED+resistor / button / potentiometer circuit on that pin — or on a free one (auto)
 //   defer                              "this needs a bigger AI"      ·   off     "outside what CircuitBench does"
 // Commands are separated by ";". REF is a part id (led-2) or a part type (led).
 import { PART_DEFS } from './parts.js';
@@ -32,6 +32,10 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
   const parts = (circuit.parts || []).map(p => ({ id: p.id, type: p.type }));       // grows as we plan additions
   const actions = [], said = []; let code = null;
   const board = () => parts.find(p => BOARDS.includes(p.type));
+  // pins already wired on the board, so `auto` picks a free one
+  const usedPins = new Set(); let autoPin = null;
+  for (const w of circuit.wires || []) for (const e of [w.from, w.to]) if (e && board() && e.part === board().id) usedPins.add(String(e.pin).toUpperCase());
+  const freePin = analog => { const c = analog ? ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'] : [13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2].map(String); const f = c.find(x => !usedPins.has(x)); if (f) usedPins.add(f); return f; };
   const ids = type => parts.filter(p => p.type === type).map(p => p.id);
   const fresh = type => { let n = 1; const base = type.replace(/[^a-z0-9]/g, ''); while (parts.some(p => p.id === `${base}${n}`)) n++; return `${base}${n}`; };
   const addPart = (type, props = {}) => {
@@ -67,10 +71,14 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
       const [ra, pa, rb, pb] = a, x = refs(ra, false), y = refs(rb, false); if (!x || !y || !wire(x[0], pa, y[0], pb)) return null;
       said.push(`Wired ${x[0]} ${pa} to ${y[0]} ${pb}`);
     } else if (op === 'blink') {
-      const pin = String(a[0]).toUpperCase(), ms = +a[1]; if (!PIN.test(pin) || !(ms >= 10 && ms <= 60000)) return null;
+      const pin = (String(a[0]).toLowerCase() === 'auto' ? autoPin : String(a[0]).toUpperCase()) || (a[0] === 'auto' ? '13' : ''), ms = +a[1]; if (!PIN.test(pin) || !(ms >= 10 && ms <= 60000)) return null;
       code = blinkSketch(pin, ms); said.push(`Wrote a sketch that blinks pin ${pin} every ${ms} ms`);
     } else if (op === 'build') {
-      const kind = a[0], pin = String(a[1]).toUpperCase(), b = board()?.id; if (!b || !PIN.test(pin) || !pinOk(b, pin)) return null;
+      const kind = a[0], b = board()?.id; if (!b) return null;
+      const want = String(a[1] ?? 'auto').toLowerCase();
+      const pin = want === 'auto' ? freePin(kind === 'pot') : want.toUpperCase();
+      if (!pin || !PIN.test(pin) || !pinOk(b, pin)) return null;
+      if (kind === 'led') autoPin = pin;
       const g = gnd(b); if (!g) return null;
       if (kind === 'led') {
         const led = addPart('led'), r = addPart('resistor', { ohms: 220 });
@@ -110,7 +118,7 @@ export const stateString = circuit => [...canonicalIds(circuit).toCanon.values()
 /** Run a program written in the model's numbered ids against the real circuit; the result speaks in real ids. */
 export function runForCircuit(program, circuit) {
   const { toReal, toCanon } = canonicalIds(circuit);
-  const canonical = { parts: (circuit?.parts || []).map(p => ({ ...p, id: toCanon.get(p.id) })), wires: [] };
+  const canonical = { parts: (circuit?.parts || []).map(p => ({ ...p, id: toCanon.get(p.id) })), wires: (circuit?.wires || []).map(w => ({ from: { ...w.from, part: toCanon.get(w.from?.part) }, to: { ...w.to, part: toCanon.get(w.to?.part) } })) };
   const r = runProgram(program, canonical);
   if (!r || r.kind !== 'edit') return r;
   const real = id => toReal.get(id) ?? id;

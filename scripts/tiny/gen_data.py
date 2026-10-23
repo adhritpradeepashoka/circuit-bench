@@ -98,7 +98,7 @@ def gen_one(rng, held):
     SUF = SUFFIX + (SUFFIX_HO if held else [])
     if held:  # held-out set only uses the held-out phrasings (plus unseen combinations)
         ADD = ADD_V[-7:]; DEL = DEL_V[-4:]; SET = SET_V[-4:]; SUF = SUFFIX_HO
-    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off'], [26, 14, 18, 10, 10, 8, 9, 5])[0]
+    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off'], [26, 14, 18, 10, 16, 8, 9, 5])[0]
     suf = rng.choice(SUF)
     def finish(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
 
@@ -173,6 +173,19 @@ def gen_one(rng, held):
     if kind == 'build':
         what = rng.choice(['led', 'led', 'button', 'pot'])
         _, st = make_state(rng)
+        if rng.random() < 0.5:      # no pin named: the bench picks a free one (and can blink it)
+            if what == 'led':
+                if rng.random() < 0.4:
+                    ms, w = rng.choice([(500, ''), (500, ' every half second'), (1000, ' every second'), (250, ' every 250 ms'), (2000, ' every 2 seconds')])
+                    req = rng.choice(['add an led and make it blink', 'make an led blink', 'build a blinking led circuit', 'set up a blinking led', 'add a led and make it flash', 'make a circuit with a blinking led', 'wire up an led and blink it']) + w
+                    return finish(req, st, f'build led auto; blink auto {ms}')
+                req = rng.choice(['add an led and make a circuit', 'add a led and make a circuit', 'add an led and wire it up', 'make an led circuit', 'make a circuit with an led', 'set up an led', 'wire up an led', 'add an led and connect it', 'add a working led', 'build an led circuit', 'add an led with a resistor and wire it', 'make me a circuit with a led', 'put an led on the board and wire it up', 'add a led and make a circuit please', 'create an led circuit'])
+                return finish(req, st, 'build led auto')
+            if what == 'button':
+                req = rng.choice(['add a button and make a circuit', 'add a button and wire it up', 'make a button circuit', 'set up a button', 'wire up a button', 'add a pushbutton and connect it', 'add a working button', 'build a button circuit'])
+                return finish(req, st, 'build button auto')
+            req = rng.choice(['add a potentiometer and make a circuit', 'add a pot and wire it up', 'make a potentiometer circuit', 'set up a pot', 'wire up a knob', 'add a potentiometer and connect it', 'add a working pot', 'build a pot circuit'])
+            return finish(req, st, 'build pot auto')
         if what == 'led':
             pin = rng.choice(DIGI)
             req = rng.choice([f'wire up an led on pin {pin}', f'hook up an led to pin {pin}', f'build an led circuit on pin {pin}', f'connect an led to pin {pin} with a resistor', f'set up an led on {pin}', f'put an led on pin {pin} with its resistor and wire it', f'make an led circuit on {pin}'])
@@ -198,6 +211,8 @@ def gen_one(rng, held):
     if kind == 'defer': return {'request': rng.choice(DEFER_HO if held else DEFER), 'state': make_state(rng)[1], 'program': 'defer'}
     return {'request': rng.choice(OFF_HO if held else OFF), 'state': make_state(rng)[1], 'program': 'off'}
 
+OUT = sys.argv[4] if len(sys.argv) > 4 else '/tmp/tiny'
+
 def main():
     n_train, n_val, n_held = int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])
     rng = random.Random(7)
@@ -213,7 +228,7 @@ def main():
     seen = {(x['request'], x['state']) for x in train}
     held = [x for x in held if (x['request'], x['state']) not in seen]
     for name, d in (('train', train), ('val', val), ('heldout', held)):
-        with open(f'/tmp/tiny/{name}.jsonl', 'w') as f:
+        with open(f'{OUT}/{name}.jsonl', 'w') as f:
             for x in d: f.write(json.dumps(x) + '\n')
     print({k: len(v) for k, v in (('train', train), ('val', val), ('heldout', held))})
 

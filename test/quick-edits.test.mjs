@@ -52,3 +52,8 @@ test('blink: a sketch for the pin and the time, with wiring advice', () => {
 test('anything unclear, a question, or multi-step goes to a model', () => {
   for (const q of ['why is my led not working', 'explain how a resistor works', 'add an led and a resistor and wire them to pin 9', 'make me a slime mold circuit', 'hello', '', 'add a flux capacitor', 'what is ohms law']) assert.equal(quickEdit(q, board('led')), null, q);
 });
+
+test('build-style requests are left for the tiny model instead of dropping a bare part', () => {
+  for (const q of ['add an led and make a circuit', 'wire up a button', 'set up an led', 'add a led and connect it']) assert.equal(quickEdit(q, { parts: [], wires: [] }), null, q);
+  assert.ok(quickEdit('add an led', { parts: [], wires: [] }), 'a plain add still works instantly');
+});
