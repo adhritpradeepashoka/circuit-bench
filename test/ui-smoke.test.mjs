@@ -1051,14 +1051,15 @@ test('ui: AI providers — each keeps its own key, switching is one click, and t
   w.__lab.initAiPanel(editor, code, sim);
   doc.getElementById('aiBtn').click();
   const tabs = () => [...doc.querySelectorAll('#aiProviderTabs [data-provider]')];
-  assert.deepEqual(tabs().map(b => b.dataset.provider), ['gemini', 'groq', 'nvidia', 'meta', 'openrouter']);
+  assert.deepEqual(tabs().map(b => b.dataset.provider), ['tiny', 'gemini', 'groq', 'nvidia', 'meta', 'openrouter']);
   const pick = id => doc.getElementById(`aiProvider-${id}`).click();
   const save = (key, model = '') => { doc.getElementById('aiKeyInput').value = key; doc.getElementById('aiModelInput').value = model; doc.getElementById('aiKeySave').click(); };
   pick('groq'); save('groq-key');
   assert.equal(doc.getElementById('aiSetup').hidden, true);
   pick('nvidia'); assert.equal(doc.getElementById('aiSetup').hidden, false, 'no key for NVIDIA yet');
   save('nv-key', 'meta/llama-3.1-70b-instruct');
-  assert.ok(tabs().length === 5);
+  assert.ok(tabs().length === 6);
+  pick('tiny'); assert.equal(doc.getElementById('aiSetup').hidden, true, 'the tiny model needs no key'); assert.ok(doc.getElementById('aiProvider-tiny').classList.contains('on'));
   doc.getElementById('aiForgetKey').click();
   assert.ok(doc.getElementById('aiProvider-groq').textContent.includes('✓') && doc.getElementById('aiProvider-nvidia').textContent.includes('✓'));
   assert.ok(!doc.getElementById('aiProvider-gemini').textContent.includes('✓'));
