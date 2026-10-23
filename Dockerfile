@@ -44,7 +44,9 @@ COPY server ./server
 # bd123fc crash on startup with ERR_MODULE_NOT_FOUND, while Render kept serving the last image that
 # built — so restarts looked like no-ops no matter how many commits actually fixed something.
 COPY src/core ./src/core
-COPY package.json ./package.json
+COPY package.json package-lock.json ./
+# Runtime packages (pg, jose, ...) — the server imports them; without node_modules it crashed on start.
+RUN npm ci --omit=dev && npm cache clean --force
 ENV HOST=0.0.0.0 PORT=8787 VLAB_BUILD_CACHE=/tmp/vlab/cache NODE_ENV=production
 USER vlab
 EXPOSE 8787
