@@ -9,7 +9,7 @@ import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
 import { hasHostedAi } from '../sim/session.mjs';
 import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
-import { generateCode, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
+import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { FORMAT, VERSION } from '../core/project.js';
 import { sidePanes } from './side-panes.js';
@@ -20,7 +20,7 @@ const SUGGESTIONS = ['Make the LED blink twice as fast', 'Add a pushbutton on pi
 
 // applyCircuitActions already works in — and returns — the project-file shape (parts use "rotate",
 // wires use from/to), the same shape editor.exportProject()/fromProjectFile() use, so no remapping.
-const toProjectFileShape = (parts, wires) => ({ format: FORMAT, version: VERSION, parts, wires });
+const toProjectFileShape = (parts, wires, customParts = []) => ({ format: FORMAT, version: VERSION, parts, wires, ...(customParts.length ? { customParts } : {}) });
 
 const CAP = { output: 4000, serial: 2000, file: 6000, files: 12000 };
 
@@ -142,7 +142,7 @@ export function initAiPanel(editor, code, sim = null) {
 
   function applyProposal(m) {
     const p = proposals.get(m.id); if (!p) return;
-    if (p.circuitEdit) editor.importProject(toProjectFileShape(p.circuitEdit.parts, p.circuitEdit.wires));
+    if (p.circuitEdit) editor.importProject(toProjectFileShape(p.circuitEdit.parts, p.circuitEdit.wires, p.circuitEdit.customParts));
     if (p.code) { code.source = p.code; code.open(); }
     editor.status(p.circuitEdit && p.code ? 'AI edit applied — circuit and sketch.ino both updated' : p.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify or Run to compile it');
     m.state = 'applied'; proposals.delete(m.id); saveChat(); render();
@@ -246,12 +246,28 @@ export function initAiPanel(editor, code, sim = null) {
     let circuitEdit = null, warnings = [], changed = null;
     if (res.actions?.length) {
       const applied = applyCircuitActions(circuit, res.actions);
-      circuitEdit = { parts: applied.parts, wires: applied.wires };
+      circuitEdit = { parts: applied.parts, wires: applied.wires, customParts: applied.newSpecs };
       warnings = applied.warnings;
       changed = JSON.stringify(circuitEdit.parts) !== JSON.stringify(circuit.parts) || JSON.stringify(circuitEdit.wires) !== JSON.stringify(circuit.wires);
     }
     if (circuitEdit && changed === false && warnings.length === 0) warnings = [...warnings, 'None of the requested circuit changes actually took effect — the AI may be describing an edit it did not really make.'];
     return { circuitEdit: changed ? circuitEdit : null, attempted: !!circuitEdit, changed, warnings };
+  }
+
+  /** create_part actions: ask the part maker to draw + define each part, then point add_part at the id it really got. */
+  async function resolveNewParts(res) {
+    const acts = res.actions; if (!Array.isArray(acts) || !acts.some(a => a?.op === 'create_part')) return;
+    const remap = new Map(); let n = 0;
+    for (const a of acts) {
+      if (a?.op !== 'create_part' || a.spec) continue;
+      if (++n > 3) { a.error = 'at most 3 new parts at a time'; continue; }
+      setStatus(`Drawing "${String(a.description || a.id).slice(0, 40)}"…`);
+      const r = await createPart({ description: String(a.description || a.id || ''), hosted: hostedOn() });
+      if (r.ok && r.spec) { a.spec = r.spec; if (a.id && a.id !== r.spec.id) remap.set(a.id, r.spec.id); }
+      else a.error = r.error || 'the part maker did not answer';
+    }
+    for (const a of acts) if (a?.op === 'add_part' && remap.has(a.type)) a.type = remap.get(a.type);
+    setStatus('');
   }
 
   async function send() {
@@ -294,6 +310,7 @@ export function initAiPanel(editor, code, sim = null) {
         return;
       }
       if (res.meta) setStatus(`${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s${res.meta.tried ? ` (${res.meta.tried} unavailable model${res.meta.tried > 1 ? 's' : ''} skipped)` : ''}`);
+      await resolveNewParts(res);
       const o = outcome(circuit, res);
       const hasEdit = !!(res.code || o.circuitEdit);
       const summary = [];

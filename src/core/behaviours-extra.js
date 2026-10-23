@@ -241,6 +241,22 @@ export const EXTRA_BEHAVIOURS = {
     ],
     note: 'A simulated body: the voltage between IN+ and IN− follows the chosen biosignal (a typical, illustrative waveform — not a medical measurement). Wire the three electrodes to an amplifier such as the BioAmp EXG Pill. Poor contact plus mains hum adds 50 Hz interference, like a real bench.',
   },
+  bldc: {
+    label: 'Brushless motor, 3 phases (spins as the sketch commutates it)',
+    ...roles({ u: 'Phase U', v: 'Phase V', w: 'Phase W' }),
+    params: [{ key: 'poles', label: 'Pole pairs', unit: '', min: 1, max: 30, step: 1, def: 7 }],
+    note: 'A bare three-wire brushless motor (outrunner / gimbal / drone motor). It turns when the three phase pins go through the six-step pattern (U,V,W = 100, 110, 010, 011, 001, 101) — one step is 60 electrical degrees, and speed is how fast the pattern advances. Swap the order and it spins the other way. On a real bench a 3-phase driver sits between the Arduino and the motor; here you may wire the pins straight to it.',
+  },
+  'bldc-esc': {
+    label: 'Brushless motor with ESC (throttle pulse on one wire)',
+    ...roles({ vcc: 'Battery + (power in)', gnd: 'Battery − (ground)', signal: 'Throttle signal (pulse in)' }),
+    params: [
+      { key: 'kv', label: 'Motor Kv', unit: 'rpm/V', min: 50, max: 10000, step: 10, def: 1000 },
+      { key: 'minUs', label: 'Pulse for zero throttle', unit: 'µs', min: 600, max: 1500, step: 10, def: 1000 },
+      { key: 'maxUs', label: 'Pulse for full throttle', unit: 'µs', min: 1500, max: 2600, step: 10, def: 2000 },
+    ],
+    note: 'Like a hobby motor + ESC. The ESC must be armed first: send the zero-throttle pulse (Servo.writeMicroseconds(1000)) for about a second. After that the motor speed is throttle × Kv × the battery voltage. It needs at least 5 V on power in.',
+  },
   stepper: {
     label: 'Stepper motor (counts the coil pattern the sketch sends)',
     ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)' }),
@@ -251,10 +267,10 @@ export const EXTRA_BEHAVIOURS = {
 };
 
 /** Behaviours drawn with a schematic symbol / live indicator in the middle of the part (see iconSVG in src/parts/elements.js). */
-export const ICON_KINDS = new Set(['switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper', 'keypad', 'switch-bank', 'joystick']);
+export const ICON_KINDS = new Set(['bldc', 'bldc-esc', 'switch', 'relay', 'variable-resistor', 'diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'capacitor', 'inductor', 'buzzer', 'motor', 'led-array', 'servo', 'ultrasonic', 'encoder', 'stepper', 'keypad', 'switch-bank', 'joystick']);
 
 /** Behaviours that need the firmware's pin timing (not just the solved voltages). */
-export const TIMED_KINDS = new Set(['servo', 'ultrasonic', 'stepper']);
+export const TIMED_KINDS = new Set(['servo', 'ultrasonic', 'stepper', 'bldc', 'bldc-esc']);
 
 /** Clamp/clean the params of a behaviour. Unknown keys are dropped, bad values fall back to the default. */
 export function cleanParams(def, raw) {

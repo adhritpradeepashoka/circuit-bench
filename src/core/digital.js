@@ -57,10 +57,12 @@ export function timedParts(circuit, parts) {
         if (!(circuit.uno.v5.has(vcc) || circuit.uno.v33.has(vcc))) problems.push(`${name}: VCC has no power — connect it to 5V`);
         if (!circuit.uno.gnd.has(gnd)) problems.push(`${name}: GND is not connected to the Arduino's GND`);
       }
-    } else if (b.kind === 'stepper') {
+    } else if (b.kind === 'bldc-esc') pins.signal = need(b.roles.signal, 'the throttle wire');
+    else if (b.kind === 'bldc') pins.phases = ['u', 'v', 'w'].map(r => need(b.roles[r], `phase ${r.toUpperCase()}`));
+    else if (b.kind === 'stepper') {
       pins.coils = b.coils.map((c, i) => need(c, `IN${i + 1}`));
     }
-    const attached = b.kind === 'stepper' ? pins.coils.every(Boolean) : Object.values(pins).every(Boolean);
+    const attached = b.kind === 'stepper' ? pins.coils.every(Boolean) : b.kind === 'bldc' ? pins.phases.every(Boolean) : Object.values(pins).every(Boolean);
     out.push({ partId: part.id, kind: b.kind, spec, pins, attached: attached && !problems.length, problems });
   }
   return out;

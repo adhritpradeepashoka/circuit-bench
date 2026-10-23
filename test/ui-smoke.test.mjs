@@ -273,7 +273,7 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   editor.addPart('servo');
   assert.ok(editor.state.parts.some(p => p.type === 'servo'));
   assert.ok(editor.els.get(editor.state.parts.find(p => p.type === 'servo').id).querySelector('wokwi-servo'), 'the servo is the real wokwi-servo element');
-  assert.ok(![...doc.querySelectorAll('#pcTemplate option')].some(o => o.value === 'servo-sg90'), 'popular parts are not in the template list');
+  assert.equal(doc.getElementById('pcTemplate'), null, 'the part maker no longer starts from a preset list — you describe the part');
   for (const n of ['RGB LED', 'Slide Switch', '7-Segment Display', 'PIR Motion Sensor', 'MPU-6050 Accelerometer + Gyro', 'OLED Display 128×64 (SSD1306)']) assert.ok(names.includes(n), `${n} in catalogue`);
   for (const type of ['rgb-led', 'slide-switch', 'seven-segment', 'pir-sensor', 'mpu6050', 'ssd1306', 'arduino-nano', 'arduino-mega', 'dht', 'lcd1602', 'dc-motor', 'l298n', 'battery']) {
     editor.addPart(type);
@@ -1714,14 +1714,13 @@ import { validatePartSpec } from '../src/core/custom-parts.js';
 const libSpec = (tplId, id) => { const { id: _i, group: _g, ...t } = TEMPLATES.find(x => x.id === tplId); const v = validatePartSpec({ ...t, id }); assert.ok(v.ok, v.errors?.join()); return v.spec; };
 const wire = (id, a, ap, b, bp) => ({ id, from: { part: a, pin: ap }, to: { part: b, pin: bp }, style: 'straight', color: '#2f6cf0', width: 2 });
 
-test('ui: Part Creator — start from a ready-made switch, save it, click it to flip it; its symbol and the circuit follow', () => {
+test('ui: Part Creator — open with a switch spec, save it, click it to flip it; its symbol and the circuit follow', () => {
   const { w, editor, drag } = boot();
   const doc = w.document, $ = id => doc.getElementById(id);
   w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false, error: 'no AI in this test' }) });
   assert.ok($('pcKind').querySelectorAll('optgroup').length >= 4, 'behaviours are grouped');
-  assert.ok($('pcTemplate').querySelectorAll('option').length > 15, 'a long template list');
-  $('createPartBtn').click();
-  $('pcTemplate').value = 'sw-spst'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  const tplSpec = id => { const { id: _i, group: _g, ...t } = TEMPLATES.find(x => x.id === id); return t; };
+  editor.emit('create-part', { spec: tplSpec('sw-spst') });
   assert.equal($('pcName').value, 'Toggle switch (on / off)');
   assert.equal($('pcKind').value, 'switch');
   assert.equal($('pcSave').disabled, false);
@@ -1744,8 +1743,8 @@ test('ui: Part Creator — a behaviour’s numbers appear as fields, are validat
   const doc = w.document, $ = id => doc.getElementById(id);
   const pc = w.__lab.initPartCreator(editor, { createPart: async () => ({ ok: false }) });
   const set = (id, v, ev = 'input') => { const e = $(id); e.value = v; e.dispatchEvent(new w.Event(ev, { bubbles: true })); };
-  editor.emit('create-part');
-  $('pcTemplate').value = 'q-irf540'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  const tplSpec = id => { const { id: _i, group: _g, ...t } = TEMPLATES.find(x => x.id === id); return t; };
+  editor.emit('create-part', { spec: tplSpec('q-irf540') });
   assert.equal($('pcKind').value, 'nmos');
   assert.equal($('pcParam-vth').value, '5.5'); assert.equal($('pcParam-rds').value, '0.044');
   assert.equal($('pcRole-gate').value, 'G'); assert.equal($('pcRole-drain').value, 'D');
@@ -1753,8 +1752,7 @@ test('ui: Part Creator — a behaviour’s numbers appear as fields, are validat
   $('pcSave').click();
   assert.equal(pc.library()[0].behaviour.vth, 3.3);
   // switching what a part does re-guesses the roles from the pin names and resets the numbers
-  editor.emit('create-part');
-  $('pcTemplate').value = 'd-schottky'; $('pcTemplate').dispatchEvent(new w.Event('change', { bubbles: true }));
+  editor.emit('create-part', { spec: tplSpec('d-schottky') });
   set('pcKind', 'npn', 'change');
   assert.equal($('pcParam-beta').value, '100');
   set('pcKind', 'diode', 'change');

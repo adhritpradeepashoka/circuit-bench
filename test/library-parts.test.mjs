@@ -186,7 +186,8 @@ test('templates: every ready-made part passes the validator and keeps its behavi
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { Mcu, CPU_HZ } from '../src/sim/mcu.js';
-import { Servo, Ultrasonic, Stepper, FreqProbe } from '../src/parts/timed.js';
+import { Servo, Ultrasonic, Stepper, Bldc, BldcEsc, FreqProbe } from '../src/parts/timed.js';
+import { renderArt } from '../src/core/part-art.js';
 import { BOARD_SPECS } from '../src/core/boards.js';
 
 const fixtures = JSON.parse(readFileSync(fileURLToPath(new URL('./fixtures/firmware.json', import.meta.url)), 'utf8'));
@@ -235,6 +236,27 @@ test('stepper: the Stepper library’s coil pattern turns the shaft one step at 
   near(st.angle, 90, 2, '512 of 2048 steps = a quarter turn');
   for (let i = 0; i < 300 && !/back/.test(text()); i++) run(0.01);
   assert.match(text(), /back/); near(st.angle, 45, 2, 'then 256 steps back');
+});
+
+test('BLDC with a real six-step sketch: the motor reaches the commutation rate, reverses on command, and a drawn sprite spins', () => {
+  const { mcu, run, text } = boot('bldc-sixstep');
+  const m = new Bldc({ poles: 7 }); m.attach(mcu, [3, 4, 5].map(pinOf));
+  run(0.05); for (let i = 0; i < 30; i++) { run(0.02); m.update(0.02); }
+  // 1 step per ~1.65 ms ≈ 606 steps/s → 101 electrical rev/s → /7 pole pairs → ≈ 866 rpm
+  near(m.rpm, 866, 90, 'forward rpm');
+  mcu.serialWrite('r'); for (let i = 0; i < 60; i++) { run(0.02); m.update(0.02); }
+  assert.ok(m.rpm < -700, `reversed: ${m.rpm}`);
+  const v = validatePartSpec({ name: 'BLDC', package: 'art', pins: [{ id: 'U', x: 4, y: 10 }, { id: 'V', x: 4, y: 20 }, { id: 'W', x: 4, y: 30 }], art: { w: 80, h: 50, svg: '<g id="rotor"><circle cx="45" cy="25" r="18" fill="#889"/><rect x="43" y="8" width="4" height="12" fill="#d33"/></g>', motion: [{ target: 'rotor', kind: 'spin', driver: 'rpm', pivot: [45, 25] }] }, behaviour: { kind: 'bldc', roles: { u: 'U', v: 'V', w: 'W' }, poles: 7 } });
+  assert.ok(v.ok, v.errors?.join('; '));
+  assert.match(renderArt(v.spec.art, { aux: m.rpm }), /animation:cp-spin 0\.0[0-9]s linear infinite reverse/);
+});
+
+test('BLDC with an ESC: the real Servo-library sketch arms it, then half throttle on an 11.1 V pack gives about 5,500 rpm (1000 Kv)', () => {
+  const { mcu, run, text } = boot('bldc-esc');
+  const e = new BldcEsc({ kv: 1000, minUs: 1000, maxUs: 2000 }); e.attach(mcu, pinOf(9));
+  for (let i = 0; i < 60; i++) { run(0.05); e.update(0.05, 11.1); }
+  assert.match(text(), /armed/); assert.ok(e.armed);
+  near(e.rpm, 5550, 120, 'rpm');
 });
 
 test('buzzer tone(): the frequency probe reads the note the sketch plays', () => {

@@ -119,3 +119,15 @@ test('actions is tolerant of junk input instead of throwing', () => {
   const { warnings } = applyCircuitActions(BASE, [null, { op: 'add_part' }]);
   assert.ok(warnings.length >= 1);
 });
+
+test('create_part registers a validated spec, add_part can use it, bad specs warn', () => {
+  const spec = { id: 'custom-aitest-led', name: 'AI test LED', pins: [{ id: 'A' }, { id: 'K' }], behaviour: { kind: 'diode', roles: { anode: 'A', cathode: 'K' } } };
+  const r = applyCircuitActions({ parts: [], wires: [] }, [
+    { op: 'create_part', id: 'custom-aitest-led', description: 'x', spec },
+    { op: 'add_part', id: 'p1', type: 'custom-aitest-led', x: 10, y: 10 },
+    { op: 'create_part', id: 'custom-nope', description: 'a thing', error: 'no key' },
+  ]);
+  assert.equal(r.newSpecs.length, 1, JSON.stringify(r.warnings));
+  assert.ok(r.parts.some(p => p.type === 'custom-aitest-led'));
+  assert.ok(r.warnings.some(w => /Could not make/.test(w)));
+});

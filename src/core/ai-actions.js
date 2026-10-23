@@ -6,6 +6,7 @@
 // (to validate before ever showing a result to the user), from the same PART_DEFS catalogue.
 import { PART_DEFS } from './parts.js';
 import { CONTROLS } from './controls.js';
+import { validatePartSpec, registerCustomPart } from './custom-parts.js';
 
 const uid = prefix => `${prefix}-${Math.random().toString(36).slice(2, 7)}`;
 
@@ -44,14 +45,14 @@ const pinExists = (type, pin) => !!PART_DEFS[type]?.pinById?.has(String(pin));
 export function applyCircuitActions(project, actions) {
   const parts = (project?.parts || []).map(p => ({ ...p }));
   const wires = (project?.wires || []).map(w => ({ ...w, from: { ...w.from }, to: { ...w.to } }));
-  const warnings = [];
+  const warnings = [], newSpecs = [];
   const usedPartIds = new Set(parts.map(p => p.id));
   const usedWireIds = new Set(wires.map(w => w.id));
   const idMap = new Map(); // id the AI asked for → id it actually got (this batch only)
   const resolve = id => idMap.get(id) ?? id;
   const partByFinalId = id => parts.find(p => p.id === id);
 
-  if (!Array.isArray(actions)) return { parts, wires, warnings: ['No actions to apply.'] };
+  if (!Array.isArray(actions)) return { parts, wires, warnings: ['No actions to apply.'], newSpecs };
 
   let cascade = 0;
   const bbox = parts.reduce((b, p) => {
@@ -63,6 +64,14 @@ export function applyCircuitActions(project, actions) {
     if (!a || typeof a !== 'object' || typeof a.op !== 'string') { warnings.push(`Skipped a malformed action: ${JSON.stringify(a)}`); continue; }
     try {
       switch (a.op) {
+        case 'create_part': {           // a new drawn, working part; the client fills a.spec from the part maker before this runs
+          if (!a.spec) { warnings.push(`Could not make "${String(a.description || a.id || 'the part').slice(0, 60)}"${a.error ? `: ${String(a.error).slice(0, 200)}` : ''}.`); break; }
+          if (newSpecs.length >= 3) { warnings.push('At most 3 new parts at a time — skipped one.'); break; }
+          const v = validatePartSpec(a.spec, { id: a.spec.id });
+          if (!v.ok) { warnings.push(`New part rejected: ${(v.errors || []).join(' ')}`); break; }
+          registerCustomPart(v.spec); newSpecs.push(v.spec);
+          break;
+        }
         case 'add_part': {
           const def = PART_DEFS[a.type];
           if (!def) { warnings.push(`Unknown part type "${a.type}" — skipped.`); break; }
@@ -132,5 +141,5 @@ export function applyCircuitActions(project, actions) {
       warnings.push(`"${a.op}" failed: ${err.message}`);
     }
   }
-  return { parts, wires, warnings };
+  return { parts, wires, warnings, newSpecs };
 }

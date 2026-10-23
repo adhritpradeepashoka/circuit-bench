@@ -11,7 +11,7 @@ import { Ssd1306, OLED_W, OLED_H } from '../parts/ssd1306.js';
 import { Lcd1602 } from '../parts/lcd1602.js';
 import { Dht } from '../parts/dht.js';
 import { dhtParts, timedParts } from '../core/digital.js';
-import { Servo, Ultrasonic, Stepper, FreqProbe } from '../parts/timed.js';
+import { Servo, Ultrasonic, Stepper, Bldc, BldcEsc, FreqProbe } from '../parts/timed.js';
 import { Sound } from './audio.js';
 import { visualTarget } from '../parts/skins.js';
 import { motorRpm } from '../core/solver.js';
@@ -254,11 +254,12 @@ export class Simulation {
       let e = this.timed.get(t.partId);
       if (!e) {
         const b = t.spec.behaviour;
-        const model = t.kind === 'servo' ? new Servo(b) : t.kind === 'ultrasonic' ? new Ultrasonic() : new Stepper(b);
+        const model = t.kind === 'servo' ? new Servo(b) : t.kind === 'ultrasonic' ? new Ultrasonic() : t.kind === 'bldc' ? new Bldc(b) : t.kind === 'bldc-esc' ? new BldcEsc(b) : new Stepper(b);
         e = { kind: t.kind, model }; this.timed.set(t.partId, e);
       }
       if (!t.attached) { e.model.detach(); continue; }
-      if (t.kind === 'servo') e.model.attach(this.mcu, t.pins.signal);
+      if (t.kind === 'servo' || t.kind === 'bldc-esc') e.model.attach(this.mcu, t.pins.signal);
+      else if (t.kind === 'bldc') e.model.attach(this.mcu, t.pins.phases);
       else if (t.kind === 'ultrasonic') e.model.attach(this.mcu, t.pins.trig, t.pins.echo);
       else e.model.attach(this.mcu, t.pins.coils);
     }
@@ -290,9 +291,11 @@ export class Simulation {
     for (const t of this.timedInfo) {
       const e = this.timed.get(t.partId), root = this.editor.els.get(t.partId), el = visualTarget(root, PART_DEFS[this.editor.partById(t.partId)?.type]);
       if (!e || !el) continue;
-      const roles = t.spec.behaviour.roles, powered = supply(circuit.netOf(t.partId, roles.vcc), circuit.netOf(t.partId, roles.gnd)) >= 3.5;
+      const roles = t.spec.behaviour.roles, volts = roles.vcc ? supply(circuit.netOf(t.partId, roles.vcc), circuit.netOf(t.partId, roles.gnd)) : 5, powered = volts >= 3.5;
       if (t.kind === 'servo') { e.model.update(dt, powered); el.aux = e.model.angle; el.lit = powered && t.attached ? 1 : 0; }
       else if (t.kind === 'stepper') el.aux = powered ? e.model.angle : el.aux;
+      else if (t.kind === 'bldc') { e.model.update(dt); el.aux = e.model.rpm; el.lit = e.model.rpm ? 1 : 0; }
+      else if (t.kind === 'bldc-esc') { e.model.update(dt, volts); el.aux = e.model.rpm; el.lit = e.model.rpm ? 1 : 0; }
     }
     for (const part of this.editor.state.parts) {
       const def = PART_DEFS[part.type];
@@ -507,7 +510,7 @@ export class Simulation {
         case 'inductor': e.mA = r2((r.reactive?.get(part.id)?.i ?? 0) * 1000); break;
         case 'buzzer': e.sounding = (r.loadVolts?.get(part.id) ?? 0) >= b.vmin || (b.mode !== 'active' && (this.probes.get(part.id)?.freq || 0) > 0); if (b.mode !== 'active') e.hz = Math.round(this.probes.get(part.id)?.freq || 0); break;
         case 'motor': e.volts = r2(r.loadVolts?.get(part.id) ?? 0); e.rpm = motorRpm(e.volts); break;
-        case 'servo': case 'ultrasonic': case 'stepper': { const m = this.timed.get(part.id)?.model; if (m) Object.assign(e, m.summary()); const info = this.timedInfo.find(t => t.partId === part.id); if (info?.problems.length) e.problems = info.problems; break; }
+        case 'servo': case 'ultrasonic': case 'stepper': case 'bldc': case 'bldc-esc': { const m = this.timed.get(part.id)?.model; if (m) Object.assign(e, m.summary()); const info = this.timedInfo.find(t => t.partId === part.id); if (info?.problems.length) e.problems = info.problems; break; }
         case 'encoder': e.phase = part.phase ?? 0; break;
         default: continue;
       }

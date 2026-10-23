@@ -45,11 +45,11 @@ function aiEndpoint(loc = globalThis.location, win = globalThis, path = '/api/ai
 }
 
 /** Describe a part → { ok, spec, note } (a validated part spec), or { ok:false, error, needsKey? }. */
-export async function createPart({ description, provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal } = {}) {
-  if (!userKey) return { ok: false, needsKey: true, error: 'Add a free AI key first (open ✨ Ask AI → Settings) — then describe your part again.' };
+export async function createPart({ description, provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false } = {}) {
+  if (!userKey && !hosted) return { ok: false, needsKey: true, error: 'Add a free AI key first (open ✨ Ask AI → Settings) — then describe your part again.' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask.' };
   let res;
-  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description, userKey, provider, model }), signal }); }
+  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { description, hosted: true } : { description, userKey, provider, model }), signal }); }
   catch (err) { if (err?.name === 'AbortError') throw err; return { ok: false, error: `Could not reach ${endpoint}.` }; }
   let body = null; try { body = await res.json(); } catch { /* ignore */ }
   return body || { ok: false, error: noReply(res.status) };

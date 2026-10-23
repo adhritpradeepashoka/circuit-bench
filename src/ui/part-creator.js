@@ -4,7 +4,6 @@
 // (this browser) and travel inside any project that uses them.
 import { BEHAVIOURS, PACKAGES, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
 import { FUNCTIONS } from '../core/expr.js';
-import { TEMPLATES as ALL_TEMPLATES, TEMPLATE_GROUPS, POPULAR, HAS_WOKWI_PART } from '../core/part-templates.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { customPartSVG } from '../parts/elements.js';
@@ -31,8 +30,6 @@ const blank = () => ({
   behaviour: { kind: 'analog-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'OUT' } },
 });
 
-const TEMPLATES = ALL_TEMPLATES.filter(t => !POPULAR[t.id] && !HAS_WOKWI_PART.has(t.id));   // the popular ones are in the sidebar catalogue
-
 export function initPartCreator(editor, { createPart = defaultCreatePart } = {}) {
   const $ = id => document.getElementById(id);
   const modal = $('partModal'), pinsEl = $('pcPins'), rolesEl = $('pcRoles'), kindSel = $('pcKind');
@@ -45,7 +42,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   const KIND_GROUPS = [
     ['Basics', ['none', 'resistor', 'variable-resistor', 'led', 'led-array', 'switch', 'button']],
     ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'opamp', 'inamp', 'relay', 'capacitor', 'inductor']],
-    ['Sound, motors & motion', ['buzzer', 'motor', 'servo', 'stepper']],
+    ['Sound, motors & motion', ['buzzer', 'motor', 'servo', 'stepper', 'bldc', 'bldc-esc']],
     ['Sensors & inputs', ['analog-sensor', 'digital-sensor', 'ultrasonic', 'encoder', 'signal-source']],
     ['Chips', ['mux', 'logic']],
   ];
@@ -53,9 +50,6 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   const grouped = new Set(KIND_GROUPS.flatMap(([, ks]) => ks));
   kindSel.replaceChildren(...KIND_GROUPS.map(([name, ks]) => { const g = document.createElement('optgroup'); g.label = name; g.append(...ks.filter(k => BEHAVIOURS[k]).map(kindOption)); return g; }),
     ...Object.keys(BEHAVIOURS).filter(k => !grouped.has(k)).map(kindOption));
-  const tpl = $('pcTemplate');
-  tpl.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: '— choose one, or build your own below —' }),
-    ...TEMPLATE_GROUPS.map((name, gi) => { const g = document.createElement('optgroup'); g.label = name; g.append(...TEMPLATES.filter(t => t.group === gi).map(t => Object.assign(document.createElement('option'), { value: t.id, textContent: t.name }))); return g; }));
 
   const el = (tag, props = {}) => Object.assign(document.createElement(tag), props);
 
@@ -265,7 +259,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   function open(type = null, prefill = null) {
     if (typeof paintProvider === 'function') paintProvider();
     editing = type && PART_DEFS[type]?.custom ? type : null;
-    draft = editing ? clone(PART_DEFS[editing].spec) : blank();
+    draft = editing ? clone(PART_DEFS[editing].spec) : prefill?.spec ? { ...blank(), ...clone(prefill.spec), id: newCustomId() } : blank();
     $('partTitle').textContent = editing ? `Edit “${PART_DEFS[editing].name}”` : 'Create a part';
     $('pcSave').textContent = editing ? 'Save changes' : 'Save & place';
     $('pcDelete').hidden = !editing;
@@ -363,14 +357,6 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     draft.breadboard = e.target.checked;
     if (draft.breadboard) for (const p of draft.pins) p.side = 'bottom';
     paintPins(); preview();
-  });
-  tpl.addEventListener('change', () => {
-    const t = TEMPLATES.find(x => x.id === tpl.value);
-    if (!t) return;
-    const { id: _id, group: _g, ...spec } = clone(t);
-    draft = { ...blank(), ...spec, pins: spec.pins.map(p => ({ side: 'bottom', ...p })), id: editing || draft.id };
-    paintForm();
-    $('pcAiStatus').textContent = ''; tpl.value = '';
   });
   kindSel.addEventListener('change', () => {
     const kind = kindSel.value, roles = {};

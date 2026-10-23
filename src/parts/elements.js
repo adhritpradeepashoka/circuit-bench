@@ -5,6 +5,7 @@
 import { LOBES, MM_TO_PX } from '../core/slime.js';
 import { ICON_KINDS } from '../core/behaviours-extra.js';
 import { layoutSpec } from '../core/custom-parts.js';
+import { renderArt } from '../core/part-art.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 
@@ -159,6 +160,11 @@ function iconSVG(spec, st, cx, cy, fg) {
       const wave = lit > 0.5 ? `<path d="M8 -6 q4 6 0 12 M12 -9 q7 9 0 18" ${line} stroke="${on}"/>` : '';
       return g(`<path d="M-12 -3h5l6 -5v16l-6 -5h-5z" fill="${fg}" opacity=".9"/>${wave}`);
     }
+    case 'bldc': case 'bldc-esc': {
+      const dur = aux ? Math.max(0.08, Math.min(3, 60 / Math.abs(aux))) : 0;
+      const spin = aux ? `style="transform-origin:0 0;animation:cp-spin ${dur.toFixed(2)}s linear infinite${aux < 0 ? ' reverse' : ''}"` : '';
+      return g(`<circle r="12" ${line}/><g ${spin}><path d="M0 0L0 -9M0 0L7.8 4.5M0 0L-7.8 4.5" ${line} stroke-width="2.4"/></g><circle r="2" fill="${fg}"/>`);
+    }
     case 'motor': {
       const dur = aux ? Math.max(0.12, Math.min(3, 60 / Math.abs(aux))) : 0;
       const spin = aux ? `style="transform-origin:0 0;animation:cp-spin ${dur.toFixed(2)}s linear infinite${aux < 0 ? ' reverse' : ''}"` : '';
@@ -190,6 +196,7 @@ function iconSVG(spec, st, cx, cy, fg) {
 export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   const { w, h, pins } = layoutSpec(spec);
   if (spec.package === 'board' && spec.board) return boardSVG(spec, w, h, pins);
+  if (spec.package === 'art' && spec.art) return artSVG(spec, w, h, pins, { lit, aux, levels });
   if (spec.package === 'sprite' && spec.sprite) return spriteSVG(spec, w, h, pins);
   if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
@@ -223,6 +230,11 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
     <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
       stroke="${spec.color}" stroke-width="${quad ? 2.2 : 0}" paint-order="stroke">${esc(spec.label)}</text>
   </svg>`;
+}
+/** A part drawn by the AI (or the student) as SVG: its picture, with the moving pieces driven by the live simulation, and a lead dot on every pin. */
+function artSVG(spec, w, h, pins, st) {
+  const dots = pins.map(p => `<rect x="${(p.x - 2.4).toFixed(1)}" y="${(p.y - 2.4).toFixed(1)}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"><title>${esc(p.label || p.id)}</title></rect>`).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${renderArt(spec.art, { lit: st.lit, aux: st.aux, level: st.levels?.[0] })}${dots}</svg>`;
 }
 /** Simple pictures of real modules (a "sprite"): the board, its header pins and connector, with each pin lead ending on its connection point. */
 function spriteSVG(spec, w, h, pins) {

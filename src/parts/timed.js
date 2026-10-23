@@ -26,7 +26,7 @@ export class Servo extends Watcher {
   constructor({ range = 180, minUs = 544, maxUs = 2400 } = {}) {
     super();
     Object.assign(this, { range, minUs, maxUs });
-    this.angle = range / 2; this.target = range / 2; this.pulseUs = 0; this.rise = null; this.pulses = 0; this.bit = 0; this.pinPort = null;
+    this.angle = range / 2; this.target = range / 2; this.lastPulseAt = -1; this.pulseUs = 0; this.rise = null; this.pulses = 0; this.bit = 0; this.pinPort = null;
   }
   attach(mcu, pin) {
     if (this.mcu === mcu && this.pinPort === pin.port && this.bit === pin.bit) return;
@@ -40,7 +40,7 @@ export class Servo extends Watcher {
     if (this.rise === null) return;
     const us = (now - this.rise) / US; this.rise = null;
     if (us < 300 || us > 3000) return;                           // not a servo pulse (a PWM edge, a tone…)
-    this.pulseUs = us; this.pulses++;
+    this.pulseUs = us; this.pulses++; this.lastPulseAt = this.mcu.seconds;
     this.target = Math.max(0, Math.min(this.range, ((us - this.minUs) / (this.maxUs - this.minUs)) * this.range));
   }
   /** Move the horn toward the target at a real servo's speed (≈ 0.12 s per 60°). */
@@ -111,6 +111,67 @@ export class Stepper extends Watcher {
     this.pos = now;
   }
   summary() { return { angleDeg: Math.round(this.angle * 10) / 10, turns: Math.round((this.angle / 360) * 100) / 100, stepsTaken: this.count }; }
+}
+
+/** The six states of a three-phase square-wave drive, in order: U,V,W = 100 → 110 → 010 → 011 → 001 → 101. One step = 60 electrical degrees. */
+const SIX = ['100', '110', '010', '011', '001', '101'];
+/**
+ * A bare brushless motor: it follows the order in which the three phase pins are driven. Speed comes from how fast the pattern
+ * advances (steps per second ÷ 6 = electrical revolutions per second ÷ pole pairs = mechanical), direction from the order.
+ */
+export class Bldc extends Watcher {
+  constructor({ poles = 7 } = {}) { super(); this.poles = poles; this.rpm = 0; this.pos = null; this.log = []; this.pins = []; this.count = 0; }
+  attach(mcu, pins) {
+    this.detach();
+    this.mcu = mcu; this.pins = pins.map(p => ({ port: p.port, bit: p.bit }));
+    for (const p of pins) this.listen(mcu, p, () => this.watch());
+    this.pos = this.read();
+  }
+  read() {
+    const bits = this.pins.map(p => (this.mcu.ports[p.port].pinState(p.bit) === PinState.High ? '1' : '0')).join('');
+    const i = SIX.indexOf(bits);
+    return i >= 0 ? i : null;                                    // 000 / 111 are not drive states
+  }
+  watch() {
+    const now = this.read();
+    if (now === null) return;
+    if (this.pos !== null && now !== this.pos) {
+      const d = ((now - this.pos + 9) % 6) - 3;                  // −3 … +2 steps
+      this.log.push({ t: this.mcu.seconds, d }); this.count += d;
+    }
+    this.pos = now;
+  }
+  /** Smooth toward the speed the last 0.15 s of steps imply; coast to a stop when they stop. */
+  update(dt) {
+    if (!this.mcu) return;
+    const now = this.mcu.seconds, win = 0.15;
+    while (this.log.length && this.log[0].t < now - win) this.log.shift();
+    const steps = this.log.reduce((s, x) => s + x.d, 0);
+    const target = (steps / 6 / win / this.poles) * 60;
+    this.rpm += (target - this.rpm) * Math.min(1, dt * 10);
+    if (Math.abs(this.rpm) < 1) this.rpm = 0;
+  }
+  summary() { return { rpm: Math.round(this.rpm), stepsSeen: this.count }; }
+}
+
+/** A brushless motor with its ESC: the throttle is the pulse width on one wire; the ESC has to be armed with a zero-throttle pulse first. */
+export class BldcEsc extends Servo {
+  constructor({ kv = 1000, minUs = 1000, maxUs = 2000 } = {}) {
+    super({ range: 1, minUs, maxUs });
+    Object.assign(this, { kv }); this.armed = false; this.rpm = 0; this.throttle = 0;
+  }
+  watch() {
+    super.watch();
+    if (this.pulseUs && this.pulseUs <= this.minUs + 60) this.armed = true;
+    this.throttle = this.armed ? Math.max(0, Math.min(1, (this.pulseUs - this.minUs) / (this.maxUs - this.minUs))) : 0;
+  }
+  update(dt, volts) {
+    const live = this.pulseUs && this.mcu && (this.mcu.seconds - this.lastPulseAt < 0.25);
+    const target = volts >= 5 && this.armed && live !== false ? this.throttle * this.kv * volts : 0;
+    this.rpm += (target - this.rpm) * Math.min(1, dt * 4);
+    if (this.rpm < 2) this.rpm = 0;
+  }
+  summary() { return { rpm: Math.round(this.rpm), armed: this.armed, throttlePct: Math.round(this.throttle * 100), pulseUs: Math.round(this.pulseUs) }; }
 }
 
 /** Counts rising edges on one pin so a passive buzzer can play the tone() the sketch makes. */

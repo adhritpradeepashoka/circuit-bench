@@ -6,7 +6,7 @@ import { PART_DEFS } from './parts.js';
 import { BEHAVIOURS, validatePartSpec, describeCustomSpecs } from './custom-parts.js';
 
 export const LIMITS = { promptChars: 4_000, codeChars: 20_000 };
-export const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire';
+export const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire, create_part';
 
 // A part's catalogue note (see describeCatalog) states its electrical behavior, but a model that reads
 // "OUT falls as it gets hotter" still has to correctly derive and apply the inverted comparison itself —
@@ -179,6 +179,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block containing a single object — an
                          //   remove_part: {"op":"remove_part","id":"<id>"}
                          //   add_wire: {"op":"add_wire","from":{"part":"<id>","pin":"<pin>"},"to":{"part":"<id>","pin":"<pin>"}}
                          //   remove_wire: {"op":"remove_wire","id":"<wire id from the circuit above>"}
+                         //   create_part: {"op":"create_part","id":"custom-<short-name>","description":"<what they asked for, in their words, with any numbers they gave>"} — ONLY for a part missing from the catalogue (a BLDC motor, a specific sensor/chip). Put it BEFORE the add_part that uses it, and give add_part "type" the same id. Never invent unlisted catalogue types.
   "explanation": "<your reply to the student, plain text, no markdown. For an edit: what was wrong (citing the reading or error that shows it, if any) and what you changed, in at most three short sentences. For a question: the answer.>"
 }
 If the firmware/sketch needs to change, follow that json block with a SECOND fenced block, tagged \`\`\`cpp, containing the COMPLETE new sketch.ino (not a diff/snippet). If firmware does not need to change, do not include a \`\`\`cpp block at all.
@@ -244,7 +245,11 @@ export function buildPartPrompt(description, problems = null) {
   const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}${b.params ? ` Numbers to set in the behaviour object: ${b.params.map(p => (p.options ? `"${p.key}" (${p.options.map(([v]) => `"${v}"`).join(' | ')}, default "${p.def}")` : `"${p.key}" (${p.label}${p.unit ? `, ${p.unit}` : ''}; ${p.min}–${p.max}, default ${p.def})`)).join('; ')}.` : ''}`).join('\n');
   return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data.
 
-FIRST: if the part is a real, named component (a chip, a module, a breakout board), look it up on the web and use its ACTUAL pinout — the real pin names, in the real order, from the datasheet — and its real behaviour. Do not work from memory if you can check. Getting the pin names and order right matters more than anything else here, because the student will wire it up by those names.
+HOW TO READ THE REQUEST
+The student writes in plain language, not in datasheet terms. Work out what real part they mean:
+  - A named part ("INA128", "SG90 servo", "BioAmp EXG Pill"): look it up on the web and use its ACTUAL pinout — the real pin names, in the real order, from the datasheet — and its real behaviour. Do not work from memory if you can check. Getting the pin names and order right matters more than anything else here, because the student will wire it up by those names.
+  - A kind of part, or a job ("a BLDC motor", "an op amp tailored to bioelectronics", "a light sensor module", "a motor driver"): pick the industry-standard real part for that job (for the bio-signal op amp: an instrumentation / bio-amplifier of the INA128, AD620 or AD8232 class) and build THAT, with its real pinout, package, look and typical values. Say which real part you chose in "description".
+  - STANDARD FIRST. Build the part the way the real thing is built and the way most makers draw and use it: the usual package and pin order, the usual colours and proportions, typical datasheet values. Change a specification ONLY when the student states one. When they do ("gain 1000", "input impedance 10 GΩ", "noise 3 µV", "12 V", "Kv 920", "14 poles"), apply it: put every number the simulator can model into the matching behaviour number (gain, vout, vf, ohms, kv, poles, steps…, converting units: 12 mV = 0.012 V, 4.7k = 4700 Ω), and write every number it cannot model into "note" in plain words — never silently drop a number the student gave. If two requirements conflict, follow what the student said and mention it in "note".
 
 Then describe it with one of the behaviours below. If the part IS one of the specific components — a switch, relay, potentiometer, flex/force sensor, diode or Zener, transistor or MOSFET, voltage regulator, capacitor, inductor, buzzer, motor, LED bar, servo, ultrasonic sensor, rotary encoder, stepper — use that behaviour and set its numbers from the datasheet (forward voltage, gain, threshold, output voltage, coil resistance…). Pick "logic" for any chip whose behaviour is digital and definable (gates, shift registers, counters, flip-flops, latches, decoders, drivers). Use "none" only as a last resort, for something genuinely unmodellable here (an RF module, a microcontroller, an I2C/SPI peripheral with an internal register map) — and then say what is missing in "note".
 
@@ -282,6 +287,25 @@ Worked example — a 74HC595 serial-in / parallel-out shift register:
   }
 A quad NAND gate (74HC00) needs no vars and no rules at all — just "outputs": { "Y1": "!(A1 && B1)", ... }.
 
+DRAWING THE PART — the "art" package
+Every part that is not a chip package (dip, dip-wide, quad) is a DRAWN part: package "art". You draw the real thing as SVG so it looks like the actual component on a bench — a motor looks like a motor (can, shaft or bell, wires), a servo like a servo (case, horn, three wires), a sensor module like the board with its sensor and header — in its real colours, with a little shading (gradients), not a labelled box. Think of what a photo of it shows and draw those shapes.
+  "art": { "w": <picture width, 60–300>, "h": <height, 40–300>, "svg": "<the inside of an svg: shapes only>", "motion": [ ... ] }
+  - Coordinates are in pixels from the top-left of the picture. Scale: about 10 px = 2.5 mm; a hobby servo is ~140 x 70, an Arduino-style module ~130 x 80, a small DC or brushless motor ~120 x 90 (side view).
+  - Allowed: g, path, rect, circle, ellipse, line, polyline, polygon, text, defs, linearGradient, radialGradient, stop, clipPath. Attributes: geometry (x y cx cy r rx ry width height x1 y1 x2 y2 d points transform), fill, stroke, stroke-width, opacity, fill-opacity, stroke-linecap/linejoin/dasharray, font-size/weight, text-anchor, id, gradient bits. Fill/stroke are #hex colours, rgb(), or url(#id) for a gradient you define. Nothing else exists: no style, class, script, image, href, filter or animation — they are removed.
+  - Wires and leads end in pins: every pin in "pins" gets "x" and "y" in the picture, at the very end of its lead (a motor's three wires end at the left edge, a module's header pins along an edge). Keep pins 10+ px apart and inside the picture. The simulator draws a small gold contact dot there.
+  - MOVING PIECES: put each moving part in its own <g id="..."> (e.g. the rotor, the servo horn, the fan blades, a lamp glow) and describe how it moves in "motion". Each entry: {"target":"<id of that g>", "kind": "spin" | "rotate" | "glow" | "slide", "pivot":[x,y], "driver": ...}
+      spin   — turns continuously about "pivot" at the part's real rpm (driver "rpm"). Use for motor rotors, fans, propellers, pump impellers.
+      rotate — turns to an angle about "pivot": driver "angle" (degrees, from servos and encoders), or driver "level" with "from" and "to" degrees.
+      glow   — gets brighter as the part lights up (driver "lit"), with "min" opacity 0–1: LED bodies, lamps, heaters, displays.
+      slide  — moves along (dx, dy) pixels as a 0–1 level (driver "level"): a valve, a linear actuator, a plunger.
+    Draw the moving piece so it looks right when it is still, and spinning pieces symmetric about their pivot so the spin reads clearly (blades, magnets, spokes). A rotor that spins needs a behaviour that produces an rpm: "motor", "bldc", "bldc-esc" or "stepper"; a swinging horn needs "servo".
+  - Add a short label with <text> if the real part has printing on it (the model name). Keep the whole drawing under ~60 shapes.
+Worked example — a brushless outrunner motor (3 wires out of the left, rotor bell that spins):
+  "package": "art", "pins": [ {"id":"U","label":"Phase U","x":4,"y":30}, {"id":"V","label":"Phase V","x":4,"y":45}, {"id":"W","label":"Phase W","x":4,"y":60} ],
+  "art": { "w": 140, "h": 90, "svg": "<defs><linearGradient id='al' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#d9dde2'/><stop offset='1' stop-color='#7b838c'/></linearGradient></defs><path d='M4 30H40M4 45H40M4 60H40' stroke='#e0b030' stroke-width='2.5' fill='none'/><rect x='38' y='38' width='22' height='14' fill='#444'/><g id='rotor'><rect x='58' y='12' width='64' height='66' rx='6' fill='url(#al)' stroke='#555'/><circle cx='90' cy='45' r='10' fill='#333'/><path d='M90 18V72M63 45H117' stroke='#2b2f36' stroke-width='3'/></g><circle cx='90' cy='45' r='3' fill='#bbb'/>", "motion": [ {"target":"rotor","kind":"spin","driver":"rpm","pivot":[90,45]} ] },
+  "behaviour": { "kind": "bldc", "roles": { "u": "U", "v": "V", "w": "W" }, "poles": 7 }
+(In that example the rotor is drawn face-on-ish so a spin is visible; make yours recognisable for the part you were asked for.)
+
 Student's description: ${String(description).slice(0, 1500)}
 ${problems ? `\nYour previous answer was rejected by the simulator for these reasons — fix them and reply again:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}
 Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
@@ -291,8 +315,9 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
   "description": "<one sentence: what it is and how to wire it>",
   "color": "<#rrggbb body colour that looks like the real part>",
   "textColor": "<#rrggbb, readable on that colour>",
-  "package": "dip" | "dip-wide" | "quad" | "module",
+  "package": "art" | "dip" | "dip-wide" | "quad" | "module",   (use "art" unless it is a chip package)
   "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
+  "art": { "w": ..., "h": ..., "svg": "...", "motion": [...] }   (required for "art"; each pin then has "x" and "y" instead of "side"),
   "breadboard": <"module" only: true if the real part plugs into a breadboard; then every pin must be on "bottom">,
   "behaviour": { "kind": "<one of the behaviours>", "roles": { "<role>": "<pin id>" }, "<the behaviour's own numbers, e.g. vf, beta, vout, uF>": <number or choice>, "ohms": <resistor only>, "color": "<led / led-array only>", "segments": [<led-array only>], "coils": [<stepper only>], "select": [<mux only>], "channels": [<mux only>], "vars": {<logic only>}, "rules": [<logic only>], "outputs": {<logic only>}, "analog": [<logic only>] },
   "note": "<anything the simulator can't reproduce about the real part — timing, drive current, analog detail — else empty>"

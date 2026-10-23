@@ -13,6 +13,7 @@ import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js'
 import { EXTRA_BEHAVIOURS, ICON_KINDS, cleanParams } from './behaviours-extra.js';
 import { TEMPLATES, POPULAR } from './part-templates.js';
 import { NATIVE_PARTS } from './native-parts.js';
+import { cleanArt } from './part-art.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
 const PAD = 14, MIN_W = 76, MIN_H = 56, ICON_MIN_H = 76, MAX_PINS = 64;
@@ -29,6 +30,7 @@ export const PACKAGES = {
   'dip-wide': { label: 'DIP chip, 0.6" wide (28–40 pins: ATmega328P, 8051…)', auto: true, rows: 6, step: 2, insert: true, hint: 'in datasheet order, pin 1 first' },
   board: { label: 'Imported circuit board (KiCad)', auto: false, hidden: true, hint: 'drawn from the board file; pins sit where the header pads are' },
   sprite: { label: 'Module drawn as a picture (built-in)', auto: false, hidden: true, hint: 'a fixed drawing with pins at fixed spots' },
+  art: { label: 'Drawn part (a picture of the real thing, with moving pieces)', auto: false, hidden: true, hint: 'the picture is drawn for it; pins sit where its leads end' },
   quad: { label: 'Quad flat pack — pins on all four sides (QFP/QFN: a microprocessor)', auto: true, step: 4, insert: false, hint: 'in datasheet order from pin 1, anticlockwise' },
 };
 export const DEFAULT_PACKAGE = 'module';
@@ -92,7 +94,7 @@ export function validatePartSpec(raw, { id } = {}) {
     if (!PIN_ID_RE.test(pid)) { errors.push(`Pin name "${pid || '(empty)'}" — use letters, digits, + - _ . (max 12).`); continue; }
     if (seen.has(pid.toLowerCase())) { errors.push(`Two pins are called "${pid}".`); continue; }
     seen.add(pid.toLowerCase());
-    pins.push({ id: pid, label: str(p?.label, 40) || pid, side: SIDES.includes(p?.side) ? p.side : 'bottom', ...(raw.package === 'board' || raw.package === 'sprite' ? { x: clampN(p?.x, 0, 600), y: clampN(p?.y, 0, 600) } : {}) });
+    pins.push({ id: pid, label: str(p?.label, 40) || pid, side: SIDES.includes(p?.side) ? p.side : 'bottom', ...(raw.package === 'board' || raw.package === 'sprite' || raw.package === 'art' ? { x: clampN(p?.x, 0, 600), y: clampN(p?.y, 0, 600) } : {}) });
   }
   const b = raw.behaviour && typeof raw.behaviour === 'object' ? raw.behaviour : { kind: 'none' };
   const kind = BEHAVIOURS[b.kind] ? b.kind : null;
@@ -168,8 +170,16 @@ export function validatePartSpec(raw, { id } = {}) {
   }
   const pkg = PACKAGES[raw.package] ? raw.package : DEFAULT_PACKAGE;
   const shape = PACKAGES[pkg];
+  let art = null;
+  if (pkg === 'art') {
+    const a = cleanArt(raw.art);
+    if (a.ok) {
+      art = a.art;
+      for (const p of pins) if (p.x > art.w || p.y > art.h) errors.push(`Pin ${p.id} is outside the picture (${art.w}×${art.h}) — put each pin where its lead ends.`);
+    } else errors.push(...a.errors);
+  }
   // A through-hole chip always straddles the trench; a surface-mount one can never plug in at all.
-  const breadboard = shape.auto ? !!shape.insert : !!raw.breadboard;
+  const breadboard = shape.auto ? !!shape.insert : pkg === 'art' ? false : !!raw.breadboard;
   if (shape.auto) {
     const min = shape.step === 4 ? 8 : 4;
     if (pins.length < min) errors.push(`A ${shape.label.split(/[,—(]/)[0].trim()} needs at least ${min} pins.`);
@@ -188,6 +198,7 @@ export function validatePartSpec(raw, { id } = {}) {
     color: hexColor(raw.color, '#2b6cb0'), textColor: hexColor(raw.textColor, '#ffffff'),
     pins, behaviour, breadboard, package: pkg,
     ...(pkg === 'board' ? { board: cleanBoard(raw.board) } : {}),
+    ...(pkg === 'art' && art ? { art } : {}),
     ...(pkg === 'sprite' ? { sprite: { art: SPRITE_ARTS.includes(raw.sprite?.art) ? raw.sprite.art : SPRITE_ARTS[0], w: clampN(raw.sprite?.w, 20, 400), h: clampN(raw.sprite?.h, 20, 400) } } : {}),
   };
   return { ok: true, spec };
@@ -216,6 +227,7 @@ export function layoutSpec(spec) {
     const S = BOARD_SCALE, m = 6;
     return { w: Math.ceil(spec.board.w * S + m * 2), h: Math.ceil(spec.board.h * S + m * 2), pins: spec.pins.map(p => ({ id: p.id, label: p.label, x: +((p.x ?? 0) * S + m).toFixed(2), y: +((p.y ?? 0) * S + m).toFixed(2), kind: 'pin', side: 'bottom' })) };
   }
+  if (spec.package === 'art' && spec.art) return { w: spec.art.w, h: spec.art.h, pins: spec.pins.map(p => ({ id: p.id, label: p.label, x: p.x ?? 0, y: p.y ?? 0, kind: 'pin', side: 'bottom' })) };
   if (spec.package === 'sprite' && spec.sprite) return { w: spec.sprite.w, h: spec.sprite.h, pins: spec.pins.map(p => ({ id: p.id, label: p.label, x: p.x ?? 0, y: p.y ?? 0, kind: 'pin', side: 'bottom' })) };
   if (spec.package === 'quad') return layoutQuad(spec);
   if (PACKAGES[spec.package]?.rows) return layoutDip(spec, PACKAGES[spec.package].rows * PITCH);
