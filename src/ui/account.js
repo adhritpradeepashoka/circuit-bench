@@ -5,6 +5,8 @@
 //
 // The button only appears when the host provides a Google OAuth client ID (GOOGLE_CLIENT_ID → /api/config).
 
+import { getToken, getMe, setSession, clearSession, authed } from '../sim/session.mjs';
+
 const STORE = 'circuitbench:account';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
 
@@ -26,7 +28,7 @@ const loadScript = src => new Promise((resolve, reject) => {
   document.head.append(s);
 });
 
-export function initAccount({ fetchConfig = () => fetch('/api/config').then(r => r.json()), load = loadScript, status = () => {} } = {}) {
+export function initAccount({ fetchConfig = () => fetch('/api/config').then(r => r.json()), load = loadScript, status = () => {}, fetchImpl = (...a) => globalThis.fetch(...a), heartbeatMs = 60_000 } = {}) {
   const $ = id => document.getElementById(id);
   const slot = $('accountSlot'), menu = $('accountMenu');
   let user = null, google = null;
@@ -44,6 +46,7 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
       btn.addEventListener('click', e => { e.stopPropagation(); menu.hidden = !menu.hidden; });
       slot.append(btn);
       $('accountWho').textContent = user.name || '';
+      const role = getMe()?.role; $('accountRole').textContent = role && role !== 'user' ? role : ''; $('accountRole').hidden = !(role && role !== 'user');
       $('accountEmail').textContent = user.email || '';
       slot.hidden = false;
     } else if (google) {
@@ -59,9 +62,28 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
     user = u;
     try { localStorage.setItem(STORE, JSON.stringify(user)); } catch { /* ignore */ }
     paint(); status(`Signed in as ${user.name || user.email}`);
+    serverSignIn(resp.credential);
   }
+  /** Ask the server to verify the Google token and tell us this account's role. Failing is fine: the app works without it. */
+  async function serverSignIn(credential) {
+    try {
+      const r = await fetchImpl('/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ credential }) });
+      const b = await r.json();
+      if (b?.ok) { setSession(b.token, { ...b.me, hostedAiReady: false }); await refresh(); paint(); if (b.me.role !== 'user') status(`Signed in as ${user?.name || b.me.email} · ${b.me.role}`); }
+    } catch { /* offline or accounts disabled */ }
+  }
+  /** Re-read the role (it can change while you are signed in) and tell the server we are here. */
+  async function refresh() {
+    if (!user || !getToken()) return;
+    try {
+      const r = await authed('/api/presence', { method: 'POST', fetchImpl });
+      if (r.status === 401) { clearSession(); paint(); return; }
+      const b = await r.json(); if (b?.ok) { setSession(getToken(), b.me); paint(); }
+    } catch { /* ignore */ }
+  }
+  if (heartbeatMs) setInterval(refresh, heartbeatMs);
   function signOut() {
-    user = null;
+    user = null; clearSession();
     try { localStorage.removeItem(STORE); } catch { /* ignore */ }
     google?.accounts.id.disableAutoSelect();
     paint(); status('Signed out');
@@ -70,7 +92,7 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
   document.addEventListener('click', e => { if (!menu.hidden && !e.target.closest('.account')) menu.hidden = true; });
 
   const ready = (async () => {
-    paint();                                                  // a remembered user shows straight away
+    paint(); refresh();                                       // a remembered user shows straight away
     let id = null;
     try { id = (await fetchConfig())?.googleClientId || null; } catch { id = null; }
     if (!id) { if (!user) slot.hidden = true; return; }
@@ -81,5 +103,5 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
     paint();
   })();
 
-  return { ready, signOut, get user() { return user; } };
+  return { ready, signOut, refresh, get user() { return user; }, get me() { return getMe(); } };
 }

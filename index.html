@@ -34,7 +34,7 @@
     <button id="workspacesBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Workspaces: Electronics, Bioelectronics, your own and community ones">Workspaces</button>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
-      <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span></div><p class="account-note">Only your name and picture are shown here, in this browser. CircuitBench doesn't store your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
+      <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span><em class="role-badge" id="accountRole" hidden></em></div><p class="account-note">Your Google account only proves who you are. Your name, email and role are kept by CircuitBench so beta access can follow your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
     </div>
     <button id="settingsBtn" type="button" class="help-btn settings-btn" title="Settings: AI keys, themes, and other options" aria-label="Settings" aria-haspopup="dialog">⚙</button>
   </header>
@@ -310,6 +310,13 @@
           <label>Text<input type="color" id="cu-text"></label><label>Accent<input type="color" id="cu-accent"></label>
           <label>Font<select id="cu-font"></select></label>
         </div></section>
+      <section class="set-sec" id="setAccount"><h3>Account</h3><p class="proj-note" id="setAccountInfo">Sign in with Google (top bar) to keep beta access with your account.</p></section>
+      <section class="set-sec" id="setAdmin" hidden><h3>Members <span class="beta-tag" id="setAdminOnline"></span></h3>
+        <p class="proj-note">Beta members get lifetime free access to everything and are never limited when the site is busy. Add someone by their Google email — it works before they have ever signed in. Changes apply on their very next request.</p>
+        <form class="proj-new" id="adminForm"><input id="adminEmail" type="email" placeholder="friend@gmail.com" autocomplete="off" aria-label="Email to add"><select id="adminRole" aria-label="Role"><option value="beta">Beta</option></select><button type="submit">Add</button></form>
+        <p class="proj-note" id="adminNote" role="status"></p>
+        <div class="admin-list" id="adminList"></div>
+      </section>
       <section class="set-sec"><h3>Other</h3>
         <div class="set-actions">
           <button type="button" class="proj-act" id="setTour">Replay the tour</button>

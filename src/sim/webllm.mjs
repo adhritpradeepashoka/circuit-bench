@@ -14,7 +14,21 @@ const TINY = 'Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC';
 const MODEL_STORAGE = 'virtual-lab:ai-model:local';
 const CONTEXT = 4096;
 
-export const webgpuAvailable = (nav = globalThis.navigator) => !!(nav && nav.gpu);
+let probed = null;   // null = not asked yet, true/false = the browser really can (not) give us a GPU adapter
+/** navigator.gpu existing is not enough: many machines expose it but hand back no adapter (driver blocklist, hardware acceleration off). */
+export const webgpuAvailable = (nav = globalThis.navigator) => !!(nav && nav.gpu) && probed !== false;
+export const NO_ADAPTER_HELP = 'Your browser has WebGPU but could not get a graphics adapter. Turn on hardware acceleration (Chrome/Edge → Settings → System), update your graphics driver, or check chrome://gpu — or use a free API key instead.';
+export async function requestAdapter(nav = globalThis.navigator) {
+  for (const opts of [undefined, { powerPreference: 'low-power' }, { powerPreference: 'high-performance' }]) {
+    try { const a = await nav.gpu.requestAdapter(opts); if (a) return a; } catch { /* try the next */ }
+  }
+  return null;
+}
+/** Ask once whether a usable adapter exists; webgpuAvailable() turns false if not so the UI stops offering the on-device model. */
+export async function probeWebGPU(nav = globalThis.navigator) {
+  if (!(nav && nav.gpu)) return (probed = false);
+  return (probed = !!(await requestAdapter(nav)));
+}
 export function getLocalModel() { try { const m = localStorage.getItem(MODEL_STORAGE); return LOCAL_MODELS.some(x => x.id === m) ? m : DEFAULT_LOCAL_MODEL; } catch { return DEFAULT_LOCAL_MODEL; } }
 export function setLocalModel(id) { try { localStorage.setItem(MODEL_STORAGE, id); } catch { /* ignore */ } }
 
@@ -23,8 +37,8 @@ const sizeOf = id => LOCAL_MODELS.find(m => m.id === id)?.sizeMB ?? (id === TINY
 /** The q4f16 builds need the GPU's shader-f16 feature; many laptops lack it, so use the q4f32 build of the same model there. */
 export async function pickBuild(modelId, nav = globalThis.navigator) {
   try {
-    const adapter = await nav.gpu.requestAdapter();
-    if (!adapter) { const e = new Error('No WebGPU adapter (graphics driver or browser setting)'); e.noAdapter = true; throw e; }
+    const adapter = await requestAdapter(nav);
+    if (!adapter) { probed = false; const e = new Error(NO_ADAPTER_HELP); e.noAdapter = true; throw e; }
     if (!adapter.features.has('shader-f16')) return modelId.replace('q4f16_1', 'q4f32_1');
   } catch (err) { if (err?.noAdapter) throw err; }
   return modelId;

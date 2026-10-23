@@ -9,4 +9,18 @@ services:
         value: production
       - key: GOOGLE_CLIENT_ID      # public OAuth client ID for "Sign in with Google"; leave unset to hide the button
         sync: false
+      - key: OWNER_EMAIL           # your Google email: the owner (can make admins; cannot be removed). Comma-separate for several.
+        sync: false
+      - key: DATABASE_URL          # Supabase → Project Settings → Database → Connection string (use the pooler URI). Keeps roles across deploys.
+        sync: false
+      - key: SESSION_SECRET        # any long random string; changing it signs everyone out
+        generateValue: true
+      - key: MAX_FREE_CONCURRENT   # optional: free users online at once before the free extras pause (beta/admin never limited). 0 = no cap
+        value: "0"
+      - key: HOSTED_AI_KEY         # optional: your own AI key, used for beta members' "Included" AI
+        sync: false
+      - key: HOSTED_AI_PROVIDER    # gemini | groq | nvidia | meta | openrouter
+        value: groq
+      - key: FREE_HOSTED_AI        # 1 = free signed-in users get the included AI too (while under the cap)
+        value: "0"
     healthCheckPath: /api/health

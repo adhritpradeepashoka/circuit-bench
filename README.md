@@ -312,3 +312,19 @@ simulated parts is the next step.
 
 - **Visualizer** (toggle next to the toolbar): a 3D head scan (“3D human head scan” by celer, CC BY — see `ATTRIBUTION.md`). Every BioAmp EXG Pill in the circuit is a channel with its own E+ and E−; drag them onto EEG / EOG / EMG sites (or pick from the lists). One reference electrode is shared. The signal each Pill receives depends on where its electrodes sit (illustrative model in `src/core/body-sites.js`, not medical data).
 - **Slime mold (Physarum)**: lay it over an imported electrode board (File → Import PCB). The pads it covers pick up its slow oscillation and pass it to their pins, measured against its REF pin; read them with Pills and an Arduino (example sketch “Slime mold electrode reader”). Model in `src/core/slime.js`; illustrative, not real culture data.
+
+
+## Accounts, roles and beta access
+
+Sign in with Google; the server verifies the Google token and keeps each account's role.
+
+| Role | Can do |
+|---|---|
+| owner (`OWNER_EMAIL`) | everything; makes and removes admins; can't be changed |
+| admin | grants and revokes beta |
+| beta | lifetime free access to everything (included AI, premium features); never limited when busy |
+| user | free tier; loses the free extras first when `MAX_FREE_CONCURRENT` is reached |
+
+Manage members in the app: **⚙ Settings → Members** (admins only). You can add an email before the person has ever signed in; revoking applies on their next request.
+
+Server env: `OWNER_EMAIL`, `DATABASE_URL` (Supabase Postgres; without it roles live in memory and reset on restart), `SESSION_SECRET`, `MAX_FREE_CONCURRENT`, `HOSTED_AI_KEY` / `HOSTED_AI_PROVIDER` / `HOSTED_AI_MODEL`, `FREE_HOSTED_AI=1`.

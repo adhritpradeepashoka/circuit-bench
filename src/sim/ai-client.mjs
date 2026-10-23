@@ -1,5 +1,6 @@
 // Browser side of the AI "Generate Code" feature. v0.1 (beta) is bring-your-own-key: the key lives only
 // in this browser's localStorage and is sent with each request — CircuitBench's own server never stores it.
+import { getToken } from './session.mjs';
 const KEY_STORAGE = 'virtual-lab:ai-key';              // before there were several providers: one key for whichever was selected
 const PROVIDER_STORAGE = 'virtual-lab:ai-provider';
 const MODEL_STORAGE = 'virtual-lab:ai-model:';
@@ -57,12 +58,12 @@ export async function createPart({ description, provider = getStoredProvider(), 
 /**
  * @returns {Promise<{ok:boolean, code?:string, explanation?:string, error?:string, needsKey?:boolean}>}
  */
-export async function generateCode({ instruction, circuit, code, context = null, history = [], provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(), signal } = {}) {
-  if (!userKey) return { ok: false, needsKey: true, error: 'Add a free API key in Settings → AI to use this (beta, bring-your-own-key for now).' };
+export async function generateCode({ instruction, circuit, code, context = null, history = [], provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(), signal, hosted = false } = {}) {
+  if (!userKey && !hosted) return { ok: false, needsKey: true, error: 'Add a free API key in Settings → AI to use this (beta, bring-your-own-key for now).' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask. Run the app from the server (npm run server) to use AI features.' };
   let res;
   try {
-    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ instruction, circuit, code, context, history, userKey, provider, model }), signal });
+    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { instruction, circuit, code, context, history, hosted: true } : { instruction, circuit, code, context, history, userKey, provider, model }), signal });
   } catch (err) {
     if (err?.name === 'AbortError') throw err;
     return { ok: false, error: `Could not reach ${endpoint}.` };

@@ -1,7 +1,10 @@
 // HTTP front for the compile service (and, when ./dist exists, the built web app).
 //   POST /api/compile   { sketch | files:[{name,content}], fqbn? }  →  { ok, hex, output, diagnostics, size, cached, ms }
 //   GET  /api/health    →  { ok, arduinoCli, boards }
-//   GET  /api/config    →  { googleClientId }   (public settings; GOOGLE_CLIENT_ID env)
+//   GET  /api/config    →  { googleClientId, accounts }   (public settings; GOOGLE_CLIENT_ID env)
+//   POST /api/auth/google {credential} → { token, me }   ·   GET /api/me · POST /api/presence (Bearer token)
+//   GET/POST/DELETE /api/admin/users   (admins; the owner also manages admins)
+//   Env for accounts: OWNER_EMAIL, DATABASE_URL, SESSION_SECRET, MAX_FREE_CONCURRENT, FREE_HOSTED_AI=1, HOSTED_AI_KEY/_PROVIDER/_MODEL
 // Env: PORT (8787), HOST (127.0.0.1), VLAB_CORS_ORIGIN (e.g. * — only needed when the page is served from somewhere else),
 //      ARDUINO_CLI, AVR_GCC_DIR, ARDUINO_CTAGS_DIR, VLAB_BUILD_CACHE (see compile-service.mjs)
 import http from 'node:http';
@@ -10,17 +13,35 @@ import { join, extname, normalize, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCompiler, RequestError, BOARDS } from './compile-service.mjs';
 import { createAiService } from './ai-service.mjs';
+import { createAccounts, createMemoryStore, createPgStore, createSessions, createGoogleVerifier, createPresence } from './accounts.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
-export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {} } = {}) {
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null } = {}) {
+  // hostedAi = { provider, key, model? }: the owner's own AI key, used only for signed-in users whose role entitles them to it.
+  const bearer = req => /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1] || '';
+  async function readJson(req, max) {
+    let raw = '';
+    for await (const chunk of req) { raw += chunk; if (raw.length > max) { req.destroy(); throw new RequestError('Request too large.', 413); } }
+    try { return JSON.parse(raw || '{}'); } catch { throw new RequestError('Body must be valid JSON.'); }
+  }
+  /** Swap in the server's own AI key when the student asked for the included AI and their role allows it. */
+  async function applyHosted(req, body) {
+    if (!body?.hosted) return body;
+    const me = accounts && await accounts.me(bearer(req));
+    if (!me) throw new RequestError('Sign in to use the included AI.', 401);
+    if (!me.entitlements.hostedAi) throw new RequestError('The included AI is for beta members. Use the on-device model or add your own free key.', 403);
+    if (!hostedAi?.key) throw new RequestError('The included AI is not set up on this server yet.', 503);
+    const { hosted, userKey, provider, model, ...rest } = body;
+    return { ...rest, userKey: hostedAi.key, provider: hostedAi.provider || 'groq', model: hostedAi.model || '' };
+  }
   const buckets = new Map();   // ip → recent request timestamps (small in-memory rate limit)
   const limited = ip => {
     const now = Date.now(), list = (buckets.get(ip) || []).filter(t => now - t < 60_000);
     list.push(now); buckets.set(ip, list);
     return list.length > 40;
   };
-  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, OPTIONS', 'access-control-allow-headers': 'content-type', 'access-control-max-age': '600', vary: 'origin' } : {};
+  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '600', vary: 'origin' } : {};
   const send = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors, ...headers }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
 
   return http.createServer(async (req, res) => {
@@ -29,7 +50,32 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       if (req.method === 'OPTIONS' && url.pathname.startsWith('/api/')) { res.writeHead(corsOrigin ? 204 : 403, cors); return res.end(); }
       // Public, non-secret settings the page needs at run time (e.g. the Google OAuth *client* ID, which is
       // meant to be visible). Lets them change on the host without a rebuild.
-      if (url.pathname === '/api/config') return send(res, 200, { googleClientId: publicConfig.googleClientId || null });
+      if (url.pathname === '/api/config') return send(res, 200, { googleClientId: publicConfig.googleClientId || null, accounts: !!accounts });
+      if (url.pathname === '/api/auth/google') {
+        if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
+        if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
+        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
+        const out = await accounts.signIn((await readJson(req, 20_000)).credential);
+        return out ? send(res, 200, { ok: true, ...out }) : send(res, 401, { ok: false, error: 'Google sign-in could not be verified.' });
+      }
+      if (url.pathname === '/api/me' || url.pathname === '/api/presence') {
+        if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
+        const me = await accounts.me(bearer(req), { beat: url.pathname === '/api/presence' });
+        return me ? send(res, 200, { ok: true, me: { ...me, hostedAiReady: !!hostedAi?.key } }) : send(res, 401, { ok: false, error: 'Please sign in again.' });
+      }
+      if (url.pathname === '/api/admin/users') {
+        if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
+        if (req.method === 'GET') {
+          const out = await accounts.listUsers(bearer(req));
+          return out ? send(res, 200, { ok: true, ...out }) : send(res, 403, { ok: false, error: 'Admins only.' });
+        }
+        if (req.method === 'POST' || req.method === 'DELETE') {
+          const b = req.method === 'POST' ? await readJson(req, 4_000) : { email: url.searchParams.get('email'), role: 'user' };
+          const out = await accounts.setRole(bearer(req), b.email, b.role);
+          return send(res, out.ok ? 200 : out.status, out.ok ? { ok: true, user: out.user } : { ok: false, error: out.error });
+        }
+        return send(res, 405, { ok: false, error: 'Use GET, POST or DELETE.' });
+      }
       if (url.pathname === '/api/health') {
         const v = await compiler.version();
         return send(res, 200, { ok: !!v, arduinoCli: v, boards: Object.fromEntries(Object.entries(BOARDS).map(([k, b]) => [k, b.name])) });
@@ -60,7 +106,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         }
         if (tooBig) throw new RequestError('Request too large.', 413);
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
-        const result = await ai.generateCode(body);
+        const result = await ai.generateCode(await applyHosted(req, body));
         log(`ai generate-code ok`);
         return send(res, 200, result);
       }
@@ -70,7 +116,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         let raw = '';
         for await (const chunk of req) { raw += chunk; if (raw.length > 20_000) { req.destroy(); return; } }
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
-        const result = await ai.createPart(body);
+        const result = await ai.createPart(await applyHosted(req, body));
         log(`ai create-part ok`);
         return send(res, 200, result);
       }
@@ -99,7 +145,25 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const dist = fileURLToPath(new URL('../dist', import.meta.url));
   const staticDir = await stat(dist).then(() => dist, () => null);
   const compiler = createCompiler();
-  const server = createServer({ compiler, staticDir, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: process.env.GOOGLE_CLIENT_ID || '137986291175-5s42d2u26q1029oo1v5dhged48dg79fb.apps.googleusercontent.com' }, log: m => console.log(`[vlab] ${m}`) });
+  const clientId = process.env.GOOGLE_CLIENT_ID || '137986291175-5s42d2u26q1029oo1v5dhged48dg79fb.apps.googleusercontent.com';
+  // Accounts: DATABASE_URL (Supabase/Neon Postgres) keeps roles across deploys; without it they live in memory and reset on restart.
+  let store = createMemoryStore();
+  if (process.env.DATABASE_URL) {
+    const { default: pg } = await import('pg');
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 4 });
+    store = createPgStore(pool); await store.init();
+  } else console.log('[vlab] WARNING: no DATABASE_URL — roles are kept in memory and reset on every restart');
+  const ownerEmails = String(process.env.OWNER_EMAIL || '').split(',').map(x => x.trim()).filter(Boolean);
+  if (!ownerEmails.length) console.log('[vlab] WARNING: OWNER_EMAIL is not set — nobody can administer accounts');
+  if (!process.env.SESSION_SECRET) console.log('[vlab] WARNING: no SESSION_SECRET — everyone is signed out on every restart');
+  const accounts = createAccounts({
+    store, ownerEmails, verifyGoogle: createGoogleVerifier({ clientId }),
+    sessions: createSessions({ secret: process.env.SESSION_SECRET || undefined }),
+    presence: createPresence({ cap: Number(process.env.MAX_FREE_CONCURRENT) || 0 }),
+    freeHostedAi: process.env.FREE_HOSTED_AI === '1',
+  });
+  const hostedAi = process.env.HOSTED_AI_KEY ? { key: process.env.HOSTED_AI_KEY, provider: process.env.HOSTED_AI_PROVIDER || 'groq', model: process.env.HOSTED_AI_MODEL || '' } : null;
+  const server = createServer({ compiler, staticDir, accounts, hostedAi, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
   server.listen(port, host, async () => {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);

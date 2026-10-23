@@ -63,3 +63,14 @@ test('a model too big for the GPU steps down to a smaller one', async () => {
   assert.match(tried.at(-1), /1\.5B/);
   assert.match(tried[0], /7B/);
 });
+
+test('navigator.gpu without an adapter is not usable: probe says so and the option disappears', async () => {
+  const { probeWebGPU, webgpuAvailable, NO_ADAPTER_HELP } = await import('../src/sim/webllm.mjs');
+  const calls = [];
+  const nav = { gpu: { requestAdapter: async o => { calls.push(o); return null; } } };
+  assert.equal(await probeWebGPU(nav), false);
+  assert.equal(calls.length, 3, 'default, low-power and high-performance were all tried');
+  assert.equal(webgpuAvailable(nav), false);
+  assert.match(NO_ADAPTER_HELP, /hardware acceleration/);
+  assert.equal(await probeWebGPU({ gpu: { requestAdapter: async () => ({ features: new Set() }) } }), true);
+});

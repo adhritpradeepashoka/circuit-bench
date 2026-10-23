@@ -134,7 +134,7 @@ test('server: /api/config exposes only the public Google client ID (null when un
     await new Promise(r => server.listen(0, '127.0.0.1', r));
     try {
       const r = await fetch(`http://127.0.0.1:${server.address().port}/api/config`);
-      assert.deepEqual(await r.json(), { googleClientId: want });
+      assert.deepEqual(await r.json(), { googleClientId: want, accounts: false });
     } finally { server.close(); }
   }
 });

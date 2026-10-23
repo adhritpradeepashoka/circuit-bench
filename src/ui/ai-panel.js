@@ -5,7 +5,8 @@
 // running sim, Serial Monitor output) — see gatherContext below and describeContext in
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
-import { generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
+import { hasHostedAi } from '../sim/session.mjs';
+import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { FORMAT, VERSION } from '../core/project.js';
@@ -150,19 +151,23 @@ export function initAiPanel(editor, code, sim = null) {
   /* On-device (WebLLM) is the default when the browser has WebGPU and the student has saved no key of their own; a saved key wins unless they pick the local model on purpose. */
   const LOCAL_PREF = 'virtual-lab:ai-local';
   const getPref = () => { try { return localStorage.getItem(LOCAL_PREF); } catch { return null; } };
-  const setPref = v => { try { localStorage.setItem(LOCAL_PREF, v ? '1' : '0'); } catch { /* ignore */ } };
-  const localOn = () => webgpuAvailable() && (getPref() === '1' || (getPref() !== '0' && !hasAnyKey()));
-  const hasKey = () => localOn() || !!getStoredKey();
+  const setPref = v => { try { localStorage.setItem(LOCAL_PREF, v === 'h' ? 'h' : v ? '1' : '0'); } catch { /* ignore */ } };
+  // "Included AI": beta members (and anyone the owner allows) use the server's own key with no setup. It leads unless they chose something else.
+  const hostedOn = () => hasHostedAi() && (getPref() === 'h' || getPref() === null);
+  const localOn = () => !hostedOn() && webgpuAvailable() && (getPref() === '1' || (getPref() !== '0' && getPref() !== 'h' && !hasAnyKey()));
+  const hasKey = () => hostedOn() || localOn() || !!getStoredKey();
   let picking = false;           // the provider picker was opened on purpose (even though the current provider has a key)
   const setupBar = $('aiSetup'), openSettings = () => $('settingsBtn')?.click();
   function refreshKeyUi() { setupBar.hidden = hasKey(); paintProvider(); }
   const select = $('aiProviderSelect');
   function paintSelect() {
-    const cur = localOn() ? LOCAL_PROVIDER : getStoredProvider();
+    const cur = hostedOn() ? 'hosted' : localOn() ? LOCAL_PROVIDER : getStoredProvider();
+    const hostedOpt = () => { const o = document.createElement('option'); o.value = 'hosted'; o.textContent = 'Included with your account'; o.selected = cur === 'hosted'; return o; };
     const localOpt = () => { const o = document.createElement('option'); o.value = LOCAL_PROVIDER; o.textContent = 'On this device (free, no key)'; o.selected = cur === LOCAL_PROVIDER; return o; };
-    select.replaceChildren(...(webgpuAvailable() ? [localOpt()] : []), ...PROVIDER_IDS.map(id => { const o = document.createElement('option'); o.value = id; o.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ' (no key)'}`; o.selected = id === cur; return o; }));
+    select.replaceChildren(...(hasHostedAi() ? [hostedOpt()] : []), ...(webgpuAvailable() ? [localOpt()] : []), ...PROVIDER_IDS.map(id => { const o = document.createElement('option'); o.value = id; o.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ' (no key)'}`; o.selected = id === cur; return o; }));
   }
   select.addEventListener('change', () => {
+    if (select.value === 'hosted') { setPref('h'); keyInput.value = ''; picking = false; setStatus('Using the AI included with your account.'); refreshKeyUi(); return; }
     if (select.value === LOCAL_PROVIDER) { setPref(true); keyInput.value = ''; picking = false; setStatus('Using the model on this device.'); refreshKeyUi(); return; }
     setPref(false); setStoredProvider(select.value); keyInput.value = '';
     if (hasKey()) { picking = false; setStatus(`Using ${PROVIDER_INFO[select.value].label}.`); } else setStatus(`${PROVIDER_INFO[select.value].label} needs a key — get one below.`);
@@ -170,13 +175,14 @@ export function initAiPanel(editor, code, sim = null) {
   });
   function paintProvider() {
     paintSelect();
-    const isLocal = localOn();
+    const isHosted = hostedOn(), isLocal = localOn() || isHosted;
     $('aiKeySave').textContent = isLocal ? 'Done' : 'Save key';
     modelInput.hidden = isLocal; keyInput.hidden = isLocal; $('aiGetKey').hidden = isLocal;
     const cur = getStoredProvider(), info = PROVIDER_INFO[cur];
     $('aiGetKey').href = info.keyUrl; $('aiGetKey').textContent = `Get a ${info.label} key ↗`;
-    const localTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = LOCAL_PROVIDER; b.id = `aiProvider-${LOCAL_PROVIDER}`; b.classList.toggle('on', isLocal); b.textContent = 'On this device'; b.title = 'Runs in your browser — no key, nothing leaves your computer'; return b; };
-    tabsEl.replaceChildren(...(webgpuAvailable() ? [localTab()] : []), ...PROVIDER_IDS.map(id => {
+    const hostedTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = 'hosted'; b.id = 'aiProvider-hosted'; b.classList.toggle('on', isHosted); b.textContent = 'Included'; b.title = 'Free with your account — no key needed'; return b; };
+    const localTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = LOCAL_PROVIDER; b.id = `aiProvider-${LOCAL_PROVIDER}`; b.classList.toggle('on', localOn()); b.textContent = 'On this device'; b.title = 'Runs in your browser — no key, nothing leaves your computer'; return b; };
+    tabsEl.replaceChildren(...(hasHostedAi() ? [hostedTab()] : []), ...(webgpuAvailable() ? [localTab()] : []), ...PROVIDER_IDS.map(id => {
       const b = document.createElement('button');
       b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = id; b.id = `aiProvider-${id}`;
       b.classList.toggle('on', !isLocal && id === cur); b.classList.toggle('has-key', !!getStoredKey(id));
@@ -185,6 +191,7 @@ export function initAiPanel(editor, code, sim = null) {
       return b;
     }));
     providerHint.replaceChildren();
+    if (isHosted) { providerHint.append('CircuitBench’s own AI, free with your account — no key and nothing to download. Switch to another option above any time.'); return; }
     if (isLocal) {
       const m = LOCAL_MODELS.find(x => x.id === getLocalModel()) || LOCAL_MODELS[0];
       const sel = document.createElement('select'); sel.className = 'ai-local-model'; sel.setAttribute('aria-label', 'On-device model');
@@ -201,6 +208,7 @@ export function initAiPanel(editor, code, sim = null) {
   }
   tabsEl.addEventListener('click', e => {
     const b = e.target.closest('[data-provider]'); if (!b) return;
+    if (b.dataset.provider === 'hosted') { setPref('h'); picking = false; setStatus('Using the AI included with your account.'); refreshKeyUi(); return; }
     if (b.dataset.provider === LOCAL_PROVIDER) { setPref(true); picking = false; setStatus('Using the model on this device.'); refreshKeyUi(); return; }
     setPref(false); setStoredProvider(b.dataset.provider); keyInput.value = '';
     if (hasKey()) { picking = false; setStatus(`Using ${PROVIDER_INFO[b.dataset.provider].label}.`); }
@@ -219,6 +227,8 @@ export function initAiPanel(editor, code, sim = null) {
   keyInput.addEventListener('paste', () => setTimeout(() => { if (/^[\w.-]{20,}$/.test(keyInput.value.trim())) $('aiKeySave').click(); }, 0));   // pasting a key saves it: no extra click
   $('aiForgetKey').addEventListener('click', () => { refreshKeyUi(); setStatus(''); openSettings(); });
   $('aiOpenSettings').addEventListener('click', openSettings);
+  window.addEventListener('cb-session', () => { refreshKeyUi(); });
+  probeWebGPU().then(() => refreshKeyUi());      // no usable GPU adapter → stop defaulting to the on-device model
 
   /* ── composer ────────────────────────── */
   const autosize = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${Math.min(promptEl.scrollHeight || 0, 150)}px`; };
@@ -255,7 +265,9 @@ export function initAiPanel(editor, code, sim = null) {
       const circuit = editor.exportProject();
       const args = { instruction: text, circuit, code: code.source, context: gatherContext(code, sim), history };
       let res, localErr = '';
-      if (localOn()) {
+      if (hostedOn()) {
+        res = await generateCode({ ...args, hosted: true });
+      } else if (localOn()) {
         setStatus('Starting the on-device model…');
         res = await generateLocal({ ...args, onProgress: p => setStatus(p?.progress < 1 ? `Downloading the model (first time only): ${Math.round((p.progress || 0) * 100)}%` : 'Starting the model…') });
         if (!res.ok && hasAnyKey()) { localErr = res.error; console.warn('[on-device AI]', res.error); messages.push({ id: ++seq, role: 'error', text: `On-device model failed: ${res.error}` }); render(); setStatus('On-device model failed — trying your saved key…'); const fb = getStoredKey(getStoredProvider()) ? getStoredProvider() : providersWithKeys()[0]; res = await generateCode({ ...args, provider: fb, userKey: getStoredKey(fb), model: getStoredModel(fb) }); }

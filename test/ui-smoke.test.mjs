@@ -1975,3 +1975,38 @@ test('ui: Settings dialog — opens from the top bar, themes apply and persist, 
   doc.getElementById('settingsClose').click();
   assert.equal(modal.hidden, true);
 });
+
+test('ui: members panel for admins, and beta members use the included AI with no key', async () => {
+  const me = { email: 'boss@example.com', name: 'Boss', role: 'owner', entitlements: { hostedAi: true, premium: true, seat: true, admin: true, owner: true }, hostedAiReady: true };
+  const { w, editor, code, sim } = boot(undefined, win => { win.localStorage.setItem('circuitbench:session', 'tok'); win.localStorage.setItem('circuitbench:me', JSON.stringify(me)); });
+  const doc = w.document, sent = [];
+  w.fetch = async (url, opts = {}) => {
+    sent.push({ url, opts, body: opts.body ? JSON.parse(opts.body) : null });
+    if (url === '/api/admin/users' && opts.method !== 'POST') return { status: 200, json: async () => ({ ok: true, online: { online: 2, free: 1, privileged: 1, cap: 5 }, users: [{ email: 'boss@example.com', role: 'owner', name: 'Boss' }, { email: 'kid@example.com', role: 'user', name: 'Kid', lastSeen: 1 }] }) };
+    if (url === '/api/admin/users') return { status: 200, json: async () => ({ ok: true }) };
+    return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'from the server key' }) };
+  };
+  const ai = w.__lab.initAiPanel(editor, code, sim);
+  w.__lab.initSettings({ tour: { start() {} }, ai });
+  doc.getElementById('settingsBtn').click();
+  await flush();
+  assert.equal(doc.getElementById('setAdmin').hidden, false);
+  assert.match(doc.getElementById('setAdminOnline').textContent, /2 online/);
+  assert.deepEqual([...doc.querySelectorAll('#adminRole option')].map(o => o.value), ['beta', 'admin'], 'only the owner can make admins');
+  const rows = [...doc.querySelectorAll('#adminList .proj-row')];
+  assert.equal(rows.length, 2); assert.equal(rows[0].querySelector('button'), null, 'the owner row has no controls');
+  rows[1].querySelector('button').click(); await flush();
+  const grant = sent.find(r => r.opts.method === 'POST');
+  assert.deepEqual(grant.body, { email: 'kid@example.com', role: 'beta' });
+  assert.equal(grant.opts.headers.authorization, 'Bearer tok');
+  // the included AI: no key anywhere, still chats, through the server's key
+  doc.getElementById('settingsClose').click();
+  doc.getElementById('aiBtn').click();
+  assert.equal(doc.getElementById('aiSetup').hidden, true);
+  assert.ok(doc.getElementById('aiProvider-hosted'));
+  const prompt = doc.getElementById('aiPrompt'); prompt.value = 'hi'; doc.getElementById('aiGenerate').click(); await flush();
+  const call = sent.filter(r => r.url.includes('generate-code')).at(-1);
+  assert.equal(call.body.hosted, true); assert.equal(call.body.userKey, undefined);
+  assert.equal(call.opts.headers.authorization, 'Bearer tok');
+  assert.match(doc.getElementById('aiLog').textContent, /from the server key/);
+});

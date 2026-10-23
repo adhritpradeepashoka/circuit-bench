@@ -1,12 +1,14 @@
 // The Settings dialog (⚙ in the top bar, beside the account): AI keys and models, appearance, and the housekeeping
 // switches that don't belong on the bench. The AI key form itself is owned by ai-panel.js and lives in this dialog.
 import { THEMES, FONTS, getTheme, setTheme, getCustom, setCustom } from './theme.js';
+import { initAdmin } from './admin.js';
 import { PROVIDER_IDS, setStoredKey } from '../sim/ai-client.mjs';
 
 export function initSettings({ tour, ai, status = () => {} }) {
   const $ = id => document.getElementById(id);
   const modal = $('settingsModal');
-  const open = () => { paintThemes(); modal.hidden = false; $('settingsClose').focus(); };
+  const admin = initAdmin();
+  const open = () => { admin.load(); paintThemes(); modal.hidden = false; $('settingsClose').focus(); };
   const close = () => { modal.hidden = true; };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
