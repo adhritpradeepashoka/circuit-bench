@@ -32,6 +32,7 @@ const fixtureCompile = async files => (files.length === 1 && bySource.get(norm(f
 function boot(compile = fixtureCompile, before = null) {
   const dom = new JSDOM(html, { runScripts: 'outside-only', pretendToBeVisual: true, url: 'http://localhost/' });
   const w = dom.window;
+  w.VLAB_NO_TINY = true;                // the tiny model has its own tests; here every fetch is counted
   before?.(w);
   // jsdom has no ImageData; the OLED element allocates one in its constructor
   w.ImageData ||= class ImageData { constructor(width, height) { this.width = width; this.height = height; this.data = new Uint8ClampedArray(width * height * 4); } };

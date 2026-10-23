@@ -5,6 +5,7 @@
 // running sim, Serial Monitor output) — see gatherContext below and describeContext in
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
+import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
 import { hasHostedAi } from '../sim/session.mjs';
 import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
@@ -230,7 +231,8 @@ export function initAiPanel(editor, code, sim = null) {
   $('aiForgetKey').addEventListener('click', () => { refreshKeyUi(); setStatus(''); openSettings(); });
   $('aiOpenSettings').addEventListener('click', openSettings);
   window.addEventListener('cb-session', () => { refreshKeyUi(); });
-  probeWebGPU().then(() => refreshKeyUi());      // no usable GPU adapter → stop defaulting to the on-device model
+  probeWebGPU().then(() => refreshKeyUi());
+  if (!globalThis.VLAB_NO_TINY) setTimeout(() => loadTiny().catch(() => {}), 1500);      // fetch the tiny model (2.5 MB) in the background so the first answer is instant      // no usable GPU adapter → stop defaulting to the on-device model
 
   /* ── composer ────────────────────────── */
   const autosize = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${Math.min(promptEl.scrollHeight || 0, 150)}px`; };
@@ -256,7 +258,17 @@ export function initAiPanel(editor, code, sim = null) {
     const text = promptEl.value.trim();
     if (!text) return;
     if (busy) return setStatus('Wait for the current reply first.');
-    const quick = quickEdit(text, editor.exportProject());     // plainly worded edits are answered instantly, with no model at all
+    // Tier 1: plainly worded edits are answered instantly by rules. Tier 2: the CircuitBench tiny model (2.5 MB, in-page, no GPU) understands
+    // looser wording and politely declines what is outside the bench. Anything either is unsure about goes on to the chosen AI.
+    let quick = quickEdit(text, editor.exportProject()), tinyMs = 0;
+    if (!quick && !globalThis.VLAB_NO_TINY) {
+      try {
+        const t0 = Date.now(), tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
+        const u = understand(tiny, text, editor.exportProject());
+        if (u) quick = u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation } : u;
+        tinyMs = Date.now() - t0; if (quick) quick.viaModel = true;
+      } catch { /* the model is optional: no file, still loading, or an old browser — carry on */ }
+    }
     if (!quick && !hasKey()) { refreshKeyUi(); openSettings(); return setStatus('Add a free API key (or choose an AI) in Settings for requests like this.'); }
     setStatus('');
     const history = chatHistory(messages);
@@ -268,7 +280,7 @@ export function initAiPanel(editor, code, sim = null) {
       const circuit = editor.exportProject();
       const args = { instruction: text, circuit, code: code.source, context: gatherContext(code, sim), history };
       let res, localErr = '';
-      if (quick) res = { ok: true, ...quick, meta: { provider: 'Instant assistant', model: 'built in', ms: 0 } };
+      if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {
         res = await generateCode({ ...args, hosted: true });
       } else if (localOn()) {

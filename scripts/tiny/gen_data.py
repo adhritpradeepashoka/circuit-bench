@@ -40,24 +40,28 @@ def ohm_words(v):
 
 # ───────── phrasing pools: first part TRAIN, last part HELD-OUT (never trained on) ─────────
 ADD_V = ['add', 'put', 'place', 'insert', 'drop in', 'give me', 'i need', 'i want', 'get me', 'lets add', 'throw in', 'attach', 'bring in', 'can you add', 'please add', 'could you put', 'would you add', 'i would like',
-         # held-out ↓
-         'stick in', 'whack in', 'pop in', 'include', 'set down', 'fetch me', 'chuck in']
+         'stick in', 'whack in', 'pop in', 'include', 'set down', 'fetch me', 'chuck in', 'add in', 'i d like', 'we need', 'lets have', 'plug in', 'hook in', 'drag in', 'show me', 'create', 'make me', 'spawn', 'put in', 'add another', 'one more',
+         # held-out ↓ (never trained)
+         'stick on', 'pop on', 'slot in', 'plonk', 'bung in', 'summon', 'deposit']
 DEL_V = ['remove', 'delete', 'get rid of', 'take away', 'take out', 'scrap', 'erase', 'trash', 'clear', 'dump', 'please remove', 'can you delete',
-         'ditch', 'bin', 'yank out', 'wipe out']
+         'ditch', 'bin', 'yank out', 'wipe out', 'drop', 'lose', 'unplug', 'take off', 'pull out', 'i dont need', 'i dont want', 'cut', 'discard', 'kill',
+         'rip out', 'banish', 'junk', 'axe']
 SET_V = ['set', 'change', 'make', 'turn', 'adjust', 'update', 'switch', 'can you make', 'please set', 'i want', 'lets make',
-         'tweak', 'swap', 'convert', 'alter']
+         'tweak', 'swap', 'convert', 'alter', 'modify', 'put', 'give', 'configure', 'use', 'lets use', 'edit', 'bump', 'dial',
+         'fix', 'reset', 'recalibrate']
 SUFFIX = ['', '', '', 'please', 'for me', 'now', 'real quick', 'on the board', 'on the bench', 'onto the breadboard', 'thanks', 'asap', 'if you can',
           'right now', 'to my circuit', 'quickly']
-SUFFIX_HO = ['when you get a chance', 'to the workspace', 'pls', 'ty']
-DEFER = ['why is my led not lighting up', 'why does my circuit not work', 'how does a resistor work', 'what does this code do', 'explain ohms law', 'how do i read a button',
+SUFFIX = SUFFIX + ['when you get a chance', 'to the workspace', 'pls', 'ty', 'thank you', 'ok', 'if possible', 'for the project', 'in my circuit', 'there', 'again', 'too']
+SUFFIX_HO = ['whenever', 'at your leisure', 'for me please', 'okay thanks', 'in this sketch']
+DEFER = ['my led is too dim why', 'how do i wire a button properly', 'what does analogwrite do', 'is this resistor value ok', 'can you review my circuit', 'make a clock', 'make a thermostat', 'build a calculator', 'make the motor speed follow the pot', 'program a countdown timer', 'how many leds can one pin drive', 'what is a breadboard rail', 'why is my led not lighting up', 'why does my circuit not work', 'how does a resistor work', 'what does this code do', 'explain ohms law', 'how do i read a button',
   'is my circuit correct', 'debug my sketch', 'it is not working', 'help me fix this', 'what is pwm', 'how do i use the oled', 'why is pin 9 always high', 'what resistor should i use for an led',
   'make a traffic light', 'build a temperature alarm', 'make a slime mold circuit', 'code a pong game', 'read the ntc and show it on the oled', 'write code that fades an led',
   'make an automatic night light', 'build a line following robot', 'design a burglar alarm', 'create a lock with a keypad', 'make the led fade with the potentiometer', 'show the temperature on the lcd',
   'make a morse code sender', 'how do i make a motor spin both ways', 'what is the difference between an led and a diode', 'can you check my wiring', 'why is the temperature wrong',
   'make a reaction time game', 'drive the motor with the potentiometer', 'whats wrong with my code', 'optimise my sketch', 'explain this sketch', 'teach me about pull up resistors',
   'make a metronome', 'build a voltmeter', 'make a dimmer', 'simulate a heart rate monitor', 'wire up the oled', 'connect the mpu6050 and print roll and pitch']
-DEFER_HO = ['how come the light stays off', 'can you tell me how a potentiometer works', 'make a door alarm', 'program a fading effect', 'what is a pull down resistor']
-OFF = ['whats the weather today', 'tell me a joke', 'who is the prime minister', 'write my essay on world war 2', 'what is the capital of france', 'play some music', 'what is 5 plus 7',
+DEFER_HO = ['i cant get the led to turn on', 'what happens if i remove the resistor', 'how come the light stays off', 'can you tell me how a potentiometer works', 'make a door alarm', 'program a fading effect', 'what is a pull down resistor']
+OFF = ['whats the date today', 'who made you', 'tell me about dogs', 'what is the tallest building', 'whos the best footballer', 'make me a sandwich', 'explain photosynthesis', 'say something funny', 'what is the speed of light', 'how old is the earth', 'whats the weather today', 'tell me a joke', 'who is the prime minister', 'write my essay on world war 2', 'what is the capital of france', 'play some music', 'what is 5 plus 7',
   'translate hello to french', 'recommend a movie', 'who won the cricket match', 'write a poem about cats', 'how do i cook pasta', 'tell me about the moon', 'what time is it', 'solve my maths homework',
   'give me a recipe', 'how tall is mount everest', 'hello', 'hi there', 'hey', 'good morning', 'thanks', 'ok', 'who are you', 'what can you do', 'sing a song', 'what is the meaning of life']
 OFF_HO = ['whats the news', 'tell me a fun fact', 'how far is the sun', 'draw me a cat', 'what is your name']
@@ -90,7 +94,7 @@ def tname(t, rng, plural=False):
     return n
 
 def gen_one(rng, held):
-    ADD = ADD_V if held else ADD_V[:-7]; DEL = DEL_V if held else DEL_V[:-4]; SET = SET_V if held else SET_V[:-4]
+    ADD = ADD_V[:-7]; DEL = DEL_V[:-4]; SET = SET_V[:-4]
     SUF = SUFFIX + (SUFFIX_HO if held else [])
     if held:  # held-out set only uses the held-out phrasings (plus unseen combinations)
         ADD = ADD_V[-7:]; DEL = DEL_V[-4:]; SET = SET_V[-4:]; SUF = SUFFIX_HO
@@ -111,6 +115,8 @@ def gen_one(rng, held):
         if n == 1 and det in ('1',): det = 'a'
         if n > 1 and name.endswith(('r', 'd', 'n', 'e', 'o', 'y', 'm')) and not name.endswith('s'): noun = noun + 's' if not noun.endswith('s') else noun
         prog = f'add {t}' + (f' x{n}' if n > 1 else '') + ''.join(' ' + p for p in props)
+        if not held and rng.random() < 0.08: return finish(f"{det} {noun}".replace('  ', ' ').strip(), make_state(rng)[1], prog)
+        if not held and rng.random() < 0.05: return finish(f'another {name}', make_state(rng)[1], f'add {t}')
         _, st = make_state(rng)
         req = f'{rng.choice(ADD)} {det} {noun}'.replace('  ', ' ')
         return finish(req, st, prog)
