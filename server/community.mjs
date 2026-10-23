@@ -29,6 +29,8 @@ export function createPgCommunity(pool) {
     async init() {
       await q(`create table if not exists cb_posts (id bigserial primary key, kind text not null, title text not null, body text not null, author_email text not null, author_name text not null default '', created_at bigint not null, pinned int not null default 0)`);
       await q(`create table if not exists cb_comments (id bigserial primary key, post_id bigint not null references cb_posts(id) on delete cascade, author_email text not null, author_name text not null default '', author_picture text not null default '', body text not null, created_at bigint not null, hidden int not null default 0)`);
+      // Supabase exposes public tables over its Data API; with row level security on and no policies, only this server can read them.
+      for (const t of ['cb_posts', 'cb_comments']) { try { await q(`alter table ${t} enable row level security`); } catch { /* not Postgres-proper (tests) */ } }
     },
     async listPosts(kind) {
       const r = await q(`select * from cb_posts ${kind ? 'where kind = $1' : ''} order by pinned desc, created_at desc limit 200`, kind ? [kind] : []);
