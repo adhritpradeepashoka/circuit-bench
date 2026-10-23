@@ -255,14 +255,13 @@ export function initAiPanel(editor, code, sim = null) {
       if (localOn()) {
         setStatus('Starting the on-device model…');
         res = await generateLocal({ ...args, onProgress: p => setStatus(p?.progress < 1 ? `Downloading the model (first time only): ${Math.round((p.progress || 0) * 100)}%` : 'Starting the model…') });
-        if (!res.ok && hasAnyKey()) { localErr = res.error; setStatus('On-device model failed — trying your saved key…'); const fb = getStoredKey(getStoredProvider()) ? getStoredProvider() : providersWithKeys()[0]; res = await generateCode({ ...args, provider: fb, userKey: getStoredKey(fb), model: getStoredModel(fb) }); }
+        if (!res.ok && hasAnyKey()) { localErr = res.error; console.warn('[on-device AI]', res.error); messages.push({ id: ++seq, role: 'error', text: `On-device model failed: ${res.error}` }); render(); setStatus('On-device model failed — trying your saved key…'); const fb = getStoredKey(getStoredProvider()) ? getStoredProvider() : providersWithKeys()[0]; res = await generateCode({ ...args, provider: fb, userKey: getStoredKey(fb), model: getStoredModel(fb) }); }
       } else res = await generateCode(args);
       if (!res.ok) {
         if (res.needsKey) { setStoredKey(''); refreshKeyUi(); }
         messages.push({ id: ++seq, role: 'error', text: res.error || 'Something went wrong.' });
         return;
       }
-      if (localErr) messages.push({ id: ++seq, role: 'error', text: `On-device model did not work, so your saved key was used instead. Reason: ${localErr}` });
       if (res.meta) setStatus(`${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s${res.meta.tried ? ` (${res.meta.tried} unavailable model${res.meta.tried > 1 ? 's' : ''} skipped)` : ''}`);
       const o = outcome(circuit, res);
       const hasEdit = !!(res.code || o.circuitEdit);
