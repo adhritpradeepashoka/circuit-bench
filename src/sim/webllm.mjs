@@ -5,11 +5,12 @@ import { buildPrompt, parseReply } from '../core/ai-prompt.js';
 
 export const LOCAL_PROVIDER = 'local';
 export const LOCAL_MODELS = [
+  { id: 'Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 0.5B (tiny)', sizeMB: 945, note: 'Tiny and fast (~0.9 GB download, once): runs on almost any laptop, but it is the weakest — good for simple edits and quick questions.' },
   { id: 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 1.5B', sizeMB: 1630, note: 'Default: fits integrated graphics (~1.6 GB download, once), but makes more mistakes.' },
   { id: 'Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 3B', sizeMB: 2505, note: 'Smarter; wants a graphics card or a fast laptop (~2.5 GB download, once).' },
   { id: 'Qwen2.5-Coder-7B-Instruct-q4f16_1-MLC', label: 'Qwen2.5 Coder 7B', sizeMB: 5107, note: 'Smarter, needs a strong GPU (~5 GB download, once).' },
 ];
-export const DEFAULT_LOCAL_MODEL = LOCAL_MODELS[0].id;   // integrated GPUs are the common case, so start with the model they can hold
+export const DEFAULT_LOCAL_MODEL = 'Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC';   // integrated GPUs are the common case, so start with the model they can hold
 const TINY = 'Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC';
 const MODEL_STORAGE = 'virtual-lab:ai-model:local';
 const CONTEXT = 4096;
@@ -89,7 +90,7 @@ export async function generateLocal({ instruction, circuit, code, context = null
 }
 
 /* ── managing the downloaded models (they live in the browser's cache, 1–5 GB each) ── */
-const allIds = () => LOCAL_MODELS.flatMap(m => [m.id, m.id.replace('q4f16_1', 'q4f32_1')]).concat(TINY, TINY.replace('q4f16_1', 'q4f32_1'));
+const allIds = () => LOCAL_MODELS.flatMap(m => [m.id, m.id.replace('q4f16_1', 'q4f32_1')]).concat(TINY, TINY.replace('q4f16_1', 'q4f32_1')).filter((id, i, a) => a.indexOf(id) === i);
 /** Which on-device models are currently downloaded in this browser. */
 export async function cachedModels({ web = null } = {}) {
   try { web ||= await import('@mlc-ai/web-llm'); const out = []; for (const id of allIds()) if (await web.hasModelInCache(id)) out.push(id); return out; } catch { return []; }

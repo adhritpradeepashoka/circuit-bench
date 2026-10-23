@@ -8,7 +8,7 @@
 import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
 import { hasHostedAi } from '../sim/session.mjs';
-import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
+import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { FORMAT, VERSION } from '../core/project.js';
@@ -196,7 +196,7 @@ export function initAiPanel(editor, code, sim = null) {
     providerHint.replaceChildren();
     if (isHosted) { providerHint.append('CircuitBench’s own AI, free with your account — no key and nothing to download. Switch to another option above any time.'); return; }
     if (isLocal) {
-      const m = LOCAL_MODELS.find(x => x.id === getLocalModel()) || LOCAL_MODELS[0];
+      const m = LOCAL_MODELS.find(x => x.id === getLocalModel()) || LOCAL_MODELS.find(x => x.id === DEFAULT_LOCAL_MODEL) || LOCAL_MODELS[0];
       const sel = document.createElement('select'); sel.className = 'ai-local-model'; sel.setAttribute('aria-label', 'On-device model');
       for (const x of LOCAL_MODELS) { const o = document.createElement('option'); o.value = x.id; o.textContent = `${x.label} (~${(x.sizeMB / 1000).toFixed(1)} GB)`; o.selected = x.id === m.id; sel.append(o); }
       sel.addEventListener('change', () => { setLocalModel(sel.value); paintProvider(); });
