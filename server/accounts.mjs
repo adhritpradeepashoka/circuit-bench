@@ -85,6 +85,8 @@ export function createPgStore(pool) {
       await pool.query(`create table if not exists cb_users (
         email text primary key, role text not null default 'user', sub text, name text not null default '', picture text not null default '',
         created_at bigint not null, last_seen bigint, granted_by text, granted_at bigint)`);
+      // Supabase exposes public tables over its Data API; with row level security on and no policies, only this server (the owner role) can read them.
+      try { await pool.query('alter table cb_users enable row level security'); } catch { /* not Postgres-proper (tests) */ }
     },
     async get(email) { return toRow((await pool.query('select * from cb_users where email = $1', [normEmail(email)])).rows[0]); },
     async login({ email, sub, name, picture }, now = Date.now()) {
