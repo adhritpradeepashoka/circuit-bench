@@ -172,8 +172,15 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 4 });
-    store = createPgStore(pool); await store.init();
-    communityStore = createPgCommunity(pool); await communityStore.init();
+    try {
+      const pgStore = createPgStore(pool), pgCommunity = createPgCommunity(pool);
+      await pgStore.init(); await pgCommunity.init();
+      store = pgStore; communityStore = pgCommunity;
+    } catch (e) {
+      // Keep the site up on a bad DATABASE_URL (wrong password, unreachable host): fall back to memory and say why.
+      console.log(`[vlab] ERROR: database unavailable (${e.code || ''} ${e.message}) — using in-memory accounts until DATABASE_URL is fixed`);
+      pool.end().catch(() => {});
+    }
   } else console.log('[vlab] WARNING: no DATABASE_URL — roles are kept in memory and reset on every restart');
   const ownerEmails = String(process.env.OWNER_EMAIL || '').split(',').map(x => x.trim()).filter(Boolean);
   if (!ownerEmails.length) console.log('[vlab] WARNING: OWNER_EMAIL is not set — nobody can administer accounts');
