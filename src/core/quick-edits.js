@@ -39,7 +39,7 @@ export function parseOhms(text) {
 const idsOfType = (circuit, type) => (circuit?.parts || []).filter(p => p.type === type).map(p => p.id);
 const fmtMs = ms => (ms % 1000 === 0 ? `${ms / 1000} s` : `${ms} ms`);
 
-function blinkSketch(pin, ms) {
+export function blinkSketch(pin, ms) {
   return `// Blink pin ${pin}: on for ${fmtMs(ms)}, off for ${fmtMs(ms)}.
 const int LED_PIN = ${pin};
 
