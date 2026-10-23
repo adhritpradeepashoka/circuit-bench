@@ -36,6 +36,7 @@
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
       <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span></div><p class="account-note">Only your name and picture are shown here, in this browser. CircuitBench doesn't store your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
     </div>
+    <button id="settingsBtn" type="button" class="help-btn settings-btn" title="Settings: AI keys, themes, and other options" aria-label="Settings" aria-haspopup="dialog">⚙</button>
     <button id="helpBtn" type="button" class="help-btn" title="Tour &amp; help: what everything does, or build your first circuit step by step" aria-label="Tour and help">?</button>
   </header>
 
@@ -181,15 +182,7 @@
             <button type="button" class="pane-x" id="aiClose" title="Close the AI chat" aria-label="Close the AI chat"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
           </span>
         </div>
-        <div class="ai-key-row" id="aiKeyRow" hidden>
-          <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
-          <div class="ai-provider-tabs" id="aiProviderTabs" role="tablist" aria-label="AI provider"></div>
-          <p class="ai-provider-hint" id="aiProviderHint"></p>
-          <input id="aiKeyInput" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
-          <input id="aiModelInput" class="ai-model-input" type="text" placeholder="Model (optional)" autocomplete="off" spellcheck="false" aria-label="Model id (optional)">
-          <a id="aiGetKey" class="ai-getkey" href="#" target="_blank" rel="noopener">Get a key ↗</a>
-          <button id="aiKeySave" type="button">Save key</button>
-        </div>
+        <div class="ai-setup" id="aiSetup" hidden><span>AI needs a one-time setup.</span><button type="button" id="aiOpenSettings">Open AI settings</button></div>
         <div class="ai-log" id="aiLog" role="log" aria-live="polite" aria-label="Conversation"></div>
         <form class="ai-composer" id="aiComposer">
           <textarea id="aiPrompt" rows="1" placeholder="Ask about your circuit, or describe a change…" aria-label="Message the AI"></textarea>
@@ -294,6 +287,40 @@
     </form>
     <input type="file" id="wsImportFile" accept="application/json,.json" hidden>
     <p class="proj-note" id="wsNote">Community workspaces from GitHub are coming. For now you can share a workspace as a file.</p>
+  </div>
+</div>
+<div class="modal" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" hidden>
+  <div class="modal-card settings-card">
+    <div class="modal-head"><h2 id="settingsTitle">Settings</h2><button type="button" class="pane-x" id="settingsClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <div class="settings-body">
+      <section class="set-sec"><h3>AI</h3>
+        <p class="proj-note">Pick who answers in ✨ Ask AI. “On this device” needs no key; with your own free key a hosted model is used instead. Keys stay in this browser.</p>
+        <div class="ai-key-row" id="aiKeyRow">
+          <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
+          <div class="ai-provider-tabs" id="aiProviderTabs" role="tablist" aria-label="AI provider"></div>
+          <p class="ai-provider-hint" id="aiProviderHint"></p>
+          <input id="aiKeyInput" type="password" placeholder="Paste your API key" autocomplete="off" spellcheck="false">
+          <input id="aiModelInput" class="ai-model-input" type="text" placeholder="Model (optional)" autocomplete="off" spellcheck="false" aria-label="Model id (optional)">
+          <a id="aiGetKey" class="ai-getkey" href="#" target="_blank" rel="noopener">Get a key ↗</a>
+          <button id="aiKeySave" type="button">Save key</button>
+        </div>
+      </section>
+      <section class="set-sec"><h3>Appearance</h3><div class="theme-list" id="themeList"></div>
+        <div class="theme-custom" id="themeCustom" hidden>
+          <label>Top bar<input type="color" id="cu-bar"></label><label>Background<input type="color" id="cu-bg"></label>
+          <label>Text<input type="color" id="cu-text"></label><label>Accent<input type="color" id="cu-accent"></label>
+          <label>Font<select id="cu-font"></select></label>
+        </div></section>
+      <section class="set-sec"><h3>Other</h3>
+        <div class="set-actions">
+          <button type="button" class="proj-act" id="setTour">Replay the tour</button>
+          <button type="button" class="proj-act" id="setHint">Show the starter hint</button>
+          <button type="button" class="proj-act" id="setClearChat">Clear AI chat history</button>
+          <button type="button" class="proj-act" id="setForgetKeys">Remove all saved API keys</button>
+        </div>
+        <p class="proj-note">Signing in with Google (top bar) only shows your name here; projects and keys stay in this browser.</p>
+      </section>
+    </div>
   </div>
 </div>
 <script type="module" src="/src/main.js"></script>

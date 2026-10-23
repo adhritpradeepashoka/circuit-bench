@@ -154,7 +154,8 @@ export function initAiPanel(editor, code, sim = null) {
   const localOn = () => webgpuAvailable() && (getPref() === '1' || (getPref() !== '0' && !hasAnyKey()));
   const hasKey = () => localOn() || !!getStoredKey();
   let picking = false;           // the provider picker was opened on purpose (even though the current provider has a key)
-  function refreshKeyUi() { keyRow.hidden = hasKey() && !picking; paintProvider(); }
+  const setupBar = $('aiSetup'), openSettings = () => $('settingsBtn')?.click();
+  function refreshKeyUi() { setupBar.hidden = hasKey(); paintProvider(); }
   const select = $('aiProviderSelect');
   function paintSelect() {
     const cur = localOn() ? LOCAL_PROVIDER : getStoredProvider();
@@ -170,6 +171,7 @@ export function initAiPanel(editor, code, sim = null) {
   function paintProvider() {
     paintSelect();
     const isLocal = localOn();
+    $('aiKeySave').textContent = isLocal ? 'Done' : 'Save key';
     modelInput.hidden = isLocal; keyInput.hidden = isLocal; $('aiGetKey').hidden = isLocal;
     const cur = getStoredProvider(), info = PROVIDER_INFO[cur];
     $('aiGetKey').href = info.keyUrl; $('aiGetKey').textContent = `Get a ${info.label} key ↗`;
@@ -210,12 +212,13 @@ export function initAiPanel(editor, code, sim = null) {
     if (v) { setStoredKey(v); setPref(false); }
     else if (!getStoredKey(cur)) return setStatus('Paste a key first.');
     setStoredModel(modelInput.value.trim());
-    keyInput.value = ''; picking = false; refreshKeyUi();
+    keyInput.value = ''; picking = false; refreshKeyUi(); $('settingsClose')?.click();
     setStatus(`${PROVIDER_INFO[cur].label} ${v ? 'key saved' : 'selected'} — only in this browser.`);
     if (promptEl.value.trim()) send(); else promptEl.focus();
   });
   keyInput.addEventListener('paste', () => setTimeout(() => { if (/^[\w.-]{20,}$/.test(keyInput.value.trim())) $('aiKeySave').click(); }, 0));   // pasting a key saves it: no extra click
-  $('aiForgetKey').addEventListener('click', () => { picking = !picking; refreshKeyUi(); setStatus(''); if (picking) keyInput.focus(); });
+  $('aiForgetKey').addEventListener('click', () => { refreshKeyUi(); setStatus(''); openSettings(); });
+  $('aiOpenSettings').addEventListener('click', openSettings);
 
   /* ── composer ────────────────────────── */
   const autosize = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${Math.min(promptEl.scrollHeight || 0, 150)}px`; };
@@ -241,7 +244,7 @@ export function initAiPanel(editor, code, sim = null) {
     const text = promptEl.value.trim();
     if (!text) return;
     if (busy) return setStatus('Wait for the current reply first.');
-    if (!hasKey()) { refreshKeyUi(); keyInput.focus(); return setStatus('Add a free API key above to start chatting.'); }
+    if (!hasKey()) { refreshKeyUi(); openSettings(); return setStatus('Add a free API key in Settings to start chatting.'); }
     setStatus('');
     const history = chatHistory(messages);
     for (const m of messages) if (m.state === 'pending') { m.state = 'superseded'; proposals.delete(m.id); }   // an older edit no longer matches the board once you've moved on
@@ -284,7 +287,7 @@ export function initAiPanel(editor, code, sim = null) {
   }
 
   /* ── opening / closing ───────────────── */
-  function focusInput() { refreshKeyUi(); (hasKey() ? promptEl : keyInput).focus(); }
+  function focusInput() { refreshKeyUi(); promptEl.focus(); }
   $('aiBtn').addEventListener('click', () => { panes.toggle('ai'); if (panes.isOpen('ai')) focusInput(); });
   $('aiClose').addEventListener('click', () => panes.close('ai'));
   panes.onChange((name, open) => { if (name === 'ai' && open) { refreshKeyUi(); render(); } });
@@ -309,5 +312,6 @@ export function initAiPanel(editor, code, sim = null) {
   }
 
   paintProvider(); refreshKeyUi(); render();
-  return { askAi, send, setScope, get messages() { return messages; } };
+  const clearChat = () => { messages = []; proposals.clear(); saveChat(); render(); };
+  return { askAi, send, setScope, clearChat, refresh: () => { refreshKeyUi(); paintProvider(); }, get messages() { return messages; } };
 }

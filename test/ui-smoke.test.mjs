@@ -1027,7 +1027,7 @@ test('ui: AI chat without a key shows the key setup in the pane and keeps your m
   w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Hi!' }) }; };
   w.__lab.initAiPanel(editor, code, sim);
   doc.getElementById('aiBtn').click();
-  assert.equal(doc.getElementById('aiKeyRow').hidden, false);
+  assert.equal(doc.getElementById('aiSetup').hidden, false, 'a setup bar points at Settings');
   const prompt = doc.getElementById('aiPrompt');
   prompt.value = 'hello';
   doc.getElementById('aiGenerate').click();
@@ -1036,7 +1036,7 @@ test('ui: AI chat without a key shows the key setup in the pane and keeps your m
   doc.getElementById('aiKeyInput').value = 'my-key';
   doc.getElementById('aiKeySave').click();
   await flush();
-  assert.equal(doc.getElementById('aiKeyRow').hidden, true);
+  assert.equal(doc.getElementById('aiSetup').hidden, true);
   assert.equal(sent.length, 1);
   assert.equal(sent[0].userKey, 'my-key');
   assert.match(doc.getElementById('aiLog').textContent, /Hi!/);
@@ -1054,17 +1054,15 @@ test('ui: AI providers — each keeps its own key, switching is one click, and t
   const pick = id => doc.getElementById(`aiProvider-${id}`).click();
   const save = (key, model = '') => { doc.getElementById('aiKeyInput').value = key; doc.getElementById('aiModelInput').value = model; doc.getElementById('aiKeySave').click(); };
   pick('groq'); save('groq-key');
-  assert.equal(doc.getElementById('aiKeyRow').hidden, true);
-  doc.getElementById('aiForgetKey').click();                         // reopen the picker
-  assert.equal(doc.getElementById('aiKeyRow').hidden, false);
-  pick('nvidia'); assert.equal(doc.getElementById('aiKeyRow').hidden, false, 'no key for NVIDIA yet');
+  assert.equal(doc.getElementById('aiSetup').hidden, true);
+  pick('nvidia'); assert.equal(doc.getElementById('aiSetup').hidden, false, 'no key for NVIDIA yet');
   save('nv-key', 'meta/llama-3.1-70b-instruct');
   assert.ok(tabs().length === 5);
   doc.getElementById('aiForgetKey').click();
   assert.ok(doc.getElementById('aiProvider-groq').textContent.includes('✓') && doc.getElementById('aiProvider-nvidia').textContent.includes('✓'));
   assert.ok(!doc.getElementById('aiProvider-gemini').textContent.includes('✓'));
-  pick('groq');                                                        // a saved key: one click switches and closes the picker
-  assert.equal(doc.getElementById('aiKeyRow').hidden, true);
+  pick('groq');                                                        // a saved key: one click switches
+  assert.equal(doc.getElementById('aiSetup').hidden, true);
   const prompt = doc.getElementById('aiPrompt');
   prompt.value = 'hi'; doc.getElementById('aiGenerate').click(); await flush();
   assert.equal(sent.at(-1).provider, 'groq'); assert.equal(sent.at(-1).userKey, 'groq-key');
@@ -1079,11 +1077,11 @@ test('ui: AI providers — each keeps its own key, switching is one click, and t
   prompt.value = 'third'; doc.getElementById('aiGenerate').click(); await flush();
   assert.equal(sent.at(-1).provider, 'groq');
   sel.value = 'meta'; sel.dispatchEvent(new w.Event('change', { bubbles: true }));
-  assert.equal(doc.getElementById('aiKeyRow').hidden, false, 'no key for Meta: the key box opens');
+  assert.equal(doc.getElementById('aiSetup').hidden, false, 'no key for Meta: the setup bar shows');
   assert.match(doc.getElementById('aiGetKey').href, /llama\.developer\.meta\.com/);
   const ki = doc.getElementById('aiKeyInput'); ki.value = 'pasted-key-1234567890abcdef';
   ki.dispatchEvent(new w.Event('paste', { bubbles: true })); await new Promise(r => setTimeout(r, 5));
-  assert.equal(doc.getElementById('aiKeyRow').hidden, true, 'pasting a key saves it straight away');
+  assert.equal(doc.getElementById('aiSetup').hidden, true, 'pasting a key saves it straight away');
 });
 
 test('ui: Part Creator — pick which AI makes the part (shared with the chat); a provider without a key asks for one right there, and pasting it saves it', () => {
@@ -1946,4 +1944,33 @@ test('ui: Workspaces — a Bioelectronics project starts with the signal source 
   assert.ok(good.ok, good.errors?.join(';'));
   assert.equal(w.__lab.workspaceCore.saveWorkspace(good.workspace, w.localStorage).ok, true);
   assert.ok(Object.values(w.__lab.workspaceCore.listWorkspaces()).some(x => x.parts.length === 1));
+});
+
+test('ui: Settings dialog — opens from the top bar, themes apply and persist, custom colours work, AI setup lives in it', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const ai = w.__lab.initAiPanel(editor, code, sim);
+  w.__lab.initSettings({ tour: { start() {} }, ai });
+  const modal = doc.getElementById('settingsModal');
+  assert.equal(modal.hidden, true);
+  doc.getElementById('settingsBtn').click();
+  assert.equal(modal.hidden, false);
+  assert.ok(modal.contains(doc.getElementById('aiKeyRow')), 'the key form is in Settings, not the chat');
+  const themes = [...doc.querySelectorAll('#themeList [data-theme]')].map(b => b.dataset.theme);
+  assert.deepEqual(themes, ['classic', 'kids', 'hacker', 'techno', 'contrast', 'custom']);
+  doc.querySelector('#themeList [data-theme="hacker"]').click();
+  assert.equal(doc.documentElement.getAttribute('data-theme'), 'hacker');
+  assert.equal(w.localStorage.getItem('virtual-lab:theme'), 'hacker');
+  assert.equal(doc.getElementById('themeCustom').hidden, true);
+  doc.querySelector('#themeList [data-theme="custom"]').click();
+  assert.equal(doc.getElementById('themeCustom').hidden, false);
+  const acc = doc.getElementById('cu-accent'); acc.value = '#112233'; acc.dispatchEvent(new w.Event('input', { bubbles: true }));
+  assert.equal(doc.documentElement.style.getPropertyValue('--blue'), '#112233');
+  w.__lab.themeCore.setCustom({ accent: 'not a colour' });          // junk never reaches the page
+  assert.equal(w.__lab.themeCore.getCustom().accent, '#112233');
+  doc.querySelector('#themeList [data-theme="classic"]').click();
+  assert.equal(doc.documentElement.getAttribute('data-theme'), null);
+  assert.equal(doc.documentElement.style.getPropertyValue('--blue'), '');
+  doc.getElementById('settingsClose').click();
+  assert.equal(modal.hidden, true);
 });

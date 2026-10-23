@@ -14,6 +14,9 @@ import { initAiPanel } from './ui/ai-panel.js';
 import { initProjects } from './ui/projects.js';
 import { initMpuInspector } from './ui/mpu-inspector.js';
 import { initTour } from './ui/tour.js';
+import { initSettings } from './ui/settings.js';
+import { applyTheme } from './ui/theme.js';
+applyTheme();
 import { initAccount } from './ui/account.js';
 import { importPcbFile } from './ui/pcb-import.js';
 import { initWorkspaces } from './ui/workspaces.js';
@@ -53,6 +56,7 @@ initVisualizer({ editor });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
 const tour = initTour({ editor, sim, code, projects });
+initSettings({ tour, ai, status: t => editor.status(t) });
 projects.ready.then(() => tour.maybeAutoStart());
 $('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });
 
