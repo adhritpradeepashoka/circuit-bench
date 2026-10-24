@@ -192,7 +192,9 @@ export function initBlocks({ editor, code }) {
 
   /* ── the sketch changed under us ───────── */
   code.onChange(() => {                                  // typed in Code mode, loaded an example, the AI wrote code…
-    if (mode === 'blocks' && lastCode !== null && code.source !== lastCode) { setMode('code'); editor.status('The code was changed outside the blocks, so you are now in Code mode'); }
+    // before Blockly has loaded there is no generated code yet: anything but the starter sketch was put there by someone else (the AI, an example)
+    const foreign = lastCode !== null ? code.source !== lastCode : code.source.trim() !== '' && code.source.trim() !== DEFAULT_SKETCH.trim();
+    if (mode === 'blocks' && foreign) { setMode('code'); editor.status('The code was changed outside the blocks, so you are now in Code mode'); }
   });
   code.onBlocks(() => {                                  // a project was opened
     const s = code.blocks;
@@ -204,7 +206,7 @@ export function initBlocks({ editor, code }) {
   paint();
   if (mode === 'blocks') {
     // a fresh visitor sees the blocks as soon as the dock opens; the library loads in the background
-    code.onFirstOpen(() => { mode = 'code'; setMode('blocks', { quiet: true }); });
+    code.onFirstOpen(() => { if (mode !== 'blocks') return; mode = 'code'; setMode('blocks', { quiet: true }); });      // unless the sketch was replaced before the dock ever opened
   }
   return { setMode, get mode() { return mode; }, start, get workspace() { return ws; } };
 }

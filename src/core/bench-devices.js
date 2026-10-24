@@ -10,7 +10,7 @@
 import { PART_DEFS } from './parts.js';
 import { BOARD_SPECS, mainBoard } from './boards.js';
 
-const PWM_PINS = { 'arduino-uno': new Set(['3', '5', '6', '9', '10', '11']), 'arduino-nano': new Set(['3', '5', '6', '9', '10', '11']), 'arduino-mega': new Set([...Array(12).keys()].map(i => String(i + 2)).concat(['44', '45', '46'])) };
+export const PWM_PINS = { 'arduino-uno': new Set(['3', '5', '6', '9', '10', '11']), 'arduino-nano': new Set(['3', '5', '6', '9', '10', '11']), 'arduino-mega': new Set([...Array(12).keys()].map(i => String(i + 2)).concat(['44', '45', '46'])) };
 const MAX_HOPS = 2;
 
 /** Short, kid-friendly name of a pin: "D13", "A0". */

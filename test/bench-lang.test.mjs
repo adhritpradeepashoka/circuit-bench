@@ -24,7 +24,9 @@ test('build led / button / pot wire real pins and write a sketch', () => {
   x = go('build pot A0'); assert.equal(x.out.wires.length, 3); assert.match(x.r.code, /analogRead\(A0\)/);
   assert.equal(go('build pot 9'), null, 'a pot needs an analog pin');
   assert.equal(go('build led 99'), null);
-  assert.equal(go('build led 9', { parts: [], wires: [] }), null, 'no board to wire to');
+  const empty = go('build led 9', { parts: [], wires: [] });
+  assert.ok(empty.out.parts.some(p => p.type === 'arduino-uno'), 'an empty bench gets an Uno to wire to');
+  assert.equal(empty.out.warnings.length, 0); assert.equal(empty.out.wires.length, 3);
 });
 
 test('blink, wire, multi-step programs', () => {
