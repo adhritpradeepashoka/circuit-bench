@@ -355,9 +355,16 @@ export class Editor {
       el.classList.toggle('selected', this.sel?.kind === 'part' && this.sel.id === p.id);
     }
   }
+  /** The "Build your first circuit" card is only for brand-new projects, not older ones that happen to be empty. */
+  setHintAllowed(ok) {
+    this.hintOk = !!ok;
+    const hasWork = this.state.wires.length > 0 || this.state.parts.some(p => PART_DEFS[p.type].insertable);
+    $('hintCard').hidden = hasWork || !this.hintOk;
+  }
   afterStructureChange() {
     const hasWork = this.state.wires.length > 0 || this.state.parts.some(p => PART_DEFS[p.type].insertable);
-    $('hintCard').hidden = hasWork;
+    if (hasWork) this.hintOk = false;                          // once a project has had something in it, the "first circuit" hint never comes back
+    $('hintCard').hidden = hasWork || this.hintOk === false;
     $('undoTool').disabled = this.hi <= 0;
     $('redoTool').disabled = this.hi >= this.hist.length - 1;
     this.renderOverlay();

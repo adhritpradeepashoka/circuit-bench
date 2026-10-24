@@ -12,7 +12,8 @@ function showHint() {
 export function initWorkspaces({ editor, code, projects }) {
   const $ = id => document.getElementById(id);
   const modal = $('workspacesModal'), list = $('wsList');
-  projects.onSwitch(p => { setActiveWorkspace(p.workspace); showHint(); editor.emit('catalog'); });      // the parts menu leads with the open project's workspace
+  const isBrandNew = p => !!p.createdAt && Date.now() - p.createdAt < 10 * 60_000;       // made in the last few minutes
+  projects.onSwitch(p => { setActiveWorkspace(p.workspace); showHint(); editor.setHintAllowed(isBrandNew(p)); editor.emit('catalog'); });      // the parts menu leads with the open project's workspace
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const btn = (label, fn, title) => { const b = el('button', 'proj-act', label); b.type = 'button'; if (title) b.title = title; b.addEventListener('click', fn); return b; };
