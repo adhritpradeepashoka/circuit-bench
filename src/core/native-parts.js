@@ -55,7 +55,7 @@ export const NATIVE_PARTS = [
     labels: {},
     behaviour: { kind: 'keypad', roles: {}, rows: ['R1', 'R2', 'R3', 'R4'], cols: ['C1', 'C2', 'C3', 'C4'] },
     note: 'Scan it: set the four column pins as INPUT_PULLUP, drive one row LOW at a time and read the columns (or use the Keypad library).' },
-  { id: 'dip-switch-8', name: 'DIP Switch (8-way)', tag: 'wokwi-dip-switch-8', category: 'Input', ...mm(82.87, 55.355), insertable: false,
+  { id: 'dip-switch-8', name: 'DIP Switch (8-way)', tag: 'wokwi-dip-switch-8', category: 'Input', w: 82.87, h: 55.355, insertable: false,      // this element's SVG is sized in px, not mm like the others
     blurb: 'Eight slide switches — click one to flip it',
     labels: {},
     behaviour: { kind: 'switch-bank', roles: {}, a: ['1a', '2a', '3a', '4a', '5a', '6a', '7a', '8a'], b: ['1b', '2b', '3b', '4b', '5b', '6b', '7b', '8b'] },

@@ -118,3 +118,19 @@ test("the part-maker prompt teaches the behaviours and the format, not a stock d
   assert.deepEqual(JSON.parse(extractJsonText('Here you go: {"a":2} thanks')), { a: 2 });
   assert.equal(extractJsonText('no json here'), null);
 });
+
+test('every native part is sized so its pins sit inside it (DIP switch thumbnail regression; the library lets legs overhang a few px)', async () => {
+  const { NATIVE_PARTS } = await import('../src/core/native-parts.js');
+  for (const p of NATIVE_PARTS) for (const pin of p.pins) {
+    assert.ok(pin.x >= 0 && pin.x <= p.w + 10 && pin.y >= 0 && pin.y <= p.h + 10, `${p.id} pin ${pin.id} (${pin.x},${pin.y}) is outside ${p.w}x${p.h}`);
+  }
+});
+
+test('native part boxes are not oversized relative to their pins (px vs mm mix-up)', async () => {
+  const { NATIVE_PARTS } = await import('../src/core/native-parts.js');
+  for (const p of NATIVE_PARTS) {
+    if (!p.pins.length) continue;
+    const mx = Math.max(...p.pins.map(q => q.x)), my = Math.max(...p.pins.map(q => q.y));
+    assert.ok(mx >= p.w * 0.3 || my >= p.h * 0.3, `${p.id}: pins reach only (${mx},${my}) of ${p.w}x${p.h}`);
+  }
+});
