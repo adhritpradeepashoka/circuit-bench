@@ -196,9 +196,49 @@ class Battery extends CbElement {
   update() { const t = this.querySelector('.v'); if (t) t.textContent = `${+this._volts.toFixed(1)}V`; }
 }
 
-for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico], ['cb-uno-r4', UnoR4]]) {
+for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico]]) {
   if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
 }
+
+/**
+ * The UNO R4 Minima is the R3's own drawing (header, pins, LEDs, reset button — all the real detail) re-skinned: teal board,
+ * USB-C instead of the big USB-B, a square Renesas RA4M1 instead of the long ATmega, and its own name. Where the wokwi R3 element
+ * is not available (a bare test page) the standalone drawing above is used instead.
+ */
+const SVG = 'http://www.w3.org/2000/svg';
+const mk = (tag, attrs, text) => { const e = document.createElementNS(SVG, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); if (text != null) e.textContent = text; return e; };
+function skinR4(root) {
+  const svg = root?.querySelector('svg');
+  if (!svg || svg.querySelector('#r4-skin')) return;
+  svg.querySelector('path[fill="#2b6b99"]')?.setAttribute('fill', '#0b7f89');                      // the board
+  for (const g of svg.querySelectorAll('g')) {
+    if ((g.getAttribute('style') || '').includes('#b3b2b2')) g.setAttribute('display', 'none');   // the big USB-B connector
+    if (g.querySelector(':scope > rect[fill="url(#mcu-leads)"]')) g.setAttribute('display', 'none');   // the long ATmega package
+  }
+  const skin = mk('g', { id: 'r4-skin' });
+  skin.append(
+    mk('rect', { x: -1.6, y: 13.4, width: 8, height: 3.6, rx: 1.5, fill: '#cfd4d9', stroke: '#8a9299', 'stroke-width': 0.15 }),   // USB-C shell
+    mk('rect', { x: -0.4, y: 14.5, width: 5.6, height: 1.4, rx: 0.7, fill: '#2a2f34' }),
+    mk('rect', { x: 36.2, y: 31.4, width: 11, height: 11, rx: 0.4, fill: '#16191c', stroke: '#050607', 'stroke-width': 0.15 }),   // RA4M1, square
+    mk('circle', { cx: 37.6, cy: 32.8, r: 0.55, fill: '#4a5056' }),
+    mk('text', { x: 41.7, y: 37.4, fill: '#d7dce0', 'font-size': 1.9, 'font-weight': 700, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'RA4M1'),
+    mk('text', { x: 41.7, y: 39.5, fill: '#8d959c', 'font-size': 1.1, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'RENESAS'),
+    mk('text', { x: 54, y: 37, fill: '#f2fdfe', 'font-size': 3.4, 'font-weight': 800, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'UNO R4'),
+    mk('text', { x: 54, y: 40.2, fill: '#bfeff3', 'font-size': 1.7, 'letter-spacing': 0.5, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'MINIMA'),
+  );
+  for (let i = 0; i < 16; i++) { const t = 36.2 + 0.6 + i * 0.6875; skin.append(mk('rect', { x: t, y: 30.9, width: 0.25, height: 0.5, fill: '#b8bec4' }), mk('rect', { x: t, y: 42.4, width: 0.25, height: 0.5, fill: '#b8bec4' })); }
+  svg.append(skin);
+}
+function defineUnoR4() {
+  if (!globalThis.customElements || customElements.get('cb-uno-r4')) return;
+  const Base = customElements.get('wokwi-arduino-uno');
+  if (!Base) { customElements.define('cb-uno-r4', UnoR4); return; }
+  customElements.define('cb-uno-r4', class extends Base {
+    firstUpdated(c) { super.firstUpdated?.(c); skinR4(this.shadowRoot); }
+    updated(c) { super.updated?.(c); skinR4(this.shadowRoot); }
+  });
+}
+defineUnoR4();
 
 /** A student-made part (src/core/custom-parts.js): drawn from its spec — body, name, pins with their labels. */
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
