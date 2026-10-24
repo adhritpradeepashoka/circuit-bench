@@ -61,11 +61,11 @@ initVisualizer({ editor });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
 initFeatures({ blocks });
-initClassroom({ editor, code, projects, status: t => editor.status(t), refreshAccount: () => account.refresh() });
+const classroom = initClassroom({ editor, code, projects, account, status: t => editor.status(t), refreshAccount: () => account.refresh() });
 const tour = initTour({ editor, sim, code, projects });
 initCommunity({ status: t => editor.status(t) });
 initSettings({ tour, ai, status: t => editor.status(t) });
-projects.ready.then(() => tour.maybeAutoStart());
+Promise.all([projects.ready, classroom.entered]).then(() => tour.maybeAutoStart());       // the tour starts once someone has left the menu and is on the bench
 $('simAskAi').addEventListener('click', e => { e.stopPropagation(); ai.askAi('Using the live readings, why is the circuit not doing what I expect? I expected: '); });
 
 // The code dock starts on the lightweight editor; Monaco (a few hundred KB, loaded on demand) takes over the first time it's opened —

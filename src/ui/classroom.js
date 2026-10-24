@@ -5,13 +5,13 @@ import { getMe, getToken, setSession, authed } from '../sim/session.mjs';
 import { FEATURES, PRESETS, normCode } from '../core/classroom.js';
 import { setTheme } from './theme.js';
 
-const KIDS_KEY = 'circuitbench:kids-default', ASKED_KEY = 'circuitbench:kind-asked', DASH_KEY = 'circuitbench:dash-shown', CURRENT_KEY = 'circuitbench:class-project', LAST_CLASS = 'circuitbench:last-class';
+const ENTERED = 'circuitbench:entered', KIDS_KEY = 'circuitbench:kids-default', ASKED_KEY = 'circuitbench:kind-asked', DASH_KEY = 'circuitbench:dash-shown', CURRENT_KEY = 'circuitbench:class-project', LAST_CLASS = 'circuitbench:last-class';
 const lget = k => { try { return localStorage.getItem(k); } catch { return null; } };
 const lset = (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch { /* ignore */ } };
 const sget = k => { try { return sessionStorage.getItem(k); } catch { return null; } };
 const sset = (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* ignore */ } };
 
-export function initClassroom({ editor, code, projects, status = () => {}, fetchImpl = (...a) => globalThis.fetch(...a), refreshAccount = async () => {} } = {}) {
+export function initClassroom({ editor, code, projects, account = null, status = () => {}, fetchImpl = (...a) => globalThis.fetch(...a), refreshAccount = async () => {} } = {}) {
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   const btn = (label, cls, fn) => { const b = el('button', `cls-btn ${cls || ''}`, label); b.type = 'button'; if (fn) b.addEventListener('click', fn); return b; };
@@ -20,33 +20,40 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
   const sayErr = r => status(r.body?.error || 'Something went wrong — try again.');
 
   /* ───────── account type ───────── */
-  const kindModal = $('kindModal'), kindBody = $('kindBody'), classModal = $('classModal'), classBody = $('classBody');
-  const closeKind = () => { kindModal.hidden = true; };
+  const screen = $('startScreen'), classBody = $('startBody'), kindBody = classBody, classModal = screen, INTENT = 'circuitbench:intent';
+  let enterResolve; const entered = new Promise(r => { enterResolve = r; });
+  const shown = () => !screen.hidden;
+  /** Everyone starts at this menu; the bench is only reachable by leaving it. */
+  function setBench(inert) { for (const c of document.body.children) if (c !== screen && c.tagName !== 'SCRIPT') c.inert = inert; }
+  function enter() { screen.hidden = true; setBench(false); sset(ENTERED, '1'); enterResolve(); try { editor.fit?.(); } catch { /* ignore */ } }
+  function showMenu() { screen.hidden = false; setBench(true); renderMenu(); }
+  const closeKind = () => {};
   async function reloadMe() { await refreshAccount(); paintMenu(); }
 
   async function choose(k) {
     const r = await call('/api/account/kind', { method: 'POST', body: { kind: k } });
     if (!r.body?.ok) return sayErr(r);
-    lset(ASKED_KEY, '1'); await reloadMe(); closeKind();
-    if (k === 'teacher') { status('Teacher account ready — make your first class.'); openDashboard(); }
-    else status('Account type saved.');
+    lset(ASKED_KEY, '1'); lset(INTENT, null); await reloadMe(); showMenu();
+    status(k === 'teacher' ? 'Teacher account ready — make your first class.' : 'Account type saved.');
   }
   async function joinCode(code, { fromChooser = false } = {}) {
     const r = await call('/api/classes/join', { method: 'POST', body: { code: normCode(code) } });
     if (!r.body?.ok) return sayErr(r) ?? false;
     lset(ASKED_KEY, '1');
     if (!lget(KIDS_KEY)) { lset(KIDS_KEY, '1'); setTheme('kids'); }          // students start with the Kids look; they can change it unless the teacher locked it
-    await reloadMe(); if (fromChooser) closeKind();
+    lset(INTENT, null); await reloadMe();
     status(`You joined ${r.body.class.name}.`); lset(LAST_CLASS, String(r.body.class.id)); openDashboard();
     return true;
   }
-  function openKindChooser() {
-    const me = getMe(); if (!me) return;
-    kindBody.replaceChildren();
+  function openKindChooser() { showMenu(); }
+  function renderChooser() {
+    const me = getMe(), intent = lget(INTENT);
+    const canTeach = me.teacherSignup !== false || me.entitlements?.admin;
+    kindBody.replaceChildren(el('h1', 'start-h', `Welcome, ${(me.name || me.email || '').split(' ')[0]}!`), el('p', 'start-sub', 'How will you use CircuitBench?'));
     const opts = el('div', 'kind-opts');
     const opt = (title, note, fn) => { const b = el('button', 'kind-opt'); b.type = 'button'; b.append(el('b', '', title), el('span', '', note)); b.addEventListener('click', fn); return b; };
-    opts.append(opt('Just me', 'Build and code on your own. Nothing changes.', () => choose('single')));
-    if (me.teacherSignup !== false || me.entitlements?.admin) opts.append(opt('I’m a teacher', 'Make classes, share a join code, see your students’ progress and choose what they can use.', () => choose('teacher')));
+    opts.append(opt('Just me', 'Build and code on your own.', () => choose('single')));
+    if (canTeach) opts.append(opt('I’m a teacher', 'Make classes, share a join code, see your students’ progress and choose what they can use.', () => choose('teacher')));
     else opts.append(el('p', 'proj-note', 'Teacher accounts are not open for sign-up yet.'));
     const code = el('input'); code.placeholder = 'CLASS CODE'; code.maxLength = 8; code.setAttribute('aria-label', 'Class code');
     const join = btn('Join', 'primary', () => joinCode(code.value, { fromChooser: true }));
@@ -54,30 +61,61 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
     const stu = el('div', 'kind-opt'); stu.append(el('b', '', 'I’m a student'), el('span', '', 'Your teacher gave you a 6-letter class code.'));
     const row = el('div', 'kind-join'); row.append(code, join); stu.append(row);
     opts.append(stu); kindBody.append(opts);
-    kindModal.hidden = false;
+    if (intent === 'student') setTimeout(() => code.focus(), 50);
   }
-  $('kindClose').addEventListener('click', () => { lset(ASKED_KEY, '1'); closeKind(); });
+  function renderSignedOut() {
+    kindBody.replaceChildren(el('h1', 'start-h', 'Welcome to CircuitBench'), el('p', 'start-sub', 'An electronics lab in your browser. Build real circuits, snap together blocks or write code, and watch it run.'));
+    const opts = el('div', 'kind-opts');
+    const opt = (title, note, fn) => { const b = el('button', 'kind-opt'); b.type = 'button'; b.append(el('b', '', title), el('span', '', note)); b.addEventListener('click', fn); return b; };
+    opts.append(opt('Build on my own', 'No account needed. Start building straight away.', enter));
+    if (account?.enabled !== false) {
+      const need = who => () => { lset(INTENT, who); status('Sign in with Google (top right) to continue.'); const h = $('startAccount'); h.classList.add('nudge'); setTimeout(() => h.classList.remove('nudge'), 1800); };
+      opts.append(opt('I’m a teacher', 'Sign in to make classes and follow your students’ progress.', need('teacher')), opt('I’m a student', 'Sign in, then enter the class code your teacher gave you.', need('student')));
+    }
+    kindBody.append(opts, el('p', 'proj-note', 'Signing in with Google is how CircuitBench knows who you are. Returning? Sign in at the top right to carry on where you left off.'));
+  }
+  function renderSingle() {
+    const me = getMe();
+    kindBody.replaceChildren(el('h1', 'start-h', `Hi ${(me.name || '').split(' ')[0] || 'there'}!`), el('p', 'start-sub', 'Your projects are ready on the bench.'));
+    kindBody.append(btn('Open the bench →', 'primary big', enter));
+  }
+  function renderAccount() {
+    const box = $('startAccount'), me = getMe(); box.replaceChildren();
+    if (me) {
+      const u = account?.user; const who = el('span', 'start-who', me.name || u?.name || me.email);
+      box.append(who, btn('Sign out', '', () => { account?.signOut(); }));
+    } else { const host = el('div'); box.append(host); account?.mountButton?.(host); }
+  }
+  function renderMenu() {
+    renderAccount();
+    const me = getMe();
+    if (!me) return renderSignedOut();
+    if (!me.kind) return lget(INTENT) === 'teacher' && (me.teacherSignup !== false || me.entitlements?.admin) ? (choose('teacher'), kindBody.replaceChildren(el('p', 'start-sub', 'Setting up your teacher account…'))) : renderChooser();
+    if (me.kind === 'single') return renderSingle();
+    return openDashboard();
+  }
+  $('startEnter').addEventListener('click', enter);
+  for (const e of document.querySelectorAll('.brand-mark, .brand-name')) { e.style.cursor = 'pointer'; e.addEventListener('click', showMenu); }
 
   /* ───────── account menu ───────── */
   function paintMenu() {
     const box = $('accountClassItems'); if (!box) return; box.replaceChildren();
+    box.append(menuItem('Main menu', showMenu));
     const me = getMe(); if (!me) return;
     if (me.kind === 'teacher') box.append(menuItem('Teacher dashboard', openDashboard));
     else if (me.kind === 'student') box.append(menuItem('My class', openDashboard));
-    else if (!me.kind) box.append(menuItem('Teacher or student?', openKindChooser));
+    else if (!me.kind) box.append(menuItem('Teacher or student?', showMenu));
     else if (me.kind === 'single') box.append(menuItem('Join a class', () => status('Single-user accounts cannot join a class. Ask an admin to change your account type.')));
   }
   const menuItem = (label, fn) => { const b = el('button', '', label); b.type = 'button'; b.addEventListener('click', () => { $('accountMenu').hidden = true; fn(); }); return b; };
 
   /* ───────── dashboards ───────── */
-  const closeDash = () => { classModal.hidden = true; };
-  $('classClose').addEventListener('click', closeDash);
-  for (const m of [classModal, kindModal]) m.addEventListener('click', e => { if (e.target === m) m.hidden = true; });
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') { if (!classModal.hidden) closeDash(); if (!kindModal.hidden) closeKind(); } });
+  const closeDash = enter;
   let teacherTab = 'students';
 
   async function openDashboard(id) {
-    classModal.hidden = false; classBody.replaceChildren(el('p', 'proj-note', 'Loading…'));
+    if (screen.hidden) { screen.hidden = false; setBench(true); renderAccount(); }
+    classBody.replaceChildren(el('p', 'proj-note', 'Loading…'));
     const k = kind();
     const list = await call('/api/classes');
     if (!list.body?.ok) { classBody.replaceChildren(el('p', 'proj-note', list.body?.error || 'Could not load your classes.')); return; }
@@ -96,8 +134,7 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
 
   /* ── teacher ── */
   async function teacherView(classes, cur) {
-    $('classTitle').textContent = 'Teacher dashboard';
-    const bar = el('div', 'cls-bar');
+    const bar = el('div', 'cls-bar'), title = el('h1', 'start-h', 'Teacher dashboard');
     if (cur) bar.append(classPicker(classes, cur, openDashboard));
     const nameIn = el('input'); nameIn.placeholder = 'New class name'; nameIn.maxLength = 60; nameIn.setAttribute('aria-label', 'New class name');
     bar.append(btn('＋ New class', 'primary', async () => {
@@ -105,9 +142,9 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
       if (!r.body?.ok) return sayErr(r); await reloadMe(); openDashboard(r.body.class.id);
     }), nameIn);
     if (getMe()?.entitlements?.owner) bar.append(btn('Make a demo class', '', async () => { const r = await call('/api/classes/demo', { method: 'POST' }); if (!r.body?.ok) return sayErr(r); openDashboard(r.body.class.id); }));
-    if (!cur) { classBody.replaceChildren(bar, el('div', 'cls-empty', 'Make your first class, then share its code with your students.')); return; }
+    if (!cur) { classBody.replaceChildren(title, bar, el('div', 'cls-empty', 'Make your first class, then share its code with your students.')); return; }
     const r = await call(`/api/classes/${cur.id}`);
-    if (!r.body?.ok) { classBody.replaceChildren(bar, el('p', 'proj-note', r.body?.error || 'Could not load the class.')); return; }
+    if (!r.body?.ok) { classBody.replaceChildren(title, bar, el('p', 'proj-note', r.body?.error || 'Could not load the class.')); return; }
     const d = r.body;
     const code = el('span', 'cls-code', d.class.code); code.title = 'Students type this code to join';
     bar.append(code,
@@ -122,7 +159,7 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
     if (teacherTab === 'students') studentsPane(pane, d, cur);
     else if (teacherTab === 'course') coursePane(pane, d, cur);
     else settingsPane(pane, d, cur);
-    classBody.replaceChildren(bar, tabs, pane);
+    classBody.replaceChildren(title, bar, tabs, pane);
   }
   const visible = d => d.curriculum.filter(p => !p.hidden);
   const done = x => x?.status === 'submitted' || x?.status === 'done';
@@ -205,15 +242,14 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
 
   /* ── student ── */
   async function studentView(classes, cur) {
-    $('classTitle').textContent = 'My class';
-    const bar = el('div', 'cls-bar');
+    const bar = el('div', 'cls-bar'), title = el('h1', 'start-h', 'My class');
     if (classes.length > 1 || cur) bar.append(classes.length ? classPicker(classes, cur, openDashboard) : '');
     const code = el('input'); code.placeholder = 'CLASS CODE'; code.maxLength = 8; code.setAttribute('aria-label', 'Class code'); code.style.cssText = 'text-transform:uppercase;letter-spacing:.12em;width:9em';
     const join = btn(classes.length ? 'Join another class' : 'Join', 'primary', () => joinCode(code.value)); code.addEventListener('keydown', e => { if (e.key === 'Enter') join.click(); });
     bar.append(code, join);
-    if (!cur) { classBody.replaceChildren(bar, el('div', 'cls-empty', 'Type the code your teacher gave you to join your class.')); return; }
+    if (!cur) { classBody.replaceChildren(title, bar, el('div', 'cls-empty', 'Type the code your teacher gave you to join your class.')); return; }
     const r = await call(`/api/classes/${cur.id}`);
-    if (!r.body?.ok) { classBody.replaceChildren(bar, el('p', 'proj-note', r.body?.error || 'Could not load the class.')); return; }
+    if (!r.body?.ok) { classBody.replaceChildren(title, bar, el('p', 'proj-note', r.body?.error || 'Could not load the class.')); return; }
     const d = r.body, n = d.projects.filter(p => done(p)).length;
     const head = el('div', 'cls-bar'); const track = el('span', 'cls-bar-track'), fill = el('span', 'cls-bar-fill'); fill.style.width = `${d.projects.length ? Math.round(100 * n / d.projects.length) : 0}%`; track.append(fill);
     head.append(el('b', '', `${d.class.name} · ${d.class.teacher}`), track, el('span', 'proj-meta', `${n} of ${d.projects.length} done`));
@@ -230,7 +266,7 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
       }
       row.append(act); if (p.comment) row.append(el('div', 'note', `Teacher: ${p.comment}`)); list.append(row);
     });
-    classBody.replaceChildren(bar, head, list);
+    classBody.replaceChildren(title, bar, head, list);
   }
 
   /* ── working on a project ── */
@@ -262,12 +298,10 @@ export function initClassroom({ editor, code, projects, status = () => {}, fetch
   /* ───────── when to show what ───────── */
   function onSession() {
     paintMenu(); paintPill();
-    const me = getMe();
-    if (me && !me.kind && !lget(ASKED_KEY) && me.classroom) setTimeout(openKindChooser, 600);       // once per browser; "Teacher or student?" stays in the account menu
-    if (me && (me.kind === 'teacher' || me.kind === 'student') && !sget(DASH_KEY) && classModal.hidden) { sset(DASH_KEY, '1'); setTimeout(openDashboard, 400); }   // teachers and students land on their dashboard
-    if (!me) { sset(DASH_KEY, ''); }
+    if (shown()) renderMenu();                                // signing in or out while on the menu: the menu follows
   }
   globalThis.addEventListener?.('cb-session', onSession);
-  onSession();
-  return { openDashboard, openKindChooser, choose, joinCode, handIn, paintMenu };
+  account?.ready?.then(() => { if (shown() && !getMe()) renderMenu(); });      // once we know sign-in exists, the teacher and student cards appear
+  showMenu();
+  return { entered, enter, showMenu, openDashboard, openKindChooser, choose, joinCode, handIn, paintMenu };
 }

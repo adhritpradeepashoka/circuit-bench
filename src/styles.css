@@ -828,3 +828,26 @@ html[data-off~="themes"] #themeList, html[data-off~="themes"] #themeCustom { dis
 .cls-empty { padding: 18px; text-align: center; color: var(--muted); }
 .proj-pill { position: fixed; left: 14px; bottom: 14px; z-index: 60; display: flex; gap: 10px; align-items: center; max-width: min(520px, 90vw); padding: 8px 10px 8px 14px; background: var(--ink, #1b1f3b); color: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); font-size: 13px; }
 .proj-pill[hidden] { display: none; } .proj-pill b { font-weight: 800; } .proj-pill button { padding: 5px 12px; border-radius: 10px; border: 0; background: var(--blue); color: var(--on-blue); font-weight: 700; cursor: pointer; }
+
+/* ── the main menu: the first thing everyone sees ── */
+.start { position: fixed; inset: 0; z-index: 500; display: flex; flex-direction: column; background: var(--paper); color: var(--text); overflow: auto; }
+.start[hidden] { display: none; }
+.start-head { flex: none; display: flex; align-items: center; gap: 14px; padding: 12px 24px; background: var(--ink); color: #fff; }
+.start-brand { display: flex; align-items: center; gap: 10px; font-size: 16px; margin-right: auto; }
+.start-account { display: flex; align-items: center; gap: 10px; }
+.start-account.nudge { animation: vlab-pulse 0.6s ease-in-out 3; }
+.start-who { font-weight: 600; font-size: 13px; }
+.start-head .cls-btn { color: #fff; border-color: rgba(255,255,255,.35); }
+.start-head .cls-btn.primary { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+.start-main { flex: 1; display: flex; justify-content: center; padding: 40px 20px 60px; }
+.start-body { width: min(980px, 100%); }
+.start-h { margin: 0 0 6px; font-size: 30px; }
+.start-sub { margin: 0 0 24px; color: var(--muted); font-size: 15px; }
+.start .kind-opts { max-width: 560px; }
+.cls-btn.big { padding: 14px 28px; font-size: 17px; border-radius: 14px; }
+.start .cls-tabs, .start .cls-bar { color: var(--text); }
+
+.start .kind-opts { max-width: none; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.start .kind-opt { padding: 20px 20px; border-radius: 16px; background: var(--surface); box-shadow: 0 1px 2px rgba(0,0,0,.05); }
+.start .kind-opt b { font-size: 17px; } .start .kind-opt span { font-size: 13px; }
+.start .proj-note { border: 0; padding: 18px 0 0; }

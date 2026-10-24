@@ -31,7 +31,7 @@ const loadScript = src => new Promise((resolve, reject) => {
 export function initAccount({ fetchConfig = () => fetch('/api/config').then(r => r.json()), load = loadScript, status = () => {}, fetchImpl = (...a) => globalThis.fetch(...a), heartbeatMs = 60_000 } = {}) {
   const $ = id => document.getElementById(id);
   const slot = $('accountSlot'), menu = $('accountMenu');
-  let user = null, google = null;
+  let user = null, google = null, enabled = false;
   try { user = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch { user = null; }
 
   function paint() {
@@ -96,6 +96,7 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
     let id = null;
     try { id = (await fetchConfig())?.googleClientId || null; } catch { id = null; }
     if (!id) { if (!user) slot.hidden = true; return; }
+    enabled = true;
     try { await load(GIS_SRC); } catch { return; }            // offline / blocked: the rest of the app is unaffected
     google = globalThis.google;
     if (!google?.accounts?.id) return;
@@ -103,5 +104,7 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
     paint();
   })();
 
-  return { ready, signOut, refresh, get user() { return user; }, get me() { return getMe(); } };
+  /** Draw the Google button somewhere else (the start menu). Does nothing when sign-in is not available. */
+  const mountButton = host => ready.then(() => { if (google && !user) google.accounts.id.renderButton(host, { type: 'standard', theme: 'filled_blue', size: 'large', shape: 'pill', text: 'signin_with', logo_alignment: 'left' }); });
+  return { ready, signOut, refresh, mountButton, get enabled() { return enabled; }, get user() { return user; }, get me() { return getMe(); } };
 }
