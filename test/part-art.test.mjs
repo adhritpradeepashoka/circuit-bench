@@ -105,15 +105,16 @@ test('BLDC with ESC needs arming, then rpm = throttle × Kv × volts', () => {
   assert.equal(esc.rpm, 0, 'too little battery voltage');
 });
 
-test("the worked example in the part-maker prompt is itself a valid part (so the AI copies something that works)", async () => {
-  const { buildPartPrompt } = await import('../src/core/ai-prompt.js');
-  const t = buildPartPrompt('a brushless motor');
-  const i = t.indexOf('"package": "art", "pins"'), j = t.indexOf('(In that example');
-  const body = t.slice(i, j).trim();
-  const spec = JSON.parse(`{"name":"Outrunner","label":"BLDC",${body}}`);
-  const v = validatePartSpec(spec);
-  assert.ok(v.ok, v.errors?.join('; '));
-  assert.equal(v.spec.art.motion[0].target, 'rotor');
+test("the part-maker prompt teaches the behaviours and the format, not a stock drawing to copy", async () => {
+  const { buildPartPrompt, extractJsonText } = await import('../src/core/ai-prompt.js');
+  const t = buildPartPrompt('a brushless ESC');
+  assert.ok(!t.includes('Worked example'), 'no worked examples to copy');
+  assert.match(t, /"bldc-esc"/);                                   // every behaviour is still described
   assert.match(t, /STANDARD FIRST/);
   assert.match(t, /never silently drop a number/);
+  assert.match(t, /speed controller \(ESC\)/);
+  // a reply cut off before its closing fence, or sent without one, is still read
+  assert.deepEqual(JSON.parse(extractJsonText('```json\n{"a":{"b":1}}')), { a: { b: 1 } });
+  assert.deepEqual(JSON.parse(extractJsonText('Here you go: {"a":2} thanks')), { a: 2 });
+  assert.equal(extractJsonText('no json here'), null);
 });

@@ -194,6 +194,15 @@ export function matchJsonFence(text) {
   return /```json\s*\n([\s\S]*?)```/i.exec(text || '') || /```\s*\n(\{[\s\S]*?\})\s*```/.exec(text || '');
 }
 
+/** The JSON object in a model reply: a closed ```json fence, else an unclosed fence (a reply cut off at the end), else the outermost {...}. Returns the text of the object or null. */
+export function extractJsonText(text) {
+  const t = String(text || '');
+  const fence = matchJsonFence(t); if (fence) return fence[1];
+  const open = /```(?:json)?\s*\n(\{[\s\S]*)$/i.exec(t); if (open) return open[1].replace(/\s*```\s*$/, '');
+  const i = t.indexOf('{'), j = t.lastIndexOf('}');
+  return i >= 0 && j > i ? t.slice(i, j + 1) : null;
+}
+
 /** JSON.parse, with one repair pass for the trailing-comma mistake models make often enough to be worth tolerating. */
 export function tryParseJson(str) {
   try { return JSON.parse(str); } catch { /* fall through to repair */ }
@@ -272,20 +281,7 @@ In an expression you may use:
   - min, max, abs, floor, ceil, round, clamp(x,lo,hi), select(cond,a,b)
 Nothing else exists: no function calls of your own, no strings, no arrays, no property access. Every pin you name must be one of the pins you listed. Power the part through its "vcc" and "gnd" roles; below 2 V it switches off and forgets its vars. An optional "enable" role is an active-LOW output enable.
 
-Worked example — a 74HC595 serial-in / parallel-out shift register:
-  "pins": [ {"id":"Q1"},{"id":"Q2"},{"id":"Q3"},{"id":"Q4"},{"id":"Q5"},{"id":"Q6"},{"id":"Q7"},{"id":"GND"},{"id":"Q7S"},{"id":"MR"},{"id":"SHCP"},{"id":"STCP"},{"id":"OE"},{"id":"DS"},{"id":"Q0"},{"id":"VCC"} ],
-  "behaviour": {
-    "kind": "logic",
-    "roles": { "vcc": "VCC", "gnd": "GND", "enable": "OE" },
-    "vars": { "shift": 0, "latch": 0 },
-    "rules": [
-      { "when": "!MR", "set": { "shift": "0" } },
-      { "when": "rising(SHCP) && MR", "set": { "shift": "(shift * 2 + DS) % 256" } },
-      { "when": "rising(STCP)", "set": { "latch": "shift" } }
-    ],
-    "outputs": { "Q0": "latch & 1", "Q1": "(latch >> 1) & 1", "Q2": "(latch >> 2) & 1", "Q3": "(latch >> 3) & 1", "Q4": "(latch >> 4) & 1", "Q5": "(latch >> 5) & 1", "Q6": "(latch >> 6) & 1", "Q7": "(latch >> 7) & 1", "Q7S": "(shift >> 7) & 1" }
-  }
-A quad NAND gate (74HC00) needs no vars and no rules at all — just "outputs": { "Y1": "!(A1 && B1)", ... }.
+Memory goes in "vars" and is changed by "rules" on clock edges (rising(CLK) etc.); every output is an expression of pins and vars. A quad NAND gate (74HC00) needs no vars and no rules at all — just "outputs": { "Y1": "!(A1 && B1)", ... }.
 
 DRAWING THE PART — the "art" package
 Every part that is not a chip package (dip, dip-wide, quad) is a DRAWN part: package "art". You draw the real thing as SVG so it looks like the actual component on a bench — a motor looks like a motor (can, shaft or bell, wires), a servo like a servo (case, horn, three wires), a sensor module like the board with its sensor and header — in its real colours, with a little shading (gradients), not a labelled box. Think of what a photo of it shows and draw those shapes.
@@ -300,11 +296,7 @@ Every part that is not a chip package (dip, dip-wide, quad) is a DRAWN part: pac
       slide  — moves along (dx, dy) pixels as a 0–1 level (driver "level"): a valve, a linear actuator, a plunger.
     Draw the moving piece so it looks right when it is still, and spinning pieces symmetric about their pivot so the spin reads clearly (blades, magnets, spokes). A rotor that spins needs a behaviour that produces an rpm: "motor", "bldc", "bldc-esc" or "stepper"; a swinging horn needs "servo".
   - Add a short label with <text> if the real part has printing on it (the model name). Keep the whole drawing under ~60 shapes.
-Worked example — a brushless outrunner motor (3 wires out of the left, rotor bell that spins):
-  "package": "art", "pins": [ {"id":"U","label":"Phase U","x":4,"y":30}, {"id":"V","label":"Phase V","x":4,"y":45}, {"id":"W","label":"Phase W","x":4,"y":60} ],
-  "art": { "w": 140, "h": 90, "svg": "<defs><linearGradient id='al' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='#d9dde2'/><stop offset='1' stop-color='#7b838c'/></linearGradient></defs><path d='M4 30H40M4 45H40M4 60H40' stroke='#e0b030' stroke-width='2.5' fill='none'/><rect x='38' y='38' width='22' height='14' fill='#444'/><g id='rotor'><rect x='58' y='12' width='64' height='66' rx='6' fill='url(#al)' stroke='#555'/><circle cx='90' cy='45' r='10' fill='#333'/><path d='M90 18V72M63 45H117' stroke='#2b2f36' stroke-width='3'/></g><circle cx='90' cy='45' r='3' fill='#bbb'/>", "motion": [ {"target":"rotor","kind":"spin","driver":"rpm","pivot":[90,45]} ] },
-  "behaviour": { "kind": "bldc", "roles": { "u": "U", "v": "V", "w": "W" }, "poles": 7 }
-(In that example the rotor is drawn face-on-ish so a spin is visible; make yours recognisable for the part you were asked for.)
+Draw the part from what you know of the real thing — do not reuse a stock drawing. Each pin's "x","y" sits on the end of its lead; moving pieces are separate <g id> groups named in "motion"; spinning pieces are drawn symmetric about the "pivot". A standalone speed controller (ESC) or motor driver is a small case with its battery/power leads, its signal lead and its three motor leads — give it those pins; use a behaviour from the list only if it really matches what the part does, otherwise "none" with the missing behaviour described in "note".
 
 Student's description: ${String(description).slice(0, 1500)}
 ${problems ? `\nYour previous answer was rejected by the simulator for these reasons — fix them and reply again:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}

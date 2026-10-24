@@ -19,7 +19,7 @@
 // pin name is silently dropped with a warning there, never trusted blindly from the model's output.
 import { RequestError } from './compile-service.mjs';
 import { validatePartSpec } from '../src/core/custom-parts.js';
-import { LIMITS, buildPrompt, parseReply, matchJsonFence, tryParseJson, describeContext, describeHistory, buildPartPrompt } from '../src/core/ai-prompt.js';
+import { LIMITS, buildPrompt, parseReply, matchJsonFence, extractJsonText, tryParseJson, describeContext, describeHistory, buildPartPrompt } from '../src/core/ai-prompt.js';
 export { describeContext, describeHistory, buildPartPrompt };
 
 function statusFor(httpStatus, message) {
@@ -43,8 +43,9 @@ function openAiLike({ compact = false, label, url, models, search = false, keyUr
     listIds: body => (Array.isArray(body?.data) ? body.data : []).filter(m => !onlyFree || m?.id === 'openrouter/free' || /:free$/.test(m?.id || '') || (m?.pricing && Number(m.pricing.prompt) === 0 && Number(m.pricing.completion) === 0)).map(m => m?.id).filter(Boolean),
     url: () => url,
     headers: key => ({ 'content-type': 'application/json', authorization: `Bearer ${key}` }),
-    body: (prompt, useSearch, model, fast) => JSON.stringify({
+    body: (prompt, useSearch, model, fast, maxTokens) => JSON.stringify({
       model, temperature: 0.2, messages: [{ role: 'user', content: prompt }],
+      ...(maxTokens ? { max_tokens: maxTokens } : {}),
       ...(fast && effort === 'reasoning_effort' && /gpt-oss/.test(model) ? { reasoning_effort: 'low' } : {}),
       ...(fast && effort === 'reasoning' ? { reasoning: { effort: 'low' } } : {}),
       ...(useSearch && search ? { tools: [{ type: 'browser_search' }] } : {}),
@@ -69,9 +70,9 @@ export const PROVIDERS = {
     headers: () => ({ 'content-type': 'application/json' }),
     // search: Google Search grounding, so a part lookup is based on the real datasheet instead of recall.
     // fast: Gemini 2.5/3.x "think" before answering by default, which is most of the wait; edits don't need it
-    body: (prompt, search, model, fast) => JSON.stringify({
+    body: (prompt, search, model, fast, maxTokens) => JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, ...(fast && /flash/.test(model) ? { thinkingConfig: /gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' } } : {}) },
+      generationConfig: { temperature: 0.2, ...(maxTokens ? { maxOutputTokens: maxTokens } : {}), ...(fast && /flash/.test(model) ? { thinkingConfig: /gemini-2\./.test(model) ? { thinkingBudget: 0 } : { thinkingLevel: 'low' } } : {}) },
       ...(search ? { tools: [{ google_search: {} }] } : {}),
     }),
     errorMessage: body => body?.error?.message,
@@ -134,7 +135,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
    * Groq browser search); keys and plans differ, so if the provider rejects the tool we quietly try again
    * without it rather than failing the student's request.
    */
-  async function ask(p, userKey, prompt, { search = false, model = '' } = {}) {
+  async function ask(p, userKey, prompt, { search = false, model = '', maxTokens = 0 } = {}) {
     const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
     const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, p.anyChat ? 8 : 6), ...p.models].filter(Boolean))].slice(0, p.anyChat ? 8 : 7);   // a model the student typed is the only one tried
     const tried = [], t0 = now();
@@ -145,7 +146,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
       const left = budgetMs - (now() - t0);
       if (left < 4000) throw new RequestError(`${p.label} is taking too long right now (tried ${tried.concat(wanted[i]).slice(0, 3).join(', ')}). Try again, or switch provider with the menu under the chat box.`, 504);
       try {
-        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i], fast), signal: AbortSignal.timeout(Math.min(attemptMs, left)) });
+        res = await fetchImpl(p.url(userKey, wanted[i]), { method: 'POST', headers: p.headers(userKey), body: p.body(prompt, search, wanted[i], fast, maxTokens), signal: AbortSignal.timeout(Math.min(attemptMs, left)) });
       } catch (err) {
         if (err?.name === 'TimeoutError' || err?.name === 'AbortError') { tried.push(wanted[i]); if (i < wanted.length - 1) continue; throw new RequestError(`${p.label} did not answer in time (${wanted[i]}). Try again, or switch provider with the menu under the chat box.`, 504); }
         throw new RequestError(`Could not reach ${p.label} — check your connection and try again.`, 502);
@@ -158,7 +159,7 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
       msg = p.errorMessage(body) || `HTTP ${res.status}`;
       if (fast && res.status === 400 && /reason|thinking|effort|unknown (field|param)|unrecognized|unexpected|extra inputs|invalid json payload/i.test(msg) && !/key/i.test(msg)) { fast = false; i--; continue; }   // this model doesn't take the speed-up hint: same model, plain request
       tried.push(wanted[i]);
-      if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model });
+      if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model, maxTokens });
       if (i < wanted.length - 1 && (modelGone(res.status, msg) || transient(res.status, msg))) continue;            // that model isn't available to this key — try the next one
       throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ` — none of ${tried.length > 1 ? `the ${tried.length} models I tried (${tried.slice(0, 4).join(', ')}${tried.length > 4 ? '…' : ''})` : `“${tried[0]}”`} is open to this key. Type a model your account can use in the AI settings, or pick another provider.` : ''}`, statusFor(res.status, msg));
     }
@@ -174,10 +175,14 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     const p = needKey(userKey, provider);
     let problems = null;
     for (let attempt = 0; attempt < 2; attempt++) {
-      const { text, sources, searched, meta } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true, model });
-      const m = matchJsonFence(text);
-      const raw = m ? tryParseJson(m[1]) : null;
-      if (!raw) { problems = ['The reply had no valid json block.']; continue; }
+      const { text, sources, searched, meta } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true, model, maxTokens: 8000 });
+      const json = extractJsonText(text);
+      const raw = json ? tryParseJson(json) : null;
+      if (!raw) {
+        const t = String(text || '').trim();
+        problems = [t ? `The reply was not a complete JSON object (${t.length} characters, ending “…${t.slice(-50).replace(/\s+/g, ' ')}”) — it may have been cut off: keep the drawing short (under 40 shapes) and reply with the JSON only.` : 'The reply was empty.'];
+        continue;
+      }
       const v = validatePartSpec(raw);
       if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300), sources, searched, meta };
       problems = v.errors;
