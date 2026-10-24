@@ -7,7 +7,7 @@
 //   set REF key=value [all]            set resistor-1 ohms=1000
 //   wire REF PIN REF PIN               wire uno-1 9 resistor-1 1
 //   blink PIN MS                       blink 9 500   ·   blink auto 500 (the pin the last `build led` picked)
-//   build led|button|pot PIN|auto      a ready LED+resistor / button / potentiometer circuit on that pin — or on a free one (auto)
+//   build led|button|pot|mpu6050|dht|… PIN|auto      a ready LED+resistor / button / potentiometer circuit on that pin — or on a free one (auto)
 //   defer                              "this needs a bigger AI"      ·   off     "outside what CircuitBench does"
 // Commands are separated by ";". REF is a part id (led-2) or a part type (led).
 import { PART_DEFS } from './parts.js';
@@ -22,6 +22,21 @@ export function parseProgram(text) {
   const cmds = String(text || '').trim().split(/\s*;\s*/).filter(Boolean).map(c => c.split(/\s+/));
   return cmds.length && cmds.length <= 8 ? cmds : null;
 }
+
+/* ── ready-made circuits for the other parts ("make an MPU circuit") ─────────────────────────────────────────────
+ * `build TYPE auto`: find the part on the bench (add one if it is not there), make sure there is a board, and wire only what is
+ * not wired yet: power, ground and either the I²C pair or one signal pin. A short starter sketch goes with it. */
+const RECIPES = {
+  'mpu6050': { name: 'tilt sensor', power: 'VCC', gnd: 'GND', i2c: ['SDA', 'SCL'], code: () => `// MPU-6050: reads tilt over I²C (SDA, SCL) and prints roll and pitch. Right-click the sensor to tilt it.\n#include <Wire.h>\n\nconst int MPU = 0x68;\n\nint16_t readWord() {\n  int16_t high = Wire.read();\n  return (high << 8) | Wire.read();\n}\n\nvoid setup() {\n  Serial.begin(9600);\n  Wire.begin();\n  Wire.beginTransmission(MPU);\n  Wire.write(0x6B);          // wake the sensor up\n  Wire.write(0);\n  Wire.endTransmission();\n}\n\nvoid loop() {\n  Wire.beginTransmission(MPU);\n  Wire.write(0x3B);          // X, Y, Z acceleration follow\n  Wire.endTransmission(false);\n  Wire.requestFrom(MPU, 6);\n  int16_t ax = readWord(), ay = readWord(), az = readWord();\n  Serial.print("roll ");\n  Serial.print(atan2(ay, az) * 180.0 / PI, 0);\n  Serial.print("  pitch ");\n  Serial.println(atan2(-ax, sqrt((float)ay * ay + (float)az * az)) * 180.0 / PI, 0);\n  delay(200);\n}\n` },
+  'lcd1602': { name: 'text screen', power: 'VCC', gnd: 'GND', i2c: ['SDA', 'SCL'], code: () => `// 16×2 LCD on I²C (SDA, SCL): prints a line of text and a counter.\n#include <Wire.h>\n#include <LiquidCrystal_I2C.h>\n\nLiquidCrystal_I2C lcd(0x27, 16, 2);\n\nvoid setup() {\n  lcd.init();\n  lcd.backlight();\n  lcd.setCursor(0, 0);\n  lcd.print("Hello, bench!");\n}\n\nvoid loop() {\n  lcd.setCursor(0, 1);\n  lcd.print(millis() / 1000);\n  lcd.print(" s   ");\n  delay(200);\n}\n` },
+  'ssd1306': { name: 'OLED screen', power: 'VIN', gnd: 'GND', i2c: ['DATA', 'CLK'], code: () => `// 128×64 OLED on I²C (DATA = SDA, CLK = SCL): shows some text.\n#include <Wire.h>\n#include <Adafruit_GFX.h>\n#include <Adafruit_SSD1306.h>\n\nAdafruit_SSD1306 display(128, 64, &Wire, -1);\n\nvoid setup() {\n  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);\n  display.setTextColor(SSD1306_WHITE);\n}\n\nvoid loop() {\n  display.clearDisplay();\n  display.setTextSize(2);\n  display.setCursor(0, 0);\n  display.print(F("Hello!"));\n  display.setTextSize(1);\n  display.setCursor(0, 30);\n  display.print(millis() / 1000);\n  display.print(F(" s"));\n  display.display();\n  delay(200);\n}\n` },
+  'dht': { name: 'humidity sensor', power: 'VCC', gnd: 'GND', sig: 'SDA', analog: false, code: pin => `// DHT22: DATA on pin ${pin}. Prints temperature and humidity. Right-click the sensor to change the weather.\n#include <DHT.h>\n\nDHT dht(${pin}, DHT22);\n\nvoid setup() {\n  Serial.begin(9600);\n  dht.begin();\n}\n\nvoid loop() {\n  Serial.print(dht.readTemperature(), 1);\n  Serial.print(" C, ");\n  Serial.print(dht.readHumidity(), 0);\n  Serial.println(" %");\n  delay(2000);\n}\n` },
+  'ntc-sensor': { name: 'temperature sensor', power: 'VCC', gnd: 'GND', sig: 'OUT', analog: true, code: pin => `// Temperature sensor: OUT on ${pin}. Prints the raw reading (0–1023); it changes when you change the temperature.\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  Serial.println(analogRead(${pin}));\n  delay(200);\n}\n` },
+  'ldr-module': { name: 'light sensor', power: 'VCC', gnd: 'GND', sig: 'AO', analog: true, code: pin => `// Light sensor: AO on ${pin}. A high reading means dark. Right-click the module to change the light level.\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  Serial.println(analogRead(${pin}));\n  delay(200);\n}\n` },
+  'pir-sensor': { name: 'motion sensor', power: 'VCC', gnd: 'GND', sig: 'OUT', analog: false, code: pin => `// Motion sensor: OUT on ${pin}. Lights the built-in LED (pin 13) while it sees movement.\nvoid setup() {\n  pinMode(${pin}, INPUT);\n  pinMode(13, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(13, digitalRead(${pin}));\n  delay(50);\n}\n` },
+};
+export const RECIPE_TYPES = Object.keys(RECIPES);
+const I2C_PINS = { 'arduino-uno': ['A4', 'A5'], 'arduino-nano': ['A4', 'A5'], 'arduino-mega': ['SDA', 'SCL'] };
 
 /** → { kind:'edit', actions, code, explanation } | { kind:'defer' } | { kind:'off', explanation } | null (invalid → treat as defer) */
 export function runProgram(text, circuit = { parts: [], wires: [] }) {
@@ -74,11 +89,11 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
       const pin = (String(a[0]).toLowerCase() === 'auto' ? autoPin : String(a[0]).toUpperCase()) || (a[0] === 'auto' ? '13' : ''), ms = +a[1]; if (!PIN.test(pin) || !(ms >= 10 && ms <= 60000)) return null;
       code = blinkSketch(pin, ms); said.push(`Wrote a sketch that blinks pin ${pin} every ${ms} ms`);
     } else if (op === 'build') {
-      const kind = a[0]; if (!board()) addPart('arduino-uno');   // an empty bench gets an Uno first
+      const kind = a[0]; if (!board()) { addPart('arduino-uno'); said.push('Added an Arduino Uno'); }   // an empty bench gets an Uno first
       const b = board()?.id; if (!b) return null;
       const want = String(a[1] ?? 'auto').toLowerCase();
-      const pin = want === 'auto' ? freePin(kind === 'pot') : want.toUpperCase();
-      if (!pin || !PIN.test(pin) || !pinOk(b, pin)) return null;
+      const pin = RECIPES[kind] ? null : want === 'auto' ? freePin(kind === 'pot') : want.toUpperCase();
+      if (!RECIPES[kind] && (!pin || !PIN.test(pin) || !pinOk(b, pin))) return null;
       if (kind === 'led') autoPin = pin;
       const g = gnd(b); if (!g) return null;
       if (kind === 'led') {
@@ -96,6 +111,24 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
         if (!five || !wire(pot, 'SIG', b, pin) || !wire(pot, 'VCC', b, five) || !wire(pot, 'GND', b, g)) return null;
         code = `// Read the potentiometer on ${pin} and print it.\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  Serial.println(analogRead(${pin}));\n  delay(100);\n}\n`;
         said.push(`Built a potentiometer on ${pin} and a sketch that prints its value`);
+      } else if (RECIPES[kind]) {
+        const R = RECIPES[kind], five = PART_DEFS[parts.find(p => p.id === b).type].pins.find(p => p.id === '5V')?.id;
+        if (!five) return null;
+        const had = parts.find(p => p.type === kind), part = had?.id || addPart(kind);          // scan first, add only when it is missing
+        // pins of this part that already have a wire, and the board pin on the other end of each
+        const wiredTo = {};
+        for (const w of circuit.wires || []) for (const [x, y] of [[w.from, w.to], [w.to, w.from]]) if (x?.part === part) wiredTo[x.pin] = y;
+        const hook = (pin, bp) => { if (wiredTo[pin]) return true; return wire(part, pin, b, bp); };
+        let sig = null, n = 0;
+        if (R.i2c) { const [sda, scl] = I2C_PINS[parts.find(p => p.id === b).type] || []; if (!sda || !hook(R.i2c[0], sda) || !hook(R.i2c[1], scl)) return null; }
+        else {
+          const wired = wiredTo[R.sig]; sig = wired?.part === b ? String(wired.pin) : (want === 'auto' ? freePin(R.analog) : want.toUpperCase());
+          if (!sig || !PIN.test(sig) || !pinOk(b, sig) || (R.analog && !/^A\d/.test(sig)) || !hook(R.sig, sig)) return null;
+        }
+        if (!hook(R.power, five) || !hook(R.gnd, g)) return null;
+        n = actions.length;
+        said.push(`${had ? `Used the ${R.name} already on the bench` : `Added ${R.name}`}${R.i2c ? ' and wired it to the board’s I²C pins' : ` and wired it to pin ${sig}`}${actions.length > (had ? 0 : 1) ? '' : ' (it was already wired)'}`);
+        code = R.code(sig);
       } else return null;
     } else return null;
   }

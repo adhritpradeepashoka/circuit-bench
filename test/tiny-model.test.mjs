@@ -33,3 +33,18 @@ test('"I want a basic LED circuit" works on an empty bench (adds an Uno first)',
     assert.equal(u.actions.filter(a => a.op === 'add_wire').length, 3);
   }
 });
+
+test('"make a <part> circuit" scans the bench, adds what is missing and wires only what is not wired', async () => {
+  const { recipeEdit } = await import('../src/core/recipes.js');
+  const empty = recipeEdit('make a MPU circuit', { parts: [], wires: [] });
+  assert.deepEqual(empty.actions.filter(a => a.op === 'add_part').map(a => a.type), ['arduino-uno', 'mpu6050']);
+  assert.equal(empty.actions.filter(a => a.op === 'add_wire').length, 4);
+  assert.match(empty.code, /Wire\.h/);
+  const have = { parts: [{ id: 'u', type: 'arduino-uno' }, { id: 'm', type: 'mpu6050' }], wires: [{ from: { part: 'm', pin: 'VCC' }, to: { part: 'u', pin: '5V' } }] };
+  const r = recipeEdit('build an mpu circuit', have);
+  assert.equal(r.actions.filter(a => a.op === 'add_part').length, 0, 'reuses the MPU already there');
+  assert.equal(r.actions.filter(a => a.op === 'add_wire').length, 3, 'skips the wire that exists');
+  assert.equal(recipeEdit('how do I make an mpu circuit', have), null, 'questions go to a bigger AI');
+  const two = recipeEdit('make an mpu and oled circuit', { parts: [], wires: [] });
+  assert.equal(two.actions.filter(a => a.op === 'add_part').length, 3, 'one board, two parts');
+});

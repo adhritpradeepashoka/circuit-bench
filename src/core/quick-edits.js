@@ -12,14 +12,14 @@ const NAMES = [
   ['pushbutton', /\bpush ?buttons?\b|\bbuttons?\b/], ['slide-switch', /\bslide ?switch(es)?\b|\bswitch(es)?\b/],
   ['potentiometer', /\bpotentiometers?\b|\bpots?\b|\bknobs?\b|\bdials?\b/], ['seven-segment', /\b7[- ]?segment\b|\bseven[- ]segment\b/],
   ['pir-sensor', /\bpir\b|\bmotion sensors?\b/], ['ldr-module', /\bldr\b|\bphoto ?resistors?\b|\blight sensors?\b/],
-  ['ntc-sensor', /\bntc\b|\bthermistors?\b|\btemperature sensors?\b/], ['mpu6050', /\bmpu[- ]?6050\b|\baccelerometers?\b|\bgyro(scope)?\b/],
+  ['ntc-sensor', /\bntc\b|\bthermistors?\b|\btemperature sensors?\b/], ['mpu6050', /\bmpu(?:[- ]?6050)?\b|\baccelerometers?\b|\bgyro(scope)?\b/],
   ['ssd1306', /\boled\b|\bssd1306\b/], ['lcd1602', /\blcd\b/], ['dht', /\bdht\d*\b|\bhumidity sensors?\b/],
   ['l298n', /\bl298n?\b|\bmotor driver\b/], ['dc-motor', /\bmotors?\b/], ['battery', /\bbatter(y|ies)\b/], ['breadboard', /\bbreadboards?\b/],
 ];
 const COLORS = ['red', 'green', 'blue', 'yellow', 'orange', 'white'];
 const label = t => PART_DEFS[t]?.name || t;
 
-function findTypes(text) {
+export function findTypes(text) {
   const out = [];
   let rest = text;
   for (const [type, re] of NAMES) { const m = re.exec(rest); if (m && PART_DEFS[type]) { out.push({ type, index: m.index }); rest = rest.replace(re, ' '.repeat(m[0].length)); } }

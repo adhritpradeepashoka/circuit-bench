@@ -7,6 +7,7 @@
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
 import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
+import { recipeEdit } from '../core/recipes.js';
 import { hasHostedAi } from '../sim/session.mjs';
 import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
@@ -283,7 +284,7 @@ export function initAiPanel(editor, code, sim = null) {
     if (busy) return setStatus('Wait for the current reply first.');
     // Tier 1: plainly worded edits are answered instantly by rules. Tier 2: the CircuitBench tiny model (2.5 MB, in-page, no GPU) understands
     // looser wording and politely declines what is outside the bench. Anything either is unsure about goes on to the chosen AI.
-    let quick = quickEdit(text, editor.exportProject()), tinyMs = 0;
+    let quick = recipeEdit(text, editor.exportProject()) || quickEdit(text, editor.exportProject()), tinyMs = 0;
     if (!quick && !globalThis.VLAB_NO_TINY) {
       try {
         const t0 = Date.now(), tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
