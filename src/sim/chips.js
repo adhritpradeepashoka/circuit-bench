@@ -67,7 +67,7 @@ const ATMEGA2560 = {
     t16(0x120, 0x73, 0x3a, 47, PORTL, [3, 4, 5], PORTL, 2),
   ],
   usart: { ...usart0Config, rxCompleteInterrupt: vec(26), dataRegisterEmptyInterrupt: vec(27), txCompleteInterrupt: vec(28) },
-  extraUsarts: [usartAt(0xc8, 36), usartAt(0xd0, 51), usartAt(0x130, 54)],      // Serial1–3
+  extraUsarts: [usartAt(0xc8, 37), usartAt(0xd0, 52), usartAt(0x130, 55)],      // Serial1–3
   adc: { ...adcConfig, adcInterrupt: vec(30), numChannels: 16, muxInputMask: 0x3f, muxChannels: megaAdcChannels },
   twi: { ...twiConfig, twiInterrupt: vec(40) },
   pwm: {

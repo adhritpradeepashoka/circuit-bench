@@ -2121,3 +2121,32 @@ test('ui: block-coding state is kept with the project and round-trips through ex
   assert.ok(code.importState({ sketch: 'void setup(){}\nvoid loop(){}' })); assert.equal(code.blocks, null, 'an older project has no blocks');
   code.setBlocks({ mode: 'nonsense' }); assert.equal(code.blocks, null, 'junk is ignored');
 });
+
+test('ui: two boards on one bench — each has its own sketch, they run together, and a TX→RX wire carries Serial between them', async () => {
+  const { editor, sim, code, w } = boot();
+  const wire = (id, a, ap, b, bp) => ({ id, from: { part: a, pin: ap }, to: { part: b, pin: bp }, style: 'straight', color: '#000', width: 2 });
+  editor.importProject({ format: 'virtual-lab', version: 1,
+    parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0, rotate: 0 }, { id: 'uno-2', type: 'arduino-uno', x: 500, y: 0, rotate: 0 }],
+    wires: [wire('w1', 'uno-1', '1', 'uno-2', '0'), wire('w2', 'uno-1', 'GND.1', 'uno-2', 'GND.1')] });
+  const board = w.document.getElementById('codeBoard');
+  code.setBoards([{ id: 'uno-1', label: 'Arduino Uno 1' }, { id: 'uno-2', label: 'Arduino Uno 2' }]);
+  assert.equal(board.hidden, false); assert.equal(board.options.length, 2);
+  assert.ok(code.importState({ files: [{ name: 'sketch.ino', content: sketch('link-sender') }], boardSketches: { 'uno-2': { files: [{ name: 'sketch.ino', content: sketch('link-receiver') }], activeFile: 'sketch.ino' } }, mainOwner: 'uno-1' }));
+  // the second board's sketch is its own, and flipping between them loses nothing
+  assert.match(code.source, /Serial\.println/);
+  code.showBoard('uno-2'); assert.equal(board.value, 'uno-2'); assert.match(code.source, /startsWith\("msg:"\)/);
+  assert.equal(code.viewBoardId, 'uno-2');
+  code.showBoard('uno-1'); assert.match(code.source, /Serial\.println/);
+  const saved = code.exportState();
+  assert.match(saved.sketch, /Serial\.println/, 'the project’s own sketch stays the first board’s'); assert.match(saved.boardSketches['uno-2'].files[0].content, /startsWith/);
+  await sim.start();
+  assert.equal(sim.ctxs.length, 2, 'both boards are running');
+  for (let i = 0; i < 30; i++) { for (const c of sim.ctxs) c.mcu.run(0.05 * 16e6); sim.step(); }
+  assert.equal(sim.ctxs[1].mcu.pinMode({ port: 'B', bit: 5 }), 'H', 'board 2 heard board 1 and lit its LED');
+  assert.match(sim.snapshot().serialLinks.join(), /Uno 1 TX → Arduino Uno 2 RX/);
+  assert.match(code.serial.text, /msg:\d+/, 'the monitor shows board 1’s own output');
+  sim.stop();
+  // delete a board: its sketch goes, the other keeps the project's
+  code.setBoards([]); assert.equal(board.hidden, true);
+  assert.match(code.source, /Serial\.println/);
+});

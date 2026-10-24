@@ -56,6 +56,7 @@ export class Simulation {
     $('simPause').addEventListener('click', () => this.togglePause());
     $('simStop').addEventListener('click', () => this.stop());
     editor.on('toggle-run', () => this.toggle());
+    this.code.onBoardView?.(id => { if (!this.running) return; const ctx = this.ctxs.find(c => c.id === id); if (ctx && ctx !== this.monitorCtx) this.showMonitor(ctx); });
     editor.on('button', ({ partId, pressed }) => { pressed ? this.pressed.add(partId) : this.pressed.delete(partId); this.lastSig = ''; });
     editor.on('change', () => { this.lastSig = ''; if (!this.running) this.scheduleIdleRefresh(); });
     // Serial Monitor → the sketch's Serial input (returns true when delivered)

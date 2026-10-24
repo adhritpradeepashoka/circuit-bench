@@ -46,9 +46,24 @@ initSidebar(editor);
 const code = initCode();
 const sim = new Simulation(editor, code);
 const blocks = initBlocks({ editor, code });
-code.setBoard(() => editor.getCircuit().uno.spec?.fqbn || null);
+code.setBoard(() => {
+  const c = editor.getCircuit(), id = code.viewBoardId;
+  return (id && c.boards?.find(b => b.board?.id === id)?.spec?.fqbn) || c.uno.spec?.fqbn || null;      // the sketch on screen is compiled for ITS board
+});
+{
+  let sig = '';
+  const syncBoards = () => {
+    const bs = editor.getCircuit().boards || [], list = bs.map((b, i) => ({ id: b.board?.id, label: `${b.spec?.name || 'Board'} ${i + 1}` }));
+    const next = JSON.stringify(list); if (next === sig) return; sig = next;
+    code.setBoards(bs.length > 1 ? list : []);
+  };
+  editor.on('change', syncBoards);
+  editor.on('workspace', syncBoards);
+  var syncBoardsNow = syncBoards;
+}
 initPartCreator(editor);                 // registers "My parts" before any saved circuit that uses them loads
 editor.init();
+syncBoardsNow();
 initResistorEditor(editor);
 initLedEditor(editor);
 initValueEditor(editor);

@@ -23,7 +23,7 @@ const TEMPLATES = { h: '#pragma once\n\n', hpp: '#pragma once\n\n', c: '#include
  */
 export function initCode({ compile = defaultCompile, editor = createTextEditor(), board = () => null } = {}) {
   const dock = $('codeDock'), status = $('codeStatus'), outPane = $('outputPane'), examples = $('codeExamples'), tabsEl = $('fileTabs');
-  const listeners = { change: [], open: [], toggle: null, blocks: [] };
+  const listeners = { change: [], open: [], toggle: null, blocks: [], board: [] };
   let blocks = null;                                       // block-coding state: { program, mode: 'blocks' | 'code' } (null = never used)
   let ed = editor;
   const simpleEditor = editor;                              // always kept: the fallback if Monaco can't be used
@@ -43,8 +43,36 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     } catch { /* storage unavailable or corrupt */ }
     return { files: [{ name: MAIN, content: DEFAULT_SKETCH }], active: MAIN };
   }
-  const persist = () => { try { localStorage.setItem(PROJECT_KEY, JSON.stringify({ files, active, blocks })); } catch { /* ignore */ } };
+  const persist = () => { try { localStorage.setItem(PROJECT_KEY, JSON.stringify({ files: mainSlot().files, active: mainSlot().active, blocks, ...extraSlots() })); } catch { /* ignore */ } };
   const mainName = () => (files.find(f => f.name === MAIN) || files.find(f => f.name.endsWith('.ino')) || files[0]).name;
+  /* ── one sketch per board ─────────────── */
+  // `files`/`active` are always the sketch on screen. With several boards on the bench every board has its own sketch:
+  // the one not on screen is parked in `slots`. Slot 'main' is the project's original sketch (the first board's).
+  const BLANK = 'void setup() {\n  \n}\n\nvoid loop() {\n  \n}\n';
+  let slots = new Map(), viewing = 'main', mainOwner = null, boardList = [], results = new Map();
+  const cleanSlots = o => {
+    const out = new Map();
+    for (const [k, v] of Object.entries(o && typeof o === 'object' ? o : {})) {
+      if (k === 'main' || !Array.isArray(v?.files) || !v.files.length) continue;
+      if (!v.files.every(f => f && FILE_NAME_RE.test(f.name) && typeof f.content === 'string') || new Set(v.files.map(f => f.name)).size !== v.files.length || !v.files.some(f => f.name.endsWith('.ino'))) continue;
+      out.set(k, { files: v.files.map(f => ({ name: f.name, content: f.content })), active: v.files.some(f => f.name === v.activeFile) ? v.activeFile : v.files[0].name });
+    }
+    return out;
+  };
+  const mainSlot = () => (viewing === 'main' ? { files, active } : slots.get('main') || { files, active });
+  const extraSlots = () => {
+    const boards = {};
+    for (const [k, v] of slots) if (k !== 'main') boards[k] = { files: v.files, activeFile: v.active };
+    if (viewing !== 'main') boards[viewing] = { files, activeFile: active };
+    return Object.keys(boards).length ? { boardSketches: boards, ...(mainOwner ? { mainOwner } : {}) } : {};
+  };
+  const stash = () => { slots.set(viewing, { files: files.map(f => ({ ...f })), active }); };
+  /** Which slot holds this board's sketch. One board: always the project's own sketch. Several: the first keeps it, the others get their own. */
+  function slotKey(id, n) {
+    if (n <= 1 || !id) return 'main';
+    if (!mainOwner || !boardList.some(b => b.id === mainOwner)) mainOwner = boardList[0]?.id ?? id;
+    return id === mainOwner ? 'main' : id;
+  }
   let boardOf = board;                                     // () → the fqbn of the board on the canvas (the sketch is compiled for it)
   const snapshot = () => JSON.stringify([boardOf() || '', files]);
   const fileByName = n => files.find(f => f.name === n);
@@ -113,6 +141,66 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     diagnostics = diagnostics.map(d => (d.file === from ? { ...d, file: to } : d));
     if (active === from) active = to;
     persist(); renderTabs(); changed(); return null;
+  }
+
+  const boardSel = $('codeBoard');
+  function loadSlot(key) {
+    const slot = key === 'main' ? (slots.get('main') || { files, active }) : slots.get(key) || { files: [{ name: MAIN, content: BLANK }], active: MAIN };
+    viewing = key; slots.delete(key);
+    files = slot.files.map(f => ({ ...f })); active = fileByName(slot.active) ? slot.active : files[0].name;
+    const res = results.get(key) || null; last = res; diagnostics = (res?.diagnostics || []).filter(d => fileByName(d.file));
+    dock.classList.toggle('has-error', !!res && !res.ok);
+    mountProject(); persist();
+    if (res) showResult(res); else { setStatus('Not compiled yet'); renderOutput(null); }
+  }
+  /** Show another board's sketch in the editor. */
+  function showBoard(id) {
+    if (boardList.length < 2) return;
+    const key = slotKey(id, boardList.length);
+    if (key === viewing) return;
+    stash(); loadSlot(key);
+    boardSel.value = id; listeners.board.forEach(fn => fn(id));
+  }
+  /** The bench changed: these are its boards, in order ([{ id, label }]). */
+  function setBoards(list) {
+    boardList = (list || []).filter(b => b && b.id);
+    const several = boardList.length > 1;
+    boardSel.hidden = !several;
+    boardSel.replaceChildren(...boardList.map(b => { const o = document.createElement('option'); o.value = b.id; o.textContent = b.label || b.id; return o; }));
+    if (!several) {
+      if (viewing !== 'main') { stash(); loadSlot('main'); }
+      return;
+    }
+    const keys = new Set(boardList.map(b => slotKey(b.id, boardList.length)));
+    for (const k of [...slots.keys()]) if (k !== 'main' && !keys.has(k)) slots.delete(k);            // a deleted board takes its sketch with it
+    if (!keys.has(viewing)) { stash(); loadSlot('main'); }
+    boardSel.value = boardList.find(b => slotKey(b.id, boardList.length) === viewing)?.id ?? boardList[0].id;
+  }
+  boardSel.addEventListener('change', () => showBoard(boardSel.value));
+  /** Compile every board's sketch (boards: [{ id, fqbn }]); resolves to one build result per board, or null if superseded. */
+  async function compileAll(list) {
+    const id = ++buildId; controller?.abort(); controller = new AbortController();
+    const signal = controller.signal;
+    dock.classList.add('compiling'); $('codeCompile').disabled = true;
+    setStatus(`Compiling ${list.length} sketches…`, 'busy'); renderOutput(null, `Compiling ${list.length} sketches with Arduino CLI…`);
+    const keys = list.map(b => slotKey(b.id, list.length));
+    const out = [];
+    try {
+      for (const [i, b] of list.entries()) {
+        const slot = keys[i] === viewing ? { files } : slots.get(keys[i]);
+        const fs = slot?.files || [{ name: MAIN, content: BLANK }];
+        let res;
+        try { res = await compile(fs.map(f => ({ name: f.name, content: f.content })), { signal, fqbn: b.fqbn || undefined }); }
+        catch (err) { if (err?.name === 'AbortError') return null; res = { ok: false, diagnostics: [], output: String(err?.message || err), error: String(err?.message || err) }; }
+        if (id !== buildId) return null;
+        results.set(keys[i], res); out.push(res);
+      }
+    } finally {
+      if (id === buildId) { dock.classList.remove('compiling'); $('codeCompile').disabled = false; }
+    }
+    lastBuiltFrom = snapshot();
+    const mine = results.get(viewing); if (mine) showResult(mine); else { setStatus(`Compiled ${out.length} sketches`, 'ok'); renderOutput(null); }
+    return out;
   }
 
   /* ── compiler output ──────────────────── */
@@ -199,7 +287,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
   function setFiles(list, activeName) {
     files = list.map(f => ({ name: f.name, content: f.content }));
     active = activeName && fileByName(activeName) ? activeName : files[0].name;
-    diagnostics = []; last = null; dock.classList.remove('has-error');
+    diagnostics = []; last = null; results.delete(viewing); dock.classList.remove('has-error');
     mountProject(); persist(); setStatus('Not compiled yet'); renderOutput(null);
     listeners.change.forEach(fn => fn());
   }
@@ -300,6 +388,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
   const initial = loadProject();
   blocks = cleanBlocks(initial.blocks);
   files = initial.files.map(f => ({ ...f })); active = fileByName(initial.active) ? initial.active : files[0].name;
+  slots = cleanSlots(initial.boardSketches); mainOwner = typeof initial.mainOwner === 'string' ? initial.mainOwner : null;
   bindEditor(ed); mountProject(); renderOutput(null); setStatus('Not compiled yet'); renderEditorKind(); paintTabs(); measure();
 
   return {
@@ -308,7 +397,10 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     set source(v) { fileByName(mainName()).content = v; mountProject(); changed(); },
     get files() { return files.map(f => ({ ...f })); },
     /** What goes into a project file: `sketch` (main file, for older readers) + all `files`. */
-    exportState() { return { sketch: fileByName(mainName()).content, files: files.map(f => ({ ...f })), activeFile: active, ...(blocks ? { blocks: { ...blocks } } : {}) }; },
+    exportState() {
+      const m = mainSlot(), main = m.files.find(f => f.name === MAIN) || m.files.find(f => f.name.endsWith('.ino')) || m.files[0];
+      return { sketch: main.content, files: m.files.map(f => ({ ...f })), activeFile: m.active, ...extraSlots(), ...(blocks ? { blocks: { ...blocks } } : {}) };
+    },
     /** Block-coding state ({ program, mode }) — kept with the project. Setting it saves but does not touch the files. */
     get blocks() { return blocks; },
     setBlocks(b) { blocks = cleanBlocks(b); persist(); },
@@ -317,13 +409,16 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     importState(data) {
       const ok = Array.isArray(data?.files) && data.files.length && data.files.every(f => f && FILE_NAME_RE.test(f.name) && typeof f.content === 'string') && new Set(data.files.map(f => f.name)).size === data.files.length && data.files.some(f => f.name.endsWith('.ino'));
       const apply = () => { blocks = cleanBlocks(data?.blocks); persist(); listeners.blocks.forEach(fn => fn()); };
-      if (ok) { setFiles(data.files, data.activeFile); apply(); return true; }
-      if (typeof data?.sketch === 'string') { setFiles([{ name: MAIN, content: data.sketch }]); apply(); return true; }
+      const reset = () => { slots = cleanSlots(data?.boardSketches); mainOwner = typeof data?.mainOwner === 'string' ? data.mainOwner : null; results = new Map(); viewing = 'main'; };
+      if (ok) { reset(); setFiles(data.files, data.activeFile); apply(); setBoards(boardList); return true; }
+      if (typeof data?.sketch === 'string') { reset(); setFiles([{ name: MAIN, content: data.sketch }]); apply(); setBoards(boardList); return true; }
       return false;
     },
     get active() { return active; },
     setFiles, addFile, removeFile, renameFile, selectFile,
-    compile: build, open: () => setOpen(true), goToLine,
+    /** The id of the board whose sketch is on screen (null with a single board). */
+    get viewBoardId() { return boardList.length > 1 ? boardList.find(b => slotKey(b.id, boardList.length) === viewing)?.id ?? null : null; },
+    compile: build, compileAll, setBoards, showBoard, onBoardView: fn => listeners.board.push(fn), open: () => setOpen(true), goToLine,
     /** Tell the dock which board the sketch is for: fn() → fqbn. */
     setBoard(fn) { boardOf = fn; },
     onChange: fn => listeners.change.push(fn),
