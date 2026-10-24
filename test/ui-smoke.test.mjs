@@ -1,6 +1,6 @@
 // Drives the *real* editor UI code inside jsdom with synthetic pointer events:
 // add parts → drag them onto the breadboard → draw wires → Run → watch the LED blink.
-import test from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -19,6 +19,8 @@ const out = await build({ entryPoints: [join(root, 'test/fixtures/ui-entry.js')]
 const html = readFileSync(join(root, 'index.html'), 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
 
 const opened = [];
+// Each test builds a whole browser page (jsdom + the app bundle); closing them as we go keeps the run well under Node's heap limit.
+afterEach(() => { while (opened.length) opened.pop().window.close(); });
 test.after(() => { for (const d of opened) d.window.close(); });
 
 // Real firmware built by Arduino CLI (npm run build-firmware) stands in for the compile service.
@@ -2149,4 +2151,55 @@ test('ui: two boards on one bench — each has its own sketch, they run together
   // delete a board: its sketch goes, the other keeps the project's
   code.setBoards([]); assert.equal(board.hidden, true);
   assert.match(code.source, /Serial\.println/);
+});
+
+test('ui: the AI’s sketch is compiled before it is shown — compile errors go back to the AI, the fixed sketch is what the student sees', async () => {
+  const compileCalls = [];
+  const compile = async files => {
+    const src = files[0].content; compileCalls.push(src);
+    return /BAD/.test(src) ? { ok: false, diagnostics: [{ severity: 'error', file: 'sketch.ino', line: 2, message: "'BAD' was not declared in this scope" }], output: "sketch.ino:2:3: error: 'BAD' was not declared in this scope" } : { ok: true, diagnostics: [], output: 'ok', size: {} };
+  };
+  const { w, editor, code, sim } = boot(compile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const doc = w.document, sent = [];
+  const replies = [
+    { ok: true, actions: [], code: 'void setup(){}\nvoid loop(){ BAD(); }\n', explanation: 'Blinks the LED.' },
+    { ok: true, actions: [], code: 'void setup(){}\nvoid loop(){ }\n', explanation: 'ignored: the first explanation is kept' },
+  ];
+  w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => replies.shift() }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  const prompt = doc.getElementById('aiPrompt'), logEl = doc.getElementById('aiLog');
+  prompt.value = 'blink the led'; prompt.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  await flush();
+  assert.equal(sent.length, 2, 'one repair round trip');
+  assert.match(sent[1].instruction, /does not compile/); assert.match(sent[1].instruction, /line 2: 'BAD' was not declared/);
+  assert.match(sent[1].code, /BAD\(\)/, 'the failing sketch is what it is asked to fix');
+  assert.equal(sent[1].context.compile.ok, false); assert.equal(sent[1].context.compile.errors[0].line, 2);
+  const last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.match(last.textContent, /Blinks the LED/); assert.match(last.textContent, /compile error/); assert.ok(!/does not compile yet/.test(last.textContent));
+  assert.ok(!last.querySelector('.ai-code pre').textContent.includes('BAD'), 'the student is shown the fixed sketch');
+  last.querySelector('[data-act="apply"]').click();
+  assert.ok(!code.source.includes('BAD'));
+});
+
+test('ui: an AI that cannot fix its sketch is tried twice, then the sketch is shown with an honest warning; an unreachable compiler skips the check', async () => {
+  let reachable = true, calls = 0;
+  const compile = async files => { calls++; return reachable ? { ok: false, diagnostics: [{ severity: 'error', file: 'sketch.ino', line: 1, message: 'expected ‘;’' }], output: 'x' } : { ok: false, unreachable: true, diagnostics: [], output: 'down' }; };
+  const { w, editor, code, sim } = boot(compile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const doc = w.document; let asked = 0;
+  w.fetch = async () => { asked++; return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: `void setup(){ x }\nvoid loop(){}\n// ${asked}`, explanation: 'Here.' }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  const prompt = doc.getElementById('aiPrompt'), logEl = doc.getElementById('aiLog');
+  const say = async t => { prompt.value = t; prompt.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush(); };
+  await say('do something');
+  assert.equal(asked, 3, 'the first answer + two repair attempts, then it stops'); assert.equal(calls, 3);
+  let last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.match(last.textContent, /does not compile yet/); assert.match(last.textContent, /expected/);
+  assert.ok(last.querySelector('[data-act="apply"]'), 'it can still be applied and fixed by hand');
+  reachable = false; asked = 0; calls = 0;
+  await say('and again');
+  assert.equal(asked, 1, 'no compiler to ask → no repair loop'); assert.equal(calls, 1);
+  last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.ok(!/does not compile yet/.test(last.textContent));
 });

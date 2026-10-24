@@ -14,6 +14,7 @@ import { hasHostedAi } from '../sim/session.mjs';
 import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
+import { BOARD_SPECS } from '../core/boards.js';
 import { FORMAT, VERSION } from '../core/project.js';
 import { sidePanes } from './side-panes.js';
 
@@ -280,6 +281,35 @@ export function initAiPanel(editor, code, sim = null) {
     setStatus('');
   }
 
+  /* ── check what the AI wrote before showing it ──────────────────────────────────────────────────────
+   * A proposed sketch is compiled in the background. If it fails, the compiler's errors go back to the same AI (up to MAX_REPAIRS times)
+   * so the student is shown code that builds — small on-device models especially get includes, calls and braces wrong on the first try. */
+  const MAX_REPAIRS = 2;
+  const generate = args => (hostedOn() ? generateCode({ ...args, hosted: true }) : localOn() ? generateLocal(args) : generateCode(args));
+  const errorLines = v => (v.diagnostics || []).filter(d => d.severity === 'error').slice(0, 6).map(d => `line ${d.line}: ${d.message}`);
+  async function selfCheck(res, args, circuit, text, history) {
+    let cur = res, fixed = 0;
+    for (let attempt = 0; ; attempt++) {
+      setStatus(attempt ? `Checking the fixed sketch compiles (try ${attempt + 1})…` : 'Checking the sketch compiles…');
+      const o = outcome(circuit, cur);
+      const boardType = o.circuitEdit?.parts?.find(p => BOARD_SPECS[p.type])?.type;
+      const v = await code.compileSource(cur.code, { fqbn: boardType ? BOARD_SPECS[boardType].fqbn : undefined });
+      if (v.ok || v.unreachable) return { res: cur, failed: null, fixed };      // builds — or there is no compiler to ask, so show it as it is
+      if (attempt >= MAX_REPAIRS) return { res: cur, failed: v, fixed };
+      const errs = errorLines(v);
+      setStatus(`The sketch did not compile (${errs[0] || 'see the compiler output'}) — asking the AI to fix it (${attempt + 1}/${MAX_REPAIRS})…`);
+      const proposed = o.circuitEdit ? toProjectFileShape(o.circuitEdit.parts, o.circuitEdit.wires, o.circuitEdit.customParts) : circuit;
+      const next = await generate({
+        ...args, circuit: proposed, code: cur.code,
+        instruction: `The sketch you just wrote does not compile with Arduino CLI. Fix every compile error and return the complete corrected sketch.ino — keep what it does the same, and only use libraries that are installed (Wire, Servo, Stepper, LiquidCrystal_I2C, DHT, Adafruit_GFX, Adafruit_SSD1306, Adafruit_MPU6050, Adafruit_Sensor, Adafruit_BusIO).\nErrors:\n${errs.join('\n') || String(v.output || '').slice(-600)}`,
+        context: { ...(args.context || {}), compile: { ok: false, stale: false, errors: (v.diagnostics || []).filter(d => d.severity === 'error').slice(0, 10).map(d => ({ file: d.file, line: d.line, message: d.message })), output: String(v.output || '').slice(-1500) } },
+        history: [...history, { role: 'user', text }, { role: 'assistant', text: cur.explanation || 'Here is the sketch.' }],
+      }).catch(() => null);
+      if (!next?.ok || !next.code || next.code === cur.code) return { res: cur, failed: v, fixed };      // it could not do better: show what we have, honestly
+      cur = { ...cur, code: next.code }; fixed++;
+    }
+  }
+
   async function send() {
     const text = promptEl.value.trim();
     if (!text) return;
@@ -326,13 +356,16 @@ export function initAiPanel(editor, code, sim = null) {
       }
       if (res.meta) setStatus(`${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s${res.meta.tried ? ` (${res.meta.tried} unavailable model${res.meta.tried > 1 ? 's' : ''} skipped)` : ''}`);
       await resolveNewParts(res);
+      let check = { failed: null, fixed: 0 };
+      if (res.code && !quick) { check = await selfCheck(res, args, circuit, text, history); res = check.res; }
       const o = outcome(circuit, res);
+      if (check.failed) o.warnings = [...o.warnings, `This sketch does not compile yet (${errorLines(check.failed)[0] || 'see the compiler output'}). Apply it and press Fix with AI, or edit it.`];
       const hasEdit = !!(res.code || o.circuitEdit);
       const summary = [];
       if (o.attempted) summary.push(o.changed ? `${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'}` : 'no circuit change actually applied');
       if (res.code) summary.push('a new sketch');
       const m = {
-        id: ++seq, role: 'assistant', text: res.explanation || (hasEdit ? 'Here is the change.' : 'Done.'),
+        id: ++seq, role: 'assistant', text: `${res.explanation || (hasEdit ? 'Here is the change.' : 'Done.')}${check.fixed ? ` (The first version had ${check.fixed === 1 ? 'a compile error' : 'compile errors'}; I checked it with the compiler and fixed ${check.fixed === 1 ? 'it' : 'them'} before showing you.)` : ''}`,
         summary: summary.length ? `Proposes: ${summary.join(' + ')}.` : '', warnings: o.warnings, fatal: o.attempted && !o.changed,
         code: res.code || undefined, codeLines: res.code ? res.code.split('\n').length : 0, hasEdit, state: hasEdit ? 'pending' : undefined,
       };

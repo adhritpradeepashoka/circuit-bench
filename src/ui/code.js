@@ -418,6 +418,12 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     setFiles, addFile, removeFile, renameFile, selectFile,
     /** The id of the board whose sketch is on screen (null with a single board). */
     get viewBoardId() { return boardList.length > 1 ? boardList.find(b => slotKey(b.id, boardList.length) === viewing)?.id ?? null : null; },
+    /** Compile a candidate main sketch (the project's other files as they are) without touching the editor or its output — used to check what the AI wrote before showing it. */
+    async compileSource(source, { fqbn, signal } = {}) {
+      const fs = files.map(f => ({ name: f.name, content: f.name === mainName() ? source : f.content }));
+      try { return await compile(fs, { signal, fqbn: fqbn || boardOf() || undefined }); }
+      catch (err) { return { ok: false, unreachable: true, diagnostics: [], output: String(err?.message || err), error: String(err?.message || err) }; }
+    },
     compile: build, compileAll, setBoards, showBoard, onBoardView: fn => listeners.board.push(fn), open: () => setOpen(true), goToLine,
     /** Tell the dock which board the sketch is for: fn() → fqbn. */
     setBoard(fn) { boardOf = fn; },
