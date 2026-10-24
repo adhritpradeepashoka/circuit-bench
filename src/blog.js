@@ -109,8 +109,9 @@ function showComposer(focus) {
     e.preventDefault(); post.disabled = true;
     const { body: r } = await call('/api/community/posts', { method: 'POST', body: { flair: sel.value, title: t.value, body: b.value } });
     post.disabled = false;
-    if (r?.ok) go(`/blog/${r.post.id}`); else msg.textContent = r?.error || 'That did not work.';
+    if (r?.ok) { dropDraft('new'); go(`/blog/${r.post.id}`); } else msg.textContent = r?.error || 'That did not work.';
   });
+  keepDraft('new', { flair: sel, title: t, body: b }); hint.textContent = FLAIR_BY_ID.get(sel.value)?.hint || hint.textContent;
   f.append(sel, hint, t, b, post, msg); box.append(f); main.prepend(box);
   if (focus) t.focus();
 }
@@ -140,7 +141,8 @@ async function showPost(id) {
   if (signedIn()) {
     form = el('form', 'cm-form'); const b = el('textarea'); b.rows = 3; b.placeholder = 'Write a comment…'; b.maxLength = 1500; b.setAttribute('aria-label', 'Comment');
     const post = el('button', '', 'Comment'); post.type = 'submit'; const msg = el('p', 'proj-note'); msg.setAttribute('role', 'status');
-    form.addEventListener('submit', async e => { e.preventDefault(); const { body: x } = await call(`/api/community/posts/${id}/comments`, { method: 'POST', body: { body: b.value } }); if (x?.ok) showPost(id); else msg.textContent = x?.error || 'That did not work.'; });
+    form.addEventListener('submit', async e => { e.preventDefault(); const { body: x } = await call(`/api/community/posts/${id}/comments`, { method: 'POST', body: { body: b.value } }); if (x?.ok) { dropDraft(`c${id}`); showPost(id); } else msg.textContent = x?.error || 'That did not work.'; });
+    keepDraft(`c${id}`, { comment: b });
     form.append(b, post, msg);
   }
   main.replaceChildren(card, acts, el('h2', 'blog-h2', `${r.comments.length} comment${r.comments.length === 1 ? '' : 's'}`), comments, form);
@@ -150,6 +152,20 @@ function render() {
   const r = route(); paintSide(r);
   if (r.post) showPost(r.post); else { document.title = 'CircuitBench Blog'; showList(r); }
 }
-window.addEventListener('cb-session', () => { if (!document.getElementById('blogComposer')) render(); else showComposer(false); });
+// The lab refreshes the session every few minutes. That must NOT rebuild the page (it wiped half-written posts): only redo it when who you are actually changed.
+let who = `${getMe()?.email || ''}|${getMe()?.role || ''}`;
+window.addEventListener('cb-session', () => {
+  const now = `${getMe()?.email || ''}|${getMe()?.role || ''}`; if (now === who) return; who = now;
+  if (!document.getElementById('blogComposer')) render(); else showComposer(false);
+});
+/** Keep what you are typing in this tab, so a reload or a rebuild never loses it. */
+function keepDraft(key, inputs) {
+  for (const [name, input] of Object.entries(inputs)) {
+    const k = `circuitbench:draft:${key}:${name}`;
+    try { const v = sessionStorage.getItem(k); if (v && (!input.value || input.tagName === 'SELECT')) input.value = v; } catch { /* ignore */ }
+    input.addEventListener('input', () => { try { sessionStorage.setItem(k, input.value); } catch { /* ignore */ } });
+  }
+}
+const dropDraft = key => { try { for (const n of ['title', 'body', 'flair', 'comment']) sessionStorage.removeItem(`circuitbench:draft:${key}:${n}`); } catch { /* ignore */ } };
 render();
 initAccount({ status: () => {} });
