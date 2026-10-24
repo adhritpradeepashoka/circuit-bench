@@ -1,5 +1,7 @@
 // App themes. A theme is a set of CSS variables under html[data-theme]; "custom" lets you pick the colours and font.
-// The choice lives in this browser only.
+// The choice lives in this browser only. Team themes (src/core/staff-themes.js) only show for accounts the server says may wear them.
+import { STAFF_THEMES, STAFF_THEME_IDS } from '../core/staff-themes.js';
+import { getMe } from '../sim/session.mjs';
 export const THEMES = [
   { id: 'classic', label: 'Classic', note: 'The standard dark bar and light bench.' },
   { id: 'kids', label: 'Kids', note: 'Bright colours, rounder and bigger buttons, friendlier look.' },
@@ -8,6 +10,10 @@ export const THEMES = [
   { id: 'contrast', label: 'High contrast', note: 'Strong black and white, easier to read.' },
   { id: 'custom', label: 'Custom', note: 'Pick your own colours and font.' },
 ];
+export const ALL_THEMES = [...THEMES.slice(0, -1), ...STAFF_THEMES, THEMES.at(-1)];
+export const canWear = (id, me = getMe()) => !STAFF_THEME_IDS.includes(id) || !!me?.entitlements?.themes?.includes(id);
+/** The themes this person can pick: everyone's, plus any team themes their account holds. */
+export const themesFor = (me = getMe()) => ALL_THEMES.filter(t => canWear(t.id, me));
 export const FONTS = {
   default: { label: 'Default', css: '' },
   mono: { label: 'Monospace', css: 'ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace' },
@@ -17,7 +23,7 @@ export const FONTS = {
 export const DEFAULT_CUSTOM = { bar: '#1b1f3b', bg: '#f4f1ea', text: '#222222', accent: '#e4572e', font: 'default' };
 const KEY = 'virtual-lab:theme', CUSTOM_KEY = 'virtual-lab:theme-custom';
 const HEX = /^#[0-9a-fA-F]{6}$/;
-export const getTheme = () => { try { const t = localStorage.getItem(KEY); return THEMES.some(x => x.id === t) ? t : 'classic'; } catch { return 'classic'; } };
+export const getTheme = () => { try { const t = localStorage.getItem(KEY); return ALL_THEMES.some(x => x.id === t) && canWear(t) ? t : 'classic'; } catch { return 'classic'; } };
 export function getCustom() {
   try { const c = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '{}'); return { ...DEFAULT_CUSTOM, ...Object.fromEntries(Object.entries(c).filter(([k, v]) => valid(k, v))) }; }
   catch { return { ...DEFAULT_CUSTOM }; }
@@ -35,4 +41,6 @@ export function applyTheme(id = getTheme(), root = document.documentElement) {
     if (FONTS[c.font].css) root.style.setProperty('--ui', FONTS[c.font].css);
   }
 }
-export function setTheme(id) { try { localStorage.setItem(KEY, id); } catch { /* ignore */ } applyTheme(id); }
+export function setTheme(id) { if (!canWear(id)) id = 'classic'; try { localStorage.setItem(KEY, id); } catch { /* ignore */ } applyTheme(id); }
+// Signing in or out changes which team themes are allowed (and a revoked one falls back to Classic).
+try { globalThis.addEventListener?.('cb-session', () => applyTheme()); } catch { /* not a browser */ }

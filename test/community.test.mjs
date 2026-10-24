@@ -116,3 +116,20 @@ test('HTTP: /blog and /blog/<id> serve the blog page, anyone can read posts with
     assert.equal((await fetch(`${base}/api/community/posts`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ flair: 'bug', title: 'a', body: 'b' }) })).status, 401, 'posting needs sign-in');
   } finally { srv.close(); }
 });
+
+test('team themes: the owner and admins get theirs, the owner can grant more, nobody else can', async () => {
+  const { themesFor } = await import('../src/core/staff-themes.js');
+  assert.deepEqual(themesFor('owner'), ['founder', 'operator']); assert.deepEqual(themesFor('admin'), ['operator']); assert.deepEqual(themesFor('user'), []);
+  const acc = accounts(), owner = (await acc.signIn(`good:${OWNER}`)).token, kid = (await acc.signIn('good:kid@example.com')).token, adm = (await acc.signIn('good:adm@example.com')).token;
+  assert.deepEqual((await acc.me(kid)).entitlements.themes, []);
+  assert.equal((await acc.setThemes(kid, 'kid@example.com', ['founder'])).status, 403, 'users cannot grant themselves');
+  await acc.setRole(owner, 'adm@example.com', 'admin');
+  assert.equal((await acc.setThemes(adm, 'kid@example.com', ['founder'])).status, 403, 'admins cannot grant either');
+  assert.equal((await acc.setThemes(owner, 'kid@example.com', ['nope'])).status, 400);
+  assert.equal((await acc.setThemes(owner, 'kid@example.com', ['operator'])).ok, true);
+  assert.deepEqual((await acc.me(kid)).entitlements.themes, ['operator']);
+  assert.deepEqual((await acc.me(adm)).entitlements.themes, ['operator']);
+  assert.deepEqual((await acc.me(owner)).entitlements.themes, ['founder', 'operator']);
+  assert.equal((await acc.setThemes(owner, 'kid@example.com', [])).ok, true);
+  assert.deepEqual((await acc.me(kid)).entitlements.themes, []);
+});

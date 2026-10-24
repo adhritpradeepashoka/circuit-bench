@@ -1,6 +1,7 @@
 // Settings → Account and Members (admins only). Everything here is a request to the server, which re-checks who is asking:
 // hiding the panel from non-admins is for tidiness, not security.
 import { getMe, authed } from '../sim/session.mjs';
+import { STAFF_THEMES } from '../core/staff-themes.js';
 
 export function initAdmin({ fetchImpl = (...a) => globalThis.fetch(...a) } = {}) {
   const $ = id => document.getElementById(id);
@@ -33,8 +34,22 @@ export function initAdmin({ fetchImpl = (...a) => globalThis.fetch(...a) } = {})
         b.addEventListener('click', () => change(u.email, u.role === 'user' ? 'beta' : 'user'));
         acts.append(b);
       }
+      if (me.entitlements.owner && u.role !== 'owner') {            // the owner can hand out team themes one by one
+        for (const t of STAFF_THEMES) {
+          const has = (u.themes || []).includes(t.id); if (t.tier === 'admin' && u.role === 'admin') continue;
+          const b = el('button', 'proj-act', `${has ? 'Take away' : 'Give'} ${t.label} theme`); b.type = 'button';
+          b.addEventListener('click', () => grant(u.email, has ? (u.themes || []).filter(x => x !== t.id) : [...(u.themes || []), t.id]));
+          acts.append(b);
+        }
+      }
       row.append(main, acts); return row;
     }));
+  }
+  async function grant(email, themes) {
+    note('');
+    const { body } = await call('/api/admin/users', { method: 'POST', body: { email, themes } });
+    note(body?.ok ? `${email} can now wear: ${themes.length ? themes.join(', ') : 'no team themes'}.` : body?.error || 'That did not work.');
+    await load();
   }
   async function change(email, role) {
     note('');

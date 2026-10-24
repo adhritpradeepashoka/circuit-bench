@@ -708,6 +708,27 @@ button { cursor: pointer; }
 :root[data-theme="hacker"] .run { color: #000; }
 :root[data-theme="hacker"], :root[data-theme="techno"] { --on-blue: #000; }
 :root[data-theme="custom"] { --surface: color-mix(in srgb, var(--paper) 94%, var(--text)); --mat: color-mix(in srgb, var(--paper) 90%, var(--text)); --line: color-mix(in srgb, var(--paper) 78%, var(--text)); --muted: color-mix(in srgb, var(--text) 65%, var(--paper)); --blue-soft: color-mix(in srgb, var(--blue) 16%, var(--paper)); --mat-line: color-mix(in srgb, var(--text) 9%, transparent); --mat-major: color-mix(in srgb, var(--text) 20%, transparent); }
+/* Team themes: gated by the account (see src/core/staff-themes.js) */
+:root[data-theme="founder"] {
+  --ink: #0a0803; --ink-2: #1a1407; --ink-text: #f6e7b4; --ink-muted: #b8a064;
+  --mat: #14100a; --mat-line: rgba(232, 190, 80, .09); --mat-major: rgba(232, 190, 80, .22);
+  --paper: #0c0a06; --surface: #17120a; --line: #4a3a16; --text: #f6e7b4; --muted: #c2aa6a;
+  --blue: #e8be50; --blue-soft: #2a2008; --green: #e8be50; --red: #ff5a4d; --amber: #ffb000; --amber-soft: #2a1d00;
+  --ui: Georgia, "Times New Roman", serif;
+}
+:root[data-theme="founder"] .topbar { border-bottom: 1px solid var(--blue); box-shadow: 0 2px 18px rgba(232, 190, 80, .22); }
+:root[data-theme="founder"] .run { color: #000; }
+:root[data-theme="operator"] {
+  --ink: #0f1519; --ink-2: #1a242b; --ink-text: #e2edf2; --ink-muted: #8aa0ab;
+  --mat: #151d22; --mat-line: rgba(255, 176, 0, .07); --mat-major: rgba(255, 176, 0, .18);
+  --paper: #10171b; --surface: #182229; --line: #33454f; --text: #dbe7ec; --muted: #8fa5b0;
+  --blue: #ffb000; --blue-soft: #2b2208; --green: #34d399; --red: #ff5a4d; --amber: #ffb000; --amber-soft: #2b2208;
+  --ui: ui-monospace, "Cascadia Mono", "SF Mono", Consolas, monospace;
+}
+:root[data-theme="operator"] .topbar { border-bottom: 1px solid var(--blue); }
+:root[data-theme="founder"], :root[data-theme="operator"] { --on-blue: #000; }
+.sw-founder { background: linear-gradient(135deg, #0a0803 50%, #e8be50 50%); }
+.sw-operator { background: linear-gradient(135deg, #1a242b 50%, #ffb000 50%); }
 .sw-hacker { background: linear-gradient(135deg, #000 50%, #3dff7a 50%); }
 .sw-techno { background: linear-gradient(135deg, #160d3a 40%, #00e5ff 40% 70%, #ff2ec4 70%); }
 .sw-custom { background: conic-gradient(#ff6f3c, #ffd23f, #2ec4b6, #5b3fd1, #ff6f3c); }

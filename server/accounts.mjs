@@ -6,6 +6,7 @@
 //   user   — everyone else who signs in; gets what the free tier gives (and loses it first when the site is busy).
 // The UI only reflects this; every privilege is checked again server-side.
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto';
+import { STAFF_THEME_IDS, themesFor } from '../src/core/staff-themes.js';
 
 export const ROLES = ['owner', 'admin', 'beta', 'user'];
 const RANK = { user: 0, beta: 1, admin: 2, owner: 3 };
@@ -23,9 +24,9 @@ export function whyNotAllowed(actor, current, next) {
 }
 
 /** What a role gets. `seat` is false when the site is full and this free user is over the cap. */
-export function entitlements(role, { seat = true, freeHostedAi = false } = {}) {
+export function entitlements(role, { seat = true, freeHostedAi = false, granted = [] } = {}) {
   const priv = isPrivileged(role);
-  return { hostedAi: priv || (freeHostedAi && seat), premium: priv, seat: priv || seat, admin: RANK[role] >= RANK.admin, owner: role === 'owner' };
+  return { hostedAi: priv || (freeHostedAi && seat), premium: priv, seat: priv || seat, admin: RANK[role] >= RANK.admin, owner: role === 'owner', themes: themesFor(role, granted) };
 }
 
 /* ── sessions: our own signed token, so Google's 1-hour ID token isn't needed after sign-in ── */
@@ -73,11 +74,15 @@ export function createMemoryStore() {
       const e = normEmail(email), cur = rows.get(e) || { email: e, createdAt: now, name: '', picture: '' };
       const row = { ...cur, role, grantedBy: by || null, grantedAt: now }; rows.set(e, row); return row;
     },
+    async setThemes(email, themes) {
+      const e = normEmail(email), cur = rows.get(e) || { email: e, role: 'user', createdAt: Date.now(), name: '', picture: '' };
+      const row = { ...cur, themes }; rows.set(e, row); return row;
+    },
     async list() { return [...rows.values()].sort((a, b) => a.email.localeCompare(b.email)); },
     async remove(email) { return rows.delete(normEmail(email)); },
   };
 }
-const toRow = r => !r ? null : ({ email: r.email, role: r.role, sub: r.sub, name: r.name, picture: r.picture, createdAt: Number(r.created_at), lastSeen: r.last_seen == null ? null : Number(r.last_seen), grantedBy: r.granted_by, grantedAt: r.granted_at == null ? null : Number(r.granted_at) });
+const toRow = r => !r ? null : ({ email: r.email, role: r.role, sub: r.sub, name: r.name, picture: r.picture, createdAt: Number(r.created_at), lastSeen: r.last_seen == null ? null : Number(r.last_seen), grantedBy: r.granted_by, grantedAt: r.granted_at == null ? null : Number(r.granted_at), themes: String(r.themes || '').split(',').filter(Boolean) });
 export function createPgStore(pool) {
   return {
     kind: 'postgres',
@@ -85,6 +90,7 @@ export function createPgStore(pool) {
       await pool.query(`create table if not exists cb_users (
         email text primary key, role text not null default 'user', sub text, name text not null default '', picture text not null default '',
         created_at bigint not null, last_seen bigint, granted_by text, granted_at bigint)`);
+      await pool.query("alter table cb_users add column if not exists themes text not null default ''");
       // Supabase exposes public tables over its Data API; with row level security on and no policies, only this server (the owner role) can read them.
       try { await pool.query('alter table cb_users enable row level security'); } catch { /* not Postgres-proper (tests) */ }
     },
@@ -97,6 +103,11 @@ export function createPgStore(pool) {
     async setRole(email, role, by, now = Date.now()) {
       const r = await pool.query(`insert into cb_users (email, role, created_at, granted_by, granted_at) values ($1,$2,$3,$4,$3)
         on conflict (email) do update set role = excluded.role, granted_by = excluded.granted_by, granted_at = excluded.granted_at returning *`, [normEmail(email), role, now, by || null]);
+      return toRow(r.rows[0]);
+    },
+    async setThemes(email, themes) {
+      const r = await pool.query(`insert into cb_users (email, themes, created_at) values ($1,$2,$3)
+        on conflict (email) do update set themes = excluded.themes returning *`, [normEmail(email), themes.join(','), Date.now()]);
       return toRow(r.rows[0]);
     },
     async list() { return (await pool.query('select * from cb_users order by email')).rows.map(toRow); },
@@ -128,7 +139,7 @@ export function createAccounts({ store = createMemoryStore(), sessions = createS
   const roleOf = row => (owners.has(normEmail(row?.email)) ? 'owner' : row?.role || 'user');
   const view = (row, email = row?.email) => {
     const role = owners.has(normEmail(email)) ? 'owner' : row?.role || 'user';
-    return { email: normEmail(email), name: row?.name || '', picture: row?.picture || '', role, entitlements: entitlements(role, { seat: presence.seat(normEmail(email)), freeHostedAi }) };
+    return { email: normEmail(email), name: row?.name || '', picture: row?.picture || '', role, entitlements: entitlements(role, { seat: presence.seat(normEmail(email)), freeHostedAi, granted: row?.themes }) };
   };
   async function signIn(credential) {
     const g = await verifyGoogle(credential); if (!g) return null;
@@ -160,5 +171,13 @@ export function createAccounts({ store = createMemoryStore(), sessions = createS
     if (role === 'user' && !row?.sub) { await store.remove(target); return { ok: true, user: { email: target, role: 'user' } }; }   // never signed in: just forget the invite
     return { ok: true, user: await store.setRole(target, role, a.email, now()) };
   }
-  return { signIn, me, auth, listUsers, setRole, presence, store, owners };
+  /** Owner only: choose which team themes a person may wear (on top of what their role gives). */
+  async function setThemes(token, email, themes) {
+    const a = await auth(token); if (!a || a.role !== 'owner') return { ok: false, status: 403, error: 'Only the owner can grant themes.' };
+    if (!validEmail(email)) return { ok: false, status: 400, error: 'That is not a valid email address.' };
+    if (!Array.isArray(themes) || themes.some(t => !STAFF_THEME_IDS.includes(t))) return { ok: false, status: 400, error: 'Unknown theme.' };
+    const row = await store.setThemes(normEmail(email), [...new Set(themes)]);
+    return { ok: true, user: { email: row.email, role: roleOf(row), themes: row.themes } };
+  }
+  return { signIn, me, auth, listUsers, setRole, setThemes, presence, store, owners };
 }

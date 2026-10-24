@@ -92,7 +92,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         }
         if (req.method === 'POST' || req.method === 'DELETE') {
           const b = req.method === 'POST' ? await readJson(req, 4_000) : { email: url.searchParams.get('email'), role: 'user' };
-          const out = await accounts.setRole(bearer(req), b.email, b.role);
+          const out = Array.isArray(b.themes) && req.method === 'POST' ? await accounts.setThemes(bearer(req), b.email, b.themes) : await accounts.setRole(bearer(req), b.email, b.role);
           return send(res, out.ok ? 200 : out.status, out.ok ? { ok: true, user: out.user } : { ok: false, error: out.error });
         }
         return send(res, 405, { ok: false, error: 'Use GET, POST or DELETE.' });
