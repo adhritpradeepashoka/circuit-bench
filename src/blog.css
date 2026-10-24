@@ -47,3 +47,10 @@ body.blog-page { color: var(--text); height: auto; min-height: 100%; overflow: a
 .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
 .blog-new { padding: 10px 14px; border: 0; border-radius: 10px; background: var(--blue); color: var(--on-blue); font-weight: 700; font-size: 14px; }
 .blog-new:hover { filter: brightness(1.08); }
+
+.blog-card.pinned { border-color: var(--blue); }
+.blog-foot { display: flex; align-items: center; gap: 12px; }
+.blog-pin { padding: 3px 10px; border: 1px solid var(--line); border-radius: 99px; background: none; color: var(--text); font-size: 12px; font-weight: 600; }
+.blog-del:hover { border-color: var(--red); color: var(--red); }
+.blog-pin:hover { border-color: var(--blue); color: var(--blue); }
+.blog-pinline { display: flex; align-items: center; gap: 6px; font-size: 13px; }

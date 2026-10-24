@@ -11,6 +11,7 @@ import { PART_DEFS } from '../core/parts.js';
 import { pinWorld } from '../core/geometry.js';
 import { pkey } from '../core/netlist.js';
 import { sidePanes } from './side-panes.js';
+import { getMe } from '../sim/session.mjs';
 
 const SEEN_KEY = 'circuitbench:tour-seen';
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -29,7 +30,8 @@ export function initTour({ editor, sim, code, projects }) {
   document.body.append(root);
   const card = root.querySelector('.tour-card'), dimPath = root.querySelector('.tour-dim path'), rings = root.querySelector('.tour-rings');
 
-  let steps = [], i = 0, raf = 0, poll = 0, ctx = {};
+  let steps = [], i = 0, raf = 0, poll = 0, ctx = {}, blogClicked = false;
+  document.addEventListener('click', e => { if (e.target.closest?.('.cm-blog-link, #blogBtn')) { blogClicked = true; $('communityClose')?.click(); } });
 
   /* ── where things are on screen ──────── */
   const el = sel => (typeof sel === 'string' ? document.querySelector(sel) : sel);
@@ -117,7 +119,7 @@ export function initTour({ editor, sim, code, projects }) {
     i = n; render();
   }
   function start(list, opts = {}) {
-    steps = list; ctx = opts; i = 0;
+    steps = list; ctx = opts; i = 0; blogClicked = false;
     root.hidden = false; document.body.classList.add('touring'); cancelAnimationFrame(raf); loop();
     clearInterval(poll);
     poll = setInterval(() => { const s = steps[i]; if (s?.when?.()) go(i + 1); }, 300);
@@ -181,6 +183,12 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>The project you're working on. Everything saves automatically. Click here to rename it or switch to another.</p>` },
     { spots: ['#accountSlot'], title: 'Sign in with Google', skip: () => $('accountSlot')?.hidden !== false,
       body: `<p>Sign in so CircuitBench knows it's you. Your name and picture show up here. It's optional: everything works without it.</p>` },
+    { spots: ['#communityBtn'], title: 'Community — click it', interactive: true, skip: () => !$('communityBtn'),
+      body: `<p>Updates from the team, fixes, and questions from other users. <b>Click Community</b> to open it.</p>`,
+      before: () => { if (!$('communityModal')?.hidden) $('communityClose')?.click(); }, when: () => !$('communityModal')?.hidden },
+    { spots: () => [document.querySelector('.cm-blog-link') || '#communityModal .modal-card'], title: 'The blog — click it', interactive: true, skip: () => !$('blogBtn'),
+      body: () => `<p>Everything posted here also lives on the <b>blog</b>, which anyone can read without signing in. Sign in to post a bug report, a question, a workspace or a part, or to comment.</p><p><b>Click “Open the full blog”</b> (it opens in a new tab).</p>${getMe()?.entitlements?.admin ? '<p class="tour-why"><b>Team:</b> on the blog you can <b>📌 Pin</b> a post to the top and <b>Delete</b> anyone\'s post or comment.</p>' : ''}`,
+      when: () => blogClicked },
     { spots: ['#settingsBtn'], title: 'Settings and help',
       body: `<p>Click <b>⚙</b> for AI keys, themes, and to see this tour again or be guided through building a circuit.</p>` },
     { center: true, title: 'Your first project: blink an LED',

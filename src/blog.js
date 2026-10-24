@@ -84,7 +84,19 @@ async function showList(r) {
       const card = el('article', 'blog-card');
       const meta = el('div', 'blog-meta'); meta.append(chip(p.flair), el('span', '', `${p.author} · ${when(p.createdAt)}`));
       const title = link(`/blog/${p.id}`, 'blog-title', `${p.pinned ? '📌 ' : ''}${p.title}`);
-      card.append(meta, title, el('p', 'blog-snippet', p.body.replace(/\s+/g, ' ').slice(0, 220) + (p.body.length > 220 ? '…' : '')), el('div', 'blog-foot', `💬 ${p.comments} comment${p.comments === 1 ? '' : 's'}`));
+      if (p.pinned) card.classList.add('pinned');
+      const foot = el('div', 'blog-foot', `💬 ${p.comments} comment${p.comments === 1 ? '' : 's'}`);
+      if (staff()) {                                              // the team can pin and unpin straight from the list
+        const pin = el('button', 'blog-pin', p.pinned ? '📌 Unpin' : '📌 Pin'); pin.type = 'button'; pin.style.marginLeft = 'auto';
+        pin.addEventListener('click', async () => { pin.disabled = true; await call(`/api/community/posts/${p.id}`, { method: 'PATCH', body: { pinned: !p.pinned } }); showList(r); });
+        const del = el('button', 'blog-pin blog-del', 'Delete'); del.type = 'button'; del.style.marginLeft = '0';
+        del.addEventListener('click', async () => {             // two clicks: the first asks, the second deletes
+          if (del.dataset.sure !== '1') { del.dataset.sure = '1'; del.textContent = 'Really delete?'; setTimeout(() => { del.dataset.sure = ''; del.textContent = 'Delete'; }, 4000); return; }
+          del.disabled = true; await call(`/api/community/posts/${p.id}`, { method: 'DELETE' }); showList(r);
+        });
+        foot.append(pin, del);
+      }
+      card.append(meta, title, el('p', 'blog-snippet', p.body.replace(/\s+/g, ' ').slice(0, 220) + (p.body.length > 220 ? '…' : '')), foot);
       list.append(card);
     }
   }
@@ -104,15 +116,17 @@ function showComposer(focus) {
   const hint = el('p', 'proj-note', FLAIR_BY_ID.get(sel.value).hint); sel.addEventListener('change', () => { hint.textContent = FLAIR_BY_ID.get(sel.value).hint; });
   const t = el('input'); t.placeholder = 'Title'; t.maxLength = 120; t.setAttribute('aria-label', 'Title');
   const b = el('textarea'); b.rows = 6; b.placeholder = 'Write your post. Links are made clickable.'; b.maxLength = 8000; b.setAttribute('aria-label', 'Text');
+  let pinBox = null, pinLine = null;
+  if (staff()) { pinLine = el('label', 'blog-pinline'); pinBox = el('input'); pinBox.type = 'checkbox'; pinLine.append(pinBox, ' 📌 Pin this post to the top'); }
   const post = el('button', '', 'Post'); post.type = 'submit'; const msg = el('p', 'proj-note'); msg.setAttribute('role', 'status');
   f.addEventListener('submit', async e => {
     e.preventDefault(); post.disabled = true;
     const { body: r } = await call('/api/community/posts', { method: 'POST', body: { flair: sel.value, title: t.value, body: b.value } });
     post.disabled = false;
-    if (r?.ok) { dropDraft('new'); go(`/blog/${r.post.id}`); } else msg.textContent = r?.error || 'That did not work.';
+    if (r?.ok) { dropDraft('new'); if (pinBox?.checked) await call(`/api/community/posts/${r.post.id}`, { method: 'PATCH', body: { pinned: true } }); go(`/blog/${r.post.id}`); } else msg.textContent = r?.error || 'That did not work.';
   });
   keepDraft('new', { flair: sel, title: t, body: b }); hint.textContent = FLAIR_BY_ID.get(sel.value)?.hint || hint.textContent;
-  f.append(sel, hint, t, b, post, msg); box.append(f); main.prepend(box);
+  f.append(sel, hint, t, b, ...(pinLine ? [pinLine] : []), post, msg); box.append(f); main.prepend(box);
   if (focus) t.focus();
 }
 
@@ -127,9 +141,9 @@ async function showPost(id) {
   const meta = el('div', 'blog-meta'); meta.append(chip(p.flair), el('span', '', `${p.author} · ${when(p.createdAt)}`));
   card.append(link('/blog', 'blog-back', '← All posts'), meta, el('h1', '', `${p.pinned ? '📌 ' : ''}${p.title}`), text(p.body, 'cm-text blog-body'));
   const acts = el('div', 'proj-acts');
-  const act = (label, fn) => { const b = el('button', 'proj-act', label); b.type = 'button'; b.addEventListener('click', fn); acts.append(b); };
+  const act = (label, fn) => { const b = el('button', 'proj-act', label); b.type = 'button'; b.addEventListener('click', () => fn.call(b)); acts.append(b); };
   if (p.canPin) act(p.pinned ? 'Unpin' : 'Pin', async () => { await call(`/api/community/posts/${id}`, { method: 'PATCH', body: { pinned: !p.pinned } }); showPost(id); });
-  if (p.mine) act('Delete post', async () => { await call(`/api/community/posts/${id}`, { method: 'DELETE' }); go('/blog'); });
+  if (p.mine) { let sure = false; act('Delete post', async function () { if (!sure) { sure = true; this.textContent = 'Really delete this post?'; return; } await call(`/api/community/posts/${id}`, { method: 'DELETE' }); go('/blog'); }); }
   const comments = el('div', 'cm-comments');
   for (const c of r.comments) {
     const item = el('div', 'cm-comment'); item.append(el('b', '', c.author), el('span', 'proj-meta', ` · ${when(c.createdAt)}`), text(c.body));
