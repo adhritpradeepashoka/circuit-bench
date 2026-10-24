@@ -68,7 +68,12 @@ export function createPgClassStore(pool) {
 
 /* ───────── the rules ───────── */
 export function createClasses({ store = createMemoryClassStore(), accounts, now = () => Date.now(), rand = Math.random } = {}) {
-  const parse = c => { let d = {}; try { d = JSON.parse(c.data || '{}'); } catch { /* corrupt → defaults */ } return { ...c, settings: cleanSettings(d.settings), curriculum: cleanCurriculum(d.curriculum) }; };
+  const parse = c => {
+    let d = {}; try { d = JSON.parse(c.data || '{}'); } catch { /* corrupt → defaults */ }
+    const st = d.settings || {};
+    // a class on a named preset always follows that preset (so a preset can improve); only "custom" keeps its own switches
+    return { ...c, settings: cleanSettings(PRESETS[st.preset] ? { preset: st.preset, unlock: st.unlock } : st), curriculum: cleanCurriculum(d.curriculum) };
+  };
   const pack = (settings, curriculum) => JSON.stringify({ settings, curriculum });
   const who = async token => { const a = await accounts.auth(token); return a ? { ...a, kind: a.row?.kind || '' } : null; };
   const nameOf = async email => { const r = await accounts.store.get(email); return { email, name: r?.name || email.split('@')[0], picture: r?.picture || '' }; };
@@ -90,9 +95,11 @@ export function createClasses({ store = createMemoryClassStore(), accounts, now 
     return { kind, classes: [], features: allOn() };
   }
   /** For the gate on features that cost money or reach other people: false only for a student whose class(es) turned it off. */
-  async function allowed(token, feature) {
+  async function allowed(token, feature, { personal = false } = {}) {
     const a = await who(token); if (!a || a.kind !== 'student' || a.role === 'owner') return true;
-    return !!(await forUser(a.email, 'student')).features[feature];
+    const f = (await forUser(a.email, 'student')).features;
+    if (personal && f.personal) return true;                  // the student chose their personal profile, and every class lets them
+    return !!f[feature];
   }
 
   async function create(token, { name } = {}) {

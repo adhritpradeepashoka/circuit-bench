@@ -884,3 +884,7 @@ html[data-off~="themes"] #themeList, html[data-off~="themes"] #themeCustom { dis
 .tile .note { font-size: 12.5px; background: #fff3c4; color: #5a4600; padding: 6px 9px; border-radius: 8px; }
 .tile-act { margin-top: auto; padding-top: 8px; }
 @media (max-width: 820px) { .dash { grid-template-columns: 1fr; } .dash-side { position: static; min-height: 0; } }
+
+/* with the AI switched off there is nothing about it anywhere: no keys, no models, no chat history */
+html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"] #setClearChat, html[data-off~="ai"] #setForgetKeys, html[data-off~="ai"] .pc-ai, html[data-off~="ai"] #aiSetup { display: none !important; }
+.dash-note { margin: 4px 6px; font-size: 12px; color: var(--muted); }

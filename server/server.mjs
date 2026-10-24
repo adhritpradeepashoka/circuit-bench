@@ -26,7 +26,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
   /** A student whose class turned a feature off may not use it, even by calling the API directly. */
   async function gate(req, feature, what) {
     if (!classes || !bearer(req)) return;
-    if (!(await classes.allowed(bearer(req), feature))) throw new RequestError(`Your teacher turned ${what} off for your class.`, 403);
+    if (!(await classes.allowed(bearer(req), feature, { personal: req.headers['x-cb-profile'] === 'personal' }))) throw new RequestError(`Your teacher turned ${what} off for your class.`, 403);
   }
   async function readJson(req, max) {
     let raw = '';

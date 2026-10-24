@@ -10,6 +10,9 @@ export function setSession(token, me) {
 }
 export const clearSession = () => setSession('', null);
 export const hasHostedAi = (me = getMe()) => !!(me?.entitlements?.hostedAi && me.hostedAiReady);
+/** A student can use their own personal profile (everything on) unless a class turned that off. 'class' or 'personal'. */
+export const profileMode = () => (read('circuitbench:profile') === 'personal' ? 'personal' : 'class');
+export function setProfileMode(mode) { try { mode === 'personal' ? localStorage.setItem('circuitbench:profile', 'personal') : localStorage.removeItem('circuitbench:profile'); } catch { /* ignore */ } try { globalThis.dispatchEvent?.(new Event('cb-session')); } catch { /* ignore */ } }
 /** Fetch with the session token attached. */
 export const authed = (path, { method = 'GET', body, fetchImpl = globalThis.fetch, token = getToken() } = {}) =>
-  fetchImpl(path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) }, body: body ? JSON.stringify(body) : undefined });
+  fetchImpl(path, { method, headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}), ...(profileMode() === 'personal' ? { 'x-cb-profile': 'personal' } : {}) }, body: body ? JSON.stringify(body) : undefined });

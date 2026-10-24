@@ -75,6 +75,12 @@ for (const pg of [false, true]) {
     await classes.join(kid, a.code);
     let me = await w.accounts.me(kid); assert.equal(me.classroom.features.ai, false, 'new classes start Focused'); assert.equal(me.classroom.features.code, true);
     assert.equal(await classes.allowed(kid, 'ai'), false);
+    assert.equal(me.classroom.features.themes, true, 'students may change the look unless the teacher locks it');
+    assert.equal(me.classroom.features.personal, true);
+    assert.equal(await classes.allowed(kid, 'ai', { personal: true }), true, 'their personal profile has everything on');
+    assert.equal((await classes.patch(teacher, a.id, { settings: { features: { personal: false } } })).class.settings.preset, 'custom');
+    assert.equal(await classes.allowed(kid, 'ai', { personal: true }), false, 'a class can switch the personal profile off');
+    assert.equal((await classes.patch(teacher, a.id, { settings: { preset: 'focused' } })).ok, true);
     assert.equal((await classes.patch(teacher, a.id, { settings: { preset: 'everything' } })).ok, true);
     assert.equal(await classes.allowed(kid, 'ai'), true, 'the teacher switched it on');
     await classes.join(kid, b.code); assert.equal(await classes.allowed(kid, 'ai'), false, 'the second class is Focused, so the stricter one wins');
@@ -116,6 +122,7 @@ test('http: a student whose class turned AI and the community off gets a 403 fro
     const c = (await w.classes.create(teacher, { name: 'A' })).class; await w.classes.join(kid, c.code);
     const call = (path, tok, body) => fetch(base + path, { method: body ? 'POST' : 'GET', headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
     assert.equal((await call('/api/ai/generate-code', kid, { prompt: 'x' })).status, 403);
+    assert.equal((await fetch(base + '/api/ai/generate-code', { method: 'POST', headers: { authorization: `Bearer ${kid}`, 'content-type': 'application/json', 'x-cb-profile': 'personal' }, body: '{"prompt":"x"}' })).status, 200, 'the personal profile is not limited');
     assert.equal((await call('/api/community/posts', kid)).status, 403);
     assert.equal((await call('/api/community/posts', free)).status, 200);
     assert.equal((await call('/api/ai/generate-code', free, { prompt: 'x' })).status, 200);

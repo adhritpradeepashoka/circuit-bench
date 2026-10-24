@@ -13,12 +13,13 @@ export const FEATURES = [
   { id: 'importFiles', label: 'Importing files', note: 'Bringing in files from outside, such as PCB files.' },
   { id: 'themes', label: 'Changing the look', note: 'Off = students keep the Kids theme.' },
   { id: 'share', label: 'Sharing and exporting', note: 'Downloading or copying projects out of the class.' },
+  { id: 'personal', label: 'Personal profile', note: 'Students can switch to their own profile, with everything on, for projects of their own. Hand-ins stay in the class profile.' },
 ];
 export const FEATURE_IDS = FEATURES.map(f => f.id);
 const set = on => Object.fromEntries(FEATURE_IDS.map(id => [id, on.includes(id)]));
 export const PRESETS = {
-  focused: { label: 'Focused', note: 'Only the bench, blocks and code, and the assignments.', features: set(['code']) },
-  standard: { label: 'Standard', note: 'Adds examples and the part maker.', features: set(['code', 'examples', 'customParts']) },
+  focused: { label: 'Focused', note: 'The bench, blocks and code, the look, and the assignments.', features: set(['code', 'themes', 'personal']) },
+  standard: { label: 'Standard', note: 'Adds examples and the part maker.', features: set(['code', 'themes', 'personal', 'examples', 'customParts']) },
   everything: { label: 'Everything', note: 'Every feature on.', features: set(FEATURE_IDS) },
 };
 export const DEFAULT_PRESET = 'focused';

@@ -1,7 +1,7 @@
 // Classes in the page: the "what kind of account?" chooser, the teacher dashboard (students, course, switches) and the student
 // dashboard (projects, hand in). Everything a person types is shown with textContent, never as markup. The server decides what is
 // allowed; this file only asks and shows.
-import { getMe, getToken, setSession, authed } from '../sim/session.mjs';
+import { getMe, getToken, setSession, authed, profileMode, setProfileMode } from '../sim/session.mjs';
 import { FEATURES, PRESETS, normCode } from '../core/classroom.js';
 import { setTheme } from './theme.js';
 import { ask } from './ask.js';
@@ -99,7 +99,10 @@ export function initClassroom({ editor, code, projects, account = null, status =
     const me = getMe(); if (!me) return;
     if (me.kind !== 'single') box.append(menuItem('Main menu', showMenu));
     if (me.kind === 'teacher') box.append(menuItem('Teacher dashboard', openDashboard));
-    else if (me.kind === 'student') box.append(menuItem('My class', openDashboard));
+    else if (me.kind === 'student') {
+      box.append(menuItem('My class', openDashboard));
+      if (me.classroom?.features?.personal) box.append(menuItem(profileMode() === 'personal' ? 'Back to my class profile' : 'Switch to my personal profile', () => { setProfileMode(profileMode() === 'personal' ? 'class' : 'personal'); status(profileMode() === 'personal' ? 'Personal profile: everything is on, and nothing here is handed in to a class.' : 'Back in your class profile.'); }));
+    }
     else if (!me.kind) box.append(menuItem('Teacher or student?', showMenu));
     else if (me.kind === 'single') box.append(menuItem('Join a class', () => status('Single-user accounts cannot join a class. Ask an admin to change your account type.')));
   }
@@ -252,7 +255,9 @@ export function initClassroom({ editor, code, projects, account = null, status =
     for (const c of classes) side.push(sideItem(c.name, `${c.done} of ${c.total} done`, c.id === cur?.id, () => openDashboard(c.id)));
     const code = el('input'); code.placeholder = 'CLASS CODE'; code.maxLength = 8; code.setAttribute('aria-label', 'Class code'); code.className = 'dash-code';
     const join = btn(classes.length ? 'Join another class' : 'Join', 'primary', () => joinCode(code.value)); code.addEventListener('keydown', e => { if (e.key === 'Enter') join.click(); });
-    side.push(el('div', 'dash-new'), code, join, el('div', 'dash-grow'), benchBtn());
+    side.push(el('div', 'dash-new'), code, join, el('div', 'dash-grow'));
+    if (getMe()?.classroom?.features?.personal) side.push(el('p', 'dash-note', 'Want to build something just for you? Your personal profile has everything switched on and is not part of any class.'), btn('Personal profile →', 'dash-bench', () => { setProfileMode('personal'); enter(); }));
+    side.push(btn('Open the bench (class) →', 'primary dash-bench', () => { setProfileMode('class'); enter(); }));
     if (!cur) { shell(side, [el('h1', 'start-h', 'My classes'), el('div', 'cls-empty', 'Type the code your teacher gave you to join your class.')]); return; }
     const r = await call(`/api/classes/${cur.id}`);
     if (!r.body?.ok) { shell(side, [el('p', 'proj-note', r.body?.error || 'Could not load the class.')]); return; }
@@ -284,6 +289,8 @@ export function initClassroom({ editor, code, projects, account = null, status =
   function clearCurrent() { lset(CURRENT_KEY, null); paintPill(); }
   function paintPill() {
     const c = getCurrent(); pill.replaceChildren();
+    const personal = kind() === 'student' && getMe()?.classroom?.features?.personal && profileMode() === 'personal';
+    if (personal) { pill.append(el('b', '', 'Personal profile'), el('span', '', ' · your own projects'), btn('Back to class', '', () => { setProfileMode('class'); status('Back in your class profile.'); })); pill.title = 'Nothing here is handed in to a class'; pill.hidden = false; return; }
     if (!c || kind() !== 'student') { pill.hidden = true; return; }
     pill.append(el('span', '', `Project ${c.n}: `), el('b', '', c.title), btn('Hand in', '', () => handIn()));
     pill.title = c.goal || ''; pill.hidden = false;
@@ -291,7 +298,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
   async function startProject(cls, p) {
     const k = { classId: cls.id, projectId: p.id, title: p.title, goal: p.goal, n: p.n || 0 };
     const all = (await call(`/api/classes/${cls.id}`)).body?.projects || []; k.n = all.findIndex(x => x.id === p.id) + 1;
-    lset(CURRENT_KEY, JSON.stringify(k));
+    setProfileMode('class'); lset(CURRENT_KEY, JSON.stringify(k));
     try { await projects.create({ name: `${k.n}. ${p.title}` }); } catch { /* keep working in the current project */ }
     closeDash(); paintPill(); status(`Project ${k.n}: ${p.goal}`);
   }

@@ -1,7 +1,7 @@
 // App themes. A theme is a set of CSS variables under html[data-theme]; "custom" lets you pick the colours and font.
 // The choice lives in this browser only. Team themes (src/core/staff-themes.js) only show for accounts the server says may wear them.
 import { STAFF_THEMES, STAFF_THEME_IDS } from '../core/staff-themes.js';
-import { getMe } from '../sim/session.mjs';
+import { getMe, profileMode } from '../sim/session.mjs';
 export const THEMES = [
   { id: 'classic', label: 'Classic', note: 'The standard dark bar and light bench.' },
   { id: 'kids', label: 'Kids', note: 'Bright colours, rounder and bigger buttons, friendlier look.' },
@@ -23,8 +23,10 @@ export const FONTS = {
 export const DEFAULT_CUSTOM = { bar: '#1b1f3b', bg: '#f4f1ea', text: '#222222', accent: '#e4572e', font: 'default' };
 const KEY = 'virtual-lab:theme', CUSTOM_KEY = 'virtual-lab:theme-custom';
 const HEX = /^#[0-9a-fA-F]{6}$/;
-const locked = (me = getMe()) => me?.kind === 'student' && me.classroom?.features?.themes === false;
-export const getTheme = () => { if (locked()) return 'kids'; try { const t = localStorage.getItem(KEY); return ALL_THEMES.some(x => x.id === t) && canWear(t) ? t : 'classic'; } catch { return 'classic'; } };
+const locked = (me = getMe()) => me?.kind === 'student' && me.classroom?.features?.themes === false && !(me.classroom.features.personal && profileMode() === 'personal');
+/** A student who has never picked a look starts with Kids, on any device. */
+const studentDefault = (me = getMe()) => me?.kind === 'student';
+export const getTheme = () => { if (locked()) return 'kids'; try { const t = localStorage.getItem(KEY) || (studentDefault() ? 'kids' : null); return ALL_THEMES.some(x => x.id === t) && canWear(t) ? t : 'classic'; } catch { return 'classic'; } };
 export function getCustom() {
   try { const c = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '{}'); return { ...DEFAULT_CUSTOM, ...Object.fromEntries(Object.entries(c).filter(([k, v]) => valid(k, v))) }; }
   catch { return { ...DEFAULT_CUSTOM }; }
