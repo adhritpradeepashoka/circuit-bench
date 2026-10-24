@@ -243,6 +243,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);
     console.log(v ? `[vlab] Arduino CLI ${v}` : `[vlab] WARNING: could not run “${compiler.config.cli}” — install Arduino CLI (see README) or set ARDUINO_CLI`);
-    if (v && process.env.VLAB_WARMUP !== '0') compiler.warmUp(m => console.log(`[vlab] ${m}`));       // background: never delays startup
+    // Opt-in (VLAB_WARMUP=1): compiling the ARM core at start-up needs well over 512 MB, which put the free Render instance in an out-of-memory restart loop. The Docker image already ships the pre-built Pico cache, so the first Pico build is quick without it.
+    if (v && process.env.VLAB_WARMUP === '1') compiler.warmUp(m => console.log(`[vlab] ${m}`));
   });
 }

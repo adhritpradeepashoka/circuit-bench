@@ -85,7 +85,7 @@ export function createCompiler(options = {}) {
   const cfg = {
     cli: options.cli || env.ARDUINO_CLI || 'arduino-cli',
     timeoutMs: options.timeoutMs || 90_000,
-    maxParallel: options.maxParallel || 2,
+    maxParallel: options.maxParallel || Number(env.VLAB_MAX_PARALLEL) || 1,        // one build at a time: two ARM/AVR toolchains at once do not fit a 512 MB instance
     cacheSize: options.cacheSize || 64,
     // Optional overrides for machines where the core/toolchain live in unusual places (see scripts/setup-toolchain.sh)
     compilerPath: options.compilerPath ?? env.AVR_GCC_DIR,          // directory containing avr-gcc, e.g. /usr/bin/
