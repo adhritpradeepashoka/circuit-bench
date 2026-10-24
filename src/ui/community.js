@@ -36,9 +36,8 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     try { r = (await call('/api/community/posts?kind=update')).body; } catch { /* offline, or no server */ }
     if (!r?.ok || !r.posts.length) return;
     newest = Math.max(...r.posts.map(p => p.createdAt));
-    if (newest > seen()) { $('communityBtn')?.classList.add('has-new'); $('blogBtn')?.classList.add('has-new'); }
+    if (newest > seen()) { $('communityBtn')?.classList.add('has-new'); }
   })();
-  $('blogBtn')?.addEventListener('click', () => { $('blogBtn').classList.remove('has-new'); markSeen(); });
   const close = () => { modal.hidden = true; };
   const signedIn = () => !!getMe();
   const note = () => el('p', 'proj-note', 'Sign in with Google (top bar) to post or comment.');

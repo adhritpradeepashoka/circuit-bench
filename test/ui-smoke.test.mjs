@@ -1326,7 +1326,7 @@ test('ui: first-visit tour — "Welcome to CircuitBench!", one popup per button/
     if (/first project/.test(s.title)) break;
     doc.getElementById('tourNext').click();
   }
-  for (const t of ['Your workbench', 'Parts', 'Search parts', 'Rotate & delete', 'Undo & redo', 'Zoom', 'Code', 'Ask AI', 'Your project', 'Community — click it', 'The blog — click it']) assert.ok(seen.includes(t), `covers ${t}`);
+  for (const t of ['Your workbench', 'Parts', 'Search parts', 'Rotate & delete', 'Undo & redo', 'Zoom', 'Code', 'Ask AI', 'Your project', 'Community — click it', 'The full blog — click it']) assert.ok(seen.includes(t), `covers ${t}`);
   assert.ok(seen.some(t => /^Select/.test(t)) && seen.some(t => /^Run/.test(t)) && seen.some(t => /^Wire-only/.test(t)));
   assert.match(doc.getElementById('tourBody').textContent, /1 LED.*1 resistor \(220 Ω\).*2 wires/s);
   doc.getElementById('tourSkip').click();                  // "I'll explore on my own"
