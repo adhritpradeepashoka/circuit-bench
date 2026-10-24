@@ -78,11 +78,15 @@ export function createMemoryStore() {
       const e = normEmail(email), cur = rows.get(e) || { email: e, role: 'user', createdAt: Date.now(), name: '', picture: '' };
       const row = { ...cur, themes }; rows.set(e, row); return row;
     },
+    async setKind(email, kind) {
+      const e = normEmail(email), cur = rows.get(e) || { email: e, role: 'user', createdAt: Date.now(), name: '', picture: '' };
+      const row = { ...cur, kind }; rows.set(e, row); return row;
+    },
     async list() { return [...rows.values()].sort((a, b) => a.email.localeCompare(b.email)); },
     async remove(email) { return rows.delete(normEmail(email)); },
   };
 }
-const toRow = r => !r ? null : ({ email: r.email, role: r.role, sub: r.sub, name: r.name, picture: r.picture, createdAt: Number(r.created_at), lastSeen: r.last_seen == null ? null : Number(r.last_seen), grantedBy: r.granted_by, grantedAt: r.granted_at == null ? null : Number(r.granted_at), themes: String(r.themes || '').split(',').filter(Boolean) });
+const toRow = r => !r ? null : ({ email: r.email, role: r.role, sub: r.sub, name: r.name, picture: r.picture, createdAt: Number(r.created_at), lastSeen: r.last_seen == null ? null : Number(r.last_seen), grantedBy: r.granted_by, grantedAt: r.granted_at == null ? null : Number(r.granted_at), themes: String(r.themes || '').split(',').filter(Boolean), kind: r.kind || '' });
 export function createPgStore(pool) {
   return {
     kind: 'postgres',
@@ -91,6 +95,7 @@ export function createPgStore(pool) {
         email text primary key, role text not null default 'user', sub text, name text not null default '', picture text not null default '',
         created_at bigint not null, last_seen bigint, granted_by text, granted_at bigint)`);
       await pool.query("alter table cb_users add column if not exists themes text not null default ''");
+      await pool.query("alter table cb_users add column if not exists kind text not null default ''");
       // Supabase exposes public tables over its Data API; with row level security on and no policies, only this server (the owner role) can read them.
       try { await pool.query('alter table cb_users enable row level security'); } catch { /* not Postgres-proper (tests) */ }
     },
@@ -108,6 +113,11 @@ export function createPgStore(pool) {
     async setThemes(email, themes) {
       const r = await pool.query(`insert into cb_users (email, themes, created_at) values ($1,$2,$3)
         on conflict (email) do update set themes = excluded.themes returning *`, [normEmail(email), themes.join(','), Date.now()]);
+      return toRow(r.rows[0]);
+    },
+    async setKind(email, kind) {
+      const r = await pool.query(`insert into cb_users (email, kind, created_at) values ($1,$2,$3)
+        on conflict (email) do update set kind = excluded.kind returning *`, [normEmail(email), kind, Date.now()]);
       return toRow(r.rows[0]);
     },
     async list() { return (await pool.query('select * from cb_users order by email')).rows.map(toRow); },
@@ -134,17 +144,18 @@ export function createPresence({ cap = 0, ttlMs = 150_000, now = () => Date.now(
 }
 
 /** Everything the routes need, from one object. */
-export function createAccounts({ store = createMemoryStore(), sessions = createSessions(), verifyGoogle = async () => null, presence = createPresence(), ownerEmails = [], freeHostedAi = false, now = () => Date.now() } = {}) {
+export function createAccounts({ store = createMemoryStore(), sessions = createSessions(), verifyGoogle = async () => null, presence = createPresence(), ownerEmails = [], freeHostedAi = false, teacherSignup = true, now = () => Date.now() } = {}) {
+  let classroom = null;                                       // set by the classroom module: async (email, kind) → what this person's classes allow
   const owners = new Set(ownerEmails.map(normEmail).filter(Boolean));
   const roleOf = row => (owners.has(normEmail(row?.email)) ? 'owner' : row?.role || 'user');
   const view = (row, email = row?.email) => {
     const role = owners.has(normEmail(email)) ? 'owner' : row?.role || 'user';
-    return { email: normEmail(email), name: row?.name || '', picture: row?.picture || '', role, entitlements: entitlements(role, { seat: presence.seat(normEmail(email)), freeHostedAi, granted: row?.themes }) };
+    return { email: normEmail(email), name: row?.name || '', picture: row?.picture || '', role, kind: row?.kind || '', teacherSignup, entitlements: entitlements(role, { seat: presence.seat(normEmail(email)), freeHostedAi, granted: row?.themes }) };
   };
   async function signIn(credential) {
     const g = await verifyGoogle(credential); if (!g) return null;
     const row = await store.login(g, now());
-    return { token: sessions.issue(g.email), me: view(row) };
+    return { token: sessions.issue(g.email), me: { ...view(row), classroom: await classroom?.(g.email, row?.kind || '') } };
   }
   async function auth(token) {                               // → { email, role, row } or null
     const email = sessions.verify(token); if (!email) return null;
@@ -154,7 +165,7 @@ export function createAccounts({ store = createMemoryStore(), sessions = createS
   async function me(token, { beat = false } = {}) {
     const a = await auth(token); if (!a) return null;
     if (beat) presence.beat(a.email, isPrivileged(a.role));
-    return { ...view(a.row || { email: a.email }, a.email), online: a.role === 'owner' || a.role === 'admin' ? presence.counts() : undefined };
+    return { ...view(a.row || { email: a.email }, a.email), classroom: await classroom?.(a.email, a.row?.kind || ''), online: a.role === 'owner' || a.role === 'admin' ? presence.counts() : undefined };
   }
   async function listUsers(token) {
     const a = await auth(token); if (!a || RANK[a.role] < RANK.admin) return null;
@@ -179,5 +190,20 @@ export function createAccounts({ store = createMemoryStore(), sessions = createS
     const row = await store.setThemes(normEmail(email), [...new Set(themes)]);
     return { ok: true, user: { email: row.email, role: roleOf(row), themes: row.themes } };
   }
-  return { signIn, me, auth, listUsers, setRole, setThemes, presence, store, owners };
+  const KIND_IDS = ['single', 'teacher', 'student'];
+  /** You pick what kind of account you are once, the first time. Teachers can be switched off site-wide (TEACHER_SIGNUP=0); changing later is for admins. */
+  async function chooseKind(token, kind) {
+    const a = await auth(token); if (!a) return { ok: false, status: 401, error: 'Please sign in again.' };
+    if (!KIND_IDS.includes(kind)) return { ok: false, status: 400, error: 'Pick single user, teacher or student.' };
+    if (a.row?.kind && a.role !== 'owner') return { ok: false, status: 403, error: 'Your account type is already set. Ask an admin to change it.' };
+    if (kind === 'teacher' && !teacherSignup && RANK[a.role] < RANK.admin) return { ok: false, status: 403, error: 'Teacher accounts are not open for sign-up yet. Ask an admin.' };
+    return { ok: true, kind: (await store.setKind(a.email, kind)).kind };
+  }
+  async function setKindFor(token, email, kind) {
+    const a = await auth(token); if (!a || RANK[a.role] < RANK.admin) return { ok: false, status: 403, error: 'Admins only.' };
+    if (!validEmail(email)) return { ok: false, status: 400, error: 'That is not a valid email address.' };
+    if (kind !== '' && !KIND_IDS.includes(kind)) return { ok: false, status: 400, error: 'Unknown account type.' };
+    return { ok: true, user: { email: normEmail(email), kind: (await store.setKind(email, kind)).kind } };
+  }
+  return { signIn, me, auth, listUsers, setRole, setThemes, chooseKind, setKindFor, setClassroom: fn => { classroom = fn; }, presence, store, owners };
 }

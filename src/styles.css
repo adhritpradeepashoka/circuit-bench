@@ -780,3 +780,51 @@ button { cursor: pointer; }
 .blocklyToolboxCategory .blocklyToolboxCategoryLabel, .blocklyTreeLabel { font-family: var(--ui, system-ui); font-size: 13px; }
 .blocklyToolboxDiv { background: #12181b !important; }
 .blocklyToolboxCategoryLabel { color: #dce6e1 !important; }
+
+/* ── things a teacher switched off (src/ui/features.js) ── */
+html[data-off~="ai"] #aiBtn, html[data-off~="ai"] #aiPane, html[data-off~="ai"] #simAskAi, html[data-off~="community"] #communityBtn,
+html[data-off~="code"] #codeMode, html[data-off~="code"] #codeEditorKind, html[data-off~="examples"] #codeExamples, html[data-off~="customParts"] #createPartBtn,
+html[data-off~="importFiles"] #importJson, html[data-off~="importFiles"] #importPcb, html[data-off~="share"] #exportJson, html[data-off~="share"] #copyJson,
+html[data-off~="themes"] #themeList, html[data-off~="themes"] #themeCustom { display: none !important; }
+
+/* ── classes ── */
+.kind-card { width: min(520px, 100%); }
+.kind-opts { display: grid; gap: 10px; }
+.kind-opt { display: grid; gap: 2px; text-align: left; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: transparent; cursor: pointer; }
+.kind-opt:hover { border-color: var(--blue); }
+.kind-opt b { font-size: 14px; } .kind-opt span { font-size: 12px; color: var(--muted); }
+.kind-join { display: flex; gap: 8px; margin-top: 10px; }
+.kind-join input, .cls-row input, .cls-add input { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: inherit; }
+.kind-join input { text-transform: uppercase; letter-spacing: .12em; width: 9em; }
+.class-card { width: min(980px, 100%); max-height: 86vh; }
+.cls-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.cls-bar select { padding: 6px 9px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); font: inherit; font-weight: 600; }
+.cls-code { font-family: var(--mono, monospace); font-weight: 700; letter-spacing: .14em; padding: 4px 10px; border-radius: 8px; background: var(--paper); border: 1px dashed var(--line); }
+.cls-btn { padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: transparent; cursor: pointer; font: inherit; font-weight: 600; }
+.cls-btn:hover { border-color: var(--blue); }
+.cls-btn.primary { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+.cls-btn.danger:hover { border-color: #d33; color: #d33; }
+.cls-btn:disabled { opacity: .5; cursor: default; }
+.cls-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.cls-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cls-table th, .cls-table td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+.cls-table tr.cls-student { cursor: pointer; } .cls-table tr.cls-student:hover { background: color-mix(in srgb, var(--blue) 8%, transparent); }
+.cls-bar-track { height: 8px; width: 140px; border-radius: 99px; background: var(--line); overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+.cls-bar-fill { height: 100%; background: #2fa66a; }
+.cls-chip { display: inline-block; padding: 2px 9px; border-radius: 99px; font-size: 11.5px; font-weight: 700; background: var(--line); }
+.cls-chip.submitted { background: #fff3c4; color: #6a5200; } .cls-chip.done { background: #cdeed8; color: #145a33; } .cls-chip.returned { background: #fbd5d5; color: #8a1d1d; } .cls-chip.locked { opacity: .55; }
+.cls-projects { display: grid; gap: 8px; }
+.cls-proj { display: grid; grid-template-columns: 2.2em 1fr auto; gap: 6px 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; }
+.cls-proj.locked { opacity: .55; } .cls-proj .n { font-weight: 800; font-size: 18px; color: var(--muted); }
+.cls-proj .goal { font-size: 12.5px; color: var(--muted); } .cls-proj .note { grid-column: 2 / -1; font-size: 12.5px; background: #fff3c4; color: #5a4600; padding: 5px 9px; border-radius: 8px; }
+.cls-proj .uses { font-size: 11.5px; color: var(--muted); }
+.cls-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.cls-switches { display: grid; gap: 4px; }
+.cls-switch { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+.cls-switch input { width: 18px; height: 18px; } .cls-switch b { font-size: 13px; } .cls-switch span { font-size: 12px; color: var(--muted); display: block; }
+.cls-presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.cls-presets .cls-btn[aria-pressed="true"] { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+.cls-add { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; } .cls-add input { flex: 1; min-width: 12em; }
+.cls-empty { padding: 18px; text-align: center; color: var(--muted); }
+.proj-pill { position: fixed; left: 14px; bottom: 14px; z-index: 60; display: flex; gap: 10px; align-items: center; max-width: min(520px, 90vw); padding: 8px 10px 8px 14px; background: var(--ink, #1b1f3b); color: #fff; border-radius: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.3); font-size: 13px; }
+.proj-pill[hidden] { display: none; } .proj-pill b { font-weight: 800; } .proj-pill button { padding: 5px 12px; border-radius: 10px; border: 0; background: var(--blue); color: var(--on-blue); font-weight: 700; cursor: pointer; }

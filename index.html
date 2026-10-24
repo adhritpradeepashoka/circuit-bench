@@ -35,7 +35,7 @@
     <button id="communityBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Updates, fixes and discussions: the CircuitBench blog and community">Community</button>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
-      <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span><em class="role-badge" id="accountRole" hidden></em></div><p class="account-note">Your Google account only proves who you are. Your name, email and role are kept by CircuitBench so beta access can follow your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
+      <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span><em class="role-badge" id="accountRole" hidden></em></div><p class="account-note">Your Google account only proves who you are. Your name, email and role are kept by CircuitBench so beta access can follow your account.</p><hr><div id="accountClassItems"></div><button id="accountSignOut" type="button">Sign out</button></div>
     </div>
     <button id="settingsBtn" type="button" class="help-btn settings-btn" title="Settings: AI keys, themes, and other options" aria-label="Settings" aria-haspopup="dialog">⚙</button>
   </header>
@@ -293,6 +293,19 @@
     <p class="proj-note" id="wsNote">Community workspaces from GitHub are coming. For now you can share a workspace as a file.</p>
   </div>
 </div>
+<div class="modal" id="kindModal" role="dialog" aria-modal="true" aria-labelledby="kindTitle" hidden>
+  <div class="modal-card kind-card">
+    <div class="modal-head"><h2 id="kindTitle">How will you use CircuitBench?</h2><button type="button" class="pane-x" id="kindClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="settings-body" id="kindBody"></div>
+  </div>
+</div>
+<div class="modal" id="classModal" role="dialog" aria-modal="true" aria-labelledby="classTitle" hidden>
+  <div class="modal-card class-card">
+    <div class="modal-head"><h2 id="classTitle">Class</h2><button type="button" class="pane-x" id="classClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="settings-body" id="classBody"></div>
+  </div>
+</div>
+<div class="proj-pill" id="projPill" hidden></div>
 <div class="modal" id="communityModal" role="dialog" aria-modal="true" aria-labelledby="communityTitle" hidden>
   <div class="modal-card community-card">
     <div class="modal-head"><h2 id="communityTitle">Community</h2><button type="button" class="pane-x" id="communityClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
