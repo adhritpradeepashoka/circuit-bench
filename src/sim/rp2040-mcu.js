@@ -85,7 +85,8 @@ export class Rp2040Mcu {
     // Serial (USB CDC) and Serial1/Serial2 (UART0/UART1) all land in the serial monitor
     this.cdc = new USBCDC(this.rp.usbCtrl);
     this.cdc.onSerialData = buf => { for (const b of buf) this.onSerial?.(b); };
-    for (const u of this.rp.uart) u.onByte = b => this.onSerial?.(b);
+    this.uartOut = null;
+    this.rp.uart.forEach((u, i) => { u.onByte = b => { this.onSerial?.(b); this.uartOut?.(i, b); }; });
     this.usart = { onConfigurationChange: null };
     this.i2c = new RpI2CBus(this.rp);
     // GPIO as an AVR-style "port" so pinState/setPin users (DHT, HC-SR04, servo, encoders …) work unchanged
@@ -120,7 +121,11 @@ export class Rp2040Mcu {
     this.rxBusy = false;
   }
   get seconds() { return this.clock.nanos / 1e9; }
-  get baud() { return 115200; }       // USB CDC has no baud rate; the monitor just needs a plausible one
+  get baud() { return 115200; }
+  attachSerial(monitorFn, uartFn) { this.onSerial = monitorFn; this.uartOut = uartFn; }
+  uartWrite(i, byte) { this.rp.uart[i]?.feedByte(byte); }
+  uartActive(i) { const u = this.rp.uart[i]; return !!u && !!u.enabled; }
+  uartBaud(i) { return this.rp.uart[i]?.baudRate || 115200; }       // USB CDC has no baud rate; the monitor just needs a plausible one
 
   /**
    * Run `cycles` CPU cycles of emulated time. If the browser can't keep up it stops early (`budgetMs`) and the

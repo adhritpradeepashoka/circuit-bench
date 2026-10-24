@@ -70,20 +70,27 @@ function gauss(A, b, n) {
  */
 export function solve(circuit, drive) {
   const sources = [];
-  // The board's own electrical character: an Uno's pins swing 0–5 V through ~25 Ω and are good for 40 mA; a Pico's swing 0–3.3 V through ~33 Ω and want ≤ 12 mA.
-  const bspec = circuit.uno.spec, LOGIC = bspec?.logic ?? VCC, G_BOARD_PIN = 1 / (bspec?.pinOhms ?? 25), PIN_LIMIT_A = bspec?.pinMaxA ?? LIMITS.pinA;
-  const pinRating = bspec?.pinRatingText ?? 'Arduino pin rating: 40 mA';
+  // Each board has its own electrical character: an Uno's pins swing 0–5 V through ~25 Ω and are good for 40 mA; a Pico's swing 0–3.3 V through ~33 Ω and want ≤ 12 mA.
+  // Several boards can share a bench (they only share a ground if the student wires it), so every board brings its own rails and pins.
+  const boards = circuit.boards?.length ? circuit.boards : [circuit.uno];
+  const character = bd => { const bs = bd.spec; return { bspec: bs, LOGIC: bs?.logic ?? VCC, G_PIN: 1 / (bs?.pinOhms ?? 25), LIMIT_A: bs?.pinMaxA ?? LIMITS.pinA, rating: bs?.pinRatingText ?? 'Arduino pin rating: 40 mA' }; };
   const addPower = (set, v, tag) => set.forEach(net => sources.push({ net, v, g: 1 / SUPPLY[tag].r, tag, power: true, limitA: SUPPLY[tag].limitA }));
-  addPower(circuit.uno.gnd, 0, 'GND');
-  addPower(circuit.uno.v5, VCC, '5V');
-  addPower(circuit.uno.v33, 3.3, '3.3V');
-  addPower(circuit.uno.vin, 4.6, 'VIN');
-  for (const pin of circuit.uno.pins) {
-    const mode = drive.pins.get(pin.name) || 'Z';
-    if (mode === 'H') sources.push({ net: pin.net, v: LOGIC, g: G_BOARD_PIN, tag: pin.label });
-    else if (mode === 'L') sources.push({ net: pin.net, v: 0, g: G_BOARD_PIN, tag: pin.label });
-    else if (mode === 'U') sources.push({ net: pin.net, v: LOGIC, g: bspec?.pullG ?? G_PULLUP, tag: pin.label, pullup: true });
-    else if (mode === 'D') sources.push({ net: pin.net, v: 0, g: bspec?.pullG ?? G_PULLUP, tag: pin.label, pullup: true });
+  const pinMode = pin => drive.pins.get(pin.key ?? pin.name) || 'Z';
+  const pinChar = new Map();
+  for (const bd of boards) {
+    const ch = character(bd);
+    addPower(bd.gnd, 0, 'GND');
+    addPower(bd.v5, VCC, '5V');
+    addPower(bd.v33, 3.3, '3.3V');
+    addPower(bd.vin, 4.6, 'VIN');
+    for (const pin of bd.pins) {
+      pinChar.set(pin, ch);
+      const mode = pinMode(pin);
+      if (mode === 'H') sources.push({ net: pin.net, v: ch.LOGIC, g: ch.G_PIN, tag: pin.label, limitA: ch.LIMIT_A, rating: ch.rating });
+      else if (mode === 'L') sources.push({ net: pin.net, v: 0, g: ch.G_PIN, tag: pin.label, limitA: ch.LIMIT_A, rating: ch.rating });
+      else if (mode === 'U') sources.push({ net: pin.net, v: ch.LOGIC, g: ch.bspec?.pullG ?? G_PULLUP, tag: pin.label, pullup: true });
+      else if (mode === 'D') sources.push({ net: pin.net, v: 0, g: ch.bspec?.pullG ?? G_PULLUP, tag: pin.label, pullup: true });
+    }
   }
 
   const idx = new Map();
@@ -357,14 +364,14 @@ export function solve(circuit, drive) {
     const i = s.g * (s.v - x[idx.get(s.net)]);
     if (s.power) {
       if (s.v > 0) { const e = supplyNets.get(s.net) || { tag: s.tag, v: s.v, i: 0, limitA: s.limitA, r: 1 / s.g }; e.i += i; supplyNets.set(s.net, e); }
-    } else if (!s.pullup && Math.abs(i) > PIN_LIMIT_A) warnings.push({ text: `${s.tag} is sourcing/sinking ${fmt(Math.abs(i))} (${pinRating})` });
+    } else if (!s.pullup && Math.abs(i) > s.limitA) warnings.push({ text: `${s.tag} is sourcing/sinking ${fmt(Math.abs(i))} (${s.rating})` });
   }
   // A pin that is listening (not driving) while something pushes it beyond the chip's supply: the classic "5 V sensor into a 3.3 V board" mistake
-  for (const pin of circuit.uno.pins) {
-    const mode = drive.pins.get(pin.name) || 'Z';
+  for (const [pin, ch] of pinChar) {
+    const mode = pinMode(pin);
     if (mode === 'H' || mode === 'L' || !idx.has(pin.net)) continue;
     const v = x[idx.get(pin.net)];
-    if (v > LOGIC + 0.4) warnings.push({ text: `${pin.label} is receiving ${v.toFixed(1)} V, but the ${bspec?.name ?? 'board'}'s pins only tolerate ${LOGIC} V — use a voltage divider or a level shifter` });
+    if (v > ch.LOGIC + 0.4) warnings.push({ text: `${boards.length > 1 ? `${ch.bspec?.name ?? 'Board'} ` : ''}${pin.label} is receiving ${v.toFixed(1)} V, but the ${ch.bspec?.name ?? 'board'}'s pins only tolerate ${ch.LOGIC} V — use a voltage divider or a level shifter` });
   }
   const powerTag = new Map(sources.filter(s => s.power).map(s => [s.net, s.tag]));
   for (const e of supplyNets.values()) {

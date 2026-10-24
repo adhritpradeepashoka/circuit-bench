@@ -68,7 +68,7 @@ test('boards: the first microcontroller board in a circuit is the one that runs'
 
 const wire = (id, a, ap, b, bp) => ({ id, a: { part: a, pin: ap }, b: { part: b, pin: bp }, style: 'straight', color: '#000', width: 2 });
 
-test('netlist: a Mega’s pins, power and I²C bus (D20/D21) come from its board spec; a second board is flagged, not run', () => {
+test('netlist: a Mega’s pins, power and I²C bus (D20/D21) come from its board spec; a second board is a second board', () => {
   const parts = [{ id: 'mega-1', type: 'arduino-mega', x: 0, y: 0, rot: 0 }, { id: 'm', type: 'mpu6050', x: 600, y: 0, rot: 0 }];
   const wires = [wire('w1', 'mega-1', '20', 'm', 'SDA'), wire('w2', 'mega-1', '21', 'm', 'SCL'), wire('w3', 'mega-1', '5V', 'm', 'VCC'), wire('w4', 'mega-1', 'GND.2', 'm', 'GND')];
   const c = compile({ parts, wires });
@@ -81,7 +81,11 @@ test('netlist: a Mega’s pins, power and I²C bus (D20/D21) come from its board
   const [bad] = i2cParts(compile({ parts, wires: [wire('w1', 'mega-1', 'A4', 'm', 'SDA'), ...wires.slice(1)] }), parts);
   assert.match(bad.problems.join(), /not connected to D20 \(SDA\)/);
   const two = compile({ parts: [...parts, { id: 'uno-1', type: 'arduino-uno', x: 0, y: 400, rot: 0 }], wires });
-  assert.ok(two.issues.some(i => i.partId === 'uno-1' && /Only one microcontroller/.test(i.text)));
+  assert.equal(two.boards.length, 2, 'several boards can share a bench');
+  assert.equal(two.uno, two.boards[0], 'uno is the first board, as before');
+  assert.equal(two.uno.pins.find(p => p.name === '13').key, '13', 'the first board keeps plain pin keys');
+  assert.equal(two.boards[1].pins.find(p => p.name === '13').key, 'uno-1/13', 'later boards are keyed by part');
+  assert.ok(!two.issues.some(i => /Only one microcontroller/.test(i.text)));
 });
 
 test('netlist: a Nano plugs into the breadboard; its A6/A7 are analog-only pins, ICSP header pins never seat in holes', () => {

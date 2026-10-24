@@ -23,7 +23,7 @@ class UnionFind {
   union(a, b) { const ra = this.find(a), rb = this.find(b); if (ra !== rb) this.p.set(rb, ra); }
 }
 
-import { BOARD_SPECS, boardPowerPin, mainBoard } from './boards.js';
+import { BOARD_SPECS, boardPowerPin } from './boards.js';
 
 export const MOTOR_OHMS = 20;      // a small 3–6 V hobby motor, running
 
@@ -82,18 +82,19 @@ export function compile(state) {
   // Elements + sources
   const elements = [];
   const issues = [];
-  // The microcontroller board (Uno / Nano / Mega). `uno` keeps its historical name: it is "the board that runs the firmware".
-  const uno = { pins: [], gnd: new Set(), v5: new Set(), v33: new Set(), vin: new Set(), board: null, spec: null };
-  const main = mainBoard(parts);
+  // Microcontroller boards (Uno / Nano / Mega / Pico …). Several can sit on one bench; each runs its own firmware. `uno` keeps its historical
+  // name: it is the FIRST board, the one the older single-board code paths (and every project made before multi-board) still talk about.
+  // A board's pin entries carry `key`: the plain pin name on the first board, "<partId>/<pin>" on the others, so one Map can hold them all.
+  const boards = [];
+  const newBoard = () => ({ pins: [], gnd: new Set(), v5: new Set(), v33: new Set(), vin: new Set(), board: null, spec: null, index: boards.length });
   for (const part of parts) {
     if (BOARD_SPECS[part.type]) {
-      if (part !== main) { issues.push({ partId: part.id, text: `Only one microcontroller board runs at a time: the ${BOARD_SPECS[part.type].name} isn't running (the ${BOARD_SPECS[main.type].name} is)` }); continue; }
-      const spec = BOARD_SPECS[part.type];
-      uno.board = part; uno.spec = spec;
+      const spec = BOARD_SPECS[part.type], bd = newBoard();
+      bd.board = part; bd.spec = spec; boards.push(bd);
       for (const pin of PART_DEFS[part.type].pins) {
         const n = netOf(part.id, pin.id), power = boardPowerPin(pin.id);
-        if (power) uno[power].add(n);
-        else if (spec.pins[pin.id]) uno.pins.push({ name: pin.id, label: pin.label, net: n, partId: part.id, ...spec.pins[pin.id] });
+        if (power) bd[power].add(n);
+        else if (spec.pins[pin.id]) bd.pins.push({ name: pin.id, label: pin.label, net: n, partId: part.id, key: bd.index === 0 ? pin.id : `${part.id}/${pin.id}`, ...spec.pins[pin.id] });
       }
     } else if (part.type === 'resistor') {
       const a = netOf(part.id, '1'), b = netOf(part.id, '2');
@@ -300,8 +301,9 @@ export function compile(state) {
   }
 
   // A motor straight on an I/O pin: it would need far more current than the pin can give.
-  const ioNets = new Map(uno.pins.filter(p => p.port).map(p => [p.net, p.label]));
+  const uno = boards[0] || newBoard();
+  const ioNets = new Map(boards.flatMap(bd => bd.pins).filter(p => p.port).map(p => [p.net, p.label]));
   for (const e of elements) if (e.kind === 'MOT' || (e.kind === 'LOAD' && e.heavy)) for (const t of [e.a, e.b]) if (ioNets.has(t)) issues.push({ partId: e.partId, text: `A DC motor is wired straight to ${ioNets.get(t)}: an Arduino pin can't power a motor (40 mA max) — drive it through an L298N motor driver` });
 
-  return { nets, netOf, netOfKey, elements, uno, attachments, issues, openLeads };
+  return { nets, netOf, netOfKey, elements, uno, boards, attachments, issues, openLeads };
 }

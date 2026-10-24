@@ -45,12 +45,14 @@ const AVR_PWM_MEGA = [...range(12, 2).map(String), '44', '45', '46'];
 
 export const BOARD_SPECS = {
   'arduino-uno': {
+    uarts: [{ name: 'Serial', tx: '1', rx: '0' }],
     name: 'Arduino Uno', chip: 'atmega328p', fqbn: 'arduino:avr:uno', pins: PINS_328P, ledPin: '13',
     i2c: { sda: 'A4', scl: 'A5' }, ram: 2048, flash: 32256,
     chipName: 'ATmega328P', logic: 5, adcBits: 10, pwm: AVR_PWM_328, pwmPrefer: ['11', '6', '5', '3', '9', '10'],
     avoid: ['0', '1', 'A4', 'A5'],
   },
   'arduino-nano': {
+    uarts: [{ name: 'Serial', tx: '1', rx: '0' }],
     name: 'Arduino Nano', chip: 'atmega328p', fqbn: 'arduino:avr:nano', ledPin: '13',
     pins: { ...PINS_328P, A6: { adc: 6 }, A7: { adc: 7 } },             // A6/A7: analog-only on the Nano (no digital port)
     i2c: { sda: 'A4', scl: 'A5' }, ram: 2048, flash: 30720,
@@ -58,6 +60,7 @@ export const BOARD_SPECS = {
     avoid: ['0', '1', 'A4', 'A5'],
   },
   'arduino-mega': {
+    uarts: [{ name: 'Serial', tx: '1', rx: '0' }, { name: 'Serial1', tx: '18', rx: '19' }, { name: 'Serial2', tx: '16', rx: '17' }, { name: 'Serial3', tx: '14', rx: '15' }],
     name: 'Arduino Mega 2560', chip: 'atmega2560', fqbn: 'arduino:avr:mega', pins: PINS_MEGA, ledPin: '13',
     i2c: { sda: '20', scl: '21' }, ram: 8192, flash: 253952,
     chipName: 'ATmega2560', logic: 5, adcBits: 10, pwm: AVR_PWM_MEGA, pwmPrefer: ['11', '6', '5', '3', '9', '10'],
@@ -66,6 +69,7 @@ export const BOARD_SPECS = {
   // Arduino UNO R4 Minima. Its real chip (Renesas RA4M1, Cortex-M4) is not emulated: a sketch for it is converted at compile time
   // (src/core/r4-compat.js) and runs on the Uno's AVR emulation, with the R4's 14-bit ADC and 12-bit DAC on A0 added by the simulator.
   'arduino-uno-r4': {
+    uarts: [{ name: 'Serial1', tx: '1', rx: '0' }],
     name: 'Arduino UNO R4 Minima', chip: 'atmega328p', emulation: 'uno-r4', fqbn: 'cb:uno-r4', pins: PINS_328P, ledPin: '13',
     i2c: { sda: 'A4', scl: 'A5' }, ram: 2048, flash: 32256,
     chipName: 'RA4M1 (emulated on an ATmega328P core)', logic: 5, adcBits: 14, pwm: AVR_PWM_328, pwmPrefer: ['11', '6', '5', '3', '9', '10'],
@@ -74,6 +78,7 @@ export const BOARD_SPECS = {
     aiNote: 'Write normal UNO R4 code. It is converted to run in the simulator: analogReadResolution(14) gives true 14-bit analogRead (default 10), analogWriteResolution(12) and analogWrite(A0, value) drive the 12-bit DAC on A0 (a real analog voltage). PWM pins are 3, 5, 6, 9, 10, 11 (8-bit). Same pin layout as the UNO R3, 5 V logic. In the simulator int is 16-bit and RAM is 2 KB; CAN, RTC, USB HID and the op-amp are not available.',
   },
   'raspberry-pi-pico': {
+    uarts: [{ name: 'Serial1', tx: '0', rx: '1' }, { name: 'Serial2', tx: '8', rx: '9' }],
     name: 'Raspberry Pi Pico', chip: 'rp2040', fqbn: 'rp2040:rp2040:rpipico', pins: PINS_RP2040, ledPin: '25',
     i2c: { sda: '4', scl: '5' }, ram: 264 * 1024, flash: 2 * 1024 * 1024,
     chipName: 'RP2040', logic: 3.3, adcBits: 12, pwm: range(23).map(String), pwmPrefer: [],

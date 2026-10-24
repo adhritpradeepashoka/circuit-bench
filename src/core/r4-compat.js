@@ -15,6 +15,8 @@ export const R4_COMPAT_H = `// CircuitBench: Arduino UNO R4 compatibility layer 
 #define CB_R4_COMPAT_H
 #include <Arduino.h>
 
+#define Serial1 Serial      // the UNO R4's pins 0/1 UART: here the same hardware UART as Serial
+
 #define CB_REG(a) (*(volatile uint8_t *)(a))
 static uint8_t cb_read_bits = 10;      // the R4 starts at 10 bits, like the R3
 static uint8_t cb_write_bits = 8;

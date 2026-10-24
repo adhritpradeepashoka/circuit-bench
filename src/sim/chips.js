@@ -42,6 +42,9 @@ const megaAdcChannels = {};
 for (let i = 0; i < 8; i++) { megaAdcChannels[i] = { type: 0, channel: i }; megaAdcChannels[0x20 + i] = { type: 0, channel: 8 + i }; }
 Object.assign(megaAdcChannels, { 0x1e: { type: 2, voltage: 1.1 }, 0x1f: { type: 2, voltage: 0 } });
 
+const usartAt = (base, v) => ({ ...usart0Config, UCSRA: base, UCSRB: base + 1, UCSRC: base + 2, UBRRL: base + 4, UBRRH: base + 5, UDR: base + 6,
+  rxCompleteInterrupt: vec(v), dataRegisterEmptyInterrupt: vec(v + 1), txCompleteInterrupt: vec(v + 2) });
+
 const ATMEGA2560 = {
   name: 'ATmega2560', flashBytes: 0x40000, sramBytes: 8192,
   ports: {
@@ -64,6 +67,7 @@ const ATMEGA2560 = {
     t16(0x120, 0x73, 0x3a, 47, PORTL, [3, 4, 5], PORTL, 2),
   ],
   usart: { ...usart0Config, rxCompleteInterrupt: vec(26), dataRegisterEmptyInterrupt: vec(27), txCompleteInterrupt: vec(28) },
+  extraUsarts: [usartAt(0xc8, 36), usartAt(0xd0, 51), usartAt(0x130, 54)],      // Serial1–3
   adc: { ...adcConfig, adcInterrupt: vec(30), numChannels: 16, muxInputMask: 0x3f, muxChannels: megaAdcChannels },
   twi: { ...twiConfig, twiInterrupt: vec(40) },
   pwm: {

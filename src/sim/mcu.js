@@ -44,6 +44,17 @@ export class Mcu {
     this.rxQueue = [];
     this.usart.onByteTransmit = byte => this.onSerial?.(byte);
     this.usart.onRxComplete = () => this.pumpRx();
+    // Serial1–3 (Mega): only the board-to-board links use them
+    this.usarts = [this.usart, ...(spec.extraUsarts || []).map(cfg => new AVRUSART(this.cpu, cfg, CPU_HZ))];
+    this.uartQueues = this.usarts.map(() => []);
+    this.uartOut = null;
+    this.usarts.forEach((u, i) => {
+      if (i === 0) u.onByteTransmit = byte => { this.onSerial?.(byte); this.uartOut?.(0, byte); };
+      else u.onByteTransmit = byte => this.uartOut?.(i, byte);
+      const pump = () => { const q = this.uartQueues[i]; while (q.length && !u.rxBusy) { if (u.writeByte(q[0]) === false) break; q.shift(); } };
+      if (i > 0) u.onRxComplete = pump;
+      else u.onRxComplete = () => { this.pumpRx(); pump(); };
+    });
     // TWI (Wire / I²C): the bus answers for whatever devices are wired to the board's SDA/SCL
     this.twi = new AVRTWI(this.cpu, spec.twi, CPU_HZ);
     this.i2c = new I2CBus(this.twi);
@@ -61,6 +72,18 @@ export class Mcu {
     }
   }
   get baud() { return this.usart.baudRate || 0; }
+  /** Board-to-board wiring: monitorFn gets Serial's bytes (the monitor), uartFn(i, byte) every byte any UART transmits. */
+  attachSerial(monitorFn, uartFn) { this.onSerial = monitorFn; this.uartOut = uartFn; }
+  /** A byte arriving on UART i's RX pin from another board. */
+  uartWrite(i, byte) {
+    if (i === 0) { this.serialWrite(Uint8Array.of(byte)); return; }
+    const u = this.usarts[i]; if (!u) return;
+    const q = this.uartQueues[i]; q.push(byte);
+    while (q.length && !u.rxBusy) { if (u.writeByte(q[0]) === false) break; q.shift(); }
+  }
+  /** Has the firmware switched UART i on (transmitter or receiver enabled)? */
+  uartActive(i) { const u = this.usarts[i]; return !!u && !!(this.cpu.data[u.config.UCSRB] & 0x18); }
+  uartBaud(i) { return this.usarts[i]?.baudRate || 0; }
   /** Volts (0–5) presented to ADC channel n (A0 = 0 …). */
   setAnalog(channel, volts) {
     if (channel >= this.adc.channelValues.length) return;
