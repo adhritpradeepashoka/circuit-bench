@@ -66,6 +66,76 @@ OFF = ['whats the date today', 'who made you', 'tell me about dogs', 'what is th
   'give me a recipe', 'how tall is mount everest', 'hello', 'hi there', 'hey', 'good morning', 'thanks', 'ok', 'who are you', 'what can you do', 'sing a song', 'what is the meaning of life']
 OFF_HO = ['whats the news', 'tell me a fun fact', 'how far is the sun', 'draw me a cat', 'what is your name']
 
+
+# ───────── vague, everyday wording: what people actually type ("i want a light", "make it blink", "something to measure temperature") ─────────
+# Each intent: (programs by whether an LED is already on the board, phrasings). The LAST phrasing of each is held out (never trained on).
+WANT = ['i want', 'i need', 'i would like', 'get me', 'give me', 'can i have', 'lets have', 'how about', 'could i get', 'put in', 'add', 'make me', 'show me', 'i wanna have', 'we need', 'set me up with']
+THING = {  # part type → everyday ways to ask for it without naming it
+  'ntc-sensor': ['something that measures temperature', 'a way to measure temperature', 'something to tell how hot it is', 'a temperature thing', 'something to read the temperature', 'a thing that senses heat', 'something to check how warm it is', 'a sensor for temperature', 'a thermometer', 'something that feels hot and cold', 'a thing that knows the temperature'],
+  'dht': ['something that measures humidity', 'a way to measure how humid it is', 'a humidity thing', 'something to check the air moisture', 'a sensor for humidity', 'something for humidity and temperature', 'a thing that knows how damp the air is'],
+  'pir-sensor': ['something that detects motion', 'a way to know if someone walks by', 'something to detect movement', 'a motion thing', 'something that sees people moving', 'a sensor for movement', 'something to catch someone walking past', 'a thing that notices when somebody moves'],
+  'ldr-module': ['something that measures how bright it is', 'a way to tell if its day or night', 'something to detect light', 'a light level thing', 'something that senses brightness', 'a sensor for light', 'a thing that knows when its dark', 'something to check how sunny it is'],
+  'mpu6050': ['something that detects tilt', 'a way to know if its shaking', 'something that measures movement and rotation', 'a tilt thing', 'something to sense orientation', 'a thing that feels when its turned', 'something to measure acceleration', 'a sensor for tilting'],
+  'lcd1602': ['something to show text', 'a way to show a message', 'a screen for words', 'something to write words on', 'a thing that displays letters', 'a text display', 'something that can print a message', 'a display for sentences'],
+  'ssd1306': ['something to show pictures', 'a small screen for graphics', 'a tiny screen', 'something that can draw on a screen', 'a screen for images', 'a graphic display', 'a mini monitor'],
+  'seven-segment': ['something to show a number', 'a way to display digits', 'a number display', 'something that counts on a screen', 'a thing to show numbers', 'a counter display', 'something to display a score'],
+  'dc-motor': ['something that spins', 'a thing to make wheels turn', 'something that moves', 'a way to make something rotate', 'a spinning thing', 'something to drive a wheel', 'a thing that whirs'],
+  'pushbutton': ['something to press', 'a way to switch it on with my finger', 'a thing i can click', 'something to push', 'a way to control it by pressing', 'a clicky thing', 'something i can tap'],
+  'potentiometer': ['something to turn up and down', 'a dial', 'a way to adjust it smoothly', 'a volume control', 'something to twist', 'a thing to dim with', 'a smooth control'],
+  'battery': ['some power', 'a way to power it', 'a power source', 'something to run it on', 'a thing that gives electricity', 'something to supply power'],
+  'rgb-led': ['a light that changes colour', 'a colourful light', 'a light with many colours', 'a multicolour light', 'a lamp that can be any colour', 'a rainbow light'],
+  'led': ['a light', 'a bulb', 'a lamp', 'some light', 'a little light', 'something that glows', 'a thing that lights up', 'a small bulb', 'a glowing thing', 'a tiny lamp', 'a shiny thing'],
+}
+QTY = [(1, ['a', 'one', '']), (2, ['a couple of', 'two', 'a pair of']), (3, ['a few', 'some', 'three', 'a handful of']), (4, ['several', 'four']), (5, ['a bunch of', 'lots of', 'five', 'loads of'])]
+BLINK_P = {  # phrasing → ms
+  500: ['make it blink', 'blink', 'make the light blink', 'i want it to blink', 'can you make it flash', 'make it go on and off', 'make the light flash', 'turn it on and off', 'make it flicker', 'make the led blink', 'make my led flash', 'make it pulse', 'switch it on and off over and over', 'make it twinkle', 'blink it', 'flash it', 'get it blinking', 'make it flash on and off', 'start blinking', 'i want it flashing'],
+  100: ['make it blink faster', 'make it flash quickly', 'speed it up', 'make it faster', 'blink faster', 'flash faster', 'make it go quicker', 'hurry it up', 'much faster please', 'make it blink really quickly'],
+  1000: ['make it blink slower', 'slow it down', 'make it slower', 'blink slower', 'make it flash slowly', 'make it go slower', 'blink more slowly', 'make it calmer', 'much slower please', 'make it blink gently'],
+}
+BLINK_HO = {500: ['get the light going on and off', 'could it strobe'], 100: ['crank up the speed'], 1000: ['ease off the speed']}
+BUILD_P = ['make a circuit', 'make something', 'build something', 'set something up', 'get me started', 'make me a circuit', 'do something with the led', 'lets build something', 'i want to try something', 'show me a circuit', 'start a circuit', 'make a simple circuit', 'build me a simple circuit', 'help me start', 'create a circuit for me', 'make an easy circuit', 'i am new, make something simple', 'set up something simple']
+BUILD_HO = ['whip up a circuit', 'give me a starter circuit']
+COLOR_P = ['make it', 'turn it', 'change it to', 'i want it', 'can it be', 'colour it', 'paint it', 'it should be', 'switch it to', 'lets have it']
+COLOR_HO = ['recolour it']
+SENSORISH = ['i need a sensor', 'add a sensor', 'get me a sensor', 'i want a sensor', 'put a sensor', 'add something', 'add a thing', 'i need a part', 'give me a part', 'add some stuff', 'i want a component', 'add a component', 'any sensor', 'pick a sensor for me', 'add whatever']
+
+def gen_vague(rng, held, suf):
+    def fin(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
+    r = rng.random()
+    if r < 0.40:                                              # name-free request for a part
+        t = rng.choice(list(THING)); k = rng.random()
+        n, qw = rng.choice(QTY) if t in ('led', 'pushbutton', 'potentiometer', 'dc-motor') and rng.random() < 0.3 else (1, [''])
+        ph = THING[t]; ph = ph[-1:] if held else ph[:-1]
+        thing = rng.choice(ph)
+        if n > 1: thing = thing.replace('a ', f'{rng.choice(qw)} ', 1).replace('some light', 'some lights') if thing.startswith('a ') else f'{rng.choice(qw)} {thing}'
+        _, st = make_state(rng)
+        req = f'{rng.choice(WANT)} {thing}'.replace('  ', ' ')
+        if rng.random() < 0.3: req = thing if thing.startswith(('something', 'a way', 'a ')) else req
+        return fin(req, st, f'add {t}' + (f' x{n}' if n > 1 else ''))
+    if r < 0.62:                                              # make it blink / faster / slower
+        ms = rng.choices([500, 100, 1000], [55, 25, 20])[0]
+        pool = BLINK_HO[ms] if held else BLINK_P[ms]
+        has_led = rng.random() < 0.5
+        parts, st = make_state(rng, {'led': 1} if has_led else None)
+        if not has_led:
+            parts2 = [(t, i) for t, i in parts if t != 'led']; st = ' '.join(i for _, i in parts2)
+        req = rng.choice(pool)
+        if ms == 500 and not has_led:
+            if rng.random() < 0.6: req = rng.choice(['i want a light that blinks', 'i want a blinking light', 'a blinking led', 'make a light blink', 'lets make a light blink', 'a flashing light please', 'i want to blink an led', 'blink a light', 'make a led that flashes', 'make something blink'])
+            return fin(req, st, 'build led auto; blink auto 500')
+        return fin(req, st, f'blink auto {ms}')
+    if r < 0.72:                                              # "make a circuit"
+        _, st = make_state(rng); return fin(rng.choice(BUILD_HO if held else BUILD_P), st, 'build led auto')
+    if r < 0.82:                                              # "make it red" with exactly one LED on the board
+        parts, st = make_state(rng, {'led': 1}); n = sum(1 for t, _ in parts if t == 'led')
+        c = rng.choice(COLORS)
+        if n == 1: return fin(f'{rng.choice(COLOR_HO if held else COLOR_P)} {c}', st, f'set led color={c}')
+        return fin(f'make it {c}', st, 'defer')
+    if r < 0.92:                                              # truly vague: needs a question back, so hand it to a bigger AI / the chooser
+        _, st = make_state(rng); return fin(rng.choice(SENSORISH), st, 'defer')
+    _, st = make_state(rng)                                   # cannot do (brightness, power off) → defer
+    return fin(rng.choice(['make it brighter', 'make it dimmer', 'turn it off', 'turn it on', 'make it stronger', 'make it louder', 'fix it', 'do it again', 'undo that', 'make it better', 'that is wrong', 'try again']), st, 'defer')
+
 def typo(s, rng):
     w = s.split(' '); out = []
     for t in w:
@@ -98,8 +168,9 @@ def gen_one(rng, held):
     SUF = SUFFIX + (SUFFIX_HO if held else [])
     if held:  # held-out set only uses the held-out phrasings (plus unseen combinations)
         ADD = ADD_V[-7:]; DEL = DEL_V[-4:]; SET = SET_V[-4:]; SUF = SUFFIX_HO
-    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off'], [26, 14, 18, 10, 16, 8, 9, 5])[0]
+    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off', 'vague'], [20, 10, 12, 7, 12, 6, 8, 5, 34])[0]
     suf = rng.choice(SUF)
+    if kind == 'vague': return gen_vague(rng, held, suf)
     def finish(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
 
     if kind == 'add':
