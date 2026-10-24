@@ -1,0 +1,49 @@
+/* The public blog. Colours come from the app's theme variables (styles.css), so the chosen theme applies here too. */
+body.blog-page { height: auto; min-height: 100%; overflow: auto; }
+.blog-page .topbar { position: sticky; top: 0; }
+.blog-page .brand { text-decoration: none; color: inherit; }
+.blog-sub { font-size: 11.5px; color: var(--ink-muted); }
+.blog-lab { margin-left: 12px; text-decoration: none; display: inline-flex; align-items: center; height: 34px; padding: 0 14px; border: 1px solid #36424a; border-radius: 8px; background: var(--ink-2); color: var(--ink-text); }
+.blog-lab:hover { border-color: var(--blue); }
+.blog-page .project-menu { margin-left: auto; }
+
+.blog-wrap { max-width: 1020px; margin: 0 auto; padding: 22px 16px 60px; display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 22px; align-items: start; }
+.blog-main { min-width: 0; font-size: 14px; }
+.blog-side { position: sticky; top: 70px; display: grid; gap: 12px; }
+@media (max-width: 760px) { .blog-wrap { grid-template-columns: 1fr; } .blog-side { position: static; order: -1; } }
+
+.blog-head h1 { margin: 0 0 4px; font-size: 26px; }
+.blog-lead { margin: 0 0 14px; color: var(--muted); line-height: 1.45; }
+.blog-sort { display: flex; gap: 6px; margin-bottom: 12px; }
+.blog-pill { display: inline-block; padding: 5px 13px; border: 1px solid var(--line); border-radius: 99px; color: var(--text); text-decoration: none; font-weight: 600; font-size: 12.5px; }
+.blog-pill.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.blog-list { display: grid; gap: 10px; }
+.blog-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.blog-card:hover { border-color: var(--blue); }
+.blog-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; }
+.blog-title { display: block; margin: 7px 0 4px; font-size: 17px; font-weight: 700; color: var(--text); text-decoration: none; overflow-wrap: anywhere; }
+.blog-title:hover { color: var(--blue); }
+.blog-snippet { margin: 0 0 8px; color: var(--muted); line-height: 1.45; overflow-wrap: anywhere; }
+.blog-foot { font-size: 12px; color: var(--muted); }
+
+.blog-post { padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.blog-post h1 { margin: 8px 0 10px; font-size: 24px; overflow-wrap: anywhere; }
+.blog-back { display: inline-block; margin-bottom: 8px; color: var(--blue); text-decoration: none; font-weight: 600; }
+.blog-body p { font-size: 15px; }
+.blog-h2 { margin: 18px 0 6px; font-size: 16px; }
+.blog-note { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; }
+.blog-composer { margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--blue); border-radius: 12px; background: var(--surface); }
+.blog-composer h2 { margin: 0 0 6px; font-size: 16px; }
+.blog-composer select { justify-self: start; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.blog-page .cm-form input, .blog-page .cm-form textarea { width: 100%; }
+
+.side-card { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.side-card h3 { margin: 0 0 6px; font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.side-card h3:not(:first-child) { margin-top: 12px; }
+.side-nav { display: grid; gap: 1px; }
+.side-item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 7px; color: var(--text); text-decoration: none; }
+.side-item:hover { background: var(--blue-soft); }
+.side-item.on { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
+.swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.blog-new { padding: 10px 14px; border: 0; border-radius: 10px; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; }
+.blog-new:hover { filter: brightness(1.08); }

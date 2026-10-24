@@ -1,5 +1,6 @@
 // Community: team updates and user discussions. Everything a person writes is shown as plain text (textContent), never as markup.
 import { getMe, authed } from '../sim/session.mjs';
+import { FLAIRS, FLAIR_BY_ID } from '../core/community-flairs.js';
 
 export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), status = () => {} } = {}) {
   const $ = id => document.getElementById(id);
@@ -9,6 +10,10 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
   const call = (path, opts) => authed(path, { fetchImpl, ...opts }).then(async r => ({ status: r.status, body: await r.json().catch(() => null) }));
   const when = t => new Date(t).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
   const staff = () => !!getMe()?.entitlements?.admin;
+  const chip = id => { const f = FLAIR_BY_ID.get(id) || FLAIR_BY_ID.get('discussion'); const c = el('span', 'flair', f.label); c.style.setProperty('--flair', f.color); return c; };
+  const SEEN = 'circuitbench:cm-seen';
+  const seen = () => { try { return Number(localStorage.getItem(SEEN)) || 0; } catch { return 0; } };
+  let newest = 0;
 
   /** Plain text with line breaks and clickable http(s) links, built with DOM nodes so nothing can inject markup. */
   function text(str, cls = 'cm-text') {
@@ -23,7 +28,17 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     }
     return box;
   }
-  const open = async () => { modal.hidden = false; await showList(); $('communityClose').focus(); };
+  const open = async () => { modal.hidden = false; markSeen(); await showList(); $('communityClose').focus(); };
+  function markSeen() { try { if (newest) localStorage.setItem(SEEN, String(newest)); } catch { /* ignore */ } $('communityBtn')?.classList.remove('has-new'); }
+  /** A small red dot on Community / Blog when the team has posted something you have not seen. */
+  (async () => {
+    let r = null;
+    try { r = (await call('/api/community/posts?kind=update')).body; } catch { /* offline, or no server */ }
+    if (!r?.ok || !r.posts.length) return;
+    newest = Math.max(...r.posts.map(p => p.createdAt));
+    if (newest > seen()) { $('communityBtn')?.classList.add('has-new'); $('blogBtn')?.classList.add('has-new'); }
+  })();
+  $('blogBtn')?.addEventListener('click', () => { $('blogBtn').classList.remove('has-new'); markSeen(); });
   const close = () => { modal.hidden = true; };
   const signedIn = () => !!getMe();
   const note = () => el('p', 'proj-note', 'Sign in with Google (top bar) to post or comment.');
@@ -41,9 +56,11 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     else if (!r.posts.length) list.append(el('p', 'proj-note', tab === 'update' ? 'No updates yet.' : 'No discussions yet — start one!'));
     else for (const p of r.posts) {
       const row = el('button', 'cm-row'); row.type = 'button';
-      row.append(el('b', '', `${p.pinned ? '📌 ' : ''}${p.title}`), el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)} · ${p.comments} comment${p.comments === 1 ? '' : 's'}`));
+      const top = el('div', 'cm-rowtop'); top.append(chip(p.flair), el('b', '', `${p.pinned ? '📌 ' : ''}${p.title}`));
+      row.append(top, el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)} · ${p.comments} comment${p.comments === 1 ? '' : 's'}`));
       row.addEventListener('click', () => showPost(p.id)); list.append(row);
     }
+    const blog = el('a', 'cm-blog-link', 'Open the full blog ↗'); blog.href = '/blog'; blog.target = '_blank'; blog.rel = 'noopener'; head.append(blog);
     body.replaceChildren(head, list, composer());
   }
 
@@ -51,15 +68,18 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     if (!signedIn()) return note();
     if (tab === 'update' && !staff()) return el('span');
     const f = el('form', 'cm-form'); f.id = 'cmNewForm';
+    const sel = el('select'); sel.setAttribute('aria-label', 'Flair');
+    for (const fl of FLAIRS.filter(x => (tab === 'update') === !!x.staff)) { const o = el('option', '', fl.label); o.value = fl.id; sel.append(o); }
+    sel.value = tab === 'update' ? 'update' : 'discussion';
     const t = el('input'); t.placeholder = tab === 'update' ? 'Update title' : 'Start a discussion — title'; t.maxLength = 120; t.setAttribute('aria-label', 'Title');
     const b = el('textarea'); b.rows = 3; b.placeholder = tab === 'update' ? 'What is new?' : 'What would you like to talk about?'; b.maxLength = 8000; b.setAttribute('aria-label', 'Text');
     const go = el('button', '', tab === 'update' ? 'Post update' : 'Post'); go.type = 'submit'; const msg = el('p', 'proj-note'); msg.setAttribute('role', 'status');
     f.addEventListener('submit', async e => {
       e.preventDefault();
-      const { body: r } = await call('/api/community/posts', { method: 'POST', body: { kind: tab, title: t.value, body: b.value } });
+      const { body: r } = await call('/api/community/posts', { method: 'POST', body: { flair: sel.value, title: t.value, body: b.value } });
       if (r?.ok) showPost(r.post.id); else msg.textContent = r?.error || 'That did not work.';
     });
-    f.append(t, b, go, msg); return f;
+    f.append(sel, t, b, go, msg); return f;
   }
 
   async function showPost(id) {
@@ -67,7 +87,7 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     if (!r?.ok) { await showList(); return; }
     const back = el('button', 'proj-act', '← Back'); back.type = 'button'; back.addEventListener('click', showList);
     const p = r.post, card = el('article', 'cm-post');
-    card.append(el('h3', '', `${p.pinned ? '📌 ' : ''}${p.title}`), el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)}`), text(p.body));
+    card.append(chip(p.flair), el('h3', '', `${p.pinned ? '📌 ' : ''}${p.title}`), el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)}`), text(p.body));
     const acts = el('div', 'proj-acts');
     if (p.canPin) { const b = el('button', 'proj-act', p.pinned ? 'Unpin' : 'Pin'); b.type = 'button'; b.addEventListener('click', async () => { await call(`/api/community/posts/${id}`, { method: 'PATCH', body: { pinned: !p.pinned } }); showPost(id); }); acts.append(b); }
     if (p.mine) { const b = el('button', 'proj-act', 'Delete post'); b.type = 'button'; b.addEventListener('click', async () => { await call(`/api/community/posts/${id}`, { method: 'DELETE' }); showList(); }); acts.append(b); }

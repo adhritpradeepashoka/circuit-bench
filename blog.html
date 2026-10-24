@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CircuitBench Blog</title>
+  <meta name="description" content="Updates, fixes and discussion from the CircuitBench team and community — a free virtual electronics lab in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314191c'/%3E%3Crect x='7' y='9' width='3.5' height='14' fill='%23c9853c'/%3E%3Crect x='14' y='9' width='3.5' height='14' fill='%23d64b3d'/%3E%3Crect x='21' y='9' width='3.5' height='14' fill='%23f0b429'/%3E%3C/svg%3E">
+</head>
+<body class="blog-page">
+<header class="topbar">
+  <a class="brand" href="/" title="Back to the lab">
+    <svg class="brand-mark" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#232b30"/><rect x="6" y="8" width="3.2" height="12" fill="#c9853c"/><rect x="12.4" y="8" width="3.2" height="12" fill="#d64b3d"/><rect x="18.8" y="8" width="3.2" height="12" fill="#f0b429"/></svg>
+    <div class="brand-text"><div class="brand-name">CircuitBench</div><div class="blog-sub">Blog</div></div>
+  </a>
+  <a class="top-btn blog-lab" href="/">Open the lab</a>
+  <div class="project-menu">
+    <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
+      <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span><em class="role-badge" id="accountRole" hidden></em></div><p class="account-note">Your Google account only proves who you are. Your name, email and role are kept by CircuitBench so beta access can follow your account.</p><hr><button id="accountSignOut" type="button">Sign out</button></div>
+    </div>
+  </div>
+</header>
+<div class="blog-wrap">
+  <main class="blog-main" id="blogMain" aria-live="polite"></main>
+  <aside class="blog-side" id="blogSide" aria-label="Browse the blog"></aside>
+</div>
+<script type="module" src="/src/blog.js"></script>
+</body>
+</html>

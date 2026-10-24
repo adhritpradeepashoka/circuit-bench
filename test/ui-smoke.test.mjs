@@ -2034,7 +2034,8 @@ test('ui: Community — lists updates and discussions, posts and comments for si
   const f = doc.getElementById('cmNewForm'); assert.ok(f, 'signed-in users can start a discussion');
   f.querySelector('input').value = 'Hi all'; f.querySelector('textarea').value = 'first!';
   f.dispatchEvent(new w.Event('submit', { cancelable: true, bubbles: true })); await flush(); await flush();
-  assert.deepEqual(sent.find(r => r.opts.method === 'POST').body, { kind: 'topic', title: 'Hi all', body: 'first!' });
+  assert.deepEqual(sent.find(r => r.opts.method === 'POST').body, { flair: 'discussion', title: 'Hi all', body: 'first!' });
+  assert.deepEqual([...f.querySelectorAll('option')].map(o => o.textContent), ['Error report', 'Question', 'New workspace', 'New part', 'Showcase', 'Idea', 'Discussion'], 'users pick a flair from the non-team ones');
   assert.equal(sent.find(r => r.opts.method === 'POST').opts.headers.authorization, 'Bearer tok');
   assert.match(doc.getElementById('communityBody').textContent, /Hi all/);
   assert.equal(doc.querySelector('.cm-comment b b'), null, 'a comment containing <b> is text, not an element');

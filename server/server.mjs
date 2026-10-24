@@ -70,7 +70,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
         if (req.method !== 'GET' && limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
         if (parts[0] === 'posts' && !parts[1]) {
-          if (req.method === 'GET') return out(await community.list(url.searchParams.get('kind')));
+          if (req.method === 'GET') return out(await community.list(url.searchParams.get('kind'), url.searchParams.get('flair')));
           if (req.method === 'POST') return out(await community.create(tok, await readJson(req, 30_000)));
         }
         if (parts[0] === 'posts' && Number.isInteger(id) && id > 0) {
@@ -144,7 +144,8 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       if (url.pathname.startsWith('/api/')) return send(res, 404, { ok: false, error: 'Unknown endpoint.' });
 
       if (staticDir) {                                                     // serve the built app
-        let rel = normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
+        const blogPage = url.pathname === '/blog' || /^\/blog\/\d+\/?$/.test(url.pathname);        // the public blog: one page for the list and for every post
+        let rel = blogPage ? 'blog.html' : normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
         if (rel.split(sep).includes('..')) return send(res, 400, { ok: false, error: 'Bad path.' });
         let file = join(staticDir, rel || 'index.html');
         try { if ((await stat(file)).isDirectory()) file = join(file, 'index.html'); } catch { file = join(staticDir, 'index.html'); }

@@ -76,3 +76,43 @@ test('HTTP: community routes', async () => {
     assert.equal((await call('/api/community/posts/abc')).status, 404);
   } finally { srv.close(); }
 });
+
+for (const [name, factory] of [['memory', () => createMemoryCommunity()], ['postgres (pg-mem)', async () => { const { newDb } = await import('pg-mem'); const { Pool } = newDb().adapters.createPg(); return createPgCommunity(new Pool()); }]]) {
+  test(`community (${name}): post flairs — team flairs for the team, the rest for everyone, filter by flair`, async () => {
+    const st = await factory(); await st.init();
+    const acc = accounts(), c = createCommunity({ accounts: acc, store: st });
+    const owner = (await acc.signIn(`good:${OWNER}`)).token, kid = (await acc.signIn('good:kid@example.com')).token;
+    assert.equal((await c.create(kid, { flair: 'fix', title: 'Fixed', body: 'x' })).status, 403, 'a user cannot use a team flair');
+    assert.equal((await c.create(kid, { flair: 'nonsense', title: 'a', body: 'b' })).status, 400);
+    const fix = (await c.create(owner, { flair: 'fix', title: 'ESC part maker fixed', body: 'It works now' })).post;
+    const bug = (await c.create(kid, { flair: 'bug', title: 'Resistor sticks', body: 'Legs catch' })).post;
+    const q = (await c.create(kid, { flair: 'question', title: 'How do I wire a BLDC?', body: '?' })).post;
+    const legacy = (await c.create(kid, { kind: 'topic', title: 'Old style', body: 'no flair given' })).post;
+    assert.deepEqual([fix.flair, bug.flair, q.flair, legacy.flair], ['fix', 'bug', 'question', 'discussion']);
+    assert.deepEqual([fix.kind, bug.kind], ['update', 'topic'], 'team flairs are updates, the rest topics');
+    assert.deepEqual((await c.list(null, 'bug')).posts.map(p => p.title), ['Resistor sticks']);
+    assert.deepEqual((await c.list('update')).posts.map(p => p.title), ['ESC part maker fixed']);
+    assert.equal((await c.read(q.id)).post.flair, 'question', 'readable without signing in');
+    // changing a flair follows the same rules
+    assert.equal((await c.edit(kid, q.id, { flair: 'update' })).status, 403);
+    assert.equal((await c.edit(kid, q.id, { flair: 'idea' })).post.flair, 'idea');
+    assert.equal((await c.edit(owner, q.id, { flair: 'roadmap' })).post.kind, 'update');
+  });
+}
+
+test('HTTP: /blog and /blog/<id> serve the blog page, anyone can read posts without signing in, the lab stays at /', async () => {
+  const { mkdtemp, writeFile } = await import('node:fs/promises'); const { tmpdir } = await import('node:os'); const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'cb-blog-')); await writeFile(join(dir, 'index.html'), '<title>LAB</title>'); await writeFile(join(dir, 'blog.html'), '<title>BLOG</title>');
+  const acc = accounts(), community = createCommunity({ accounts: acc });
+  const srv = createServer({ accounts: acc, community, staticDir: dir });
+  await new Promise(r => srv.listen(0, '127.0.0.1', r));
+  const base = `http://127.0.0.1:${srv.address().port}`, get = async p => (await fetch(base + p)).text();
+  try {
+    const owner = (await acc.signIn(`good:${OWNER}`)).token;
+    const post = (await community.create(owner, { flair: 'fix', title: 'Fixed', body: 'ok' })).post;
+    assert.match(await get('/blog'), /BLOG/); assert.match(await get(`/blog/${post.id}`), /BLOG/); assert.match(await get('/'), /LAB/);
+    const listed = await (await fetch(`${base}/api/community/posts?flair=fix`)).json();      // no Authorization header at all
+    assert.deepEqual(listed.posts.map(p => p.flair), ['fix']);
+    assert.equal((await fetch(`${base}/api/community/posts`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ flair: 'bug', title: 'a', body: 'b' }) })).status, 401, 'posting needs sign-in');
+  } finally { srv.close(); }
+});
