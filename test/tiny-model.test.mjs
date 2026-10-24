@@ -22,3 +22,14 @@ test('stays out of scope: unrelated chat is not turned into edits', () => {
   const r = understand(model, 'write me a poem about the ocean', { parts: [], wires: [] });
   assert.ok(r === null || r.kind === 'off');
 });
+
+test('"I want a basic LED circuit" works on an empty bench (adds an Uno first)', () => {
+  const b = readFileSync(new URL('../public/tiny-model.bin', import.meta.url)), man = JSON.parse(readFileSync(new URL('../public/tiny-model.json', import.meta.url), 'utf8'));
+  const model = createTiny(man, b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength));
+  for (const q of ['I want a basic LED circuit', 'I want a basic LED Circuit']) {
+    const u = understand(model, q, { parts: [], wires: [] });
+    assert.ok(u, q);
+    assert.equal(u.actions[0].type, 'arduino-uno');
+    assert.equal(u.actions.filter(a => a.op === 'add_wire').length, 3);
+  }
+});

@@ -74,7 +74,8 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
       const pin = (String(a[0]).toLowerCase() === 'auto' ? autoPin : String(a[0]).toUpperCase()) || (a[0] === 'auto' ? '13' : ''), ms = +a[1]; if (!PIN.test(pin) || !(ms >= 10 && ms <= 60000)) return null;
       code = blinkSketch(pin, ms); said.push(`Wrote a sketch that blinks pin ${pin} every ${ms} ms`);
     } else if (op === 'build') {
-      const kind = a[0], b = board()?.id; if (!b) return null;
+      const kind = a[0]; if (!board()) addPart('arduino-uno');   // an empty bench gets an Uno first
+      const b = board()?.id; if (!b) return null;
       const want = String(a[1] ?? 'auto').toLowerCase();
       const pin = want === 'auto' ? freePin(kind === 'pot') : want.toUpperCase();
       if (!pin || !PIN.test(pin) || !pinOk(b, pin)) return null;
