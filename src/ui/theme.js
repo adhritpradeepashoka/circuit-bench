@@ -43,4 +43,15 @@ export function applyTheme(id = getTheme(), root = document.documentElement) {
 }
 export function setTheme(id) { if (!canWear(id)) id = 'classic'; try { localStorage.setItem(KEY, id); } catch { /* ignore */ } applyTheme(id); }
 // Signing in or out changes which team themes are allowed (and a revoked one falls back to Classic).
-try { globalThis.addEventListener?.('cb-session', () => applyTheme()); } catch { /* not a browser */ }
+// Becoming an admin switches that person to the Operator theme once; after that they can pick anything they hold.
+const ROLE_KEY = 'circuitbench:last-role';
+function onSession() {
+  const role = getMe()?.role || '';
+  try {
+    const last = localStorage.getItem(ROLE_KEY);
+    if (role) localStorage.setItem(ROLE_KEY, role); else localStorage.removeItem(ROLE_KEY);
+    if (role === 'admin' && last !== 'admin') setTheme('operator');
+  } catch { /* ignore */ }
+  applyTheme();
+}
+try { globalThis.addEventListener?.('cb-session', onSession); } catch { /* not a browser */ }

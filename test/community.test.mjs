@@ -133,3 +133,17 @@ test('team themes: the owner and admins get theirs, the owner can grant more, no
   assert.equal((await acc.setThemes(owner, 'kid@example.com', [])).ok, true);
   assert.deepEqual((await acc.me(kid)).entitlements.themes, []);
 });
+
+test('becoming an admin switches that person to the Operator theme once', async () => {
+  const mem = new Map(), ls = { getItem: k => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k) };
+  const root = { setAttribute() {}, removeAttribute() {}, style: { removeProperty() {}, setProperty() {} } };
+  const handlers = []; Object.assign(globalThis, { localStorage: ls, document: { documentElement: root }, addEventListener: (t, f) => handlers.push(f), dispatchEvent() {} });
+  const { setSession } = await import('../src/sim/session.mjs'); const { getTheme, setTheme } = await import('../src/ui/theme.js?role');
+  const me = role => ({ role, entitlements: { themes: role === 'admin' ? ['operator'] : [] } });
+  const sync = () => handlers.forEach(f => f());
+  setSession('t', me('user')); sync(); assert.equal(getTheme(), 'classic');
+  setSession('t', me('admin')); sync(); assert.equal(getTheme(), 'operator', 'promotion switches the theme');
+  setTheme('classic'); sync(); assert.equal(getTheme(), 'classic', 'afterwards their own choice sticks');
+  setSession('t', me('user')); sync(); setSession('t', me('admin')); sync(); assert.equal(getTheme(), 'operator', 'promoted again → switches again');
+  for (const k of ['localStorage', 'document', 'addEventListener', 'dispatchEvent']) delete globalThis[k];
+});
