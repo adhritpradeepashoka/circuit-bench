@@ -216,17 +216,23 @@ function skinR4(root) {
     if (g.querySelector(':scope > rect[fill="url(#mcu-leads)"]')) g.setAttribute('display', 'none');   // the long ATmega package
   }
   const skin = mk('g', { id: 'r4-skin' });
+  const chip = mk('g', { transform: 'translate(-8.7 -7.9)' }), name = mk('g', { transform: 'translate(-5 -7)' });   // chip near the middle of the board
   skin.append(
     mk('rect', { x: -1.6, y: 13.4, width: 8, height: 3.6, rx: 1.5, fill: '#cfd4d9', stroke: '#8a9299', 'stroke-width': 0.15 }),   // USB-C shell
     mk('rect', { x: -0.4, y: 14.5, width: 5.6, height: 1.4, rx: 0.7, fill: '#2a2f34' }),
+  );
+  chip.append(
     mk('rect', { x: 36.2, y: 31.4, width: 11, height: 11, rx: 0.4, fill: '#16191c', stroke: '#050607', 'stroke-width': 0.15 }),   // RA4M1, square
     mk('circle', { cx: 37.6, cy: 32.8, r: 0.55, fill: '#4a5056' }),
     mk('text', { x: 41.7, y: 37.4, fill: '#d7dce0', 'font-size': 1.9, 'font-weight': 700, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'RA4M1'),
     mk('text', { x: 41.7, y: 39.5, fill: '#8d959c', 'font-size': 1.1, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'RENESAS'),
+  );
+  name.append(
     mk('text', { x: 54, y: 37, fill: '#f2fdfe', 'font-size': 3.4, 'font-weight': 800, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'UNO R4'),
     mk('text', { x: 54, y: 40.2, fill: '#bfeff3', 'font-size': 1.7, 'letter-spacing': 0.5, 'text-anchor': 'middle', 'font-family': 'sans-serif' }, 'MINIMA'),
   );
-  for (let i = 0; i < 16; i++) { const t = 36.2 + 0.6 + i * 0.6875; skin.append(mk('rect', { x: t, y: 30.9, width: 0.25, height: 0.5, fill: '#b8bec4' }), mk('rect', { x: t, y: 42.4, width: 0.25, height: 0.5, fill: '#b8bec4' })); }
+  for (let i = 0; i < 16; i++) { const t = 36.2 + 0.6 + i * 0.6875; chip.append(mk('rect', { x: t, y: 30.9, width: 0.25, height: 0.5, fill: '#b8bec4' }), mk('rect', { x: t, y: 42.4, width: 0.25, height: 0.5, fill: '#b8bec4' })); }
+  skin.append(chip, name);
   svg.append(skin);
 }
 function defineUnoR4() {
