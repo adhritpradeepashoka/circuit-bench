@@ -1,5 +1,5 @@
 /* The public blog. Colours come from the app's theme variables (styles.css), so the chosen theme applies here too. */
-body.blog-page { height: auto; min-height: 100%; overflow: auto; }
+body.blog-page { color: var(--text); height: auto; min-height: 100%; overflow: auto; }
 .blog-page .topbar { position: sticky; top: 0; }
 .blog-page .brand { text-decoration: none; color: inherit; }
 .blog-sub { font-size: 11.5px; color: var(--ink-muted); }
@@ -16,7 +16,7 @@ body.blog-page { height: auto; min-height: 100%; overflow: auto; }
 .blog-lead { margin: 0 0 14px; color: var(--muted); line-height: 1.45; }
 .blog-sort { display: flex; gap: 6px; margin-bottom: 12px; }
 .blog-pill { display: inline-block; padding: 5px 13px; border: 1px solid var(--line); border-radius: 99px; color: var(--text); text-decoration: none; font-weight: 600; font-size: 12.5px; }
-.blog-pill.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.blog-pill.on { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
 .blog-list { display: grid; gap: 10px; }
 .blog-card { padding: 14px 16px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
 .blog-card:hover { border-color: var(--blue); }
@@ -34,7 +34,7 @@ body.blog-page { height: auto; min-height: 100%; overflow: auto; }
 .blog-note { padding: 10px 12px; border: 1px dashed var(--line); border-radius: 10px; }
 .blog-composer { margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--blue); border-radius: 12px; background: var(--surface); }
 .blog-composer h2 { margin: 0 0 6px; font-size: 16px; }
-.blog-composer select { justify-self: start; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.blog-composer select { justify-self: start; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
 .blog-page .cm-form input, .blog-page .cm-form textarea { width: 100%; }
 
 .side-card { padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
@@ -45,5 +45,5 @@ body.blog-page { height: auto; min-height: 100%; overflow: auto; }
 .side-item:hover { background: var(--blue-soft); }
 .side-item.on { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
 .swatch { width: 10px; height: 10px; border-radius: 50%; flex: none; }
-.blog-new { padding: 10px 14px; border: 0; border-radius: 10px; background: var(--blue); color: #fff; font-weight: 700; font-size: 14px; }
+.blog-new { padding: 10px 14px; border: 0; border-radius: 10px; background: var(--blue); color: var(--on-blue); font-weight: 700; font-size: 14px; }
 .blog-new:hover { filter: brightness(1.08); }
