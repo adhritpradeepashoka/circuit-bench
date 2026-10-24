@@ -243,5 +243,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);
     console.log(v ? `[vlab] Arduino CLI ${v}` : `[vlab] WARNING: could not run “${compiler.config.cli}” — install Arduino CLI (see README) or set ARDUINO_CLI`);
+    if (v && process.env.VLAB_WARMUP !== '0') compiler.warmUp(m => console.log(`[vlab] ${m}`));       // background: never delays startup
   });
 }

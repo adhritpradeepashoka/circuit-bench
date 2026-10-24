@@ -12,6 +12,8 @@
 #   • Arduino AVR core 1.8.6 – github.com/arduino/ArduinoCore-avr   (the same core the IDE installs)
 #   • avr-gcc / avr-libc     – apt (Debian/Ubuntu)                    (GCC 7.3, same generation as the IDE's)
 #   • Arduino's ctags fork   – github.com/arduino/ctags, built here   (used for automatic function prototypes)
+#   • Raspberry Pi Pico      – Arduino-Pico (earlephilhower) core + its arm-none-eabi toolchain, from the same GitHub releases
+#                              the Arduino IDE's Boards Manager uses (skipped on machines that are not x86-64 Linux; set SKIP_PICO=1 to skip)
 # Then it prints the environment variables to export before `npm run server`.
 #
 # One known difference from the official toolchain: Debian's avr-libc sets __malloc_margin = 32, Arduino's = 128.
@@ -22,6 +24,7 @@ set -euo pipefail
 CLI_VERSION="${CLI_VERSION:-1.5.1}"
 CORE_VERSION="${CORE_VERSION:-1.8.6}"
 CTAGS_TAG="${CTAGS_TAG:-5.8-arduino11}"
+PICO_VERSION="${PICO_VERSION:-6.3.1}"            # Arduino-Pico core; its toolchain versions come from the core's own package index
 TOOLS_DIR="${TOOLS_DIR:-$HOME/.vlab-toolchain}"
 SUDO=""; [ "$(id -u)" -ne 0 ] && SUDO="sudo"
 
@@ -50,6 +53,40 @@ if [ ! -x "$TOOLS_DIR/ctags/ctags" ]; then
   grep -rl "__unused__" --include=*.c --include=*.h "$SRC" | xargs sed -i 's/__unused__/ctags_unused__/g'
   (cd "$SRC" && ./configure >/dev/null && make -j"$(nproc)" >/dev/null)
   cp "$SRC/ctags" "$TOOLS_DIR/ctags/ctags"; rm -rf "$SRC"
+fi
+
+if [ -z "${SKIP_PICO:-}" ] && [ "$(uname -s)-$(uname -m)" = "Linux-x86_64" ]; then
+  echo "▸ Raspberry Pi Pico core $PICO_VERSION (Arduino-Pico)"
+  PICO_PKG="$TOOLS_DIR/data/packages/rp2040"
+  if [ ! -f "$PICO_PKG/hardware/rp2040/$PICO_VERSION/platform.txt" ]; then
+    command -v python3 >/dev/null || $SUDO apt-get install -y python3        # the core's build scripts (and its "python3" tool) need a host Python
+    command -v unzip >/dev/null || $SUDO apt-get install -y unzip
+    WORK="$(mktemp -d)"
+    curl -fsSL -o "$WORK/index.json" "https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json"
+    python3 - "$WORK/index.json" "$PICO_VERSION" > "$WORK/list.txt" <<'PY'
+import json, sys
+pkg = json.load(open(sys.argv[1]))['packages'][0]
+pl = next(p for p in pkg['platforms'] if p['version'] == sys.argv[2])
+print('platform', pl['version'], pl['url'])
+need = {(t['name'], t['version']) for t in pl['toolsDependencies']}
+for t in pkg['tools']:
+    if (t['name'], t['version']) in need and t['name'] in ('pqt-gcc', 'pqt-picotool', 'pqt-pioasm', 'pqt-python3'):
+        s = next(x for x in t['systems'] if x['host'] == 'x86_64-pc-linux-gnu')
+        print('tool', t['name'], t['version'], s['url'])
+PY
+    while read -r kind a b c; do
+      if [ "$kind" = platform ]; then
+        curl -fsSL -o "$WORK/core.zip" "$b" && unzip -q "$WORK/core.zip" -d "$WORK/core"
+        mkdir -p "$PICO_PKG/hardware/rp2040" && rm -rf "$PICO_PKG/hardware/rp2040/$a" && mv "$WORK/core"/* "$PICO_PKG/hardware/rp2040/$a"
+      else
+        dest="$PICO_PKG/tools/$a/$b"; mkdir -p "$dest"
+        curl -fsSL "$c" | tar -xz --strip-components=1 -C "$dest"
+      fi
+    done < "$WORK/list.txt"
+    chmod +x "$PICO_PKG"/tools/pqt-python3/*/python3 2>/dev/null || true
+    rm -rf "$WORK"
+  fi
+  echo "   $(ls "$PICO_PKG/hardware/rp2040")"
 fi
 
 cat <<OUT

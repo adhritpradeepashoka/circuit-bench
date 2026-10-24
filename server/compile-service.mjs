@@ -13,6 +13,8 @@ export const BOARDS = {
   'arduino:avr:uno': { name: 'Arduino Uno', mcu: 'atmega328p', hexFile: 'ino.hex' },
   'arduino:avr:nano': { name: 'Arduino Nano', mcu: 'atmega328p', hexFile: 'ino.hex' },
   'arduino:avr:mega': { name: 'Arduino Mega 2560', mcu: 'atmega2560', hexFile: 'ino.hex' },
+  // Raspberry Pi Pico: Earle Philhower's Arduino-Pico core + its own arm-none-eabi toolchain. The simulator loads the raw .bin at 0x10000000.
+  'rp2040:rp2040:rpipico': { name: 'Raspberry Pi Pico', mcu: 'rp2040', bin: true },
 };
 export const DEFAULT_FQBN = 'arduino:avr:uno';
 
@@ -88,6 +90,7 @@ export function createCompiler(options = {}) {
   };
   const childEnv = { ...env, ARDUINO_UPDATER_ENABLE_NOTIFICATION: 'false' };
   const cache = new Map();          // sha256 → result (LRU by insertion order)
+  const warm = new Set();           // boards that have built at least once: the first ARM build compiles the whole core (a minute or more on a small server), later ones reuse it
   let running = 0; const waiting = [];
 
   const slot = () => new Promise(resolve => { const go = () => { running++; resolve(() => { running--; waiting.shift()?.(); }); }; running < cfg.maxParallel ? go() : waiting.push(go); });
@@ -124,10 +127,10 @@ export function createCompiler(options = {}) {
       // The Arduino builder needs <folder>/<folder>.ino
       for (const f of files) await writeFile(join(sketchDir, f.name === main ? 'sketch.ino' : f.name), f.content);
       const args = ['compile', '--fqbn', fqbn, '--warnings', 'default', '--format', 'json', '--output-dir', outDir, '--build-cache-path', cfg.cacheDir];
-      if (cfg.compilerPath) args.push('--build-property', `compiler.path=${cfg.compilerPath.replace(/\/?$/, '/')}`);
+      if (cfg.compilerPath && !BOARDS[fqbn].bin) args.push('--build-property', `compiler.path=${cfg.compilerPath.replace(/\/?$/, '/')}`);
       if (cfg.ctagsPath) args.push('--build-property', `runtime.tools.ctags.path=${cfg.ctagsPath}`);
       args.push(sketchDir);
-      const r = await run(args, { cwd: root, timeout: cfg.timeoutMs });
+      const r = await run(args, { cwd: root, timeout: BOARDS[fqbn].bin && !warm.has(fqbn) ? Math.max(cfg.timeoutMs, 300_000) : cfg.timeoutMs });
       if (r.spawnError) throw new RequestError(`The Arduino CLI could not be started (${r.spawnError.code || r.spawnError.message}). Install it and make sure “${cfg.cli}” is on PATH.`, 503);
       if (r.killed) throw new RequestError('Compilation timed out.', 504);
 
@@ -140,16 +143,18 @@ export function createCompiler(options = {}) {
 
       let result;
       if (json?.success) {
-        const hex = await readFile(join(outDir, 'sketch.ino.hex'), 'utf8');
+        const bin = BOARDS[fqbn].bin;      // ARM boards ship a binary image (base64); AVR boards an Intel HEX
+        const fw = bin ? (await readFile(join(outDir, 'sketch.ino.bin'))).toString('base64') : await readFile(join(outDir, 'sketch.ino.hex'), 'utf8');
         const sec = Object.fromEntries((json.builder_result?.executable_sections_size || []).map(s => [s.name, s]));
         const size = { flash: sec.text?.size ?? null, flashMax: sec.text?.max_size ?? null, ram: sec.data?.size ?? null, ramMax: sec.data?.max_size ?? null };
         const notes = memoryNotes(files, size);
-        result = { ok: true, hex, output: rename(text) + notes.map(n => `\n${n}`).join(''), diagnostics, size, ...(notes.length ? { notes } : {}) };
+        result = { ok: true, ...(bin ? { firmware: fw, format: 'bin' } : { hex: fw }), output: rename(text) + notes.map(n => `\n${n}`).join(''), diagnostics, size, ...(notes.length ? { notes } : {}) };
       } else {
         const failText = rename(text) || clean(json?.error || r.stderr || 'Compilation failed.');
         result = { ok: false, output: failText, diagnostics, error: json?.error || 'Compilation failed.' };
       }
       result.fqbn = fqbn;
+      if (result.ok) warm.add(fqbn);
       cache.set(key, result); if (cache.size > cfg.cacheSize) cache.delete(cache.keys().next().value);
       return { ...result, cached: false, ms: Date.now() - started };
     } finally {
@@ -157,7 +162,16 @@ export function createCompiler(options = {}) {
       rm(root, { recursive: true, force: true }).catch(() => {});
     }
   }
-  return { compile, version, config: cfg };
+  /** Build a trivial sketch for every non-AVR board in the background, so the first student to pick a Pico does not wait for the core to compile. */
+  async function warmUp(log = () => {}) {
+    for (const [fqbn, b] of Object.entries(BOARDS)) {
+      if (!b.bin) continue;
+      const t = Date.now();
+      const r = await compile({ sketch: 'void setup() {}\nvoid loop() {}\n', fqbn }).catch(err => ({ ok: false, output: err.message }));
+      log(r.ok ? `${b.name}: toolchain warmed up in ${((Date.now() - t) / 1000).toFixed(0)} s` : `${b.name}: not available — ${String(r.output).split('\n').find(Boolean) || 'compile failed'}`);
+    }
+  }
+  return { compile, version, warmUp, config: cfg };
 }
 
 // The compiler's RAM figure only counts global variables. Some libraries grab big buffers at run time —

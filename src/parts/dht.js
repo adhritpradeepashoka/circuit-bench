@@ -10,7 +10,6 @@
 //       DHT11 → humidity (integer, decimal), temperature (integer, decimal tenths; bit 7 = negative), checksum.
 import { PinState } from 'avr8js';
 
-const US = 16;                                     // CPU cycles per µs at 16 MHz
 
 export const DHT_RANGE = {
   DHT22: { tMin: -40, tMax: 80, hMin: 0, hMax: 100 },
@@ -50,7 +49,7 @@ export class Dht {
     if (this.mcu === mcu && this.port === mcu?.ports[pin?.port] && this.bit === pin?.bit) return;
     this.detach();
     if (!mcu || !pin?.port || !mcu.ports[pin.port]) return;
-    this.mcu = mcu; this.port = mcu.ports[pin.port]; this.bit = pin.bit;
+    this.mcu = mcu; this.port = mcu.ports[pin.port]; this.bit = pin.bit; this.us = (mcu.hz || 16e6) / 1e6;       // CPU cycles per µs
     this.port.addListener(this.onPort);
     this.level(true);
   }
@@ -70,7 +69,7 @@ export class Dht {
     const state = this.port.pinState(this.bit), now = this.mcu.cpu.cycles;
     if (state === PinState.Low) { if (this.lowSince === null) this.lowSince = now; return; }
     if (this.lowSince === null || state === PinState.High) { this.lowSince = null; return; }
-    const held = (now - this.lowSince) / US;                  // µs the host held the line low
+    const held = (now - this.lowSince) / this.us;                  // µs the host held the line low
     this.lowSince = null;
     const need = this.model === 'DHT11' ? 15000 : 800;
     if (held < need) { this.lastTrigger = 'too-short'; return; }
@@ -87,7 +86,7 @@ export class Dht {
     steps.push([50, true]);                                    // last low, then release
     let at = 0;
     this.events = steps.map(([us, high]) => {
-      at += us * US;
+      at += us * this.us;
       const ev = () => this.level(high);
       return this.mcu.cpu.addClockEvent(ev, at);
     });

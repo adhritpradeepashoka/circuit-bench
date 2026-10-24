@@ -11,6 +11,7 @@ const BLURB = {
   'arduino-uno': 'ATmega328P board',
   'arduino-nano': 'Small Uno · plugs into a breadboard',
   'arduino-mega': 'ATmega2560 · 54 digital, 16 analog pins',
+  'raspberry-pi-pico': 'RP2040 · 3.3 V · runs real firmware · plugs into a breadboard',
   dht: 'Temperature + humidity · right-click to set',
   lcd1602: '2 lines of text over I²C (0x27)',
   'dc-motor': 'Spins with the voltage across it',

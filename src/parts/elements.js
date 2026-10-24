@@ -12,6 +12,7 @@ const svgNS = 'http://www.w3.org/2000/svg';
 export const MOTOR_W = 120, MOTOR_H = 120;
 export const L298N_W = 170, L298N_H = 172;
 export const BATTERY_W = 76, BATTERY_H = 128;
+export const PICO_PX_W = 21 * 96 / 25.4, PICO_PX_H = 51 * 96 / 25.4;
 
 class CbElement extends HTMLElement {
   connectedCallback() {
@@ -94,6 +95,44 @@ class L298n extends CbElement {
   }
 }
 
+
+/** Raspberry Pi Pico: green board, micro-USB at the top, BOOTSEL button, RP2040 chip, on-board LED (GP25) and the pin names printed beside the pins. */
+class PiPico extends CbElement {
+  constructor() { super(); this._led = false; this._power = false; }
+  get led13() { return this._led; }
+  set led13(v) { v = !!v; if (v === this._led) return; this._led = v; this.update(); }
+  get ledPower() { return this._power; }
+  set ledPower(v) { v = !!v; if (v === this._power) return; this._power = v; this.update(); }
+  markup() {
+    const W = PICO_PX_W, H = PICO_PX_H, P = 2.54 * 96 / 25.4, x0 = (W - 7 * P) / 2, y0 = (H - 19 * P) / 2;
+    const L = ['GP0', 'GP1', 'GND', 'GP2', 'GP3', 'GP4', 'GP5', 'GND', 'GP6', 'GP7', 'GP8', 'GP9', 'GND', 'GP10', 'GP11', 'GP12', 'GP13', 'GND', 'GP14', 'GP15'];
+    const R = ['VBUS', 'VSYS', 'GND', '3V3E', '3V3', 'VREF', 'GP28', 'AGND', 'GP27', 'GP26', 'RUN', 'GP22', 'GND', 'GP21', 'GP20', 'GP19', 'GP18', 'GND', 'GP17', 'GP16'];
+    let labels = '', holes = '';
+    L.forEach((t, i) => { const y = y0 + i * P; holes += `<rect x="${(x0 - 2.5).toFixed(1)}" y="${(y - 2.5).toFixed(1)}" width="5" height="5" rx="1.2" fill="#d9b04a"/>`; labels += `<text x="${(x0 + 5).toFixed(1)}" y="${(y + 2).toFixed(1)}" font-size="5.2" font-family="sans-serif" fill="${t === 'GND' || t === 'AGND' ? '#cfe9d6' : '#fff'}" text-anchor="start">${t}</text>`; });
+    R.forEach((t, i) => { const y = y0 + i * P, x = x0 + 7 * P; holes += `<rect x="${(x - 2.5).toFixed(1)}" y="${(y - 2.5).toFixed(1)}" width="5" height="5" rx="1.2" fill="#d9b04a"/>`; labels += `<text x="${(x - 5).toFixed(1)}" y="${(y + 2).toFixed(1)}" font-size="5.2" font-family="sans-serif" fill="${t === 'GND' || t === 'AGND' ? '#cfe9d6' : '#fff'}" text-anchor="end">${t}</text>`; });
+    const cx = W / 2;
+    return `<svg xmlns="${svgNS}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="4" fill="#1b7f3b" stroke="#0f5a28"/>
+      ${holes}
+      <rect x="${cx - 10}" y="0" width="20" height="14" rx="1.5" fill="#c9ced3" stroke="#7b848c"/><rect x="${cx - 7}" y="10" width="14" height="3" fill="#8d959c"/>
+      <rect x="${cx - 6}" y="19" width="12" height="7" rx="1.5" fill="#f1f1ee" stroke="#a9a9a4"/>
+      <circle class="pwr" cx="${cx - 4}" cy="33" r="1.9" fill="#3b1111"/>
+      <circle class="led" cx="${cx + 4}" cy="33" r="2.3" fill="#17401f" stroke="#0f2f17" stroke-width=".6"/>
+      <rect x="${cx - 11}" y="62" width="22" height="22" rx="2" fill="#16181b" stroke="#000"/><circle cx="${cx - 7}" cy="66" r="1.2" fill="#454a50"/>
+      <text x="${cx}" y="76.5" font-size="5.4" font-family="sans-serif" font-weight="700" fill="#cfd4d9" text-anchor="middle">RP2040</text>
+      <rect x="${cx - 8}" y="104" width="16" height="9" rx="1.5" fill="#16181b"/>
+      <text x="${cx}" y="136" font-size="7" font-family="sans-serif" font-weight="700" fill="#f4faf5" text-anchor="middle">Pico</text>
+      ${labels}
+      <rect x="${cx - 14}" y="${H - 14}" width="28" height="8" rx="1" fill="#0f5a28"/>${[-8, 0, 8].map(dx => `<circle cx="${cx + dx}" cy="${H - 10}" r="1.5" fill="#d9b04a"/>`).join('')}
+    </svg>`;
+  }
+  update() {
+    const led = this.querySelector('.led'), pwr = this.querySelector('.pwr');
+    if (led) led.setAttribute('fill', this._led ? '#7dff8f' : '#17401f');
+    if (pwr) pwr.setAttribute('fill', this._power ? '#ff4d4d' : '#3b1111');
+  }
+}
+
 /** A 9 V-style battery with snap terminals on top. The label shows its voltage. */
 class Battery extends CbElement {
   constructor() { super(); this._volts = 9; }
@@ -114,7 +153,7 @@ class Battery extends CbElement {
   update() { const t = this.querySelector('.v'); if (t) t.textContent = `${+this._volts.toFixed(1)}V`; }
 }
 
-for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery]]) {
+for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico]]) {
   if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
 }
 

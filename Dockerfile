@@ -16,10 +16,12 @@ COPY . .
 RUN npm run build
 
 FROM node:22-bookworm-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+# python3: the Raspberry Pi Pico core's build scripts run on the host's Python
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl python3 \
  && rm -rf /var/lib/apt/lists/*
 
-ENV ARDUINO_DIRECTORIES_DATA=/opt/arduino/data \
+ENV PICO_INDEX=https://github.com/earlephilhower/arduino-pico/releases/download/global/package_rp2040_index.json \
+    ARDUINO_DIRECTORIES_DATA=/opt/arduino/data \
     ARDUINO_DIRECTORIES_USER=/opt/arduino/user \
     ARDUINO_DIRECTORIES_DOWNLOADS=/opt/arduino/downloads \
     ARDUINO_UPDATER_ENABLE_NOTIFICATION=false \
@@ -27,6 +29,9 @@ ENV ARDUINO_DIRECTORIES_DATA=/opt/arduino/data \
 RUN curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | BINDIR=/usr/local/bin sh \
  && arduino-cli core update-index \
  && arduino-cli core install arduino:avr@1.8.6 \
+ && (arduino-cli core update-index --additional-urls "$PICO_INDEX" \
+     && arduino-cli core install rp2040:rp2040@6.3.1 --additional-urls "$PICO_INDEX" \
+     || echo "WARNING: the Raspberry Pi Pico core could not be installed; Uno/Nano/Mega still work") \
  && arduino-cli lib install "Adafruit MPU6050@2.2.6" "Adafruit Unified Sensor@1.1.15" "Adafruit BusIO@1.17.4" \
                             "Adafruit SSD1306@2.5.13" "Adafruit GFX Library@1.12.1" \
                             "LiquidCrystal I2C@1.1.2" "DHT sensor library@1.4.6" "Servo@1.2.2" "Stepper@1.1.3" \
@@ -38,6 +43,10 @@ RUN useradd --system --create-home --uid 10001 vlab \
 WORKDIR /srv/vlab
 COPY --from=web /app/dist ./dist
 COPY server ./server
+# Pre-build the Raspberry Pi Pico core once, here, where the build machine has CPU to spare: the first ARM compile otherwise
+# builds hundreds of core files, which takes minutes on a small server. The result is seeded into the build cache at start-up.
+RUN node -e "import('./server/compile-service.mjs').then(async m => { const c = m.createCompiler({ cacheDir: '/opt/arduino/cache-seed', timeoutMs: 900000 }); const r = await c.compile({ sketch: 'void setup() {}\nvoid loop() {}\n', fqbn: 'rp2040:rp2040:rpipico' }); console.log(r.ok ? 'Pico core pre-built' : 'Pico core NOT pre-built: ' + String(r.output).slice(0, 300)); })" \
+ || echo "WARNING: could not pre-build the Pico core cache"
 # server/ai-service.mjs imports src/core/ai-actions.js directly (not through the Vite bundle, which only
 # covers dist/) — src/core/* is plain, dependency-free JS shared between server and browser, so it has to
 # ship in the runtime image too, not just get built into dist/. Missing this made every deploy since
@@ -51,4 +60,4 @@ ENV HOST=0.0.0.0 PORT=8787 VLAB_BUILD_CACHE=/tmp/vlab/cache NODE_ENV=production
 USER vlab
 EXPOSE 8787
 HEALTHCHECK --interval=30s --timeout=5s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/health').then(r=>r.json()).then(j=>process.exit(j.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["node", "server/server.mjs"]
+CMD ["sh", "-c", "mkdir -p /tmp/vlab/cache && cp -a /opt/arduino/cache-seed/. /tmp/vlab/cache/ 2>/dev/null; exec node server/server.mjs"]

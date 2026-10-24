@@ -70,6 +70,9 @@ function gauss(A, b, n) {
  */
 export function solve(circuit, drive) {
   const sources = [];
+  // The board's own electrical character: an Uno's pins swing 0–5 V through ~25 Ω and are good for 40 mA; a Pico's swing 0–3.3 V through ~33 Ω and want ≤ 12 mA.
+  const bspec = circuit.uno.spec, LOGIC = bspec?.logic ?? VCC, G_BOARD_PIN = 1 / (bspec?.pinOhms ?? 25), PIN_LIMIT_A = bspec?.pinMaxA ?? LIMITS.pinA;
+  const pinRating = bspec?.pinRatingText ?? 'Arduino pin rating: 40 mA';
   const addPower = (set, v, tag) => set.forEach(net => sources.push({ net, v, g: 1 / SUPPLY[tag].r, tag, power: true, limitA: SUPPLY[tag].limitA }));
   addPower(circuit.uno.gnd, 0, 'GND');
   addPower(circuit.uno.v5, VCC, '5V');
@@ -77,9 +80,10 @@ export function solve(circuit, drive) {
   addPower(circuit.uno.vin, 4.6, 'VIN');
   for (const pin of circuit.uno.pins) {
     const mode = drive.pins.get(pin.name) || 'Z';
-    if (mode === 'H') sources.push({ net: pin.net, v: VCC, g: G_PIN, tag: pin.label });
-    else if (mode === 'L') sources.push({ net: pin.net, v: 0, g: G_PIN, tag: pin.label });
-    else if (mode === 'U') sources.push({ net: pin.net, v: VCC, g: G_PULLUP, tag: pin.label, pullup: true });
+    if (mode === 'H') sources.push({ net: pin.net, v: LOGIC, g: G_BOARD_PIN, tag: pin.label });
+    else if (mode === 'L') sources.push({ net: pin.net, v: 0, g: G_BOARD_PIN, tag: pin.label });
+    else if (mode === 'U') sources.push({ net: pin.net, v: LOGIC, g: bspec?.pullG ?? G_PULLUP, tag: pin.label, pullup: true });
+    else if (mode === 'D') sources.push({ net: pin.net, v: 0, g: bspec?.pullG ?? G_PULLUP, tag: pin.label, pullup: true });
   }
 
   const idx = new Map();
@@ -353,7 +357,14 @@ export function solve(circuit, drive) {
     const i = s.g * (s.v - x[idx.get(s.net)]);
     if (s.power) {
       if (s.v > 0) { const e = supplyNets.get(s.net) || { tag: s.tag, v: s.v, i: 0, limitA: s.limitA, r: 1 / s.g }; e.i += i; supplyNets.set(s.net, e); }
-    } else if (!s.pullup && Math.abs(i) > LIMITS.pinA) warnings.push({ text: `${s.tag} is sourcing/sinking ${fmt(Math.abs(i))} (Arduino pin rating: 40 mA)` });
+    } else if (!s.pullup && Math.abs(i) > PIN_LIMIT_A) warnings.push({ text: `${s.tag} is sourcing/sinking ${fmt(Math.abs(i))} (${pinRating})` });
+  }
+  // A pin that is listening (not driving) while something pushes it beyond the chip's supply: the classic "5 V sensor into a 3.3 V board" mistake
+  for (const pin of circuit.uno.pins) {
+    const mode = drive.pins.get(pin.name) || 'Z';
+    if (mode === 'H' || mode === 'L' || !idx.has(pin.net)) continue;
+    const v = x[idx.get(pin.net)];
+    if (v > LOGIC + 0.4) warnings.push({ text: `${pin.label} is receiving ${v.toFixed(1)} V, but the ${bspec?.name ?? 'board'}'s pins only tolerate ${LOGIC} V — use a voltage divider or a level shifter` });
   }
   const powerTag = new Map(sources.filter(s => s.power).map(s => [s.net, s.tag]));
   for (const e of supplyNets.values()) {

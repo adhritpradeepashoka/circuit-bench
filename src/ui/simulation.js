@@ -1,4 +1,5 @@
 import { Mcu, CPU_HZ } from '../sim/mcu.js';
+import { Rp2040Mcu } from '../sim/rp2040-mcu.js';
 import { solveDrive } from '../core/solver.js';
 import { PART_DEFS } from '../core/parts.js';
 import { compileSketch } from '../sim/compile-client.js';
@@ -83,14 +84,15 @@ export class Simulation {
     const spec = this.editor.getCircuit().uno.spec || BOARD_SPECS[DEFAULT_BOARD];
     const builtFor = Object.values(BOARD_SPECS).find(b => b.fqbn === build.fqbn);
     if (builtFor && builtFor.chip !== spec.chip) { this.editor.status(`This firmware was built for the ${builtFor.name}, but the board is a ${spec.name} — press Run again to rebuild`); return; }
-    this.chipName = CHIPS[spec.chip].name; this.boardName = spec.name;
-    try { this.mcu = new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
+    this.chipName = spec.chipName || CHIPS[spec.chip]?.name || spec.chip; this.boardName = spec.name; this.spec = spec;
+    try { this.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
     $('simChip').textContent = this.chipName;
     const serial = this.code.serial;
     if (serial) {
       serial.clear(); serial.setBaud(0);
       this.mcu.onSerial = byte => serial.push(byte);
       this.mcu.usart.onConfigurationChange = () => serial.setBaud(Math.round(this.mcu.baud));
+      if (spec.chip === 'rp2040') serial.setBaud(0);               // USB serial has no baud rate to show
     }
     this.code.setRunning?.(true);
     this.models = new Map(); this.i2cInfo = []; this.i2cVersion = -1; this.dhts = new Map(); this.dhtInfo = [];
@@ -153,7 +155,7 @@ export class Simulation {
       if (!this.paused) {
         const dt = Math.min(0.05, (ts - this.last) / 1000);
         this.i2cPrepare();                         // devices see this frame's wiring + tilt before the firmware runs
-        this.mcu.run(dt * CPU_HZ);
+        this.mcu.run(dt * (this.mcu.hz || CPU_HZ));
         this.step();
         this.animate(dt);
       }
@@ -169,9 +171,11 @@ export class Simulation {
     const modes = new Map(), duty = new Map();
     for (const pin of circuit.uno.pins) {
       if (!pin.port) continue;                                                              // analog-only input (Nano A6/A7)
-      const d = /^\d+$/.test(pin.name) ? this.mcu.pwmDuty(Number(pin.name)) : null;       // analogWrite → average duty, not the fast waveform
+      const d = this.mcu.pwmDutyOf ? this.mcu.pwmDutyOf(pin) : /^\d+$/.test(pin.name) ? this.mcu.pwmDuty(Number(pin.name)) : null;       // analogWrite → average duty, not the fast waveform
       if (d !== null) { duty.set(pin.name, d); modes.set(pin.name, 'P'); } else modes.set(pin.name, this.mcu.pinMode(pin));
     }
+    // the on-board LED is wired inside the board (the Pico's GP25 has no header pin), so read it from the chip directly
+    if (this.spec?.ledPin && !modes.has(this.spec.ledPin) && this.spec.pins[this.spec.ledPin]?.port) modes.set(this.spec.ledPin, this.mcu.pinMode(this.spec.pins[this.spec.ledPin]));
     this.duty = duty;
     const sig = `${circuit.version}|${[...modes].join(',')}|${[...duty].map(([n, d]) => `${n}:${d.toFixed(3)}`).join(',')}|${[...this.pressed].join(',')}`;
     this.i2cPrepare(); this.i2cVisuals();               // an OLED redraws whenever the firmware changed its RAM, even if no pin did
@@ -203,9 +207,9 @@ export class Simulation {
       ...this.timedInfo.filter(t => t.attached && t.kind === 'ultrasonic').map(t => t.pins.echo.name)]);   // so does an ultrasonic sensor's ECHO
     for (const pin of circuit.uno.pins) {
       const m = modes.get(pin.name);
-      if (pin.port && (m === 'Z' || m === 'U') && !digitalDriven.has(pin.name)) {
+      if (pin.port && (m === 'Z' || m === 'U' || m === 'D') && !digitalDriven.has(pin.name)) {
         const v = this.result.voltage(pin.net);
-        this.mcu.setInput(pin, v == null ? m === 'U' : v > 2.5);
+        this.mcu.setInput(pin, v == null ? m === 'U' : v > (this.spec?.inputThreshold ?? 2.5));
       }
     }
     for (const pin of circuit.uno.pins) {                 // ADC: every analog pin sees the solved net voltage
@@ -345,7 +349,7 @@ export class Simulation {
     for (const info of this.logicInfo) {
       const read = pin => {
         const bp = info.mcu.get(pin);
-        if (bp) { const m = this.mcu.pinMode(bp); if (m === 'H') return 5; if (m === 'L') return 0; }
+        if (bp) { const m = this.mcu.pinMode(bp); if (m === 'H') return this.spec?.logic ?? 5; if (m === 'L') return 0; }
         const net = info.nets[pin];
         return net == null ? null : this.result?.voltage(net) ?? (bp ? null : null);
       };

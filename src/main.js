@@ -32,7 +32,7 @@ import { WOKWI_PINS } from './core/pins.generated.js';
 const $ = id => document.getElementById(id);
 
 // Wait until the web components are defined so their geometry can be sanity-checked and they render immediately.
-await Promise.all(['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-arduino-mega', 'wokwi-lcd1602', 'wokwi-dht22', 'cb-dc-motor', 'cb-l298n', 'cb-battery', 'cb-custom-part', 'wokwi-led', 'wokwi-resistor', 'wokwi-pushbutton', 'wokwi-mpu6050', 'wokwi-ssd1306'].map(t => customElements.whenDefined(t)));
+await Promise.all(['wokwi-arduino-uno', 'wokwi-arduino-nano', 'wokwi-arduino-mega', 'wokwi-lcd1602', 'wokwi-dht22', 'cb-dc-motor', 'cb-l298n', 'cb-battery', 'cb-pi-pico', 'cb-custom-part', 'wokwi-led', 'wokwi-resistor', 'wokwi-pushbutton', 'wokwi-mpu6050', 'wokwi-ssd1306'].map(t => customElements.whenDefined(t)));
 
 // Dev safety net: the generated pin tables must match what the installed library reports.
 for (const [tag, pins] of Object.entries(WOKWI_PINS)) {

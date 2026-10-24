@@ -12,7 +12,7 @@ import { phase, SOURCE, SINK, ACTUATOR, OTHER, offerBool, offerLevel, ledOnPin, 
 const board = type => phase(OTHER)(c => {
   const have = c.getBoard(type);
   if (have.type !== type) { c.say(`There is already ${c.boardName()} on the bench, and only one board runs at a time — so I kept it. Remove it first if you want the ${PART_DEFS[type].name} instead.`); return; }
-  c.sketch.title = `${PART_DEFS[type].name}: blinks its own LED (pin 13)`;
+  c.sketch.title = `${PART_DEFS[type].name}: blinks its own LED (pin ${c.spec().ledPin})`;
   c.sketch.setup('pinMode(LED_BUILTIN, OUTPUT);');
   c.sketch.tick(500, ['digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));']);
   c.say(`${c.wasBoardAdded() ? 'Added' : 'Used'} the ${PART_DEFS[type].name} with a sketch that blinks its own LED.`);
@@ -27,7 +27,7 @@ const ledRecipe = phase(ACTUATOR)((c, { n, count, color, ohms, type = 'led' }) =
   s.setup(`pinMode(${pin}, OUTPUT);`);
   if (bool) { s.sample(`digitalWrite(${pin}, (${bool.expr}) ? HIGH : LOW);`); c.signals.consumed = true; }
   else if (level) {
-    const pwm = c.getBoard().type && /^(3|5|6|9|10|11)$/.test(pin) || (c.getBoard().type === 'arduino-mega' && /^([2-9]|1[0-3]|44|45|46)$/.test(pin));
+    const pwm = c.spec().pwm.includes(pin);
     s.sample(pwm ? `analogWrite(${pin}, ${level.expr} / 4);` : `digitalWrite(${pin}, ${level.expr} > 511 ? HIGH : LOW);`); c.signals.consumed = true;
   } else if (count === 1) { s.tick(500, [`digitalWrite(${pin}, !digitalRead(${pin}));`]); }
   else if (n === count - 1) {
@@ -51,10 +51,10 @@ const buttonRecipe = phase(SOURCE)((c, { n }) => {
 
 const switchRecipe = phase(SOURCE)((c, { n }) => {
   const s = c.sketch, w = c.part('slide-switch', { fresh: n > 0 });
-  const pin = c.hook(w, '2', 'digital', { prefer: ['2', '3', '4', '5'] }); c.ground(w, '1'); c.power(w, '3', 'v5');
+  const pin = c.hook(w, '2', 'digital', { prefer: ['2', '3', '4', '5'] }); c.ground(w, '1'); c.power(w, '3', 'logic');
   s.setup(`pinMode(${pin}, INPUT);`);
   const v = s.uid('switchOn'); s.global(`bool ${v} = false;`); s.sample(`${v} = digitalRead(${pin}) == HIGH;`);
-  offerBool(c, v, 'the switch'); s.title ||= `Slide switch on pin ${pin}: HIGH when slid to the 5V side`;
+  offerBool(c, v, 'the switch'); s.title ||= `Slide switch on pin ${pin}: HIGH when slid to the supply side`;
   c.say(`${w.isNew ? 'Added a' : 'Used the'} slide switch on pin ${pin}.`);
 });
 
@@ -67,7 +67,7 @@ const potRecipe = phase(SOURCE)((c, { n }) => {
 });
 
 const CORE_BY_TYPE = {
-  'arduino-uno': board('arduino-uno'), 'arduino-nano': board('arduino-nano'), 'arduino-mega': board('arduino-mega'),
+  'arduino-uno': board('arduino-uno'), 'arduino-nano': board('arduino-nano'), 'arduino-mega': board('arduino-mega'), 'raspberry-pi-pico': board('raspberry-pi-pico'),
   led: ledRecipe, pushbutton: buttonRecipe, 'slide-switch': switchRecipe, potentiometer: potRecipe,
 };
 

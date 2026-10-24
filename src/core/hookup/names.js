@@ -73,6 +73,7 @@ const SYNONYMS = {
   'arduino-uno': ['arduino uno', 'uno', 'arduino'],
   'arduino-nano': ['arduino nano', 'nano'],
   'arduino-mega': ['arduino mega(?: 2560)?', 'mega(?: 2560)?'],
+  'raspberry-pi-pico': ['raspberry ?pi pico(?: w)?', 'rpi ?pico', 'pi ?pico', 'pico', 'rp2040(?: board)?'],
 };
 // words that name a whole family: used only when nothing more specific was said
 const FAMILIES = {
@@ -82,7 +83,7 @@ const FAMILIES = {
   'logic gate': ['custom-gate-and', 'custom-gate-or', 'custom-gate-not', 'custom-gate-xor', 'custom-gate-nand', 'custom-gate-nor'],
   'op amp': null,
 };
-const BOARD_TYPES = new Set(['arduino-uno', 'arduino-nano', 'arduino-mega']);
+const BOARD_TYPES = new Set(['arduino-uno', 'arduino-nano', 'arduino-mega', 'raspberry-pi-pico']);
 
 const normalize = t => String(t || '').toLowerCase().replace(/[µμ]/g, 'u').replace(/[×✕]/g, 'x').replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim();
 

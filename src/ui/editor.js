@@ -117,9 +117,9 @@ export class Editor {
   /** A fresh canvas: the chosen board with a breadboard beside it. */
   defaultWorkspace(board = 'arduino-uno') {
     const type = PART_DEFS[board] && isMcuBoard(board) ? board : 'arduino-uno';
-    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470 }[type];
+    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470, 'raspberry-pi-pico': 190 }[type];
     this.state.parts = [
-      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1' }[type], type, x: 40, y: 56, rot: 0 },
+      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1', 'raspberry-pi-pico': 'pico-1' }[type], type, x: 40, y: 56, rot: 0 },
       { id: 'bb-1', type: 'breadboard', x: bbX, y: 78, rot: 0 },
     ];
     this.state.wires = [];
@@ -397,7 +397,7 @@ export class Editor {
     const count = this.state.parts.filter(p => p.type === type).length;
     const c = at || this.viewCenterWorld();
     const off = at ? 0 : (count % 6) * 14;
-    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
+    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'raspberry-pi-pico' ? 'pico' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
       x: Math.round((c.x - def.w / 2 + off) / GRID) * GRID, y: Math.round((c.y - def.h / 2 + off) / GRID) * GRID };
     this.state.parts.push(part);
     const s = findSnap(this.state.parts, part);

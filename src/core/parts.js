@@ -33,6 +33,19 @@ const fromWokwi = (tag, labeler = n => n) =>
  *   groups      – pins that are *internally one conductor* (used by the netlist)
  *   insertable  – leads can be pushed into breadboard holes
  */
+// Raspberry Pi Pico: 21 × 51 mm, 40 castellated pins on a 2.54 mm pitch, USB at the top. Left column = pins 1–20 (top to bottom),
+// right column = pins 40–21 (top to bottom). The ids are what a sketch calls the pin: 15 means GP15, A0 means GP26.
+export const PICO_W = 21 * MM, PICO_H = 51 * MM, PICO_PITCH = 2.54 * MM;
+const PICO_LEFT = ['0', '1', 'GND.1', '2', '3', '4', '5', 'GND.2', '6', '7', '8', '9', 'GND.3', '10', '11', '12', '13', 'GND.4', '14', '15'];
+const PICO_RIGHT = ['VBUS', 'VSYS', 'GND.5', '3V3_EN', '3V3', 'ADC_VREF', 'A2', 'AGND', 'A1', 'A0', 'RUN', '22', 'GND.6', '21', '20', '19', '18', 'GND.7', '17', '16'];
+const PICO_LABEL = { 0: 'GP0 · UART0 TX', 1: 'GP1 · UART0 RX', 4: 'GP4 · SDA', 5: 'GP5 · SCL', A0: 'GP26 · A0', A1: 'GP27 · A1', A2: 'GP28 · A2', VBUS: 'VBUS (5 V from USB)', VSYS: 'VSYS', '3V3': '3V3 (3.3 V out)', '3V3_EN': '3V3_EN', ADC_VREF: 'ADC_VREF', AGND: 'AGND', RUN: 'RUN (reset)' };
+const picoLabel = id => PICO_LABEL[id] || (/^\d+$/.test(id) ? `GP${id}` : id.replace(/^GND\.\d$/, 'GND'));
+const picoPins = () => {
+  const x0 = (PICO_W - 7 * PICO_PITCH) / 2, y0 = (PICO_H - 19 * PICO_PITCH) / 2;
+  return [...PICO_LEFT.map((id, i) => ({ id, x: x0, y: y0 + i * PICO_PITCH })), ...PICO_RIGHT.map((id, i) => ({ id, x: x0 + 7 * PICO_PITCH, y: y0 + i * PICO_PITCH }))]
+    .map(p => ({ id: p.id, label: picoLabel(p.id), x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100, kind: 'pin' }));
+};
+
 export const PART_DEFS = {
   'arduino-uno': {
     type: 'arduino-uno', name: 'Arduino Uno R3', category: 'Boards', tag: 'wokwi-arduino-uno',
@@ -54,6 +67,12 @@ export const PART_DEFS = {
     w: 102.66 * MM, h: 50.8 * MM, pins: fromWokwi('wokwi-arduino-mega', prettyBoardLabel),
     groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3', 'GND.4', 'GND.5'] }, { id: 'v5', pins: ['5V', '5V.1', '5V.2'] }, { id: 'sda', pins: ['SDA', '20'] }, { id: 'scl', pins: ['SCL', '21'] }],
     insertable: false, layer: 1,
+  },
+  'raspberry-pi-pico': {
+    type: 'raspberry-pi-pico', name: 'Raspberry Pi Pico', category: 'Boards', tag: 'cb-pi-pico',
+    w: PICO_W, h: PICO_H, pins: picoPins(),
+    groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3', 'GND.4', 'GND.5', 'GND.6', 'GND.7', 'AGND'] }],
+    insertable: true, layer: 1,
   },
   breadboard: {
     type: 'breadboard', name: 'Solderless Breadboard', category: 'Prototyping', tag: null,
@@ -174,5 +193,5 @@ export const PART_DEFS = {
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

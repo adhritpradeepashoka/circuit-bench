@@ -7,7 +7,7 @@ import { PART_DEFS } from './parts.js';
 const NUM_WORDS = { a: 1, an: 1, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10 };
 // what people call each part (first match in a request wins, longer phrases first)
 const NAMES = [
-  ['arduino-nano', /\barduino nano\b|\bnano\b/], ['arduino-mega', /\barduino mega\b|\bmega\b/], ['arduino-uno', /\barduino uno\b|\buno\b/],
+  ['raspberry-pi-pico', /\braspberry pi pico\b|\bpi pico\b|\bpico\b|\brp2040\b/], ['arduino-nano', /\barduino nano\b|\bnano\b/], ['arduino-mega', /\barduino mega\b|\bmega\b/], ['arduino-uno', /\barduino uno\b|\buno\b/],
   ['rgb-led', /\brgb( led)?s?\b/], ['led', /\bleds?\b/], ['resistor', /\bresistors?\b/],
   ['pushbutton', /\bpush ?buttons?\b|\bbuttons?\b/], ['slide-switch', /\bslide ?switch(es)?\b|\bswitch(es)?\b/],
   ['potentiometer', /\bpotentiometers?\b|\bpots?\b|\bknobs?\b|\bdials?\b/], ['seven-segment', /\b7[- ]?segment\b|\bseven[- ]segment\b/],

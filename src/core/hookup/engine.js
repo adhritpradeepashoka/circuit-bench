@@ -13,12 +13,12 @@ import { Sketch } from './sketch.js';
 
 export class PlanError extends Error { constructor(message, code = 'plan') { super(message); this.code = code; } }
 
-const NAME = { 'arduino-uno': 'Arduino Uno', 'arduino-nano': 'Arduino Nano', 'arduino-mega': 'Arduino Mega' };
+const NAME = { ...Object.fromEntries(Object.entries(BOARD_SPECS).map(([k, sp]) => [k, sp.name])), 'arduino-mega': 'Arduino Mega' };
 const WIRE_COLOR = { v5: '#d9534f', v33: '#e8833a', vin: '#b5413d', gnd: '#2b2f33', sda: '#2e86de', scl: '#d4a017' };
 const SIGNAL_COLORS = ['#2e86de', '#27ae60', '#8e44ad', '#e67e22', '#16a085', '#c0392b', '#7f8c8d', '#d35400'];
 const GAP = 28, COL_GAP = 90, PAD = 70;
 
-const pinText = n => (/^A\d+$/.test(n) ? n : `pin ${n}`);
+const pinTextFor = type => n => (type === 'raspberry-pi-pico' ? (/^A\d+$/.test(n) ? `${n} (GP${26 + +n.slice(1)})` : `GP${n}`) : /^A\d+$/.test(n) ? n : `pin ${n}`);
 const rotDims = p => ((((p.rot ?? p.rotate) || 0) % 180) === 90 ? { w: p.h, h: p.w } : { w: p.w, h: p.h });
 
 export function createPlanner(circuitIn, opts = {}) {
@@ -97,6 +97,10 @@ export function createPlanner(circuitIn, opts = {}) {
     return board;
   }
   const spec = () => BOARD_SPECS[getBoard().type];
+  const pinText = n => pinTextFor(getBoard().type)(n);
+  /** 'logic' = the rail the board's own pins swing to (5 V on an Arduino, 3.3 V on a Pico); the others are named rails. */
+  const railLabels = () => (getBoard().type === 'raspberry-pi-pico' ? { v5: 'VBUS (5 V)', v33: '3V3', vin: 'VSYS', gnd: 'GND' } : { v5: '5V', v33: '3.3V', vin: 'VIN', gnd: 'GND' });
+  const resolveRail = k => (k === 'logic' ? (spec().logic < 4 ? 'v33' : 'v5') : k);
 
   /** Find `type` on the bench (a part already wired wins, so we finish what the student started) or add one. */
   function part(type, { props = {}, fresh = opts.forceNew } = {}) {
@@ -114,22 +118,24 @@ export function createPlanner(circuitIn, opts = {}) {
   const boardPinIds = () => getBoard().def.pins.filter(p => !p.noInsert).map(p => p.id);
   const railPin = kind => {
     const b = getBoard();
+    kind = resolveRail(kind);
     const re = { gnd: /^GND(\.\d+)?$/, v5: /^5V(\.\d+)?$/, v33: /^3\.3V$/, vin: /^VIN$/ }[kind];
-    const id = boardPinIds().find(i => re.test(i)); if (!id) throw new PlanError(`The ${NAME[b.type]} has no ${kind} pin.`, 'no-rail');
+    const id = spec().rails?.[kind] ?? boardPinIds().find(i => re.test(i)); if (!id) throw new PlanError(`The ${NAME[b.type]} has no ${kind} pin.`, 'no-rail');
     return id;
   };
-  const AVOID = () => { const s = spec(); return new Set(['0', '1', s.i2c.sda, s.i2c.scl]); };
+  const AVOID = () => { const s = spec(); return new Set(s.avoid || ['0', '1', s.i2c.sda, s.i2c.scl]); };
   const isNano = () => getBoard().type === 'arduino-nano';
   function candidates(kind, order) {
-    const b = getBoard(), s = spec(), pins = Object.keys(s.pins);
+    const b = getBoard(), s = spec(), pins = Object.keys(s.pins).filter(n => !s.pins[n].internal);
     const digital = pins.filter(n => /^\d+$/.test(n)).map(Number).sort((a, c) => a - c).map(String);
     const analog = pins.filter(n => /^A\d+$/.test(n) && s.pins[n].adc !== undefined && !(isNano() && /^A[67]$/.test(n)));
     const pwm = PWM_PINS[b.type] || new Set();
     if (kind === 'analog') return analog;
-    if (kind === 'pwm') { const p = digital.filter(n => pwm.has(n)); const pref = ['11', '6', '5', '3', '9', '10'];      // 9 and 10 last: the Servo library takes Timer1 and with it PWM on those two
+    if (kind === 'pwm') { const p = digital.filter(n => pwm.has(n)); const pref = s.pwmPrefer || [];      // AVR: 9 and 10 last — the Servo library takes Timer1 and with it PWM on those two
       return order === 'high' ? p.reverse() : [...pref.filter(n => p.includes(n)), ...p.filter(n => !pref.includes(n))]; }
-    const plain = digital.filter(n => !pwm.has(n)), pw = digital.filter(n => pwm.has(n));        // PWM pins are scarce: hand them out last
-    const dig = order === 'high' ? [...plain.reverse(), ...pw.reverse()] : [...plain, ...pw];
+    const plain = digital.filter(n => !pwm.has(n)), pw = digital.filter(n => pwm.has(n));        // PWM pins are scarce on an AVR: hand them out last (on a Pico every pin has PWM, so this just keeps the order)
+    let dig = order === 'high' ? [...plain.reverse(), ...pw.reverse()] : [...plain, ...pw];
+    if (order === 'high' && s.highFrom) dig = [...dig.filter(n => +n <= s.highFrom), ...dig.filter(n => +n > s.highFrom)];     // LEDs count down from GP15 on a Pico (13 on an Uno)
     return [...dig, ...(isNano() ? analog.filter(n => /^A[0-5]$/.test(n)) : analog)];       // analog pins double as digital ones when the real ones run out
   }
   /** A free board pin of the wanted kind ('digital' | 'pwm' | 'analog'); `order: 'high'` counts down from 13 (LED convention). */
@@ -137,7 +143,7 @@ export function createPlanner(circuitIn, opts = {}) {
     const avoid = AVOID();
     const pool = candidates(kind, order).filter(n => !usedPins.has(n) && !exclude.includes(n));
     const pick = pool.find(n => !avoid.has(n)) ?? pool[0];
-    if (!pick) throw new PlanError(`There is no free ${kind === 'analog' ? 'analog' : kind === 'pwm' ? 'PWM' : 'digital'} pin left on the ${NAME[getBoard().type]} for all of that at once — ask for fewer parts together${getBoard().type === 'arduino-mega' ? '' : ' or use a Mega'}.`, 'no-pin');
+    if (!pick) throw new PlanError(`There is no free ${kind === 'analog' ? 'analog' : kind === 'pwm' ? 'PWM' : 'digital'} pin left on the ${NAME[getBoard().type]} for all of that at once — ask for fewer parts together${getBoard().type === 'arduino-uno' || getBoard().type === 'arduino-nano' ? ' or use a Mega' : ''}.`, 'no-pin');
     usedPins.add(pick); return pick;
   }
 
@@ -154,13 +160,14 @@ export function createPlanner(circuitIn, opts = {}) {
 
   /** Join part pin → the board's power rail ('v5' | 'v33' | 'vin' | 'gnd'), unless it is on a rail already. */
   function rail(h, pin, kind) {
+    kind = resolveRail(kind);
     const b = getBoard(), n = netOf(h, pin), now = railOn(n);
-    const label = { v5: '5V', v33: '3.3V', vin: 'VIN', gnd: 'GND' }[kind];
+    const RL = railLabels(), label = RL[kind];
     if (now === kind) { record(h, pin, kind, label); return; }
-    if (now && now !== kind) { notes.push(`${describe(h)} ${pin} is already on ${{ v5: '5V', v33: '3.3V', vin: 'VIN', gnd: 'GND' }[now]}, so I left it there.`); checks.push({ part: h.id, pin: String(pin), expect: now }); return; }
+    if (now && now !== kind) { notes.push(`${describe(h)} ${pin} is already on ${RL[now]}, so I left it there.`); checks.push({ part: h.id, pin: String(pin), expect: now }); return; }
     rawWire(h, pin, b, railPin(kind), WIRE_COLOR[kind]); record(h, pin, kind, label);
   }
-  const power = (h, pin, kind = 'v5') => rail(h, pin, kind);
+  const power = (h, pin, kind = 'logic') => rail(h, pin, kind);
   const ground = (h, pin) => rail(h, pin, 'gnd');
 
   /**
@@ -189,7 +196,7 @@ export function createPlanner(circuitIn, opts = {}) {
       if (onNet.length) { notes.push(`${describe(h)} ${pin} is wired to ${onNet[0].name}, not to the I²C pin ${name}.`); checks.push({ part: h.id, pin: String(pin), expect: `pin:${onNet[0].name}` }); continue; }
       usedPins.add(name); setDir(name, 'io');
       // Mega: the header pins are labelled SDA / SCL (the same net as 20 / 21)
-      const boardPin = b.type === 'arduino-mega' ? (kind === 'sda' ? 'SDA' : 'SCL') : name;
+      const boardPin = s.i2cHeader?.[kind] ?? name;
       rawWire(h, pin, b, boardPin, WIRE_COLOR[kind]); record(h, pin, `pin:${name}`, name);
     }
   }
@@ -249,6 +256,7 @@ export function createPlanner(circuitIn, opts = {}) {
   }
   /** part pin ──[ohms]── power rail ('gnd' | 'v5' | …): a pull-up / pull-down / divider leg. Returns the resistor handle. */
   function pull(h, pin, railKind, ohms = 10000) {
+    railKind = resolveRail(railKind);
     const { r, near, far } = resistorAt(h, pin, ohms, railKind);
     join(r, near, h, pin); rail(r, far, railKind);
     return r;
@@ -273,6 +281,9 @@ export function createPlanner(circuitIn, opts = {}) {
     nets: () => net0, state0, finish, claimed, usedPins, notes, isNano,
     free: kind => freePin(kind),
     boardName: () => NAME[getBoard().type],
+    /** The ADC reference as it appears in sketch maths: 5.0 on an Arduino, 3.3 on a Pico. */
+    get vref() { const l = spec().logic; return Number.isInteger(l) ? `${l}.0` : String(l); },
+    get logic() { return spec().logic; },
     wasBoardAdded: () => boardAdded,
   };
 }

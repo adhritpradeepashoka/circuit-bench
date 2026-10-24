@@ -4,7 +4,7 @@ import { PART_DEFS } from '../parts.js';
 import { phase, ACTUATOR, OTHER, roleMap, PlanError, loadLed } from './helpers.js';
 
 const shortName = def => def.name.replace(/\s*\(.*$/, '').replace(/\s+/g, ' ').trim();
-const isPwm = (c, pin) => (c.getBoard().type === 'arduino-mega' ? /^([2-9]|1[0-3]|44|45|46)$/.test(pin) : /^(3|5|6|9|10|11)$/.test(pin));
+const isPwm = (c, pin) => c.spec().pwm.includes(pin);
 
 /* ── RGB LED ─────────────────────────────────────────────────────────────────────────────────── */
 const rgb = phase(ACTUATOR)((c, { n, ohms }) => {
@@ -45,7 +45,7 @@ const seven = phase(ACTUATOR)((c, { n, ohms }) => {
 /* ── servo ───────────────────────────────────────────────────────────────────────────────────── */
 const servo = phase(ACTUATOR)((c, { n, type }) => {
   const s = c.sketch, r = roleMap(type), h = c.part(type, { fresh: n > 0 }), f = c.signals;
-  c.power(h, r.vcc); c.ground(h, r.gnd);
+  c.power(h, r.vcc, 'v5'); c.ground(h, r.gnd);
   const pin = c.hook(h, r.signal, 'digital', { prefer: ['7', '8', '4', '12'], dir: 'out' }), v = s.uid('servo');
   s.include('Servo.h'); s.global(`Servo ${v};`); s.setup(`${v}.attach(${pin});`);
   if (f.bool) { s.sample(`${v}.write((${f.bool.expr}) ? 180 : 0);`); f.consumed = true; }
@@ -58,7 +58,8 @@ const servo = phase(ACTUATOR)((c, { n, type }) => {
 /* ── buzzer ──────────────────────────────────────────────────────────────────────────────────── */
 const buzzer = phase(ACTUATOR)((c, { n, type }) => {
   const s = c.sketch, r = roleMap(type), h = c.part(type, { fresh: n > 0 }), f = c.signals;
-  const pin = c.hook(h, r.a, 'digital', { prefer: ['8', '7', '6', '12'], dir: 'out' }); c.ground(h, r.b);
+  // a Pico pin is good for about 12 mA: a bare buzzer would ask for more, so it gets a series resistor there
+  const pin = c.logic < 4 ? c.drive(h, r.a, 'digital', { ohms: 150, prefer: ['8', '7', '6', '12'], dir: 'out' }) : c.hook(h, r.a, 'digital', { prefer: ['8', '7', '6', '12'], dir: 'out' }); c.ground(h, r.b);
   if (f.bool) { s.sample(`if (${f.bool.expr}) tone(${pin}, 880); else noTone(${pin});`); f.consumed = true; }
   else if (f.level) { s.sample(`tone(${pin}, map(${f.level.expr}, 0, 1023, 200, 2000));`); f.consumed = true; }
   else { s.global('const int NOTES[] = {262, 294, 330, 349, 392, 440, 494, 523};      // C D E F G A B C'); s.tick(400, ['static int i = 0;', `tone(${pin}, NOTES[i], 300);`, 'i = (i + 1) % 8;']); }
@@ -94,9 +95,9 @@ const relay = phase(ACTUATOR)((c, { n, type }) => {
   const d = c.helper('custom-d-1n4007', [['K', h, r.coilA], ['A', h, r.coilB]]);
   const pin = c.drive(q, 'B', 'digital', { ohms: 1000, prefer: ['7', '6', '5', '4'], dir: 'out' });
   c.ground(q, 'E');
-  c.power(h, r.coilA); c.join(h, r.coilB, q, 'C');
+  c.power(h, r.coilA, 'v5'); c.join(h, r.coilB, q, 'C');
   c.join(d, 'K', h, r.coilA); c.join(d, 'A', h, r.coilB);
-  c.power(h, r.common); loadLed(c, { from: [h, r.no], to: 'gnd' });
+  c.power(h, r.common, 'v5'); loadLed(c, { from: [h, r.no], to: 'gnd' });
   s.setup(`pinMode(${pin}, OUTPUT);`);
   if (f.bool) { s.sample(`digitalWrite(${pin}, (${f.bool.expr}) ? HIGH : LOW);`); f.consumed = true; }
   else if (f.level) { s.sample(`digitalWrite(${pin}, ${f.level.expr} > 511 ? HIGH : LOW);`); f.consumed = true; }
@@ -138,7 +139,7 @@ const motorKind = phase(ACTUATOR)((c, { n, type }) => {
   const s = c.sketch, r = roleMap(type), h = c.part(type, { fresh: n > 0 }), f = c.signals;
   const q = c.helper('custom-q-irlz44n', [['D', h, r.b]]);
   const d = c.helper('custom-d-1n4007', [['K', h, r.a], ['A', h, r.b]]);
-  c.power(h, r.a); c.join(h, r.b, q, 'D'); c.ground(q, 'S');
+  c.power(h, r.a, 'v5'); c.join(h, r.b, q, 'D'); c.ground(q, 'S');
   const pin = c.hook(q, 'G', 'pwm', { dir: 'out' }); c.pull(q, 'G', 'gnd', 10000);
   c.join(d, 'K', h, r.a); c.join(d, 'A', h, r.b);
   const nm = shortName(PART_DEFS[type]);
@@ -154,7 +155,7 @@ const motorKind = phase(ACTUATOR)((c, { n, type }) => {
 /* ── stepper (a ULN2003 board: IN1 … IN4) ────────────────────────────────────────────────────── */
 const stepper = phase(ACTUATOR)((c, { n, type }) => {
   const s = c.sketch, b = PART_DEFS[type].spec.behaviour, r = roleMap(type), h = c.part(type, { fresh: n > 0 }), f = c.signals;
-  c.power(h, r.vcc); c.ground(h, r.gnd);
+  c.power(h, r.vcc, 'v5'); c.ground(h, r.gnd);
   const pins = b.coils.map(p => c.hook(h, p, 'digital', { prefer: ['8', '9', '10', '11', '4', '5', '6', '7'], dir: 'out' })), arr = s.uid('coilPins');
   s.global(`const int ${arr}[4] = {${pins.join(', ')}};            // IN1 … IN4`);
   s.global('const byte HALF_STEPS[8] = {0b0001, 0b0011, 0b0010, 0b0110, 0b0100, 0b1100, 0b1000, 0b1001};   // which coils, bit 0 = IN1');

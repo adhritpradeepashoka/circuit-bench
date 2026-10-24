@@ -3,11 +3,11 @@
 // a stepper motor (which way did the coil pattern advance?) and a frequency probe for tone() on a passive buzzer.
 import { PinState } from 'avr8js';
 
-const US = 16;                                   // CPU cycles per µs at 16 MHz
 
 /** Base: listen to some pins of the MCU, remember what to detach. */
 class Watcher {
   constructor() { this.mcu = null; this.hooks = []; this.events = []; }
+  get us() { return (this.mcu?.hz || 16e6) / 1e6; }           // CPU cycles per µs: 16 on an AVR, 125 on the Pico
   listen(mcu, pin, fn) {
     const port = mcu.ports[pin.port];
     if (!port) return;
@@ -38,7 +38,7 @@ export class Servo extends Watcher {
     const st = this.mcu.ports[this.pinPort].pinState(this.bit), now = this.mcu.cpu.cycles;
     if (st === PinState.High) { if (this.rise === null) this.rise = now; return; }
     if (this.rise === null) return;
-    const us = (now - this.rise) / US; this.rise = null;
+    const us = (now - this.rise) / this.us; this.rise = null;
     if (us < 300 || us > 3000) return;                           // not a servo pulse (a PWM edge, a tone…)
     this.pulseUs = us; this.pulses++; this.lastPulseAt = this.mcu.seconds;
     this.target = Math.max(0, Math.min(this.range, ((us - this.minUs) / (this.maxUs - this.minUs)) * this.range));
@@ -70,10 +70,10 @@ export class Ultrasonic extends Watcher {
     const st = this.mcu.ports[this.trig.port].pinState(this.trig.bit), now = this.mcu.cpu.cycles;
     if (st === PinState.High) { if (this.highSince === null) this.highSince = now; return; }
     if (this.highSince === null) return;
-    const held = (now - this.highSince) / US; this.highSince = null;
+    const held = (now - this.highSince) / this.us; this.highSince = null;
     if (held < 8) return;                                         // a 10 µs trigger pulse (a little tolerance)
     this.busy = true;
-    const start = 400 * US, len = Math.round(this.distance * 58.2 * US);
+    const start = 400 * this.us, len = Math.round(this.distance * 58.2 * this.us);
     this.events = [
       this.mcu.cpu.addClockEvent(() => this.level(true), start),
       this.mcu.cpu.addClockEvent(() => { this.level(false); this.busy = false; this.measurements++; this.events = []; }, start + len),

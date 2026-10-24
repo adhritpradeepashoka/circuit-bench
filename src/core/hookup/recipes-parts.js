@@ -8,7 +8,7 @@ const b = type => PART_DEFS[type]?.spec?.behaviour || {};
 const stdOhms = v => { const s = [220, 270, 330, 470, 680, 1000, 1500, 2200]; return s.reduce((a, x) => (Math.abs(x - v) < Math.abs(a - v) ? x : a), s[0]); };
 const ohmText = v => (v >= 1000 ? `${v / 1000} kΩ` : `${v} Ω`);
 
-const volts = (c, h, text) => c.sketch.show(text, `analogRead(${h}) * 5.0 / 1023`, 2);
+const volts = (c, h, text) => c.sketch.show(text, `analogRead(${h}) * ${c.vref} / 1023`, 2);
 
 /* ── battery: a circuit with no Arduino at all ───────────────────────────────────────────────── */
 const battery = phase(ACTUATOR)((c, { n, req }) => {
@@ -45,7 +45,7 @@ const diode = phase(ACTUATOR)((c, { n, type }) => {
     const dv = c.resistorAt(h, r.cathode, 10000);
     c.join(dv.r, dv.near, h, r.cathode);
     const an = c.hook(dv.r, dv.far, 'analog'); c.pull(dv.r, dv.far, 'gnd', 10000);
-    volts(c, an, 'Zener V'); s.measure(`float zener = analogRead(${an}) * 5.0 / 1023 * 2;`); s.readouts.pop(); s.show('Zener V', 'zener', 2);
+    volts(c, an, 'Zener V'); s.measure(`float zener = analogRead(${an}) * ${c.vref} / 1023 * 2;`); s.readouts.pop(); s.show('Zener V', 'zener', 2);
     s.title ||= `${shortName(PART_DEFS[type])}: battery → 470 Ω → Zener (backwards) → GND; ${an} reads half of the Zener voltage through a 10 kΩ + 10 kΩ divider`;
     c.say(`${h.isNew ? 'Added a' : 'Used the'} ${shortName(PART_DEFS[type])} wired backwards behind a 470 Ω resistor and a ${bat.props.volts} V battery; a divider lets ${an} read about ${bh.vz} V (the battery − is joined to the Arduino GND).`);
   }
@@ -80,10 +80,10 @@ const regulator = phase(ACTUATOR)((c, { n, type }) => {
   const ohms = Math.min(2200, Math.max(220, stdOhms((bh.vout - 1.9) / 0.012)));
   loadLed(c, { ohms, from: [h, r.out], to: 'gnd' });
   let an;
-  if (bh.vout > 4.9) { const d1 = c.resistorAt(h, r.out, 10000); c.join(d1.r, d1.near, h, r.out); an = c.hook(d1.r, d1.far, 'analog'); c.pull(d1.r, d1.far, 'gnd', 10000); s.measure(`float out = analogRead(${an}) * 5.0 / 1023 * 2;`); }
-  else { an = c.hook(h, r.out, 'analog'); s.measure(`float out = analogRead(${an}) * 5.0 / 1023;`); }
+  if (bh.vout > c.logic - 0.05) { const d1 = c.resistorAt(h, r.out, 10000); c.join(d1.r, d1.near, h, r.out); an = c.hook(d1.r, d1.far, 'analog'); c.pull(d1.r, d1.far, 'gnd', 10000); s.measure(`float out = analogRead(${an}) * ${c.vref} / 1023 * 2;`); }
+  else { an = c.hook(h, r.out, 'analog'); s.measure(`float out = analogRead(${an}) * ${c.vref} / 1023;`); }
   s.show('Output V', 'out', 2);
-  s.title ||= `${shortName(PART_DEFS[type])}: a ${bat.props.volts} V battery in, ${bh.vout} V out (read on ${an}${bh.vout > 4.9 ? ' through a divider' : ''})`;
+  s.title ||= `${shortName(PART_DEFS[type])}: a ${bat.props.volts} V battery in, ${bh.vout} V out (read on ${an}${bh.vout > c.logic - 0.05 ? ' through a divider' : ''})`;
   c.say(`${h.isNew ? 'Added a' : 'Used the'} ${shortName(PART_DEFS[type])} fed by a ${bat.props.volts} V battery; its ${bh.vout} V output lights an LED and is read on ${an} (the battery − is joined to the Arduino GND).`);
 });
 
@@ -98,7 +98,7 @@ function stepResponse(c, h, { aPin, bPin, ohms, tauUs, title, say }) {
   s.setup(`pinMode(${pin}, OUTPUT);`); s.setup(`digitalWrite(${pin}, LOW);`);
   s.tick(Math.max(2000, settleMs * 3), ['unsigned long t[16];', 'int v[16];', `delay(${settleMs});                 // let it discharge first`, `digitalWrite(${pin}, HIGH);       // the step`, 'unsigned long t0 = micros();',
     'for (int i = 0; i < 16; i++) {', `  v[i] = analogRead(${an});`, '  t[i] = micros() - t0;', ...(gap ? [`  ${gap}`] : []), '}', `digitalWrite(${pin}, LOW);`,
-    'for (int i = 0; i < 16; i++) {', '  Serial.print(t[i]);', '  Serial.print(" us   ");', '  Serial.print(v[i] * 5.0 / 1023, 2);', '  Serial.println(" V");', '}', 'Serial.println("---");']);
+    'for (int i = 0; i < 16; i++) {', '  Serial.print(t[i]);', '  Serial.print(" us   ");', `  Serial.print(v[i] * ${c.vref} / 1023, 2);`, '  Serial.println(" V");', '}', 'Serial.println("---");']);
   s.title ||= title; c.say(say(pin, an));
 }
 const capacitor = phase(ACTUATOR)((c, { n, type }) => {
@@ -137,7 +137,7 @@ const bioAmp = phase(SOURCE)((c, { n, type }) => {
   c.power(amp, ar.vcc); c.ground(amp, ar.vee);
   c.join(src, roleMap(src.type).pos, amp, ar.inp); c.join(src, roleMap(src.type).neg, amp, ar.inn);
   if (abh.bias === 'ref') {                     // the amplifier's output rests at the voltage on REF: give it half the supply
-    c.pull(amp, ar.ref, 'v5', 10000); c.pull(amp, ar.ref, 'gnd', 10000);
+    c.pull(amp, ar.ref, 'logic', 10000); c.pull(amp, ar.ref, 'gnd', 10000);
   }
   c.join(src, roleMap(src.type).ref, amp, ar.ref);
   const an = c.hook(amp, ar.out, 'analog');

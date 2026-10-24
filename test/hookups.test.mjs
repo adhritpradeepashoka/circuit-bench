@@ -17,9 +17,10 @@ import { createCompiler } from '../server/compile-service.mjs';
 import '../src/core/custom-parts.js';
 
 const EMPTY = () => ({ parts: [], wires: [] });
-const TYPES = Object.keys(PART_DEFS).filter(t => !/^arduino-/.test(t) && t !== 'breadboard');
-const BOARDS = ['arduino-uno', 'arduino-nano', 'arduino-mega'];
-const FQBN = { 'arduino-uno': 'arduino:avr:uno', 'arduino-nano': 'arduino:avr:nano', 'arduino-mega': 'arduino:avr:mega' };
+import { BOARD_SPECS } from '../src/core/boards.js';
+const TYPES = Object.keys(PART_DEFS).filter(t => !BOARD_SPECS[t] && t !== 'breadboard');
+const BOARDS = Object.keys(BOARD_SPECS);
+const FQBN = Object.fromEntries(Object.entries(BOARD_SPECS).map(([k, s]) => [k, s.fqbn]));
 
 function realize(result, circuit = EMPTY()) {
   const applied = applyCircuitActions(circuit, result.actions);
@@ -93,7 +94,7 @@ test('a part that is on the bench but not wired is used, not duplicated', () => 
   const failures = [];
   for (const type of TYPES) {
     const r1 = plan([{ type }], EMPTY()), a = apply(r1);
-    const keep = new Set(a.parts.filter(p => p.type === type || /^arduino-/.test(p.type)).map(p => p.id));
+    const keep = new Set(a.parts.filter(p => p.type === type || !!BOARD_SPECS[p.type]).map(p => p.id));
     const bench = { parts: a.parts.filter(p => keep.has(p.id)), wires: [] };
     if (!bench.parts.some(p => p.type === type)) continue;
     const r = plan([{ type }], bench), added = r.actions.filter(x => x.op === 'add_part' && x.type === type).length;
@@ -145,7 +146,7 @@ test('random mixes of 2–4 parts either build cleanly or say plainly that the b
   let built = 0, refused = 0; const failures = [];
   for (let i = 0; i < 160; i++) {
     const group = Array.from({ length: 2 + Math.floor(rnd() * 3) }, () => TYPES[Math.floor(rnd() * TYPES.length)]);
-    const board = BOARDS[i % 3];
+    const board = BOARDS[i % BOARDS.length];
     const r = plan(group.map(type => ({ type })), EMPTY(), { board });
     if (!r.ok) { refused++; if (!/no free .* pin left|only one board/.test(r.explanation) || r.actions.length) failures.push(`${group}: bad refusal "${r.explanation}"`); continue; }
     built++;

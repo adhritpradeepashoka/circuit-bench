@@ -49,9 +49,9 @@ const analogKind = phase(SOURCE)((c, { n, type }) => {
 });
 
 /* ── digital sensors: PIR, tilt, hall … ──────────────────────────────────────────────────────── */
-function digitalSensor(c, h, { vcc, gnd, out, name }, n) {
+function digitalSensor(c, h, { vcc, gnd, out, name, rail = 'logic' }, n) {
   const s = c.sketch;
-  c.power(h, vcc); c.ground(h, gnd);
+  c.power(h, vcc, rail); c.ground(h, gnd);
   const pin = c.hook(h, out, 'digital', { prefer: ['2', '3', '4', '5', '6', '7'] });
   const v = s.uid('active'); s.global(`bool ${v} = false;`);
   s.setup(`pinMode(${pin}, INPUT);`); s.sample(`${v} = digitalRead(${pin}) == HIGH;`);
@@ -62,7 +62,7 @@ function digitalSensor(c, h, { vcc, gnd, out, name }, n) {
 }
 const pir = phase(SOURCE)((c, { n }) => {
   const h = c.part('pir-sensor', { fresh: n > 0 });
-  const pin = digitalSensor(c, h, { vcc: 'VCC', gnd: 'GND', out: 'OUT', name: 'Motion' }, n);
+  const pin = digitalSensor(c, h, { vcc: 'VCC', gnd: 'GND', out: 'OUT', name: 'Motion', rail: 'v5' }, n);
   c.say(`${h.isNew ? 'Added a' : 'Used the'} PIR motion sensor (OUT on pin ${pin}).`);
 });
 const digitalKind = phase(SOURCE)((c, { n, type }) => {
@@ -90,7 +90,7 @@ const dht = phase(SOURCE)((c, { n }) => {
 const mpu = phase(SOURCE)((c, { n }) => {
   const s = c.sketch, h = c.part('mpu6050', { fresh: n > 0 });
   c.bus(h, 'SDA', 'SCL'); c.power(h, 'VCC'); c.ground(h, 'GND');
-  const high = x => c.railOn(c.netOf(x, 'AD0')) === 'v5' || x.ad0High;
+  const high = x => ['v5', 'v33'].includes(c.railOn(c.netOf(x, 'AD0'))) || x.ad0High;
   const others = c.handles.filter(o => o.type === 'mpu6050' && o !== h);
   let addr = high(h) ? 0x69 : 0x68;
   if (others.some(o => (high(o) ? 0x69 : 0x68) === addr)) {
@@ -108,13 +108,14 @@ const mpu = phase(SOURCE)((c, { n }) => {
   s.measure(`float ${roll} = atan2(${ay}, ${az}) * 180.0 / PI;`); s.measure(`float ${pitch} = atan2(-${ax}, sqrt((float)${ay} * ${ay} + (float)${az} * ${az})) * 180.0 / PI;`);
   s.show(`Roll${suffix}`, roll, 0); s.show(`Pitch${suffix}`, pitch, 0);
   s.title ||= 'MPU-6050: tilt over I²C (roll and pitch in degrees). Right-click the sensor to tilt it.';
-  c.say(`${h.isNew ? 'Added an' : 'Used the'} MPU-6050 on the I²C pins${addr === 0x69 ? ' (address 0x69: AD0 to 5V)' : ''}; the sketch prints roll and pitch.`);
+  c.say(`${h.isNew ? 'Added an' : 'Used the'} MPU-6050 on the I²C pins${addr === 0x69 ? ' (address 0x69: AD0 to the supply)' : ''}; the sketch prints roll and pitch.`);
 });
 
 const lcd = phase(SINK)((c, { n }) => {
   const s = c.sketch, h = c.part('lcd1602', { fresh: n > 0 });
   if (n > 0) throw new PlanError('One 16×2 screen is enough: two would answer at the same I²C address (0x27).', 'i2c-full');
   c.bus(h, 'SDA', 'SCL'); c.power(h, 'VCC'); c.ground(h, 'GND');
+  if (c.logic < 4) c.notes.push('A 1602 LCD is really a 5 V part: on 3.3 V its text can look faint (turn the contrast screw). If it stays dark on real hardware, power it from VBUS and put a level shifter on SDA/SCL, because the backpack pulls those two lines up to 5 V and the Pico\'s pins only take 3.3 V.');
   s.sink('lcd', { includes: ['Wire.h', 'LiquidCrystal_I2C.h'], globals: ['LiquidCrystal_I2C lcd(0x27, 16, 2);'], setup: ['lcd.init();', 'lcd.backlight();'] });
   s.title ||= '16×2 LCD on I²C (address 0x27)';
   c.say(`${h.isNew ? 'Added a' : 'Used the'} 16×2 LCD on the I²C pins; it shows the readings of the other parts (or the uptime, if there are none).`);
@@ -135,7 +136,7 @@ const oled = phase(SINK)((c, { n }) => {
 /* ── distance, encoder, joystick, keypad, DIP bank ────────────────────────────────────────────── */
 const ultrasonic = phase(SOURCE)((c, { n, type }) => {
   const s = c.sketch, def = PART_DEFS[type], r = roleMap(type), h = c.part(type, { fresh: n > 0 });
-  c.power(h, r.vcc); c.ground(h, r.gnd);
+  c.power(h, r.vcc, 'v5'); c.ground(h, r.gnd);
   const trig = c.hook(h, r.trig, 'digital', { prefer: ['9', '7', '5', '3'], dir: 'out' }), echo = c.hook(h, r.echo, 'digital', { prefer: ['10', '8', '6', '4'] });
   const us = s.uid('echoUs'), cm = s.uid('distanceCm');
   s.setup(`pinMode(${trig}, OUTPUT);`); s.setup(`pinMode(${echo}, INPUT);`);
@@ -230,7 +231,7 @@ const variableResistor = phase(SOURCE)((c, { n, type }) => {
   let pin;
   if (r.wiper) { c.ground(h, r.a); c.power(h, r.b); pin = c.hook(h, r.wiper, 'analog'); }
   else {                                                  // two legs only: make a voltage divider with a 10 kΩ resistor
-    pin = c.hook(h, r.a, 'analog'); c.pull(h, r.a, 'v5', 10000); c.ground(h, r.b);
+    pin = c.hook(h, r.a, 'analog'); c.pull(h, r.a, 'logic', 10000); c.ground(h, r.b);
   }
   const v = s.uid('raw'); s.measure(`int ${v} = analogRead(${pin});`); s.show(label, v);
   offerLevel(c, `analogRead(${pin})`, label.toLowerCase()); s.title ||= `${shortName(PART_DEFS[type])}: signal on ${pin} (0 – 1023)`;

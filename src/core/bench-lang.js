@@ -11,12 +11,13 @@
 //   defer                              "this needs a bigger AI"      ·   off     "outside what CircuitBench does"
 // Commands are separated by ";". REF is a part id (led-2) or a part type (led).
 import { PART_DEFS } from './parts.js';
+import { BOARD_SPECS } from './boards.js';
 import { blinkSketch } from './quick-edits.js';
 import { applyCircuitActions } from './ai-actions.js';
 import { plan } from './hookup/plan.js';
 
 const COLORS = new Set(['red', 'green', 'blue', 'yellow', 'orange', 'white']);
-const BOARDS = ['arduino-uno', 'arduino-nano', 'arduino-mega'];
+const BOARDS = Object.keys(BOARD_SPECS);
 const PIN = /^(A\d{1,2}|\d{1,2})$/;
 const name = t => PART_DEFS[t]?.name || t;
 
@@ -117,7 +118,7 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
 /* ── adapter between a real circuit and the model ─────────────────────────────────────────────
  * The model never sees the editor's random part ids (led-k3j2a). It sees tidy numbered ones (led-1, led-2, uno-1) and answers in
  * those; we translate back to the real ids before anything touches the board. */
-const PREFIX = { 'arduino-uno': 'uno', 'arduino-nano': 'nano', 'arduino-mega': 'mega', breadboard: 'bb' };
+const PREFIX = { 'arduino-uno': 'uno', 'arduino-nano': 'nano', 'arduino-mega': 'mega', 'raspberry-pi-pico': 'pico', breadboard: 'bb' };
 export function canonicalIds(circuit) {
   const n = {}, toReal = new Map(), toCanon = new Map();
   for (const p of circuit?.parts || []) {
