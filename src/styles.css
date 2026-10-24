@@ -714,7 +714,6 @@ button { cursor: pointer; }
   --mat: #14100a; --mat-line: rgba(232, 190, 80, .09); --mat-major: rgba(232, 190, 80, .22);
   --paper: #0c0a06; --surface: #17120a; --line: #4a3a16; --text: #f6e7b4; --muted: #c2aa6a;
   --blue: #e8be50; --blue-soft: #2a2008; --green: #e8be50; --red: #ff5a4d; --amber: #ffb000; --amber-soft: #2a1d00;
-  --ui: Georgia, "Times New Roman", serif;
 }
 :root[data-theme="founder"] .topbar { border-bottom: 1px solid var(--blue); box-shadow: 0 2px 18px rgba(232, 190, 80, .22); }
 :root[data-theme="founder"] .run { color: #000; }
