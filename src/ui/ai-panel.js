@@ -327,7 +327,7 @@ export function initAiPanel(editor, code, sim = null) {
     }
     if (!quick && tinyOn()) {          // the tiny model is the chosen AI: nothing else to hand the request to
       messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
-      messages.push({ id: ++seq, role: 'assistant', text: 'The tiny model could not turn that into a bench edit. Try plain wording ("add an LED and a 220 Ω resistor", "wire the LED to pin 13"), or pick a bigger AI from the list above for sketches and harder requests.' });
+      messages.push({ id: ++seq, role: 'assistant', text: `The tiny model only does small bench edits — it can't write a sketch or build a whole project like that. To get one, switch the AI (the "Tiny model" tab or the menu at the bottom of this chat) to ${hasHostedAi() ? '"Included" (free with your account)' : webgpuAvailable() ? '"On this device" or an AI with your own free key' : 'an AI with your own free key (Settings → AI)'} and send it again. Or break it into steps the tiny model knows: "add an OLED display", "add a membrane keypad", "wire the OLED to the Uno".` });
       saveChat(); render(); return;
     }
     if (!quick && !hasKey()) { refreshKeyUi(); openSettings(); return setStatus('Add a free API key (or choose an AI) in Settings for requests like this.'); }
