@@ -2059,3 +2059,18 @@ test('ui: plainly worded edits are answered instantly with no key and no network
   prompt.value = 'make me a slime mold circuit'; doc.getElementById('aiGenerate').click(); await flush();
   assert.equal(fetched, 0, 'a request it does not understand needs an AI, and none is set up, so it asks for one instead of downloading');
 });
+
+test('ui: Delete and Backspace remove the selected wire, even right after typing in a text box', async () => {
+  const { w, editor } = boot(); const doc = w.document;
+  const search = doc.querySelector('.top-search input'); search.focus();
+  assert.equal(doc.activeElement, search);
+  editor.state.wires.push({ id: 'wx', a: { part: editor.state.parts[0].id, pin: '13' }, b: { part: editor.state.parts[0].id, pin: 'GND.1' }, color: '#d33' });
+  for (const key of ['Delete', 'Backspace']) {
+    editor.state.wires.push({ id: `w${key}`, a: { part: editor.state.parts[0].id, pin: '13' }, b: { part: editor.state.parts[0].id, pin: 'GND.1' }, color: '#d33' });
+    search.focus(); editor.onPointerDown({ target: editor.canvas, button: 0, clientX: 1, clientY: 1, preventDefault() {}, stopPropagation() {} });
+    assert.notEqual(doc.activeElement, search, 'pressing on the bench takes focus out of the text box');
+    editor.select({ kind: 'wire', id: `w${key}` });
+    w.dispatchEvent(new w.KeyboardEvent('keydown', { key, bubbles: true }));
+    assert.equal(editor.state.wires.some(x => x.id === `w${key}`), false, `${key} deletes the selected wire`);
+  }
+});

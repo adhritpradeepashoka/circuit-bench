@@ -549,6 +549,9 @@ export class Editor {
   onPointerDown(e) {
     if (e.target.closest('.wire-editor, .part-editor, .sim-tray, .hint-card')) return;
     this.hideTip();
+    // Pressing on the bench is not a mouse-down the browser acts on (we cancel it), so focus used to stay in whatever text box you last used
+    // (code, search, chat), and Delete/Backspace then edited that box instead of deleting the selected wire or part.
+    { const a = document.activeElement; if (a && a !== document.body && a.matches?.('input, select, textarea, [contenteditable]')) a.blur(); }
     if (e.button === 1 || (e.button === 0 && this.spaceDown)) { e.preventDefault(); this.beginPan(e); return; }
     if (e.button !== 0) return;
     const w = this.toWorld(e);
@@ -796,7 +799,7 @@ export class Editor {
 
   /* keyboard */
   onKey(e) {
-    if (e.target.matches?.('input, select, textarea, [contenteditable]')) return;
+    if (e.target.matches?.('input:not([type=color]):not([type=checkbox]):not([type=range]), select, textarea, [contenteditable]')) return;   // a colour picker or tick box is not typing
     const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? this.redo() : this.undo(); }
     else if (mod && k === 'y') { e.preventDefault(); this.redo(); }
