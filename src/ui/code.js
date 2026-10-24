@@ -23,7 +23,8 @@ const TEMPLATES = { h: '#pragma once\n\n', hpp: '#pragma once\n\n', c: '#include
  */
 export function initCode({ compile = defaultCompile, editor = createTextEditor(), board = () => null } = {}) {
   const dock = $('codeDock'), status = $('codeStatus'), outPane = $('outputPane'), examples = $('codeExamples'), tabsEl = $('fileTabs');
-  const listeners = { change: [], open: [], toggle: null };
+  const listeners = { change: [], open: [], toggle: null, blocks: [] };
+  let blocks = null;                                       // block-coding state: { program, mode: 'blocks' | 'code' } (null = never used)
   let ed = editor;
   const simpleEditor = editor;                              // always kept: the fallback if Monaco can't be used
   let files = [], active = MAIN;                         // the project: [{ name, content }] — first .ino is the main sketch
@@ -31,6 +32,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
   let running = false, runSnapshot = null, last = null, lastBuiltFrom = null, buildId = 0, controller = null;
   let onAiFix = null;                                      // set by the AI panel: "✨ Fix with AI" on a failed compile
 
+  const cleanBlocks = b => (b && typeof b === 'object' && (b.mode === 'blocks' || b.mode === 'code') ? { mode: b.mode, program: b.program && typeof b.program === 'object' ? b.program : null } : null);
   /* ── project state ────────────────────── */
   function loadProject() {
     try {
@@ -41,7 +43,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     } catch { /* storage unavailable or corrupt */ }
     return { files: [{ name: MAIN, content: DEFAULT_SKETCH }], active: MAIN };
   }
-  const persist = () => { try { localStorage.setItem(PROJECT_KEY, JSON.stringify({ files, active })); } catch { /* ignore */ } };
+  const persist = () => { try { localStorage.setItem(PROJECT_KEY, JSON.stringify({ files, active, blocks })); } catch { /* ignore */ } };
   const mainName = () => (files.find(f => f.name === MAIN) || files.find(f => f.name.endsWith('.ino')) || files[0]).name;
   let boardOf = board;                                     // () → the fqbn of the board on the canvas (the sketch is compiled for it)
   const snapshot = () => JSON.stringify([boardOf() || '', files]);
@@ -296,6 +298,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
 
   /* ── start ────────────────────────────── */
   const initial = loadProject();
+  blocks = cleanBlocks(initial.blocks);
   files = initial.files.map(f => ({ ...f })); active = fileByName(initial.active) ? initial.active : files[0].name;
   bindEditor(ed); mountProject(); renderOutput(null); setStatus('Not compiled yet'); renderEditorKind(); paintTabs(); measure();
 
@@ -305,12 +308,17 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     set source(v) { fileByName(mainName()).content = v; mountProject(); changed(); },
     get files() { return files.map(f => ({ ...f })); },
     /** What goes into a project file: `sketch` (main file, for older readers) + all `files`. */
-    exportState() { return { sketch: fileByName(mainName()).content, files: files.map(f => ({ ...f })), activeFile: active }; },
+    exportState() { return { sketch: fileByName(mainName()).content, files: files.map(f => ({ ...f })), activeFile: active, ...(blocks ? { blocks: { ...blocks } } : {}) }; },
+    /** Block-coding state ({ program, mode }) — kept with the project. Setting it saves but does not touch the files. */
+    get blocks() { return blocks; },
+    setBlocks(b) { blocks = cleanBlocks(b); persist(); },
+    onBlocks: fn => listeners.blocks.push(fn),
     /** Accepts new ({files}) and older ({sketch}) project files; ignores anything malformed. */
     importState(data) {
       const ok = Array.isArray(data?.files) && data.files.length && data.files.every(f => f && FILE_NAME_RE.test(f.name) && typeof f.content === 'string') && new Set(data.files.map(f => f.name)).size === data.files.length && data.files.some(f => f.name.endsWith('.ino'));
-      if (ok) { setFiles(data.files, data.activeFile); return true; }
-      if (typeof data?.sketch === 'string') { setFiles([{ name: MAIN, content: data.sketch }]); return true; }
+      const apply = () => { blocks = cleanBlocks(data?.blocks); persist(); listeners.blocks.forEach(fn => fn()); };
+      if (ok) { setFiles(data.files, data.activeFile); apply(); return true; }
+      if (typeof data?.sketch === 'string') { setFiles([{ name: MAIN, content: data.sketch }]); apply(); return true; }
       return false;
     },
     get active() { return active; },

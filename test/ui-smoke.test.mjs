@@ -2074,3 +2074,16 @@ test('ui: Delete and Backspace remove the selected wire, even right after typing
     assert.equal(editor.state.wires.some(x => x.id === `w${key}`), false, `${key} deletes the selected wire`);
   }
 });
+
+test('ui: block-coding state is kept with the project and round-trips through export/import', () => {
+  const { code } = boot();
+  assert.equal(code.blocks, null);
+  const program = { blocks: { languageVersion: 0, blocks: [{ type: 'cb_loop', id: 'a' }] }, variables: [] };
+  code.setBlocks({ program, mode: 'blocks' });
+  const saved = code.exportState();
+  assert.equal(saved.blocks.mode, 'blocks'); assert.equal(saved.blocks.program.blocks.blocks[0].type, 'cb_loop');
+  code.setBlocks(null); assert.equal(code.blocks, null); assert.equal('blocks' in code.exportState(), false);
+  assert.ok(code.importState(saved)); assert.equal(code.blocks.mode, 'blocks');
+  assert.ok(code.importState({ sketch: 'void setup(){}\nvoid loop(){}' })); assert.equal(code.blocks, null, 'an older project has no blocks');
+  code.setBlocks({ mode: 'nonsense' }); assert.equal(code.blocks, null, 'junk is ignored');
+});

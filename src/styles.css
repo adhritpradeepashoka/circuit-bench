@@ -762,3 +762,21 @@ button { cursor: pointer; }
 .cm-form { display: grid; gap: 6px; margin-top: 12px; }
 .cm-form input, .cm-form textarea { padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-family: inherit; }
 .cm-form button { justify-self: start; padding: 6px 14px; border: 0; border-radius: 8px; background: var(--blue); color: var(--on-blue); font-weight: 700; }
+
+/* ── block coding ── */
+.mode-switch { display: inline-flex; border: 1px solid #2c373d; border-radius: 8px; overflow: hidden; flex: none; }
+.mode-switch button { background: transparent; color: #aab8b2; border: 0; border-radius: 0; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.mode-switch button[aria-pressed="true"] { background: var(--blue, #2f7dd1); color: var(--on-blue, #fff); }
+.blocks-pane { flex: 1; min-height: 0; position: relative; background: #1b2328; }
+.blocks-pane[hidden] { display: none; }
+.code-body.blocks-on .file-tabs, .code-body.blocks-on .code-editor-row { display: none; }
+.code-dock.blocks-on #codeExamples, .code-dock.blocks-on #codeReset, .code-dock.blocks-on #codeEditorKind, .code-dock.blocks-on .code-title { display: none; }
+.blocks-pane .blocklyMainBackground { stroke: none; }
+.blocks-msg { position: absolute; inset: auto 12px 10px auto; max-width: 320px; background: #232e35; color: #dce6e1; border: 1px solid #36454d; border-radius: 10px; padding: 8px 10px; font: 12px/1.4 var(--ui, system-ui); z-index: 5; pointer-events: none; }
+.blocks-msg[hidden] { display: none; }
+.blocks-tools { position: absolute; top: 8px; right: 12px; z-index: 5; display: flex; gap: 6px; }
+.blocks-tools button { background: #232e35; color: #dce6e1; border: 1px solid #36454d; border-radius: 8px; padding: 4px 9px; font-size: 12px; cursor: pointer; }
+.blocks-tools button:hover { border-color: var(--blue, #2f7dd1); }
+.blocklyToolboxCategory .blocklyToolboxCategoryLabel, .blocklyTreeLabel { font-family: var(--ui, system-ui); font-size: 13px; }
+.blocklyToolboxDiv { background: #12181b !important; }
+.blocklyToolboxCategoryLabel { color: #dce6e1 !important; }

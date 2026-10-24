@@ -174,7 +174,7 @@ export function initTour({ editor, sim, code, projects }) {
     { spots: ['#runBtn'], title: `Run ${kbd('Ctrl')}+${kbd('Enter')}`,
       body: `<p>Compiles your code with the <b>real Arduino compiler</b> and runs it on the simulated Uno. While it runs, a panel at the bottom shows which pins are on, and warns you about wiring problems (like an LED with no resistor).</p>` },
     { spots: ['#codeToggle'], title: 'Code',
-      body: `<p>Opens the code editor: your Arduino sketch (C++), the compiler's messages, the <b>Serial Monitor</b> for text your Arduino prints, and an <b>Examples</b> menu with ready-made sketches.</p>` },
+      body: `<p>Opens the coding area. Use <b>🧩 Blocks</b> to snap together a program — no typing! Blocks follow the parts you wired, so “turn LED 1 on” just works — or switch to <b>{ } Code</b> to see the real Arduino sketch (C++) your blocks make, the compiler's messages, the <b>Serial Monitor</b> for text your Arduino prints, and an <b>Examples</b> menu with ready-made sketches.</p>` },
     { spots: ['#aiBtn'], title: 'Ask AI',
       body: `<p>A chat that can see your circuit, your code, compile errors and the live readings while it runs. Ask "why isn't my LED on?" or "add a button on pin 2". It can wire parts and write code for you, and you choose whether to apply each change. Needs a free API key (it explains how).</p>` },
     { spots: ['.project-menu'], title: 'File menu',
@@ -244,7 +244,7 @@ export function initTour({ editor, sim, code, projects }) {
     { label: 'It works!', title: 'Your LED is blinking 🎉', noBack: true, spots: () => [led() && editor.els.get(led().id)],
       body: `<p>It turns on and off every half second, because the code sets pin 13 <b>HIGH</b> (on) for 500 ms, then <b>LOW</b> (off) for 500 ms, forever.</p>` },
     { label: 'Try this', title: 'Change the code', spots: ['#codeToggle'],
-      body: `<p>Open <b>Code</b>, change both <code>500</code>s to <code>100</code>, then press <b>Stop</b> and <b>Run</b>. It blinks five times faster.</p><p>Next, try the <b>Examples</b> menu in Code, or ask the AI to "add a button that turns the LED on".</p>`,
+      body: `<p>Open <b>Code</b> and press <b>🧩 Blocks</b> to build a program from blocks (try <b>✨ Start from my circuit</b>), or switch to <b>{ } Code</b> and change both <code>500</code>s to <code>100</code>, then press <b>Stop</b> and <b>Run</b>. It blinks five times faster.</p><p>Next, try the <b>Examples</b> menu in Code, or ask the AI to "add a button that turns the LED on".</p>`,
       nextLabel: 'Finish', onNext: () => showOutro() },
   ];
 

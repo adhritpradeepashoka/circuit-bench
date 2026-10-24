@@ -126,6 +126,10 @@
       <section class="code-dock collapsed" id="codeDock" aria-label="Sketch editor">
         <div class="code-resize" id="codeResize" title="Drag to resize"></div>
         <div class="code-head">
+          <span class="mode-switch" id="codeMode" role="group" aria-label="Coding style">
+            <button type="button" id="modeBlocks" data-mode="blocks" title="Build the program from blocks">🧩 Blocks</button>
+            <button type="button" id="modeCode" data-mode="code" title="Write or read the Arduino code">{ } Code</button>
+          </span>
           <span class="code-title">sketch.ino</span>
           <span class="code-status" id="codeStatus" role="status"></span>
           <span class="code-actions">
@@ -138,6 +142,7 @@
         </div>
         <div class="code-body" id="codeBody">
           <div class="code-main" id="codeMain">
+            <div class="blocks-pane" id="blocksPane" hidden></div>
             <div class="file-tabs" id="fileTabs" role="tablist" aria-label="Project files"></div>
             <div class="code-editor-row">
               <div class="code-gutter" id="codeGutter" aria-hidden="true"></div>

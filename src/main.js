@@ -3,6 +3,7 @@ import './styles.css';
 import { Editor } from './ui/editor.js';
 import { initSidebar } from './ui/sidebar.js';
 import { Simulation } from './ui/simulation.js';
+import { initBlocks } from './ui/blocks.js';
 import { initCode } from './ui/code.js';
 import { initResistorEditor } from './ui/resistor-editor.js';
 import { initLedEditor } from './ui/led-editor.js';
@@ -42,6 +43,7 @@ const editor = new Editor();
 initSidebar(editor);
 const code = initCode();
 const sim = new Simulation(editor, code);
+const blocks = initBlocks({ editor, code });
 code.setBoard(() => editor.getCircuit().uno.spec?.fqbn || null);
 initPartCreator(editor);                 // registers "My parts" before any saved circuit that uses them loads
 editor.init();
