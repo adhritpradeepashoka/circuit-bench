@@ -4,6 +4,7 @@
 import { PART_DEFS } from '../parts.js';
 import { readParts } from './names.js';
 import { plan } from './plan.js';
+import { recipeFor } from './recipes.js';
 import { BOARD_SPECS } from '../boards.js';
 
 const CIRCUIT = /\b(circuit|set-?up|project|demo|example|starter|hookup|hook-up|wiring)\b/;
@@ -40,4 +41,35 @@ export function makeCircuit(instruction, circuit = { parts: [], wires: [] }, opt
   if (read.board && board && board.type !== read.board) extra.push(`Your bench already has ${nameOf(board.type)}, so I used it rather than adding ${nameOf(read.board)}.`);
   if (res.code && opts.sketchIsCustom) extra.push('The sketch in the editor will be replaced by this one — undo brings it back.');
   return { ...res, explanation: [res.explanation, ...extra].filter(Boolean).join(' ') };
+}
+
+// "Write the code for my MPU and OLED", "give me a sketch for this circuit": the planner already knows how to drive every part it can
+// wire, so a request for code is answered by the same planner — it finds what is already wired on the bench, adds only what is
+// missing, and writes the sketch. No AI model is involved, so it is exact on every device (the small on-device models are not).
+const CODE_WORD = /\b(code|sketch|program|script|firmware)\b/;
+const CODE_ASK = /\b(write|make|give|generate|create|need|want|get|build|show|do|add|produce)\b|\bcode (?:for|to)\b|\bsketch (?:for|to)\b|^(?:code|sketch|program)\b/;
+// Anything about HOW it should behave (timing, conditions, effects) is beyond a stock sketch: leave it to a real AI.
+const CUSTOM_BEHAVIOUR = /\d|\b(every|when|whenever|if|while|until|then|after|before|once|twice|only|unless|slowly|quickly|fast|slow|blink\w*|fade|fading|toggle|flash\w*|pulse|sweep|beep\w*|alarm|threshold|compare|calculate|average|log|record|count\w*|sequence|pattern|animation|menu|game|morse|temperature in|convert)\b/;
+const THIS_CIRCUIT = /\b(my|this|the|current|whole|entire|existing)\s+(circuit|bench|setup|set-up|project|parts|board|wiring)\b|\beverything\b|\bit all\b|\bthese\b/;
+
+/** → null | { ok, actions, code, explanation, notes, checks } — only for plain "write me the code" asks the planner can answer exactly */
+export function codeFor(instruction, circuit = { parts: [], wires: [] }, opts = {}) {
+  const t = String(instruction || '').toLowerCase().replace(/[!.]+$/, '').replace(/\s+/g, ' ').trim();
+  if (!t || t.length > 240 || !CODE_WORD.test(t) || !CODE_ASK.test(t)) return null;
+  if (NOT_A_REQUEST.test(t) || PRECISE_PIN.test(t) || CUSTOM_BEHAVIOUR.test(t)) return null;
+  const named = readParts(t);
+  let requests = named.requests;
+  if (!requests.length) {
+    if (!THIS_CIRCUIT.test(t) && !/\b(for|of)\b/.test(t)) return null;
+    const seen = new Map();
+    for (const p of circuit.parts || []) if (!BOARD_SPECS[p.type] && PART_DEFS[p.type] && recipeFor(p.type)) seen.set(p.type, (seen.get(p.type) || 0) + 1);
+    requests = [...seen].map(([type, count]) => ({ type, count }));
+    if (!requests.length) return null;
+  }
+  const res = plan(requests, circuit, { board: named.board || undefined });
+  if (!res.ok || !res.code) return null;
+  const extra = [];
+  if (opts.sketchIsCustom) extra.push('The sketch in the editor will be replaced by this one — undo brings it back.');
+  const lead = res.noChange ? `Wrote the sketch for what is already on your bench.` : '';
+  return { ...res, explanation: [lead, res.explanation, ...extra].filter(Boolean).join(' ') };
 }

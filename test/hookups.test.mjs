@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { plan } from '../src/core/hookup/plan.js';
-import { makeCircuit } from '../src/core/hookup/intent.js';
+import { makeCircuit, codeFor } from '../src/core/hookup/intent.js';
 import { readParts, parseOhms } from '../src/core/hookup/names.js';
 import { recipeEdit } from '../src/core/recipes.js';
 import { applyCircuitActions } from '../src/core/ai-actions.js';
@@ -299,4 +299,27 @@ test('a part the student makes (Part Creator) works like a built-in one: found b
   const blob = makeCircuit('make a mystery blob circuit', EMPTY());
   assert.ok(blob.actions.some(a => a.type === 'test-blob'), 'a part with no behaviour is still put on the bench…');
   assert.match(blob.explanation, /ready-made circuit/, '…and the answer says there is no circuit for it');
+});
+
+test('"write the code for my circuit" is answered exactly by the planner, for every board, without an AI', () => {
+  for (const board of BOARDS) {
+    const made = plan([{ type: 'mpu6050' }, { type: 'ssd1306' }], EMPTY(), { board });
+    const bench = apply(made);
+    for (const q of ['write the code for my circuit', 'give me a sketch for this', 'write code to read the MPU and show it on the OLED']) {
+      const r = codeFor(q, bench);
+      assert.ok(r?.code, `${q}`);
+      assert.equal(r.actions.length, 0, 'nothing on the bench changes');
+      assert.equal(r.code, made.code, 'same sketch as the circuit was built with');
+      assert.match(r.explanation, /already on your bench/);
+    }
+  }
+  assert.equal(codeFor('write the code for my circuit', EMPTY()), null, 'an empty bench has nothing to write code for');
+  const ledOnly = codeFor('write a sketch for an LED', EMPTY());
+  assert.ok(ledOnly?.actions.length && ledOnly.code, 'a named part that is missing is added');
+});
+
+test('code requests with their own behaviour, pins or questions are left to a real AI', () => {
+  const bench = apply(makeCircuit('make an MPU and OLED circuit', EMPTY(), {}));
+  for (const q of ['write code to blink the led every 2 seconds', 'write the code for pin 9', 'how do I write code for the mpu?', 'fix the code', 'write code that beeps when the board tilts', 'write a program for a morse code flasher'])
+    assert.equal(codeFor(q, bench), null, q);
 });
