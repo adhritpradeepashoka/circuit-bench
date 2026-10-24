@@ -148,7 +148,7 @@ test('random mixes of 2–4 parts either build cleanly or say plainly that the b
     const group = Array.from({ length: 2 + Math.floor(rnd() * 3) }, () => TYPES[Math.floor(rnd() * TYPES.length)]);
     const board = BOARDS[i % BOARDS.length];
     const r = plan(group.map(type => ({ type })), EMPTY(), { board });
-    if (!r.ok) { refused++; if (!/no free .* pin left|only one board/.test(r.explanation) || r.actions.length) failures.push(`${group}: bad refusal "${r.explanation}"`); continue; }
+    if (!r.ok) { refused++; if (!/no free .* pin left|I kept it/.test(r.explanation) || r.actions.length) failures.push(`${group}: bad refusal "${r.explanation}"`); continue; }
     built++;
     for (const p of [...problems(r), ...electrical(r)]) failures.push(`${group} on ${board}: ${p}`);
   }

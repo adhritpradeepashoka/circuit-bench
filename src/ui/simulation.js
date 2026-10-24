@@ -175,7 +175,7 @@ export class Simulation {
         const tx = netOfPin(A, ua.tx), rx = netOfPin(B, ub.rx);
         if (tx == null || rx == null || tx !== rx) return;
         if (!sharedGround(A, B)) { note(`${a.boardName} TX is wired to ${b.boardName} RX, but the two boards share no GND — connect their GND pins together or the serial link can't work.`); return; }
-        const ba = a.mcu.uartBaud?.(i), bb = b.mcu.uartBaud?.(j);
+        if (a.spec.logic > b.spec.logic + 0.5) note(`${a.boardName} sends 5 V logic into ${b.boardName}, which only takes ${b.spec.logic} V on its pins — put a voltage divider (say 1 kΩ + 2 kΩ) between TX and RX, or a real ${b.spec.name} would be damaged.`);
         const entry = { to: b, uart: j, get garble() { const x = a.mcu.uartBaud?.(i), y = b.mcu.uartBaud?.(j); return !!(x && y && Math.abs(x - y) / Math.max(x, y) > UART_BAUD_TOLERANCE); } };
         const key = `${a.id ?? a.boardIdx}:${i}`;
         this.uartLinks.set(key, [...(this.uartLinks.get(key) || []), entry]);

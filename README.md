@@ -119,7 +119,14 @@ so a shared project opens with its parts. The AI chat sees them in its catalogue
 Pick the board when you make a new project (or add one from Parts). Everything board-specific — pin → port/bit, ADC
 channels, power pins, I²C pins, the arduino-cli FQBN — lives in `src/core/boards.js`; the chips themselves (vector tables,
 timers, ports, PWM map) are in `src/sim/chips.js`. The sketch is compiled for whichever board is on the canvas, and the Mega runs
-on a real ATmega2560 model (22-bit PC, extended I/O, timers 3–5, 16-channel ADC). Only one board runs at a time; a second is flagged.
+on a real ATmega2560 model (22-bit PC, extended I/O, timers 3–5, 16-channel ADC). 
+**Several boards on one bench.** Drop as many boards as you like (any mix of Uno, Nano, Mega, R4 and Pico) and press Run once: every board
+gets its own chip emulation running its own sketch. The code dock shows a board picker when there is more than one; each board's sketch is
+saved with the project (`boardSketches` in the project file; the first board keeps the project's own `sketch`/`files`). Boards talk by
+serial: wire one board's TX to another's RX and join their GND, and real bytes flow between the chips (Mega Serial1–3 and Pico Serial1/2
+work too). The simulator tells you about a missing shared ground, TX wired to TX, a baud-rate mismatch and 5 V into a 3.3 V board. Plain
+wires between boards go through the same circuit solver as everything else. Not done yet: I²C/SPI between two boards (a board is an I²C
+master only) and a ready-made multi-board example.
 
 ### I²C parts: MPU-6050 and SSD1306 OLED
 

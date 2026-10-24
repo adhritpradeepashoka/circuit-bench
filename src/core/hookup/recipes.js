@@ -11,7 +11,7 @@ import { phase, SOURCE, SINK, ACTUATOR, OTHER, offerBool, offerLevel, ledOnPin, 
 /* ── boards ────────────────────────────────────────────────────────────────────────────────────── */
 const board = type => phase(OTHER)(c => {
   const have = c.getBoard(type);
-  if (have.type !== type) { c.say(`There is already ${c.boardName()} on the bench, and only one board runs at a time — so I kept it. Remove it first if you want the ${PART_DEFS[type].name} instead.`); return; }
+  if (have.type !== type) { c.say(`There is already ${c.boardName()} on the bench, so I kept it and wrote its sketch. If you want the ${PART_DEFS[type].name} as well, add it from the parts list — boards can share a bench, each with its own sketch, and talk over a TX→RX wire.`); return; }
   c.sketch.title = `${PART_DEFS[type].name}: blinks its own LED (pin ${c.spec().ledPin})`;
   c.sketch.setup('pinMode(LED_BUILTIN, OUTPUT);');
   c.sketch.tick(500, ['digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));']);
