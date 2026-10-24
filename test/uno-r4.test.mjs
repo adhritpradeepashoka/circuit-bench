@@ -25,7 +25,7 @@ test('spec: UNO R4 is a 5 V, 14-bit board with the R3 pin layout, built through 
 
 test('conversion: the header goes first, the student’s line numbers stay put, and the register addresses match the simulator', () => {
   const src = r4Source('void setup() {}\nvoid loop() {}\n');
-  assert.equal(src.split('\n').slice(0, 2).join('|'), `#include "${R4_HEADER_NAME}"|#line 1`);
+  assert.equal(src.split('\n').slice(0, 2).join('|'), `#include "${R4_HEADER_NAME}"|#line 1 "sketch.ino"`, 'the #line names the file — a bare "#line 1" broke library discovery');
   assert.ok(src.endsWith('void setup() {}\nvoid loop() {}\n'));
   for (const a of [R4_REG.adcSelect, R4_REG.adcLo, R4_REG.adcHi, R4_REG.dacLo, R4_REG.dacHi]) assert.ok(R4_COMPAT_H.includes(`(${a})`), `register ${a} is used by the header`);
   for (const f of ['analogReadResolution', 'analogWriteResolution', 'cb_r4_analogRead', 'cb_r4_analogWrite']) assert.ok(R4_COMPAT_H.includes(f), f);
@@ -52,4 +52,11 @@ test('DAC: analogWrite(A0, …) at 12 bits sets a real analog level on A0; PWM p
   mcu.setAnalog(1, 5); settle(mcu);
   assert.equal(mcu.dac, 4095);
   assert.equal(mcu.pwmDutyOf({ name: '9' }), null, 'a pin the sketch never used makes no PWM');
+});
+
+test('libraries: an R4 sketch that includes Wire.h and Servo.h compiles and runs (the conversion must not hide includes from the library finder)', () => {
+  const f = fx.sketches['r4-libs']; assert.ok(f?.hex, 'r4-libs built — #include <Wire.h> / <Servo.h> worked through the conversion');
+  const mcu = new UnoR4Mcu(f.hex), out = []; mcu.onSerial = b => out.push(b);
+  mcu.setAnalog(0, 2.5); settle(mcu);
+  assert.match(Buffer.from(out).toString(), /8191|8192/, 'the 14-bit analogRead still works alongside the libraries');
 });

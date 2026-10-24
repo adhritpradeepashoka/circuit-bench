@@ -58,4 +58,5 @@ inline void cb_r4_analogWrite(uint8_t pin, int value) {
 `;
 
 /** Put the compatibility header in front of the main sketch (keeping the user's line numbers). */
-export const r4Source = text => `#include "${R4_HEADER_NAME}"\n#line 1\n${text}`;
+// The file name in #line matters: a bare "#line 1" made Arduino's library finder lose the sketch (every #include <Wire.h> / <Servo.h> failed with "No such file").
+export const r4Source = text => `#include "${R4_HEADER_NAME}"\n#line 1 "sketch.ino"\n${text}`;
