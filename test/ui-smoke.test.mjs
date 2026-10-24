@@ -262,11 +262,28 @@ test('ui: right-click a resistor to edit its value — bands follow, invalid inp
 /* ───────────── catalogue batch 1 in the real UI code ───────────── */
 const wireOf = (id, a, b) => ({ id, a, b, style: 'straight', color: '#22282c', width: 3, bend: .5, sag: null });
 
+test('ui: Nano and Mega live in the "More Arduino boards" pack — add the pack and they appear; using one switches the pack on', () => {
+  const { w, editor } = boot();
+  const doc = w.document, cards = () => [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
+  assert.ok(!cards().includes('Arduino Nano') && !cards().includes('Arduino Mega 2560'), 'not in the default menu');
+  assert.ok(cards().includes('Arduino Uno R3') && cards().includes('Raspberry Pi Pico'), 'Uno and Pico are always there');
+  const btn = doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]');
+  assert.ok(btn, 'the pack is offered'); assert.equal(btn.textContent, 'Add pack');
+  btn.click();
+  assert.ok(cards().includes('Arduino Nano') && cards().includes('Arduino Mega 2560'), 'added pack → boards listed');
+  editor.addPart('arduino-nano');
+  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  assert.ok(cards().includes('Arduino Nano'), 'a pack whose board is on the bench cannot be removed');
+  editor.state.parts = editor.state.parts.filter(p => p.type !== 'arduino-nano'); editor.syncParts();
+  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  assert.ok(!cards().includes('Arduino Nano'), 'removed again once nothing uses it');
+});
+
 test('ui: catalogue lists the new parts by category, and each can be added', () => {
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Biosignal', 'Passives', 'Logic', 'Chips', 'Sound', 'My parts']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Biosignal', 'Passives', 'Logic', 'Chips', 'Sound', 'My parts', 'Resource packs']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
   for (const n of ['Servo Motor', 'Ultrasonic Sensor HC-SR04', 'Stepper 28BYJ-48 + ULN2003', 'Rotary Encoder (KY-040)', 'NPN transistor 2N2222', 'Buzzer', 'LED Bar Graph (10 segments)', 'Relay (KS2E-M-DC5)']) assert.ok(names.includes(n), `${n} ships in the default catalogue`);
   assert.equal(doc.querySelectorAll('#catalog .part-card .edit-part').length, 0, 'built-in parts have no edit button');
@@ -1115,6 +1132,12 @@ test('ui: My projects — first run adopts your existing work, new projects star
 
   doc.getElementById('projectBtn').click();
   assert.equal(doc.getElementById('projectsModal').hidden, false);
+  const boardOpts = () => [...doc.querySelectorAll('#projNewBoard option')].map(o => o.value);
+  assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico'], 'only the two built-in boards without a pack');
+  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico', 'arduino-nano', 'arduino-mega'], 'the picker follows the pack');
+  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico']);
   doc.getElementById('projNewName').value = 'Traffic light';
   doc.getElementById('projNewForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
   await flush(); await flush();

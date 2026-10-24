@@ -5,6 +5,7 @@ import { LED_COLORS } from '../core/led-colors.js';
 import { sidePanes } from './side-panes.js';
 import { customTypes, builtinTypes, BEHAVIOURS } from '../core/custom-parts.js';
 import { menuFirst } from '../core/workspaces.js';
+import { PACKS, packTypes, isInstalled, installPack, removePack, partAvailable, onPacksChange } from '../core/packs.js';
 
 const $ = id => document.getElementById(id);
 const BLURB = {
@@ -50,12 +51,38 @@ export function initSidebar(editor) {
     return box;
   }
 
+  /** Resource packs: optional extras (more boards today) that a student adds when needed. */
+  function renderPacks(host, q) {
+    const shown = PACKS.filter(p => packTypes(p).length && (!q || `${p.name} ${p.blurb} resource pack extra boards nano mega r4`.toLowerCase().includes(q)));
+    if (!shown.length) return;
+    const h = document.createElement('div'); h.className = 'group-title'; h.textContent = 'Resource packs'; host.append(h);
+    for (const pack of shown) {
+      const on = isInstalled(pack.id);
+      const card = document.createElement('div'); card.className = `pack-card${on ? ' on' : ''}`;
+      const copy = document.createElement('span'); copy.className = 'copy';
+      const nm = document.createElement('b'); nm.textContent = pack.name;
+      const bl = document.createElement('span'); bl.textContent = on ? `${pack.blurb} Added — find them under Boards.` : pack.blurb;
+      copy.append(nm, bl);
+      const btn = document.createElement('button'); btn.type = 'button'; btn.className = 'pack-btn'; btn.dataset.pack = pack.id;
+      btn.textContent = on ? 'Remove' : 'Add pack';
+      btn.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);
+      btn.addEventListener('click', () => {
+        if (on) {
+          const inUse = editor.state.parts.some(p => packTypes(pack).includes(p.type));
+          if (inUse) { editor.status(`${pack.name} is used on this bench — take those parts off first.`); return; }
+          removePack(pack.id);
+        } else installPack(pack.id);
+      });
+      card.append(copy, btn); host.append(card);
+    }
+  }
+
   function renderCatalog() {
     const host = $('catalog');
     host.innerHTML = '';
     const q = query.trim().toLowerCase();
     const blurb = d => BLURB[d.type] || (d.custom ? d.spec.description || BEHAVIOURS[d.spec.behaviour.kind].label : '');
-    const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => !q || `${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`.toLowerCase().includes(q));
+    const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type)).filter(d => !q || `${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`.toLowerCase().includes(q));
     const showCreate = !q || 'my parts create make new custom part creator'.includes(q) || items.some(d => d.custom && !d.builtin);
     const first = menuFirst();
     const cats = [...new Set(items.map(d => d.category))].sort((a, b) => (first.includes(a) ? first.indexOf(a) : 99) - (first.includes(b) ? first.indexOf(b) : 99));      // the active workspace's sections lead the menu
@@ -96,7 +123,8 @@ export function initSidebar(editor) {
         host.append(mk);
       }
     }
-    if (!items.length) {
+    renderPacks(host, q);
+    if (!items.length && !host.querySelector('.pack-card')) {
       const q0 = query.trim();
       const d = document.createElement('div'); d.className = 'empty no-match';
       const msg = document.createElement('p');
@@ -145,6 +173,7 @@ export function initSidebar(editor) {
 
   editor.on('workspace', renderWorkspace);
   editor.on('catalog', renderCatalog);
+  onPacksChange(() => renderCatalog());
   editor.on('select', renderWorkspace);
   renderCatalog(); renderWorkspace();
   return { setCollapsed };

@@ -1,3 +1,4 @@
+import { ensurePacksFor } from '../core/packs.js';
 import { PART_DEFS, boardSVGMarkup } from '../core/parts.js';
 import { allPinsWorld, partBounds, pinWorld, partSize, placeFlex } from '../core/geometry.js';
 import { findSnap, applySnap, raiseInStrips, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
@@ -204,6 +205,7 @@ export class Editor {
 
   /* ── DOM reconciliation ─────────────────────────────── */
   syncParts() {
+    if (ensurePacksFor(this.state.parts.map(p => p.type)).length) this.emit('catalog');      // a project that uses a pack's part switches the pack on
     const ids = new Set(this.state.parts.map(p => p.id));
     for (const [id, el] of this.els) if (!ids.has(id)) { el.remove(); this.els.delete(id); }
     for (const p of this.state.parts) {

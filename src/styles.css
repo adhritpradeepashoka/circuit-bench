@@ -889,3 +889,11 @@ html[data-off~="themes"] #themeList, html[data-off~="themes"] #themeCustom { dis
 /* with the AI switched off there is nothing about it anywhere: no keys, no models, no chat history */
 html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"] #setClearChat, html[data-off~="ai"] #setForgetKeys, html[data-off~="ai"] .pc-ai, html[data-off~="ai"] #aiSetup { display: none !important; }
 .dash-note { margin: 4px 6px; font-size: 12px; color: var(--muted); }
+
+/* resource packs in the catalog */
+.pack-card { display: flex; align-items: center; gap: 10px; padding: 8px; margin: 2px 0; border: 1px dashed var(--line); border-radius: 9px; }
+.pack-card.on { border-style: solid; }
+.pack-card .copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted, inherit); }
+.pack-card .copy b { font-size: 13px; color: var(--text, inherit); }
+.pack-btn { flex: none; padding: 5px 10px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.pack-btn:hover { border-color: var(--accent, currentColor); }
