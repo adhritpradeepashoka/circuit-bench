@@ -275,7 +275,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
       if (p.open) {
         const isCur = current?.classId === cur.id && current?.projectId === p.id, act = el('div', 'tile-act');
         if (!isCur && p.status !== 'done') act.append(btn(p.status === 'todo' ? 'Start' : 'Work on it', 'primary', () => startProject(cur, p)));
-        if (isCur) act.append(btn('Hand in', 'primary', () => handIn()));
+        if (isCur) act.append(btn('Keep working', 'primary', () => { closeDash(); paintPill(); status(`Project ${current.n}: ${current.goal || p.goal}`); }), btn('Hand in', '', () => handIn()));
         tile.append(act);
       }
       grid.append(tile);
