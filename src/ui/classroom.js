@@ -4,6 +4,7 @@
 import { getMe, getToken, setSession, authed } from '../sim/session.mjs';
 import { FEATURES, PRESETS, normCode } from '../core/classroom.js';
 import { setTheme } from './theme.js';
+import { ask } from './ask.js';
 
 const ENTERED = 'circuitbench:entered', KIDS_KEY = 'circuitbench:kids-default', ASKED_KEY = 'circuitbench:kind-asked', DASH_KEY = 'circuitbench:dash-shown', CURRENT_KEY = 'circuitbench:class-project', LAST_CLASS = 'circuitbench:last-class';
 const lget = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -126,31 +127,41 @@ export function initClassroom({ editor, code, projects, account = null, status =
     if (k === 'teacher' || getMe()?.entitlements?.owner) return teacherView(classes, cur);
     return studentView(classes, cur);
   }
-  const classPicker = (classes, cur, onPick) => {
-    const sel = el('select'); sel.setAttribute('aria-label', 'Class');
-    for (const c of classes) { const o = el('option', '', c.name); o.value = c.id; o.selected = c.id === cur?.id; sel.append(o); }
-    sel.addEventListener('change', () => onPick(Number(sel.value))); return sel;
-  };
 
   /* ── teacher ── */
+  /** The dashboard frame: a sidebar (like Tinkercad's) and a main area. */
+  function shell(side, main) {
+    const w = el('div', 'dash'), sb = el('nav', 'dash-side'), mn = el('div', 'dash-main');
+    sb.setAttribute('aria-label', 'Dashboard'); sb.append(...side); mn.append(...main); w.append(sb, mn); classBody.replaceChildren(w);
+  }
+  const sideLabel = t => el('div', 'dash-label', t);
+  function sideItem(label, sub, active, fn) {
+    const b = el('button', 'dash-nav'); b.type = 'button'; b.append(el('b', '', label)); if (sub) b.append(el('span', '', sub)); if (active) b.setAttribute('aria-current', 'page'); b.addEventListener('click', fn); return b;
+  }
+  const benchBtn = () => { const b = btn('Open the bench →', 'primary dash-bench', enter); return b; };
+  const userCard = (role) => { const me = getMe(), c = el('div', 'dash-user'); c.append(el('b', '', me?.name || me?.email || ''), el('span', '', role)); return c; };
+
   async function teacherView(classes, cur) {
-    const bar = el('div', 'cls-bar'), title = el('h1', 'start-h', 'Teacher dashboard');
-    if (cur) bar.append(classPicker(classes, cur, openDashboard));
+    const side = [userCard('Teacher'), sideLabel('Classes')];
+    for (const c of classes) side.push(sideItem(c.name, `${c.students} student${c.students === 1 ? '' : 's'}`, c.id === cur?.id, () => openDashboard(c.id)));
     const nameIn = el('input'); nameIn.placeholder = 'New class name'; nameIn.maxLength = 60; nameIn.setAttribute('aria-label', 'New class name');
-    bar.append(btn('＋ New class', 'primary', async () => {
+    const make = btn('＋ New class', 'primary', async () => {
       const r = await call('/api/classes', { method: 'POST', body: { name: nameIn.value || 'My class' } });
       if (!r.body?.ok) return sayErr(r); await reloadMe(); openDashboard(r.body.class.id);
-    }), nameIn);
-    if (getMe()?.entitlements?.owner) bar.append(btn('Make a demo class', '', async () => { const r = await call('/api/classes/demo', { method: 'POST' }); if (!r.body?.ok) return sayErr(r); openDashboard(r.body.class.id); }));
-    if (!cur) { classBody.replaceChildren(title, bar, el('div', 'cls-empty', 'Make your first class, then share its code with your students.')); return; }
+    });
+    nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') make.click(); });
+    side.push(el('div', 'dash-new'), nameIn, make);
+    if (getMe()?.entitlements?.owner) side.push(btn('Make a demo class', '', async () => { const r = await call('/api/classes/demo', { method: 'POST' }); if (!r.body?.ok) return sayErr(r); openDashboard(r.body.class.id); }));
+    side.push(el('div', 'dash-grow'), benchBtn());
+    if (!cur) { shell(side, [el('h1', 'start-h', 'Teacher dashboard'), el('div', 'cls-empty', 'Make your first class, then share its code with your students.')]); return; }
     const r = await call(`/api/classes/${cur.id}`);
-    if (!r.body?.ok) { classBody.replaceChildren(title, bar, el('p', 'proj-note', r.body?.error || 'Could not load the class.')); return; }
+    if (!r.body?.ok) { shell(side, [el('p', 'proj-note', r.body?.error || 'Could not load the class.')]); return; }
     const d = r.body;
-    const code = el('span', 'cls-code', d.class.code); code.title = 'Students type this code to join';
-    bar.append(code,
+    const bar = el('div', 'cls-bar'), code = el('span', 'cls-code', d.class.code); code.title = 'Students type this code to join';
+    bar.append(el('span', 'proj-meta', 'Join code'), code,
       btn('Copy', '', async () => { try { await navigator.clipboard.writeText(d.class.code); status('Class code copied'); } catch { status(`Class code: ${d.class.code}`); } }),
-      btn('New code', '', async () => { if (!confirm('Make a new join code? The old one stops working (students already in stay in).')) return; const x = await call(`/api/classes/${cur.id}/code`, { method: 'POST' }); if (x.body?.ok) openDashboard(cur.id); else sayErr(x); }),
-      btn('Delete class', 'danger', async () => { if (!confirm(`Delete “${d.class.name}” and all its progress? This cannot be undone.`)) return; const x = await call(`/api/classes/${cur.id}`, { method: 'DELETE' }); if (x.body?.ok) { await reloadMe(); openDashboard(); } else sayErr(x); }));
+      btn('New code', '', async () => { if (!(await ask({ title: 'Make a new join code?', body: 'The old code stops working. Students already in the class stay in.', yes: 'Make a new code' }))) return; const x = await call(`/api/classes/${cur.id}/code`, { method: 'POST' }); if (x.body?.ok) openDashboard(cur.id); else sayErr(x); }),
+      btn('Delete class', 'danger', async () => { if (!(await ask({ title: `Delete “${d.class.name}”?`, body: 'Its students, progress and handed-in work are removed. This cannot be undone.', yes: 'Delete the class', danger: true }))) return; const x = await call(`/api/classes/${cur.id}`, { method: 'DELETE' }); if (x.body?.ok) { await reloadMe(); openDashboard(); } else sayErr(x); }));
     const tabs = el('div', 'cls-tabs');
     for (const [id, label] of [['students', `Students (${d.roster.length})`], ['course', 'Course'], ['settings', 'What students can use']]) {
       const b = el('button', 'cm-tab', label); b.type = 'button'; b.setAttribute('aria-pressed', String(teacherTab === id)); b.addEventListener('click', () => { teacherTab = id; teacherView(classes, cur); }); tabs.append(b);
@@ -159,7 +170,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
     if (teacherTab === 'students') studentsPane(pane, d, cur);
     else if (teacherTab === 'course') coursePane(pane, d, cur);
     else settingsPane(pane, d, cur);
-    classBody.replaceChildren(title, bar, tabs, pane);
+    shell(side, [el('h1', 'start-h', d.class.name), bar, tabs, pane]);
   }
   const visible = d => d.curriculum.filter(p => !p.hidden);
   const done = x => x?.status === 'submitted' || x?.status === 'done';
@@ -174,7 +185,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
       const tr = el('tr', 'cls-student'); const nameCell = el('td'); nameCell.append(el('b', '', s.name), el('div', 'proj-meta', s.email));
       const pc = el('td'); const track = el('span', 'cls-bar-track'), fill = el('span', 'cls-bar-fill'); fill.style.width = `${vis.length ? Math.round(100 * n / vis.length) : 0}%`; track.append(fill); pc.append(track, document.createTextNode(`${n} / ${vis.length}`));
       const lc = el('td', '', last ? new Date(last).toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : '—');
-      const act = el('td'); act.append(btn('Remove', 'danger', async e => { e.stopPropagation(); if (!confirm(`Remove ${s.name} from this class?`)) return; const x = await call(`/api/classes/${cur.id}/students?email=${encodeURIComponent(s.email)}`, { method: 'DELETE' }); if (x.body?.ok) openDashboard(cur.id); else sayErr(x); }));
+      const act = el('td'); act.append(btn('Remove', 'danger', async e => { e.stopPropagation(); if (!(await ask({ title: `Remove ${s.name}?`, body: 'They leave this class and their hand-ins for it are removed. Their own projects stay theirs.', yes: 'Remove', danger: true }))) return; const x = await call(`/api/classes/${cur.id}/students?email=${encodeURIComponent(s.email)}`, { method: 'DELETE' }); if (x.body?.ok) openDashboard(cur.id); else sayErr(x); }));
       tr.append(nameCell, pc, lc, act); tr.addEventListener('click', () => studentDetail(pane, d, cur, s)); table.append(tr);
     }
     pane.replaceChildren(table);
@@ -189,9 +200,9 @@ export function initClassroom({ editor, code, projects, account = null, status =
         act.append(' ', btn('Open a copy', '', async () => {
           const w = await call(`/api/classes/${cur.id}/work?email=${encodeURIComponent(s.email)}&project=${encodeURIComponent(p.id)}`); if (!w.body?.ok) return sayErr(w);
           if (!w.body.data) return status('That hand-in has no circuit saved with it.');
-          if (!confirm(`Open ${s.name}’s “${p.title}” as a new project of yours? Your own work is not changed.`)) return;
+          if (!(await ask({ title: `Open ${s.name}’s “${p.title}”?`, body: 'It opens as a new project of yours. Your own work and the student’s are not changed.', yes: 'Open a copy' }))) return;
           try { await projects.importFile(w.body.data, `${s.name} – ${p.title}`); closeDash(); status('Opened a copy — you can look but the student’s own work is untouched.'); } catch (err) { status(`Could not open it: ${err.message}`); }
-        }), ' ', btn('Mark done', '', () => review(cur, s, p, 'done')), ' ', btn('Send back', '', () => { const c = prompt('What should they change? (optional)') ?? null; if (c !== null) review(cur, s, p, 'returned', c); }));
+        }), ' ', btn('Mark done', '', () => review(cur, s, p, 'done')), ' ', btn('Send back', '', async () => { const c = await ask({ title: `Send “${p.title}” back to ${s.name}`, body: 'What should they change? (optional)', yes: 'Send back', input: { placeholder: 'e.g. add a resistor before the LED', label: 'Note for the student' } }); if (c !== null) review(cur, s, p, 'returned', c); }));
       }
       row.append(act); if (pr?.comment) row.append(el('div', 'note', `Your note: ${pr.comment}`)); list.append(row);
     });
@@ -212,7 +223,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
         vis.addEventListener('change', () => { p.hidden = !vis.checked; save(); });
         const mid = el('div'); mid.append(el('b', '', `${i + 1}. ${p.title}`), el('div', 'goal proj-meta', p.goal));
         const mv = el('div'); const up = btn('↑', '', () => { if (i) { [cc[i - 1], cc[i]] = [cc[i], cc[i - 1]]; save(); } }), dn = btn('↓', '', () => { if (i < cc.length - 1) { [cc[i + 1], cc[i]] = [cc[i], cc[i + 1]]; save(); } });
-        up.disabled = !i; dn.disabled = i === cc.length - 1; mv.append(up, ' ', dn, ' ', btn('✕', 'danger', () => { if (confirm(`Remove “${p.title}” from this class’s course?`)) { cc.splice(i, 1); save(); } }));
+        up.disabled = !i; dn.disabled = i === cc.length - 1; mv.append(up, ' ', dn, ' ', btn('✕', 'danger', async () => { if (await ask({ title: `Remove “${p.title}”?`, body: 'It is removed from this class’s course only.', yes: 'Remove', danger: true })) { cc.splice(i, 1); save(); } }));
         row.append(vis, mid, mv); rows.append(row);
       });
       const t = el('input'), g = el('input'); t.placeholder = 'Project title'; g.placeholder = 'What should the student make?'; t.maxLength = 80; g.maxLength = 400;
@@ -242,31 +253,34 @@ export function initClassroom({ editor, code, projects, account = null, status =
 
   /* ── student ── */
   async function studentView(classes, cur) {
-    const bar = el('div', 'cls-bar'), title = el('h1', 'start-h', 'My class');
-    if (classes.length > 1 || cur) bar.append(classes.length ? classPicker(classes, cur, openDashboard) : '');
-    const code = el('input'); code.placeholder = 'CLASS CODE'; code.maxLength = 8; code.setAttribute('aria-label', 'Class code'); code.style.cssText = 'text-transform:uppercase;letter-spacing:.12em;width:9em';
+    const side = [userCard('Student'), sideLabel('My classes')];
+    for (const c of classes) side.push(sideItem(c.name, `${c.done} of ${c.total} done`, c.id === cur?.id, () => openDashboard(c.id)));
+    const code = el('input'); code.placeholder = 'CLASS CODE'; code.maxLength = 8; code.setAttribute('aria-label', 'Class code'); code.className = 'dash-code';
     const join = btn(classes.length ? 'Join another class' : 'Join', 'primary', () => joinCode(code.value)); code.addEventListener('keydown', e => { if (e.key === 'Enter') join.click(); });
-    bar.append(code, join);
-    if (!cur) { classBody.replaceChildren(title, bar, el('div', 'cls-empty', 'Type the code your teacher gave you to join your class.')); return; }
+    side.push(el('div', 'dash-new'), code, join, el('div', 'dash-grow'), benchBtn());
+    if (!cur) { shell(side, [el('h1', 'start-h', 'My classes'), el('div', 'cls-empty', 'Type the code your teacher gave you to join your class.')]); return; }
     const r = await call(`/api/classes/${cur.id}`);
-    if (!r.body?.ok) { classBody.replaceChildren(title, bar, el('p', 'proj-note', r.body?.error || 'Could not load the class.')); return; }
+    if (!r.body?.ok) { shell(side, [el('p', 'proj-note', r.body?.error || 'Could not load the class.')]); return; }
     const d = r.body, n = d.projects.filter(p => done(p)).length;
     const head = el('div', 'cls-bar'); const track = el('span', 'cls-bar-track'), fill = el('span', 'cls-bar-fill'); fill.style.width = `${d.projects.length ? Math.round(100 * n / d.projects.length) : 0}%`; track.append(fill);
-    head.append(el('b', '', `${d.class.name} · ${d.class.teacher}`), track, el('span', 'proj-meta', `${n} of ${d.projects.length} done`));
-    head.append(btn('Leave class', 'danger', async () => { if (!confirm(`Leave ${d.class.name}? Your projects stay yours, but your hand-ins for this class are removed.`)) return; const x = await call(`/api/classes/${cur.id}/leave`, { method: 'POST' }); if (x.body?.ok) { clearCurrent(); await reloadMe(); openDashboard(); } else sayErr(x); }));
-    const list = el('div', 'cls-projects'), current = getCurrent();
+    head.append(el('span', 'proj-meta', `Teacher: ${d.class.teacher}`), track, el('span', 'proj-meta', `${n} of ${d.projects.length} done`));
+    head.append(btn('Leave class', 'danger', async () => { if (!(await ask({ title: `Leave ${d.class.name}?`, body: 'Your projects stay yours, but your hand-ins for this class are removed.', yes: 'Leave the class', danger: true }))) return; const x = await call(`/api/classes/${cur.id}/leave`, { method: 'POST' }); if (x.body?.ok) { clearCurrent(); await reloadMe(); openDashboard(); } else sayErr(x); }));
+    const grid = el('div', 'dash-grid'), current = getCurrent();
     d.projects.forEach((p, i) => {
-      const row = el('div', `cls-proj ${p.status === 'locked' ? 'locked' : ''}`); row.append(el('span', 'n', String(i + 1)));
-      const mid = el('div'); mid.append(el('b', '', p.title), el('div', 'goal', p.goal)); if (p.uses?.length) mid.append(el('div', 'uses', `You will need: ${p.uses.join(', ')}`)); row.append(mid);
-      const act = el('div'); act.append(el('span', `cls-chip ${p.status}`, { todo: 'to do', locked: '🔒 locked', submitted: 'handed in', done: '✓ done', returned: 'try again' }[p.status] || p.status), ' ');
+      const tile = el('div', `tile ${p.status === 'locked' ? 'locked' : ''} st-${p.status}`);
+      const top = el('div', 'tile-top'); top.append(el('span', 'n', String(i + 1)), el('span', `cls-chip ${p.status}`, { todo: 'to do', locked: '🔒 locked', submitted: 'handed in', done: '✓ done', returned: 'try again' }[p.status] || p.status));
+      tile.append(top, el('b', 'tile-title', p.title), el('div', 'goal', p.goal));
+      if (p.uses?.length) tile.append(el('div', 'uses', `You will need: ${p.uses.join(', ')}`));
+      if (p.comment) tile.append(el('div', 'note', `Teacher: ${p.comment}`));
       if (p.open) {
-        const isCur = current?.classId === cur.id && current?.projectId === p.id;
+        const isCur = current?.classId === cur.id && current?.projectId === p.id, act = el('div', 'tile-act');
         if (!isCur && p.status !== 'done') act.append(btn(p.status === 'todo' ? 'Start' : 'Work on it', 'primary', () => startProject(cur, p)));
         if (isCur) act.append(btn('Hand in', 'primary', () => handIn()));
+        tile.append(act);
       }
-      row.append(act); if (p.comment) row.append(el('div', 'note', `Teacher: ${p.comment}`)); list.append(row);
+      grid.append(tile);
     });
-    classBody.replaceChildren(title, bar, head, list);
+    shell(side, [el('h1', 'start-h', d.class.name), head, grid]);
   }
 
   /* ── working on a project ── */
@@ -288,7 +302,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
   }
   async function handIn() {
     const c = getCurrent(); if (!c) return;
-    if (!confirm(`Hand in “${c.title}” to your teacher? They will see your circuit and code as it is now.`)) return;
+    if (!(await ask({ title: `Hand in “${c.title}”?`, body: 'Your teacher will see your circuit and code as they are right now.', yes: 'Hand in' }))) return;
     const data = { ...editor.exportProject(), ...code.exportState() };
     const r = await call(`/api/classes/${c.classId}/submit`, { method: 'POST', body: { projectId: c.projectId, data } });
     if (!r.body?.ok) return sayErr(r);
