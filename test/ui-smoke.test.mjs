@@ -262,28 +262,37 @@ test('ui: right-click a resistor to edit its value — bands follow, invalid inp
 /* ───────────── catalogue batch 1 in the real UI code ───────────── */
 const wireOf = (id, a, b) => ({ id, a, b, style: 'straight', color: '#22282c', width: 3, bend: .5, sag: null });
 
-test('ui: Nano and Mega live in the "More Arduino boards" pack — add the pack and they appear; using one switches the pack on', () => {
-  const { w, editor } = boot();
+test('ui: Nano, Mega and R4 live in the "More Arduino boards" pack, added from Workspaces & packs — add the pack and they appear; using one switches the pack on', async () => {
+  const { w, editor, code, sim } = boot();
   const doc = w.document, cards = () => [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
+  const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
+  w.__lab.initWorkspaces({ editor, code, projects });
   assert.ok(!cards().includes('Arduino Nano') && !cards().includes('Arduino Mega 2560'), 'not in the default menu');
   assert.ok(cards().includes('Arduino Uno R3') && cards().includes('Raspberry Pi Pico'), 'Uno and Pico are always there');
-  const btn = doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]');
-  assert.ok(btn, 'the pack is offered'); assert.equal(btn.textContent, 'Add pack');
-  btn.click();
-  assert.ok(cards().includes('Arduino Nano') && cards().includes('Arduino Mega 2560'), 'added pack → boards listed');
+  assert.equal(doc.querySelector('#catalog .pack-btn'), null, 'packs are not managed in the parts menu');
+  doc.getElementById('morePacksBtn').click();
+  assert.equal(doc.getElementById('workspacesModal').hidden, false, 'the menu link opens the same dialog as the Workspaces button');
+  assert.equal(doc.getElementById('wsPanePacks').hidden, false, '…on its Resource packs tab');
+  const btn = () => doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]');
+  assert.equal(btn().textContent, 'Add pack');
+  btn().click();
+  assert.equal(btn().textContent, 'Remove');
+  assert.ok(cards().includes('Arduino Nano') && cards().includes('Arduino Mega 2560') && cards().includes('Arduino UNO R4 Minima'), 'added pack → boards listed');
   editor.addPart('arduino-nano');
-  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
-  assert.ok(cards().includes('Arduino Nano'), 'a pack whose board is on the bench cannot be removed');
+  btn().click();
+  assert.equal(btn().textContent, 'Remove', 'a pack whose board is on the bench cannot be removed');
   editor.state.parts = editor.state.parts.filter(p => p.type !== 'arduino-nano'); editor.syncParts();
-  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  btn().click();
   assert.ok(!cards().includes('Arduino Nano'), 'removed again once nothing uses it');
+  doc.getElementById('wsTabWorkspaces').click();
+  assert.equal(doc.getElementById('wsPaneWorkspaces').hidden, false); assert.equal(doc.getElementById('wsPanePacks').hidden, true);
 });
 
 test('ui: catalogue lists the new parts by category, and each can be added', () => {
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Biosignal', 'Passives', 'Logic', 'Chips', 'Sound', 'My parts', 'Resource packs']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Biosignal', 'Passives', 'Logic', 'Chips', 'Sound', 'My parts']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
   for (const n of ['Servo Motor', 'Ultrasonic Sensor HC-SR04', 'Stepper 28BYJ-48 + ULN2003', 'Rotary Encoder (KY-040)', 'NPN transistor 2N2222', 'Buzzer', 'LED Bar Graph (10 segments)', 'Relay (KS2E-M-DC5)']) assert.ok(names.includes(n), `${n} ships in the default catalogue`);
   assert.equal(doc.querySelectorAll('#catalog .part-card .edit-part').length, 0, 'built-in parts have no edit button');
@@ -1132,18 +1141,20 @@ test('ui: My projects — first run adopts your existing work, new projects star
 
   doc.getElementById('projectBtn').click();
   assert.equal(doc.getElementById('projectsModal').hidden, false);
+  w.__lab.initWorkspaces({ editor, code, projects }); doc.getElementById('projectsClose').click(); doc.getElementById('workspacesBtn').click(); doc.getElementById('wsTabPacks').click();
   const boardOpts = () => [...doc.querySelectorAll('#projNewBoard option')].map(o => o.value);
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico'], 'only the two built-in boards without a pack');
-  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]').click();
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4'], 'the picker follows the pack');
-  doc.querySelector('#catalog .pack-btn[data-pack="arduino-boards"]').click();
+  doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]').click();
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico']);
+  doc.getElementById('workspacesClose').click(); doc.getElementById('projectBtn').click();
   doc.getElementById('projNewName').value = 'Traffic light';
   doc.getElementById('projNewForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
   await flush(); await flush();
   assert.equal(projects.current.name, 'Traffic light');
   assert.equal(doc.getElementById('projectsModal').hidden, true);
-  assert.equal(editor.state.parts.length, 2, 'a new project starts from the default Uno + breadboard');
+  assert.equal(editor.state.parts.length, 2, `a new project starts from the default Uno + breadboard: ${editor.state.parts.map(p => p.type)} ws=${projects.current.workspace}`);
   assert.match(code.source, /Blink/, 'and the default sketch');
   code.source = '// traffic\n';
   await projects.saveNow();
@@ -1168,7 +1179,7 @@ test('ui: My projects — first run adopts your existing work, new projects star
   assert.ok(row('Traffic light copy'), 'duplicate appears');
   row('Traffic light copy').querySelector('[data-act="delete"]').click(); await flush();
   row('Traffic light copy').querySelector('[data-act="delete-yes"]').click(); await flush();
-  assert.equal(doc.querySelectorAll('.proj-row').length, 2);
+  assert.equal(doc.querySelectorAll('#projList .proj-row').length, 2);
 
   // reload: same storage, new page — the open project and its work come back
   const saved = {}; for (let i = 0; i < w.localStorage.length; i++) { const k = w.localStorage.key(i); saved[k] = w.localStorage.getItem(k); }

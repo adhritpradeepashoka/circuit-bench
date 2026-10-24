@@ -31,7 +31,7 @@
       <input type="file" id="importFile" accept="application/json,.json" hidden>
       <input type="file" id="importPcbFile" accept=".kicad_pcb" hidden>
     </div>
-    <button id="workspacesBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Workspaces: Electronics, Bioelectronics, your own and community ones">Workspaces</button>
+    <button id="workspacesBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Workspaces and resource packs: Electronics, Bioelectronics, extra boards, your own and community ones">Workspaces &amp; packs</button>
     <button id="communityBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Updates, fixes and discussions: the CircuitBench blog and community">Community</button>
     <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
@@ -282,7 +282,16 @@
 </div>
 <div class="modal" id="workspacesModal" role="dialog" aria-modal="true" aria-labelledby="workspacesTitle" hidden>
   <div class="modal-card ws-card">
-    <div class="modal-head"><h2 id="workspacesTitle">Workspaces</h2><button type="button" class="pane-x" id="workspacesClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <div class="modal-head"><h2 id="workspacesTitle">Workspaces &amp; resource packs</h2><button type="button" class="pane-x" id="workspacesClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
+    <div class="ws-tabs" role="tablist" aria-label="Workspaces and resource packs">
+      <button type="button" role="tab" id="wsTabWorkspaces" aria-selected="true" aria-controls="wsPaneWorkspaces" data-tab="workspaces">Workspaces</button>
+      <button type="button" role="tab" id="wsTabPacks" aria-selected="false" aria-controls="wsPanePacks" data-tab="packs" tabindex="-1">Resource packs</button>
+    </div>
+    <div id="wsPanePacks" role="tabpanel" aria-labelledby="wsTabPacks" hidden>
+      <p class="proj-note">A resource pack adds extra things to your parts menu — more boards today; parts, PCBs and whole project kits from the community are coming. Add only what you need.</p>
+      <div class="ws-list" id="packList"></div>
+    </div>
+    <div id="wsPaneWorkspaces" role="tabpanel" aria-labelledby="wsTabWorkspaces">
     <p class="proj-note">A workspace is an environment for a project: its own parts, a starting board and a menu that leads with what you need.</p>
     <div class="ws-list" id="wsList"></div>
     <form class="proj-new ws-save" id="wsSaveForm">
@@ -292,6 +301,7 @@
     </form>
     <input type="file" id="wsImportFile" accept="application/json,.json" hidden>
     <p class="proj-note" id="wsNote">Community workspaces from GitHub are coming. For now you can share a workspace as a file.</p>
+    </div>
   </div>
 </div>
 <div class="start" id="startScreen" role="dialog" aria-modal="true" aria-label="CircuitBench menu">

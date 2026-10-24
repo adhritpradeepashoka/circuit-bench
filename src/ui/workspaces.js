@@ -2,6 +2,8 @@
 // in a workspace gives it that workspace's starting board; the parts menu then leads with its sections.
 import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace, listWorkspaces, saveWorkspace, removeWorkspace, parseWorkspaceFile, workspaceFromProject, workspaceFile } from '../core/workspaces.js';
 import { specsUsed } from '../core/custom-parts.js';
+import { PACKS, packTypes, isInstalled, installPack, removePack, onPacksChange } from '../core/packs.js';
+import { PART_DEFS } from '../core/parts.js';
 
 function showHint() {
   const h = activeWorkspace().hint || BUILTIN_WORKSPACES[0].hint, card = document.getElementById('hintCard');
@@ -64,9 +66,39 @@ export function initWorkspaces({ editor, code, projects }) {
     render(); editor.emit('catalog'); note(`Imported “${r.workspace.name}” — ${r.workspace.parts.length} part${r.workspace.parts.length === 1 ? '' : 's'}. Nothing in it can run code; parts are checked like any you make yourself.`);
   });
 
-  function open() { modal.hidden = false; render(); $('workspacesClose').focus(); }
+  /* ── resource packs (the second tab) ── */
+  const packList = $('packList');
+  function renderPacks() {
+    packList.replaceChildren(...PACKS.filter(p => packTypes(p).length).map(pack => {
+      const on = isInstalled(pack.id), row = el('div', `proj-row ws-row pack-card${on ? ' on' : ''}`), main = el('div', 'proj-main');
+      main.append(el('b', '', pack.name), el('span', 'proj-meta', pack.blurb), el('span', 'proj-meta pack-parts', `Adds: ${packTypes(pack).map(t => PART_DEFS[t].name).join(', ')}`));
+      const acts = el('div', 'proj-acts'), b = btn(on ? 'Remove' : 'Add pack', () => {
+        if (on) {
+          if (editor.state.parts.some(p => packTypes(pack).includes(p.type))) { editor.status(`${pack.name} is used on this bench — take those parts off first.`); packNote(`${pack.name} is used on this bench — take those parts off first.`); return; }
+          removePack(pack.id);
+        } else installPack(pack.id);
+      }, on ? `Remove ${pack.name} from your parts menu` : `Add ${pack.name} to your parts menu`);
+      b.classList.add('pack-btn'); b.dataset.pack = pack.id; b.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);
+      acts.append(b); row.append(main, acts); return row;
+    }), el('p', 'proj-note', 'Projects that already use a pack’s parts switch it on by themselves, so nothing is ever missing.'), el('p', 'proj-note', ''));
+    packList.lastChild.id = 'packNote';
+  }
+  const packNote = msg => { const n = $('packNote'); if (n) n.textContent = msg; };
+  onPacksChange(() => { renderPacks(); editor.emit('catalog'); });
+  function showTab(name) {
+    for (const t of modal.querySelectorAll('.ws-tabs [role="tab"]')) { const on = t.dataset.tab === name; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; }
+    $('wsPaneWorkspaces').hidden = name !== 'workspaces'; $('wsPanePacks').hidden = name !== 'packs';
+    if (name === 'packs') renderPacks(); else render();
+  }
+  for (const t of modal.querySelectorAll('.ws-tabs [role="tab"]')) {
+    t.addEventListener('click', () => showTab(t.dataset.tab));
+    t.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const o = [...modal.querySelectorAll('.ws-tabs [role="tab"]')].find(x => x !== t); o.focus(); showTab(o.dataset.tab); } });
+  }
+  editor.on('open-packs', () => open('packs'));
+
+  function open(tab = 'workspaces') { modal.hidden = false; showTab(tab); (modal.querySelector('.ws-tabs [aria-selected="true"]') || $('workspacesClose')).focus(); }
   function close() { modal.hidden = true; }
-  $('workspacesBtn').addEventListener('click', open);
+  $('workspacesBtn').addEventListener('click', () => open());
   $('workspacesClose').addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
