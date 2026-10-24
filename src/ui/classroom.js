@@ -75,11 +75,6 @@ export function initClassroom({ editor, code, projects, account = null, status =
     }
     kindBody.append(opts, el('p', 'proj-note', 'Signing in with Google is how CircuitBench knows who you are. Returning? Sign in at the top right to carry on where you left off.'));
   }
-  function renderSingle() {
-    const me = getMe();
-    kindBody.replaceChildren(el('h1', 'start-h', `Hi ${(me.name || '').split(' ')[0] || 'there'}!`), el('p', 'start-sub', 'Your projects are ready on the bench.'));
-    kindBody.append(btn('Open the bench →', 'primary big', enter));
-  }
   function renderAccount() {
     const box = $('startAccount'), me = getMe(); box.replaceChildren();
     if (me) {
@@ -92,7 +87,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
     const me = getMe();
     if (!me) return renderSignedOut();
     if (!me.kind) return lget(INTENT) === 'teacher' && (me.teacherSignup !== false || me.entitlements?.admin) ? (choose('teacher'), kindBody.replaceChildren(el('p', 'start-sub', 'Setting up your teacher account…'))) : renderChooser();
-    if (me.kind === 'single') return renderSingle();
+    if (me.kind === 'single') return enter();                   // single users go straight to the bench, as always
     return openDashboard();
   }
   $('startEnter').addEventListener('click', enter);
@@ -101,8 +96,8 @@ export function initClassroom({ editor, code, projects, account = null, status =
   /* ───────── account menu ───────── */
   function paintMenu() {
     const box = $('accountClassItems'); if (!box) return; box.replaceChildren();
-    box.append(menuItem('Main menu', showMenu));
     const me = getMe(); if (!me) return;
+    if (me.kind !== 'single') box.append(menuItem('Main menu', showMenu));
     if (me.kind === 'teacher') box.append(menuItem('Teacher dashboard', openDashboard));
     else if (me.kind === 'student') box.append(menuItem('My class', openDashboard));
     else if (!me.kind) box.append(menuItem('Teacher or student?', showMenu));
