@@ -48,6 +48,19 @@ export class Mcu {
     this.usarts = [this.usart, ...(spec.extraUsarts || []).map(cfg => new AVRUSART(this.cpu, cfg, CPU_HZ))];
     this.uartQueues = this.usarts.map(() => []);
     this.uartOut = null;
+    // avr8js clears UCSRA's read-only UDRE/TXC bits whenever the register is written, which is what Serial.begin() does (UCSRA = U2X).
+    // On real hardware the data register is still empty afterwards, so a second Serial.begin() (or one after Serial.end()) would leave the
+    // core waiting forever for an interrupt that never comes and all later output would vanish. Put the flags back unless a byte is on the wire.
+    for (const u of this.usarts) {
+      const c = u.config, cpu = this.cpu; let busyUntil = 0;
+      const hookUdr = cpu.writeHooks[c.UDR], hookA = cpu.writeHooks[c.UCSRA];
+      cpu.writeHooks[c.UDR] = (v, o, a, m) => { const r = hookUdr(v, o, a, m); busyUntil = cpu.cycles + u.cyclesPerChar; return r; };
+      cpu.writeHooks[c.UCSRA] = (v, o, a, m) => {
+        const r = hookA(v, o, a, m);
+        if ((cpu.data[c.UCSRB] & 0x08) && cpu.cycles >= busyUntil) { cpu.setInterruptFlag(u.UDRE); cpu.setInterruptFlag(u.TXC); }
+        return r;
+      };
+    }
     this.usarts.forEach((u, i) => {
       if (i === 0) u.onByteTransmit = byte => { this.onSerial?.(byte); this.uartOut?.(0, byte); };
       else u.onByteTransmit = byte => this.uartOut?.(i, byte);

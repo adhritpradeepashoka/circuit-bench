@@ -86,3 +86,9 @@ test('different chips link too: an Uno’s Serial.print reaches a Pico’s Seria
   for (let t = 0; t < 0.8; t += 0.0005) { uno.run(0.0005 * CPU_HZ); pico.run(0.0005 * 125e6, Infinity); }
   assert.match(String.fromCharCode(...echoed), /msg:\d+/);
 });
+
+test('Serial.begin() called again (rate change, or after Serial.end) keeps printing — avr8js used to wipe UCSRA’s UDRE bit and stall the core', () => {
+  const m = new Mcu(hexOf('serial-rebegin')), out = []; m.onSerial = b => out.push(b);
+  m.run(0.6 * CPU_HZ);
+  assert.equal(String.fromCharCode(...out).replace(/\r/g, ''), 'a\nb\nc\n');
+});
