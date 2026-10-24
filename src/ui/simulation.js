@@ -1,5 +1,6 @@
 import { Mcu, CPU_HZ } from '../sim/mcu.js';
 import { Rp2040Mcu } from '../sim/rp2040-mcu.js';
+import { UnoR4Mcu } from '../sim/uno-r4-mcu.js';
 import { solveDrive } from '../core/solver.js';
 import { PART_DEFS } from '../core/parts.js';
 import { compileSketch } from '../sim/compile-client.js';
@@ -83,9 +84,9 @@ export class Simulation {
     }
     const spec = this.editor.getCircuit().uno.spec || BOARD_SPECS[DEFAULT_BOARD];
     const builtFor = Object.values(BOARD_SPECS).find(b => b.fqbn === build.fqbn);
-    if (builtFor && builtFor.chip !== spec.chip) { this.editor.status(`This firmware was built for the ${builtFor.name}, but the board is a ${spec.name} — press Run again to rebuild`); return; }
+    if (builtFor && (builtFor.chip !== spec.chip || builtFor.emulation !== spec.emulation)) { this.editor.status(`This firmware was built for the ${builtFor.name}, but the board is a ${spec.name} — press Run again to rebuild`); return; }
     this.chipName = spec.chipName || CHIPS[spec.chip]?.name || spec.chip; this.boardName = spec.name; this.spec = spec;
-    try { this.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
+    try { this.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : spec.emulation === 'uno-r4' ? new UnoR4Mcu(build.hex) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
     $('simChip').textContent = this.chipName;
     const serial = this.code.serial;
     if (serial) {

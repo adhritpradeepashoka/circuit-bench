@@ -71,6 +71,7 @@ const SYNONYMS = {
   'gas-sensor': ['gas(?: sensors?)?', 'mq-?2', 'smoke(?: sensors?| detectors?)?', 'air quality sensors?'],
   'flame-sensor': ['flame(?: sensors?)?', 'fire(?: sensors?| detectors?)?'],
   'arduino-uno': ['arduino uno', 'uno', 'arduino'],
+  'arduino-uno-r4': ['(?:arduino )?uno ?r4(?: minima)?', 'arduino r4(?: minima)?', 'r4 minima'],
   'arduino-nano': ['arduino nano', 'nano'],
   'arduino-mega': ['arduino mega(?: 2560)?', 'mega(?: 2560)?'],
   'raspberry-pi-pico': ['raspberry ?pi pico(?: w)?', 'rpi ?pico', 'pi ?pico', 'pico', 'rp2040(?: board)?'],
@@ -83,7 +84,7 @@ const FAMILIES = {
   'logic gate': ['custom-gate-and', 'custom-gate-or', 'custom-gate-not', 'custom-gate-xor', 'custom-gate-nand', 'custom-gate-nor'],
   'op amp': null,
 };
-const BOARD_TYPES = new Set(['arduino-uno', 'arduino-nano', 'arduino-mega', 'raspberry-pi-pico']);
+const BOARD_TYPES = new Set(['arduino-uno', 'arduino-uno-r4', 'arduino-nano', 'arduino-mega', 'raspberry-pi-pico']);
 
 const normalize = t => String(t || '').toLowerCase().replace(/[µμ]/g, 'u').replace(/[×✕]/g, 'x').replace(/[’‘]/g, "'").replace(/\s+/g, ' ').trim();
 

@@ -53,6 +53,12 @@ export const PART_DEFS = {
     groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'a4', pins: ['A4', 'A4.2'] }, { id: 'a5', pins: ['A5', 'A5.2'] }],
     insertable: false, layer: 1,
   },
+  'arduino-uno-r4': {
+    type: 'arduino-uno-r4', name: 'Arduino UNO R4 Minima', category: 'Boards', tag: 'cb-uno-r4',
+    w: 72.58 * MM, h: 53.34 * MM, pins: fromWokwi('wokwi-arduino-uno', prettyUnoLabel),
+    groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'a4', pins: ['A4', 'A4.2'] }, { id: 'a5', pins: ['A5', 'A5.2'] }],
+    insertable: false, layer: 1,
+  },
   'arduino-nano': {
     type: 'arduino-nano', name: 'Arduino Nano', category: 'Boards', tag: 'wokwi-arduino-nano',
     w: 44.9 * MM, h: 17.8 * MM,
@@ -193,5 +199,5 @@ export const PART_DEFS = {
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

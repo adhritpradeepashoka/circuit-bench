@@ -16,7 +16,7 @@ console.log(`Arduino CLI ${version}`);
 
 // 1) test fixtures
 const dir = join(root, 'test/firmware'), fixtures = {};
-for (const file of readdirSync(dir).filter(f => f.endsWith('.ino')).sort()) {
+for (const file of readdirSync(dir).filter(f => f.endsWith('.ino') && !/^(pico|r4)-/.test(f))   // pico-/r4- sketches are built by build-pico-firmware.mjs.sort()) {
   const source = readFileSync(join(dir, file), 'utf8');
   const fqbn = file.startsWith('mega-') ? 'arduino:avr:mega' : file.startsWith('nano-') ? 'arduino:avr:nano' : 'arduino:avr:uno';   // board from the file name
   const r = await compiler.compile({ sketch: source, fqbn });

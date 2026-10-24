@@ -58,8 +58,8 @@ const servo = phase(ACTUATOR)((c, { n, type }) => {
 /* ── buzzer ──────────────────────────────────────────────────────────────────────────────────── */
 const buzzer = phase(ACTUATOR)((c, { n, type }) => {
   const s = c.sketch, r = roleMap(type), h = c.part(type, { fresh: n > 0 }), f = c.signals;
-  // a Pico pin is good for about 12 mA: a bare buzzer would ask for more, so it gets a series resistor there
-  const pin = c.logic < 4 ? c.drive(h, r.a, 'digital', { ohms: 150, prefer: ['8', '7', '6', '12'], dir: 'out' }) : c.hook(h, r.a, 'digital', { prefer: ['8', '7', '6', '12'], dir: 'out' }); c.ground(h, r.b);
+  // a Pico or UNO R4 pin is good for far less than an Uno's 40 mA: a bare buzzer would ask for more, so it gets a series resistor there
+  const pin = (c.logic < 4 || (c.spec().pinMaxA ?? 1) < 0.03) ? c.drive(h, r.a, 'digital', { ohms: 150, prefer: ['8', '7', '6', '12'], dir: 'out' }) : c.hook(h, r.a, 'digital', { prefer: ['8', '7', '6', '12'], dir: 'out' }); c.ground(h, r.b);
   if (f.bool) { s.sample(`if (${f.bool.expr}) tone(${pin}, 880); else noTone(${pin});`); f.consumed = true; }
   else if (f.level) { s.sample(`tone(${pin}, map(${f.level.expr}, 0, 1023, 200, 2000));`); f.consumed = true; }
   else { s.global('const int NOTES[] = {262, 294, 330, 349, 392, 440, 494, 523};      // C D E F G A B C'); s.tick(400, ['static int i = 0;', `tone(${pin}, NOTES[i], 300);`, 'i = (i + 1) % 8;']); }

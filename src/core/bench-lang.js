@@ -118,7 +118,7 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
 /* ── adapter between a real circuit and the model ─────────────────────────────────────────────
  * The model never sees the editor's random part ids (led-k3j2a). It sees tidy numbered ones (led-1, led-2, uno-1) and answers in
  * those; we translate back to the real ids before anything touches the board. */
-const PREFIX = { 'arduino-uno': 'uno', 'arduino-nano': 'nano', 'arduino-mega': 'mega', 'raspberry-pi-pico': 'pico', breadboard: 'bb' };
+const PREFIX = { 'arduino-uno': 'uno', 'arduino-nano': 'nano', 'arduino-mega': 'mega', 'arduino-uno-r4': 'unor4', 'raspberry-pi-pico': 'pico', breadboard: 'bb' };
 export function canonicalIds(circuit) {
   const n = {}, toReal = new Map(), toCanon = new Map();
   for (const p of circuit?.parts || []) {

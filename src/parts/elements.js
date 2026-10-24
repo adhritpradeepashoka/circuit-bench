@@ -6,12 +6,14 @@ import { LOBES, MM_TO_PX } from '../core/slime.js';
 import { ICON_KINDS } from '../core/behaviours-extra.js';
 import { layoutSpec } from '../core/custom-parts.js';
 import { renderArt } from '../core/part-art.js';
+import { WOKWI_PINS } from '../core/pins.generated.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 
 export const MOTOR_W = 120, MOTOR_H = 120;
 export const L298N_W = 170, L298N_H = 172;
 export const BATTERY_W = 76, BATTERY_H = 128;
+export const R4_PX_W = 72.58 * 96 / 25.4, R4_PX_H = 53.34 * 96 / 25.4;
 export const PICO_PX_W = 21 * 96 / 25.4, PICO_PX_H = 51 * 96 / 25.4;
 
 class CbElement extends HTMLElement {
@@ -133,6 +135,47 @@ class PiPico extends CbElement {
   }
 }
 
+/** Arduino UNO R4 Minima: same header positions as the R3 (shields and jumper wires fit alike), but a USB-C port, the square Renesas RA4M1 and the R4's teal board. */
+class UnoR4 extends CbElement {
+  constructor() { super(); this._led = false; this._power = false; }
+  get led13() { return this._led; }
+  set led13(v) { v = !!v; if (v === this._led) return; this._led = v; this.update(); }
+  get ledPower() { return this._power; }
+  set ledPower(v) { v = !!v; if (v === this._power) return; this._power = v; this.update(); }
+  markup() {
+    const W = R4_PX_W, H = R4_PX_H;
+    const pins = WOKWI_PINS['wokwi-arduino-uno'];
+    const sockets = pins.map(p => `<rect x="${(p.x - 4.2).toFixed(1)}" y="${(p.y - 4.2).toFixed(1)}" width="8.4" height="8.4" rx="1" fill="#15191c"/><rect x="${(p.x - 1.6).toFixed(1)}" y="${(p.y - 1.6).toFixed(1)}" width="3.2" height="3.2" fill="#d9b04a"/>`).join('');
+    const hdr = (x1, x2, y) => `<rect x="${x1 - 6}" y="${y - 6}" width="${x2 - x1 + 12}" height="12" rx="1.5" fill="#0d1113" opacity=".55"/>`;
+    const short = n => { const b = n.replace(/\.\d+$/, ''); return { IOREF: 'IOR', RESET: 'RST', '3.3V': '3V3', AREF: 'REF', GND: 'G' }[b] || b; };
+    const lab = (t, x, y, a = 'middle') => `<text x="${x}" y="${y}" font-size="4.6" font-family="sans-serif" fill="#e9fbfc" text-anchor="${a}">${t}</text>`;
+    const top = pins.filter(p => p.y < 100), bot = pins.filter(p => p.y > 100);
+    const topLabels = top.map(p => lab(p.name === 'A5.2' ? 'SCL' : p.name === 'A4.2' ? 'SDA' : short(p.name), p.x, p.y + 13)).join('');
+    const botLabels = bot.map(p => lab(short(p.name), p.x, p.y - 8)).join('');
+    return `<svg xmlns="${svgNS}" width="${W}" height="${H}" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}">
+      <rect x="0.5" y="0.5" width="${(W - 1).toFixed(1)}" height="${(H - 1).toFixed(1)}" rx="7" fill="#0b7f89" stroke="#075a62" stroke-width="1.2"/>
+      ${hdr(87, 255.5, 9)}${hdr(131, 255.5, 191.5)}
+      <rect x="-2" y="62" width="34" height="30" rx="2" fill="#c9ced3" stroke="#7b848c"/><rect x="2" y="68" width="22" height="18" rx="3" fill="#2a2f34"/>
+      <text x="14" y="80" font-size="5.5" font-family="sans-serif" fill="#e5e9ec" text-anchor="middle">USB-C</text>
+      <rect x="-3" y="128" width="46" height="46" rx="2" fill="#16181b" stroke="#000"/><circle cx="26" cy="151" r="8" fill="#050607" stroke="#2b2f33"/>
+      <rect x="112" y="76" width="54" height="54" rx="3" fill="#15181b" stroke="#000"/><circle cx="121" cy="85" r="2.4" fill="#454a50"/>
+      <text x="139" y="105" font-size="9" font-family="sans-serif" font-weight="700" fill="#d7dce0" text-anchor="middle">RA4M1</text>
+      <text x="139" y="116" font-size="5.5" font-family="sans-serif" fill="#9aa2a9" text-anchor="middle">Renesas</text>
+      <circle cx="62" cy="40" r="9" fill="#cfd4d9" stroke="#8a9299"/><circle cx="62" cy="40" r="5.5" fill="#2a2f34"/><text x="62" y="58" font-size="5.5" font-family="sans-serif" fill="#e9fbfc" text-anchor="middle">RESET</text>
+      <circle class="pwr" cx="205" cy="62" r="3" fill="#2d0f0f"/><text x="205" y="73" font-size="5.5" font-family="sans-serif" fill="#e9fbfc" text-anchor="middle">ON</text>
+      <circle class="led" cx="238" cy="62" r="3" fill="#4a3a0a"/><text x="238" y="73" font-size="5.5" font-family="sans-serif" fill="#e9fbfc" text-anchor="middle">L</text>
+      <text x="196" y="150" font-size="13" font-family="sans-serif" font-weight="800" fill="#f2fdfe" text-anchor="middle">UNO R4</text>
+      <text x="196" y="162" font-size="7" font-family="sans-serif" letter-spacing="2" fill="#bfeff3" text-anchor="middle">MINIMA</text>
+      ${sockets}${topLabels}${botLabels}
+    </svg>`;
+  }
+  update() {
+    const led = this.querySelector('.led'), pwr = this.querySelector('.pwr');
+    if (led) led.setAttribute('fill', this._led ? '#ffd23d' : '#4a3a0a');
+    if (pwr) pwr.setAttribute('fill', this._power ? '#5dff7a' : '#2d0f0f');
+  }
+}
+
 /** A 9 V-style battery with snap terminals on top. The label shows its voltage. */
 class Battery extends CbElement {
   constructor() { super(); this._volts = 9; }
@@ -153,7 +196,7 @@ class Battery extends CbElement {
   update() { const t = this.querySelector('.v'); if (t) t.textContent = `${+this._volts.toFixed(1)}V`; }
 }
 
-for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico]]) {
+for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico], ['cb-uno-r4', UnoR4]]) {
   if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
 }
 

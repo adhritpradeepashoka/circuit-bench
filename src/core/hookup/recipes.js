@@ -67,7 +67,7 @@ const potRecipe = phase(SOURCE)((c, { n }) => {
 });
 
 const CORE_BY_TYPE = {
-  'arduino-uno': board('arduino-uno'), 'arduino-nano': board('arduino-nano'), 'arduino-mega': board('arduino-mega'), 'raspberry-pi-pico': board('raspberry-pi-pico'),
+  'arduino-uno': board('arduino-uno'), 'arduino-nano': board('arduino-nano'), 'arduino-mega': board('arduino-mega'), 'arduino-uno-r4': board('arduino-uno-r4'), 'raspberry-pi-pico': board('raspberry-pi-pico'),
   led: ledRecipe, pushbutton: buttonRecipe, 'slide-switch': switchRecipe, potentiometer: potRecipe,
 };
 
