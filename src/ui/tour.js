@@ -12,6 +12,9 @@ import { pinWorld } from '../core/geometry.js';
 import { pkey } from '../core/netlist.js';
 import { sidePanes } from './side-panes.js';
 import { getMe } from '../sim/session.mjs';
+import { offFeatures } from './features.js';
+// A student's teacher can switch features off; the tour must not point at things that are not there.
+const off = id => offFeatures().includes(id);
 
 const SEEN_KEY = 'circuitbench:tour-seen';
 const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -174,8 +177,8 @@ export function initTour({ editor, sim, code, projects }) {
     { spots: ['#runBtn'], title: `Run ${kbd('Ctrl')}+${kbd('Enter')}`,
       body: `<p>Compiles your code with the <b>real Arduino compiler</b> and runs it on the simulated Uno. While it runs, a panel at the bottom shows which pins are on, and warns you about wiring problems (like an LED with no resistor).</p>` },
     { spots: ['#codeToggle'], title: 'Code',
-      body: `<p>Opens the coding area. Use <b>🧩 Blocks</b> to snap together a program — no typing! Blocks follow the parts you wired, so “turn LED 1 on” just works — or switch to <b>{ } Code</b> to see the real Arduino sketch (C++) your blocks make, the compiler's messages, the <b>Serial Monitor</b> for text your Arduino prints, and an <b>Examples</b> menu with ready-made sketches.</p>` },
-    { spots: ['#aiBtn'], title: 'Ask AI',
+      body: () => `<p>Opens the coding area. Use <b>🧩 Blocks</b> to snap together a program — no typing! Blocks follow the parts you wired, so “turn LED 1 on” just works.${off('code') ? '' : ' Switch to <b>{ } Code</b> to see the real Arduino sketch (C++) your blocks make'}${off('code') ? ' You can also see' : ', and'} the compiler's messages and the <b>Serial Monitor</b> for text your Arduino prints${off('examples') ? '' : ', and an <b>Examples</b> menu with ready-made sketches'}.</p>` },
+    { spots: ['#aiBtn'], title: 'Ask AI', skip: () => off('ai'),
       body: `<p>A chat that can see your circuit, your code, compile errors and the live readings while it runs. Ask "why isn't my LED on?" or "add a button on pin 2". It can wire parts and write code for you, and you choose whether to apply each change. Needs a free API key (it explains how).</p>` },
     { spots: ['.project-menu'], title: 'File menu',
       body: `<p>New project and My projects, import a project file or a KiCad circuit board, and download or copy your project.</p>` },
@@ -183,14 +186,14 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>The project you're working on. Everything saves automatically. Click here to rename it or switch to another.</p>` },
     { spots: ['#accountSlot'], title: 'Sign in with Google', skip: () => $('accountSlot')?.hidden !== false,
       body: `<p>Sign in so CircuitBench knows it's you. Your name and picture show up here. It's optional: everything works without it.</p>` },
-    { spots: ['#communityBtn'], title: 'Community — click it', interactive: true, skip: () => !$('communityBtn'),
+    { spots: ['#communityBtn'], title: 'Community — click it', interactive: true, skip: () => !$('communityBtn') || off('community'),
       body: `<p>Updates from the team, fixes, and questions from other users. <b>Click Community</b> to open it.</p>`,
       before: () => { if (!$('communityModal')?.hidden) $('communityClose')?.click(); }, when: () => !$('communityModal')?.hidden },
-    { spots: () => [document.querySelector('.cm-blog-link') || '#communityModal .modal-card'], title: 'The full blog — click it', interactive: true,
+    { spots: () => [document.querySelector('.cm-blog-link') || '#communityModal .modal-card'], title: 'The full blog — click it', interactive: true, skip: () => off('community'),
       body: () => `<p>Everything posted here also lives on the <b>blog</b>, which anyone can read without signing in. Sign in to post a bug report, a question, a workspace or a part, or to comment.</p><p><b>Click “Open the full blog”</b> (it opens in a new tab).</p>${getMe()?.entitlements?.admin ? '<p class="tour-why"><b>Team:</b> on the blog you can <b>📌 Pin</b> a post to the top and <b>Delete</b> anyone\'s post or comment.</p>' : ''}`,
       when: () => blogClicked },
     { spots: ['#settingsBtn'], title: 'Settings and help',
-      body: `<p>Click <b>⚙</b> for AI keys, themes, and to see this tour again or be guided through building a circuit.</p>` },
+      body: () => `<p>Click <b>⚙</b> ${[off('ai') ? '' : 'for AI keys', off('themes') ? '' : (off('ai') ? 'for themes' : 'and themes')].filter(Boolean).join(' ')}${off('ai') && off('themes') ? 'to' : ', and to'} see this tour again or be guided through building a circuit.</p>` },
     { center: true, title: 'Your first project: blink an LED',
       body: `<p>The "hello world" of electronics. You'll need:</p><ul class="tour-needs"><li><b>Arduino Uno</b> (already on the bench)</li><li><b>Breadboard</b> (already on the bench)</li><li><b>1 LED</b>, the light</li><li><b>1 resistor (220 Ω)</b>, which stops too much current from burning out the LED</li><li><b>2 wires</b>, one from pin 13 and one to GND (ground)</li></ul><p>I'll point to each part and hole as you go. It takes about 3 minutes, in a new project so nothing you've made is touched.</p>`,
       nextLabel: 'Build it with me', skipLabel: 'I\'ll explore on my own', onNext: () => startGuide(), onSkip: () => showOutro() },
@@ -244,7 +247,7 @@ export function initTour({ editor, sim, code, projects }) {
     { label: 'It works!', title: 'Your LED is blinking 🎉', noBack: true, spots: () => [led() && editor.els.get(led().id)],
       body: `<p>It turns on and off every half second, because the code sets pin 13 <b>HIGH</b> (on) for 500 ms, then <b>LOW</b> (off) for 500 ms, forever.</p>` },
     { label: 'Try this', title: 'Change the code', spots: ['#codeToggle'],
-      body: `<p>Open <b>Code</b> and press <b>🧩 Blocks</b> to build a program from blocks (try <b>✨ Start from my circuit</b>), or switch to <b>{ } Code</b> and change both <code>500</code>s to <code>100</code>, then press <b>Stop</b> and <b>Run</b>. It blinks five times faster.</p><p>Next, try the <b>Examples</b> menu in Code, or ask the AI to "add a button that turns the LED on".</p>`,
+      body: () => `<p>Open <b>Code</b> and press <b>🧩 Blocks</b> to build a program from blocks (try <b>✨ Start from my circuit</b>), ${off('code') ? 'and change both <b>500</b>s to <b>100</b> in your blocks' : 'or switch to <b>{ } Code</b> and change both <code>500</code>s to <code>100</code>'}, then press <b>Stop</b> and <b>Run</b>. It blinks five times faster.</p>${off('examples') && off('ai') ? '' : `<p>Next, ${[off('examples') ? '' : 'try the <b>Examples</b> menu in Code', off('ai') ? '' : 'ask the AI to "add a button that turns the LED on"'].filter(Boolean).join(', or ')}.</p>`}`,
       nextLabel: 'Finish', onNext: () => showOutro() },
   ];
 
