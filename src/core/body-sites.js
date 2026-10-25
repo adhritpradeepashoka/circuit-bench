@@ -7,6 +7,7 @@
 // cheek and temple), but they are not measurements and not for medical use.
 
 import { HEAD_SITES } from './head-sites.generated.js';
+import { neutralSubject, eventLevels, gazeAt, MIND_RHYTHMS } from './subject.js';
 
 const D = Math.PI / 180;
 /** Head frame: x = right ear, y = nose, z = crown. The skull is an ellipsoid with these radii (1 unit ≈ 10 cm × 0.8). */
@@ -47,19 +48,28 @@ const hash = n => { let h = Math.imul(n | 0, 0x9e3779b1) ^ 0x85ebca6b; h = Math.
 const smooth = (t, rate, seed = 0) => { const x = t * rate, i = Math.floor(x), f = x - i; return hash(i + seed * 7919) * (1 - f) + hash(i + 1 + seed * 7919) * f; };
 const bump = (t, t0, w) => Math.exp(-0.5 * ((t - t0) / w) ** 2);
 
-/** The body-wide sources at time t, each roughly in volts at weight 1. They are shared by every site, scaled by its weights. */
-export function sources(t, { effort = 50 } = {}) {
-  // Blink: a short positive spike every ~4 s. Gaze: steps left/right and up/down every 2.5 s.
+/** The body-wide sources at time t, each roughly in volts at weight 1. They are shared by every site, scaled by its weights.
+ *  `subject` (see subject.js) can steer the mind state, gaze and one-off events; without one the subject behaves as it always did. */
+export function sources(t, { effort = 50, subject = neutralSubject() } = {}) {
+  const lv = eventLevels(subject, t), gz = gazeAt(subject, t), mind = MIND_RHYTHMS[subject.mind] || MIND_RHYTHMS.relaxed;
+  // Blink: a short positive spike every ~4 s (unless switched off), plus any the user fires. Gaze: random steps every 2.5 s, or held where the user points it.
   const kb = Math.floor(t / 4.1), tb = kb * 4.1 + 1.3 + 0.8 * (hash(kb * 13 + 1) + 1) / 2;
-  const blink = 0.00018 * bump(t, tb, 0.07);
+  const blink = subject.autoBlink === false ? 0 : 0.00018 * bump(t, tb, 0.07);
+  const evBlink = (subject.events || []).reduce((a, e) => e.type === 'blink' ? a + 0.00018 * bump(t, e.t0 + 0.09, 0.06) : a, 0);
   const kg = Math.floor(t / 2.5), ph = Math.min(1, (t - kg * 2.5) / 0.1), decay = 1 - ((t - kg * 2.5) / 2.5) * 0.25;
-  const h = (hash(kg * 7 + 3) > 0 ? 1 : -1) * 0.0004 * ph * decay, v = hash(kg * 11 + 5) * 0.00012 * ph;
-  const alpha = 0.000030 * Math.sin(2 * Math.PI * 10 * t) * (0.65 + 0.35 * Math.sin(2 * Math.PI * 0.3 * t));      // waxes and wanes
-  const beta = 0.000009 * Math.sin(2 * Math.PI * 21 * t + 1) + 0.000008 * smooth(t, 300, 3);
-  // Muscle: bursts of broadband noise, strength set by the effort slider.
+  const h = gz ? gz[0] * 0.0004 : (hash(kg * 7 + 3) > 0 ? 1 : -1) * 0.0004 * ph * decay, v = gz ? gz[1] * 0.0003 : hash(kg * 11 + 5) * 0.00012 * ph;
+  const alpha = mind.alpha * 0.000030 * Math.sin(2 * Math.PI * 10 * t) * (0.65 + 0.35 * Math.sin(2 * Math.PI * 0.3 * t));      // waxes and wanes
+  const beta = mind.beta * (0.000009 * Math.sin(2 * Math.PI * 21 * t + 1) + 0.000008 * smooth(t, 300, 3));
+  const theta = mind.theta * 0.000025 * Math.sin(2 * Math.PI * 5.5 * t + 0.6) * (0.7 + 0.3 * Math.sin(2 * Math.PI * 0.2 * t));
+  // Muscle: bursts of broadband noise. The slider sets resting tone; the events add bursts on top.
   const emg = 0.002 * Math.max(0, Math.min(1, effort / 100)) * smooth(t, 1500, 5);
-  return { alpha, beta, blink, h, v, emg };
+  const burst = lv => 0.0022 * Math.min(1, lv) * smooth(t, 1500, 9);
+  return { alpha, beta, theta, blink: blink + evBlink, h, v, emg, jaw: burst(lv.jaw), twitchL: burst(lv.twitchL) * 1.2, twitchR: burst(lv.twitchR) * 1.2, brow: burst(lv.brow) * 0.8 };
 }
+
+/** Which muscle a site sits over: jaw (masseter and temporalis), forehead (frontalis), and which side of the head it is on. */
+const JAW = { 'EMG-ML': 1, 'EMG-MR': 1, T3: 0.7, T4: 0.7, F7: 0.4, F8: 0.4 }, FORE = { 'EMG-F': 1, Fp1: 0.5, Fp2: 0.5, F3: 0.1, Fz: 0.1, F4: 0.1 };
+const sideOf = s => (Math.abs(s.phi) > 100 || s.phi === 0 ? 0 : Math.sign(s.phi));       // -1 left, +1 right, 0 middle or back
 
 /** What one site picks up at time t, in volts, relative to the body's zero. */
 export function siteVoltage(id, t, opts) {
@@ -67,8 +77,10 @@ export function siteVoltage(id, t, opts) {
   const x = sources(t, opts), w = s.w;
   // a little extra variety so two different sites are never identical copies: each has its own slow phase and hiss
   const k = SITES.indexOf(s) + 1;
-  const brain = w.a * (x.alpha * Math.cos(k * 0.9) + x.beta) + 0.000004 * smooth(t, 200, k) * (w.a > 0.1 ? 1 : 0.2);
-  return brain + w.b * x.blink + w.h * x.h + w.v * x.v + w.m * x.emg * (0.7 + 0.3 * Math.cos(k));
+  const brain = w.a * (x.alpha * Math.cos(k * 0.9) + x.beta + x.theta) + 0.000004 * smooth(t, 200, k) * (w.a > 0.1 ? 1 : 0.2);
+  const j = JAW[id] || 0, f = FORE[id] || 0, sd = sideOf(s);
+  const twitch = j * (x.twitchL * (sd < 0 ? 1 : 0.1) + x.twitchR * (sd > 0 ? 1 : 0.1));
+  return brain + w.b * x.blink + w.h * x.h + w.v * x.v + w.m * x.emg * (0.7 + 0.3 * Math.cos(k)) + j * x.jaw + twitch + f * x.brow;
 }
 
 /** The signal between electrode sites `pos` and `neg` (volts). An unplaced electrode reads 0, like a loose lead. */

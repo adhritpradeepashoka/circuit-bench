@@ -7,6 +7,7 @@
 // head drawn in code is used instead. Signals are illustrative, not medical data.
 import { SITES, SITE, SITE_GROUPS, HEAD_RADII, surfacePoint, sitePosition, describeMontage } from '../core/body-sites.js';
 import { signalAt } from '../core/signals.js';
+import { subject as person, EVENT_KINDS, MINDS } from '../core/subject.js';
 import { PART_DEFS } from '../core/parts.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
@@ -55,11 +56,27 @@ export function initVisualizer({ editor }) {
     sliders[k] = { inp, out, fmt };
     subject.append(el('label', { className: 'viz-slider' }, el('span', { textContent: label }), inp, out));
   }
+
+  // What the simulated person does: mind state, where they look, one-off events. Which channel reacts depends on where its electrodes are.
+  const events = el('div', { className: 'viz-events', id: 'vizEvents' });
+  const group = (title, ...kids) => el('div', { className: 'viz-evgroup' }, el('span', { className: 'viz-evtitle', textContent: title }), el('div', { className: 'viz-evrow' }, ...kids));
+  const evBtn = (label, fn, title, id) => { const b = el('button', { type: 'button', className: 'viz-evbtn', textContent: label, title: title || label, id }); b.addEventListener('click', () => { fn(); markState(); }); return b; };
+  const tag = (b, key, val) => { b.dataset[key] = val; return b; };
+  const mindBtns = Object.entries(MINDS).map(([k, label]) => tag(evBtn(label.split(',')[0], () => person.setMind(k), label, `vizMind-${k}`), 'mind', k));
+  const gazeBtns = [['◀', 'left', 'Look left'], ['▲', 'up', 'Look up'], ['●', 'center', 'Look straight ahead'], ['▼', 'down', 'Look down'], ['▶', 'right', 'Look right'], ['Auto', 'auto', 'Glance about on its own']].map(([l, k, t]) => tag(evBtn(l, () => person.look(k), t, `vizGaze-${k}`), 'gaze', k));
+  const autoBlink = el('input', { type: 'checkbox', checked: true, id: 'vizAutoBlink' }); autoBlink.addEventListener('change', () => { person.autoBlink = autoBlink.checked; });
+  events.append(
+    group('Mind', ...mindBtns), group('Eyes', ...gazeBtns, evBtn('Blink', () => person.fire('blink'), 'One blink', 'vizEv-blink')),
+    el('label', { className: 'viz-check' }, autoBlink, el('span', { textContent: 'Random blinks' })),
+    group('Face', ...['jaw', 'twitchL', 'twitchR', 'brow'].map(k => evBtn(EVENT_KINDS[k].label, () => person.fire(k), EVENT_KINDS[k].label, `vizEv-${k}`))),
+    el('p', { className: 'viz-note', textContent: 'Try it: put E+ and E− on the cheeks and clench the jaw; on the eye corners and look left or right; on the back of the head and switch between Relaxed and Focused. The same event barely shows at electrodes that are far from the muscle or eye involved.' }));
+  const markState = () => { for (const b of mindBtns) b.classList.toggle('on', b.dataset.mind === person.mind); for (const b of gazeBtns) b.classList.toggle('on', b.dataset.gaze === (person.gaze?.to || 'auto')); autoBlink.checked = person.autoBlink !== false; };
+  markState();
   const channelsEl = el('div', { className: 'viz-channels' });
   const noChannels = el('p', { className: 'viz-note', hidden: true, textContent: 'Add a BioAmp EXG Pill (or a “Biosignal source (body)”) to the circuit — each one becomes a channel here.' });
   const trace = el('canvas', { className: 'viz-trace' });
   const traceNote = el('p', { className: 'viz-note' });
-  side.append(lead, noChannels, refRow, channelsEl, subject, trace, traceNote);
+  side.append(lead, noChannels, refRow, channelsEl, events, subject, trace, traceNote);
   pane.append(stage, side);
   canvas.append(pane);
 
@@ -132,7 +149,7 @@ export function initVisualizer({ editor }) {
     if (trace.width !== w || trace.height !== h) { trace.width = w; trace.height = h; trace.style.height = `${h}px`; }
     const c = trace.getContext('2d'); c.clearRect(0, 0, w, h);
     if (!list.length) { traceNote.textContent = ''; return; }
-    const now = performance.now() / 1000, span = 4, n = 240;
+    const now = person.now(), span = 4, n = 240;
     list.forEach((p, i) => {
       const y0 = i * rowH + rowH / 2, placed = p.sp && p.sn;
       c.strokeStyle = 'rgba(120,140,130,.35)'; c.lineWidth = 1; c.beginPath(); c.moveTo(0, y0); c.lineTo(w, y0); c.stroke();

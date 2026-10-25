@@ -18,6 +18,7 @@ import { Sound } from './audio.js';
 import { visualTarget } from '../parts/skins.js';
 import { motorRpm } from '../core/solver.js';
 import { signalAt } from '../core/signals.js';
+import { subject as person } from '../core/subject.js';
 import { slimePotentials } from '../core/slime.js';
 import { createLogicState, tickLogic, MIN_SUPPLY } from '../core/logic.js';
 
@@ -222,7 +223,7 @@ export class Simulation {
 
   stop() {
     if (!this.running) return;
-    this.running = false; this.paused = false;
+    this.running = false; this.paused = false; person.simNow = null; person.events.length = 0;
     cancelAnimationFrame(this.raf);
     for (const id of [...this.pressed]) this.editor.setButtonPressed(id, false);
     this.pressed.clear();
@@ -309,7 +310,7 @@ export class Simulation {
     this.eachBoard(() => this.logicTick());             // inputs that aren't MCU pins (a switch, another chip) settle here
     this.logicMapAll = new Map(this.ctxs.flatMap(c => [...c.logicMap]));
     const now = this.ctxs[0].mcu.seconds, dt = reactive ? Math.min(0.1, Math.max(1e-5, now - this.lastSolveAt)) : 0;
-    this.lastSolveAt = now;
+    this.lastSolveAt = now; person.simNow = now;               // the simulated person's events run on the simulation's clock while it runs
     const signalOf = e => signalAt(this.editor.partById(e.partId) || {}, now);
     const signals = new Map(bios.map(e => [e.partId, signalOf(e)]));
     for (const e of slimes) signals.set(e.partId, slimePotentials(e.taps, this.editor.partById(e.partId) || {}, now));

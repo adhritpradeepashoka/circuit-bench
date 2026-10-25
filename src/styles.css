@@ -962,3 +962,12 @@ html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"
 .asm-tip { position: absolute; z-index: 4; padding: 4px 8px; border-radius: 6px; background: #1c2824; color: #fff; font-size: 12px; pointer-events: none; }
 .asm-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; background: #8aa; } .asm-dot.ok { background: #2ea05c; } .asm-dot.warn { background: #e0a526; } .asm-dot.bad { background: #d4452a; }
 .asm-stage { position: relative; }
+/* Bioelectronics subject events */
+.viz-events { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
+.viz-evgroup { display: flex; flex-direction: column; gap: 4px; }
+.viz-evtitle { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: #5b6a63; font-weight: 700; }
+.viz-evrow { display: flex; flex-wrap: wrap; gap: 5px; }
+.viz-evbtn { height: 30px; padding: 0 10px; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; background: var(--surface, #fff); font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; color: inherit; }
+.viz-evbtn:hover { border-color: #1f7a8c; } .viz-evbtn.on { background: #1d4e75; color: #fff; border-color: #1d4e75; }
+.viz-evbtn:active { transform: translateY(1px); }
+.viz-check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }

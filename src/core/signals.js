@@ -10,6 +10,7 @@ export const SIGNAL_KINDS = [
   ['sine', 'Test sine, 10 Hz (1 mV)'],
 ];
 import { SITE, siteSignal } from './body-sites.js';
+import { subject as liveSubject } from './subject.js';
 export const MAINS_HZ = 50;           // India (and most of the world)
 
 const g = (x, mu, sd) => Math.exp(-0.5 * ((x - mu) / sd) ** 2);
@@ -27,7 +28,7 @@ export function ecgBeat(phase) {
 export function signalAt(p, t) {
   const kind = p.signal || 'ecg', scale = Math.max(0, (p.scale ?? 100) / 100);
   let v = 0;
-  if (SITE[p.sp] && SITE[p.sn]) v = siteSignal(p.sp, p.sn, t, { effort: p.effort ?? 50 });     // electrodes placed on the head model: the signal depends on where
+  if (SITE[p.sp] && SITE[p.sn]) v = siteSignal(p.sp, p.sn, t, { effort: p.effort ?? 50, subject: liveSubject });     // electrodes placed on the head model: the signal depends on where
   else if (kind === 'ecg') {
     const period = 60 / Math.max(20, Math.min(220, p.bpm ?? 70)), ph = (t % period) / period;
     v = ecgBeat(ph) + 0.00004 * Math.sin(2 * Math.PI * 0.25 * t);               // + slow breathing sway
