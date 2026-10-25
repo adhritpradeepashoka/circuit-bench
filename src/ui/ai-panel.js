@@ -8,6 +8,8 @@
 import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
 import { recipeEdit } from '../core/recipes.js';
+import { eligibleForLearning, prepareLearning, templatizeInstruction } from '../core/learned.js';
+import { learnedRecipes, addLearned, learningOn, setLearning } from '../core/learned-store.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 const isCustomSketch = src => { const t = String(src || '').replace(/\s+/g, ' ').trim(); return !!t && t !== DEFAULT_SKETCH.replace(/\s+/g, ' ').trim(); };
 import { hasHostedAi } from '../sim/session.mjs';
@@ -150,6 +152,30 @@ export function initAiPanel(editor, code, sim = null) {
     if (p.code) { code.source = p.code; code.open(); }
     editor.status(p.circuitEdit && p.code ? 'AI edit applied — circuit and sketch.ino both updated' : p.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify or Run to compile it');
     m.state = 'applied'; proposals.delete(m.id); saveChat(); render();
+    if (p.learn && p.code && p.circuitEdit) learnFrom(p).catch(() => { /* learning is a bonus: it must never get in the way */ });
+  }
+
+  /* ── learning: a student who applied what the AI built teaches the instant tier to build it (core/learned.js) ── */
+  let learning = false;
+  async function learnFrom(p) {
+    if (!learningOn() || learning) return;
+    const project = toProjectFileShape(p.circuitEdit.parts, p.circuitEdit.wires, p.circuitEdit.customParts);
+    const request = p.learn.request;
+    if (recipeEdit(request, { parts: [], wires: [] }, { learned: learnedRecipes() })) return;         // the instant tier already knows this
+    const el = eligibleForLearning({ request, project });
+    if (!el.ok) return;
+    learning = true;
+    try {
+      const res = await generate({ instruction: templatizeInstruction(el.map, p.code), circuit: project, code: p.code, context: null, history: [] });
+      if (!res?.ok || !res.code) return;
+      const prep = prepareLearning({ request, project, code: p.code, template: res.code });
+      if (!prep.ok) return;
+      for (const inst of prep.instances) {        // every instance must really build, on each board
+        const v = await code.compileSource(inst.code, { fqbn: inst.fqbn });
+        if (!v.ok) return;                          // (no compiler to ask counts as not verified)
+      }
+      if (addLearned(prep.recipe)) setStatus(`Learned "${prep.recipe.keywords.join(' ')}": next time I can build this instantly, with no AI.`);
+    } finally { learning = false; }
   }
 
   /* ── key setup ───────────────────────── */
@@ -239,6 +265,10 @@ export function initAiPanel(editor, code, sim = null) {
     if (promptEl.value.trim()) send(); else promptEl.focus();
   });
   keyInput.addEventListener('paste', () => setTimeout(() => { if (/^[\w.-]{20,}$/.test(keyInput.value.trim())) $('aiKeySave').click(); }, 0));   // pasting a key saves it: no extra click
+  const learnBtn = $('aiLearnToggle');
+  const paintLearn = () => { learnBtn.textContent = `learn: ${learningOn() ? 'on' : 'off'}`; learnBtn.setAttribute('aria-pressed', String(learningOn())); };
+  learnBtn.addEventListener('click', () => { setLearning(!learningOn()); paintLearn(); setStatus(learningOn() ? 'Learning on: AI-built circuits become instant recipes.' : 'Learning off.'); });
+  paintLearn();
   $('aiForgetKey').addEventListener('click', () => { refreshKeyUi(); setStatus(''); openSettings(); });
   $('aiOpenSettings').addEventListener('click', openSettings);
   window.addEventListener('cb-session', () => { refreshKeyUi(); });
@@ -316,7 +346,7 @@ export function initAiPanel(editor, code, sim = null) {
     if (busy) return setStatus('Wait for the current reply first.');
     // Tier 1: plainly worded edits are answered instantly by rules. Tier 2: the CircuitBench tiny model (2.5 MB, in-page, no GPU) understands
     // looser wording and politely declines what is outside the bench. Anything either is unsure about goes on to the chosen AI.
-    let quick = recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source) }) || quickEdit(text, editor.exportProject()), tinyMs = 0;
+    let quick = recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(text, editor.exportProject()), tinyMs = 0;
     if (!quick && !globalThis.VLAB_NO_TINY) {
       try {
         const t0 = Date.now(), tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
@@ -369,7 +399,8 @@ export function initAiPanel(editor, code, sim = null) {
         summary: summary.length ? `Proposes: ${summary.join(' + ')}.` : '', warnings: o.warnings, fatal: o.attempted && !o.changed,
         code: res.code || undefined, codeLines: res.code ? res.code.split('\n').length : 0, hasEdit, state: hasEdit ? 'pending' : undefined,
       };
-      if (hasEdit) proposals.set(m.id, { code: res.code || null, circuitEdit: o.circuitEdit });
+      const benchWasEmpty = !(circuit.parts || []).some(p => !BOARD_SPECS[p.type] && p.type !== 'breadboard');
+      if (hasEdit) proposals.set(m.id, { code: res.code || null, circuitEdit: o.circuitEdit, learn: !quick && benchWasEmpty && !check.failed ? { request: text } : null });
       messages.push(m);
     } catch (err) {
       messages.push({ id: ++seq, role: 'error', text: err?.message || 'Something went wrong.' });

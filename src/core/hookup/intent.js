@@ -9,8 +9,8 @@ import { BOARD_SPECS } from '../boards.js';
 
 const CIRCUIT = /\b(circuit|set-?up|project|demo|example|starter|hookup|hook-up|wiring)\b/;
 const WIRING = /\b(hook ?up|wire ?up|set ?up|get\b.{0,30}\bworking|try out|play with|test out|experiment with)\b/;
-const NOT_A_REQUEST = /\b(why|how|what|which|when|where|who|explain|wrong|broken|not working|doesn'?t|isn'?t|won'?t|error|help me understand|tell me|can you explain|difference|compare|versus|vs|remove|delete|erase|clear|undo|change|replace|rename|move|swap|fix|debug|optimi[sz]e|improve|rewrite|modify|edit|update|increase|decrease|reduce|bigger|smaller|faster|slower)\b|\?\s*$/;
-const PRECISE_PIN = /\b(pins?\s*[ad]?\d+|[ad]\d{1,2}\b)(?!\s*(?:ohm|k\b))|\bon (?:the )?(?:left|right|top|bottom)\b/;
+export const NOT_A_REQUEST = /\b(why|how|what|which|when|where|who|explain|wrong|broken|not working|doesn'?t|isn'?t|won'?t|error|help me understand|tell me|can you explain|difference|compare|versus|vs|remove|delete|erase|clear|undo|change|replace|rename|move|swap|fix|debug|optimi[sz]e|improve|rewrite|modify|edit|update|increase|decrease|reduce|bigger|smaller|faster|slower)\b|\?\s*$/;
+export const PRECISE_PIN = /\b(pins?\s*[ad]?\d+|[ad]\d{1,2}\b)(?!\s*(?:ohm|k\b))|\bon (?:the )?(?:left|right|top|bottom)\b/;
 const CALCULATOR = /\bcalculators?\b/;
 const SKETCH_ONLY = /\b(code|sketch|program|script)\b/;
 

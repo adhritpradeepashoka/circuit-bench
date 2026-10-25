@@ -2203,3 +2203,43 @@ test('ui: an AI that cannot fix its sketch is tried twice, then the sketch is sh
   last = [...logEl.querySelectorAll('.msg.ai')].pop();
   assert.ok(!/does not compile yet/.test(last.textContent));
 });
+
+test('ui: learning from the AI — an applied AI build becomes a template, is verified by compiling it on two boards, and the next request is built with no AI', async () => {
+  const compiled = [];
+  const compile = async files => { compiled.push(files[0].content); return { ok: true, diagnostics: [], output: '', hex: ':00000001FF\n', size: { flash: 1, flashMax: 2, ram: 1, ramMax: 2 } }; };
+  const { w, editor, code, sim } = boot(compile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const doc = w.document, sent = [];
+  const sketch = 'void setup() {\n  pinMode(2, INPUT_PULLUP);\n  pinMode(8, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(8, digitalRead(2) == LOW);\n  delay(8);\n}\n';
+  const template = 'void setup() {\n  pinMode(@@pushbutton.1.l@@, INPUT_PULLUP);\n  pinMode(@@led.A@@, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(@@led.A@@, digitalRead(@@pushbutton.1.l@@) == LOW);\n  delay(8);\n}\n';
+  const actions = [
+    { op: 'add_part', id: 'pb', type: 'pushbutton', x: 500, y: 40 }, { op: 'add_part', id: 'l', type: 'led', x: 500, y: 160 }, { op: 'add_part', id: 'r', type: 'resistor', x: 600, y: 160, props: { ohms: 220 } },
+    { op: 'add_wire', from: { part: 'pb', pin: '1.l' }, to: { part: 'uno-1', pin: '2' } }, { op: 'add_wire', from: { part: 'pb', pin: '2.l' }, to: { part: 'uno-1', pin: 'GND.1' } },
+    { op: 'add_wire', from: { part: 'l', pin: 'A' }, to: { part: 'r', pin: '1' } }, { op: 'add_wire', from: { part: 'r', pin: '2' }, to: { part: 'uno-1', pin: '8' } }, { op: 'add_wire', from: { part: 'l', pin: 'C' }, to: { part: 'uno-1', pin: 'GND.1' } },
+  ];
+  const replies = [{ ok: true, actions, code: sketch, explanation: 'A doorbell.' }, { ok: true, actions: [], code: template, explanation: 'template' }];
+  w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => replies.shift() || { ok: true, actions: [], code: null, explanation: 'unexpected' } }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  const prompt = doc.getElementById('aiPrompt'), logEl = doc.getElementById('aiLog');
+  const say = async t => { prompt.value = t; prompt.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush(); };
+  await say('make me a doorbell with a button and an led');
+  assert.equal(sent.length, 1);
+  [...logEl.querySelectorAll('.msg.ai')].pop().querySelector('[data-act="apply"]').click();
+  await flush(); await flush();
+  assert.equal(sent.length, 2, 'one extra call asks the AI to turn its sketch into a template');
+  assert.match(sent[1].instruction, /@@led\.A@@ = 8/);
+  const stored = JSON.parse(w.localStorage.getItem('virtual-lab:learned-recipes') || '[]');
+  assert.equal(stored.length, 1, 'learned');
+  assert.deepEqual(stored[0].keywords, ['doorbell']);
+  assert.ok(compiled.some(c => /pinMode\(\d+, OUTPUT\)/.test(c) && !/@@/.test(c)), 'the instances were compiled before the recipe was kept');
+  assert.match(doc.getElementById('aiStatus').textContent, /Learned/);
+  // the next doorbell request is answered by the recipe: no AI call
+  sent.length = 0;
+  await say('build me another doorbell');
+  assert.equal(sent.length, 0, 'no AI call');
+  const last = [...logEl.querySelectorAll('.msg.ai')].pop();
+  assert.match(last.textContent, /recipe the AI taught me/);
+  // learning off: a different request teaches nothing
+  doc.getElementById('aiLearnToggle').click();
+  assert.equal(w.localStorage.getItem('virtual-lab:learn-from-ai'), '0');
+});
