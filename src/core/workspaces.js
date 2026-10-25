@@ -37,6 +37,12 @@ export const BUILTIN_WORKSPACES = [
       sketch: 'ecg',
     },
   },
+  {
+    format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: 'robotics', builtin: true, name: 'Robotics',
+    blurb: 'Import real parts, mark where they bolt together, and (soon) test the robot', author: 'CircuitBench', menuFirst: [], parts: [], robotics: true,
+    hint: { title: 'Build the circuit, then the robot', text: 'Circuit is the electronics, as always. Assembly is where you import 3D parts (STL, OBJ or glTF) and mark their holes, shafts and connectors. Test comes next.' },
+    starter: { extra: [] },
+  },
 ];
 
 /**
@@ -70,7 +76,7 @@ export function validateWorkspace(raw) {
     ok: true,
     workspace: {
       format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id, name, blurb: str(raw.blurb, 160), author: str(raw.author, 60), builtin: !!raw.builtin,
-      visualizer: raw.visualizer === true,
+      visualizer: raw.visualizer === true, robotics: raw.robotics === true,
       menuFirst: (Array.isArray(raw.menuFirst) ? raw.menuFirst : []).slice(0, 6).map(c => str(c, 30)).filter(Boolean),
       hint: raw.hint && typeof raw.hint === 'object' ? { title: str(raw.hint.title, 60), text: str(raw.hint.text, 400) } : null,
       parts, starter: { extra, ...(project ? { project } : {}), ...(raw.starter?.sketch ? { sketch: str(raw.starter.sketch, 40) } : {}) },

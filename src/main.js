@@ -25,6 +25,7 @@ import { initAccount } from './ui/account.js';
 import { importPcbFile } from './ui/pcb-import.js';
 import { initWorkspaces } from './ui/workspaces.js';
 import { initVisualizer } from './ui/visualizer.js';
+import { initAssembly } from './ui/assembly.js';
 import { loadSavedWorkspaces } from './core/workspaces.js';
 loadSavedWorkspaces();                  // your own and imported workspaces, and their parts, before any project opens
 import { WOKWI_PINS } from './core/pins.generated.js';
@@ -73,6 +74,7 @@ const ai = initAiPanel(editor, code, sim);
 const projects = initProjects({ editor, code, sim });
 const workspaces = initWorkspaces({ editor, code, projects });
 initVisualizer({ editor });
+const assembly = initAssembly({ editor });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
 initFeatures({ blocks });
@@ -149,4 +151,4 @@ $('importPcbFile').onchange = async e => { const file = e.target.files[0]; e.tar
 $('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
 $('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 
-window.__vlab = { editor, sim, code, projects, workspaces, tour, account };   // handy in the browser console
+window.__vlab = { editor, sim, code, projects, workspaces, tour, account, assembly };   // handy in the browser console
