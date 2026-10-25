@@ -29,7 +29,127 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      20.498,
+      17.5,
+      24
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 3,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      -15.5,
+      21.5,
+      9
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 10,
+     "through": true
+    },
+    {
+     "id": "hole-3",
+     "kind": "hole",
+     "pos": [
+      -15.5,
+      19.5,
+      9
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 8.2,
+     "through": true
+    },
+    {
+     "id": "hole-4",
+     "kind": "hole",
+     "pos": [
+      8.498,
+      14,
+      22
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 1.8,
+     "through": true
+    },
+    {
+     "id": "hole-5",
+     "kind": "hole",
+     "pos": [
+      -15.5,
+      -17.5,
+      9
+     ],
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 7.5,
+     "through": true
+    },
+    {
+     "id": "hole-6",
+     "kind": "hole",
+     "pos": [
+      8.498,
+      -14,
+      22
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 1.8,
+     "through": true
+    },
+    {
+     "id": "hole-7",
+     "kind": "hole",
+     "pos": [
+      8.498,
+      -5.5,
+      0
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 3,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
@@ -62,7 +182,127 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      -20.496,
+      17.5,
+      24
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 3,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      -8.505,
+      13.998,
+      22
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 1.8,
+     "through": true
+    },
+    {
+     "id": "hole-3",
+     "kind": "hole",
+     "pos": [
+      15.5,
+      21.5,
+      9.001
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 10,
+     "through": true
+    },
+    {
+     "id": "hole-4",
+     "kind": "hole",
+     "pos": [
+      15.547,
+      19.5,
+      9.001
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 8.199,
+     "through": true
+    },
+    {
+     "id": "hole-5",
+     "kind": "hole",
+     "pos": [
+      -8.505,
+      -14.002,
+      22
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 1.8,
+     "through": true
+    },
+    {
+     "id": "hole-6",
+     "kind": "hole",
+     "pos": [
+      -8.496,
+      -5.5,
+      0
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 3,
+     "through": true
+    },
+    {
+     "id": "hole-7",
+     "kind": "hole",
+     "pos": [
+      15.502,
+      -17.5,
+      9.007
+     ],
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 7.5,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
@@ -95,7 +335,76 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      22.501,
+      11,
+      5.5
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 3.2,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      -19.499,
+      20.75,
+      15.5
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 10,
+     "through": true
+    },
+    {
+     "id": "hole-3",
+     "kind": "hole",
+     "pos": [
+      -19.499,
+      18.75,
+      15.5
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 8.2,
+     "through": true
+    },
+    {
+     "id": "hole-4",
+     "kind": "hole",
+     "pos": [
+      -19.499,
+      -16.75,
+      15.5
+     ],
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 7.5,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
@@ -128,7 +437,76 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      -22.491,
+      11,
+      5.502
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 3.2,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      19.526,
+      20.75,
+      15.503
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 10,
+     "through": true
+    },
+    {
+     "id": "hole-3",
+     "kind": "hole",
+     "pos": [
+      19.539,
+      18.75,
+      15.494
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 8.199,
+     "through": true
+    },
+    {
+     "id": "hole-4",
+     "kind": "hole",
+     "pos": [
+      19.543,
+      -16.75,
+      15.505
+     ],
+     "dir": [
+      0,
+      -1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 7.499,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
@@ -161,7 +539,42 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      21.001,
+      -4.999,
+      13.5
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 3.4,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      -20.999,
+      5.001,
+      13.5
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 3.4,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
@@ -194,7 +607,42 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      11.75,
+      12,
+      7
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 3,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      -11.25,
+      12,
+      19
+     ],
+     "dir": [
+      0,
+      1,
+      0
+     ],
+     "source": "measured",
+     "diameter": 3,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
@@ -227,7 +675,93 @@
     ],
     "source": "measured"
    },
-   "frames": [],
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 9.2,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      0,
+      0,
+      0
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 3.1,
+     "through": true
+    },
+    {
+     "id": "hole-3",
+     "kind": "hole",
+     "pos": [
+      0,
+      0,
+      4
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 7.4,
+     "through": true
+    },
+    {
+     "id": "hole-4",
+     "kind": "hole",
+     "pos": [
+      0,
+      0,
+      3.8
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 7.8,
+     "through": true
+    },
+    {
+     "id": "hole-5",
+     "kind": "hole",
+     "pos": [
+      0,
+      0,
+      1.5
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 8.8,
+     "through": true
+    }
+   ],
    "joints": [],
    "actuators": [],
    "sensors": [],
