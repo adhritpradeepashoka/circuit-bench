@@ -303,24 +303,28 @@ export function initAssembly({ editor }) {
     }
   }
 
-  // ── building: drag parts around, they snap together at their holes ─────
+  // ── building: move parts with handles or the mouse; join holes by dragging them together or with the Join tool ─────
   const asm = new Assembly(), objCache = new Map(), SCENE_KEY = 'circuitbench:robot-scene';
-  let selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null;
-  const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' });
+  const PALETTE = [0xb8c4cc, 0x7fb3d5, 0xe8b26a, 0x9ccc9c, 0xd59fb8, 0xb7a3d8, 0xd9d27a, 0x8fd0c8], hex = n => `#${n.toString(16).padStart(6, '0')}`;
+  const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
+  let selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, joinMode = false, joinFirst = null, hoverInst = null;
+  const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
   buildBox.append(
-    el('p', { className: 'asm-note', textContent: 'Click a part, or drag it into the scene. Drag a part near a hole on another part and it snaps on.' }), bnote, selBox, cards,
-    el('h4', { textContent: 'Joints' }), mateList, bomEl);
+    el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes.' }), bnote, selBox,
+    el('h4', { textContent: 'Parts' }), cards, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const everyPart = () => [...examples, ...libraryParts().map(p => ({ ...p, example: false }))];
   const findPart = id => everyPart().find(p => p.id === id);
-  // the floating bar and the hint over the 3D view
+  // the floating bar over the 3D view
   const mkBtn = (label, title, fn, id) => { const b = el('button', { type: 'button', className: 'asm-tool', textContent: label, title, ariaLabel: title, id }); b.addEventListener('click', fn); return b; };
   const undoBtn = mkBtn('↶', 'Undo (Ctrl+Z)', () => undo(), 'asmUndo'), redoBtn = mkBtn('↷', 'Redo (Ctrl+Y)', () => redo(), 'asmRedo');
-  const toolbarEl = el('div', { className: 'asm-floating', hidden: true }, undoBtn, redoBtn, mkBtn('⤢', 'Fit everything in view', () => fitScene(), 'asmFit'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
+  const joinBtn = mkBtn('Join holes', 'Click a hole on one part, then a hole on another (J)', () => setJoin(!joinMode), 'asmJoin'), xrayBtn = mkBtn('X-ray', 'See through the parts', () => { xray = !xray; xrayBtn.classList.toggle('on', xray); render(); }, 'asmXray');
+  const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
+    undoBtn, redoBtn, el('span', { className: 'asm-tsep' }), ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
+    el('span', { className: 'asm-tsep' }), joinBtn, xrayBtn, mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
   stage.append(toolbarEl, helpEl);
-  const setHelp = t => { helpEl.textContent = t; };
 
   async function meshOf(part) { return part.example ? fetch(EX_DIR + part.model.file).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : getMesh(`${part.id}/${part.model.file}`); }
   /** A part's mesh in the space its holes were marked in: mm, Z up, centred in X/Y, resting on z = 0. */
@@ -333,7 +337,7 @@ export function initAssembly({ editor }) {
       const holder = new t.THREE.Group(); holder.add(g); objCache.set(part.id, holder);
     }
     const o = objCache.get(part.id).clone(true);
-    o.traverse(m => { if (m.isMesh) m.material = new t.THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.15, roughness: 0.6, side: t.THREE.DoubleSide, emissive: 0x000000 }); });
+    o.traverse(m => { if (m.isMesh) m.material = new t.THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.1, roughness: 0.55, side: t.THREE.DoubleSide, emissive: 0x000000 }); });
     return o;
   }
   /** A small picture of each part for its card, drawn once with a throwaway renderer. */
@@ -362,14 +366,13 @@ export function initAssembly({ editor }) {
   }
 
   // — history, saving
-  const objOf = id => asm.get(id)?.obj;
   const keep = () => { history.push(asm.snapshot()); if (history.length > 60) history.shift(); future = []; refreshTools(); };
   const refreshTools = () => { undoBtn.disabled = !history.length; redoBtn.disabled = !future.length; };
   function applyScene() {
     const t = three; if (!t) return;
     for (const c of [...t.sceneRoot.children]) if (!asm.instances.some(i => i.obj === c)) t.sceneRoot.remove(c);
     for (const i of asm.instances) if (i.obj && !i.obj.parent) t.sceneRoot.add(i.obj);
-    if (selected && !asm.get(selected)) selected = null; render();
+    if (selected && !asm.get(selected)) selected = null; joinFirst = null; render();
   }
   function undo() { if (!history.length) return; future.push(asm.snapshot()); asm.restore(history.pop()); applyScene(); }
   function redo() { if (!future.length) return; history.push(asm.snapshot()); asm.restore(future.pop()); applyScene(); }
@@ -377,67 +380,111 @@ export function initAssembly({ editor }) {
   async function restoreSaved() {
     if (asm.instances.length) return; let j = null; try { j = JSON.parse(localStorage.getItem(SCENE_KEY) || 'null'); } catch { /* none */ }
     if (!j?.parts?.length) return; const t = await load3d(), ids = [];
-    for (const rec of j.parts) { const p = findPart(rec.part); if (!p) { ids.push(null); continue; } try { const inst = asm.add(p); inst.T = rec.T; inst.obj = await partObject(t, p); inst.obj.userData.inst = inst.id; ids.push(inst.id); } catch { ids.push(null); } }
+    for (const rec of j.parts) { const p = findPart(rec.part); if (!p) { ids.push(null); continue; } try { const inst = asm.add(p); inst.T = rec.T; inst.obj = await partObject(t, p); inst.obj.userData.inst = inst.id; tint(inst); ids.push(inst.id); } catch { ids.push(null); } }
     for (const m of j.mates || []) if (ids[m.a] && ids[m.b]) asm.mates.push({ a: { inst: ids[m.a], frame: m.af }, b: { inst: ids[m.b], frame: m.bf }, screw: m.screw || null });
     applyScene(); fitScene();
   }
+  const tint = inst => inst.obj.traverse(m => { if (m.isMesh) m.material.color.setHex(colourOf(inst)); });
 
   // — adding and removing
   async function addToScene(part, at = null) {
     const t = await load3d();
     try {
       const obj = await partObject(t, part); keep(); const inst = asm.add(part);
-      inst.obj = obj; obj.userData.inst = inst.id; t.sceneRoot.add(obj);
+      inst.obj = obj; obj.userData.inst = inst.id; tint(inst); t.sceneRoot.add(obj);
       const sz = new t.THREE.Box3().setFromObject(obj).getSize(new t.THREE.Vector3());
       if (at) inst.T.t = [at[0], at[1], 0];
       else { const others = asm.instances.filter(i => i !== inst); let x = 0; if (others.length) { const bb = new t.THREE.Box3(); others.forEach(o => bb.expandByObject(o.obj)); x = bb.max.x + 14 + sz.x / 2; } inst.T.t = [x, 0, 0]; }
-      select(inst.id); applyScene(); if (!at) fitScene(); bsay('');
+      selected = inst.id; applyScene(); if (!at) fitScene(); bsay('');
       if (!part.frames.length) bsay(`“${part.name}” has no marked holes, so it cannot snap to anything.`, true);
     } catch (e) { bsay(e.message, true); }
   }
   function removeInst(id) { keep(); const i = asm.get(id); if (i) three?.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; applyScene(); }
   function clearAll() { if (!asm.instances.length) return; keep(); for (const i of asm.instances) three?.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null; applyScene(); }
   const select = id => { selected = id; render(); };
+  const centreOf = inst => { const b = new three.THREE.Box3().setFromObject(inst.obj), c = b.getCenter(new three.THREE.Vector3()); return [c.x, c.y, c.z]; };
+  const detach = inst => { asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); };
+
+  // — the camera
   function fitScene() {
     const t = three, b = new t.THREE.Box3().setFromObject(t.sceneRoot); if (b.isEmpty()) return;
     const s = b.getSize(new t.THREE.Vector3()), c = b.getCenter(new t.THREE.Vector3()), d = Math.max(s.x, s.y, s.z, 40) * 2.2;
     t.controls.target.copy(c); t.camera.position.set(c.x + d * 0.5, c.y - d, c.z + d * 0.6); t.camera.near = d / 100; t.camera.far = d * 100; t.camera.updateProjectionMatrix(); t.controls.update(); t.draw();
   }
+  function viewTo(name, focusInst = null) {
+    const t = three; if (!t) return; const b = new t.THREE.Box3(); if (focusInst) b.setFromObject(focusInst.obj); else b.setFromObject(t.sceneRoot); if (b.isEmpty()) return;
+    const s = b.getSize(new t.THREE.Vector3()), c = b.getCenter(new t.THREE.Vector3()), d = Math.max(s.x, s.y, s.z, 30) * (focusInst ? 2.6 : 2.2);
+    const dir = { front: [0, -1, 0.001], top: [0, -0.001, 1], side: [1, 0, 0.001], iso: [0.5, -1, 0.6] }[name] || [0.5, -1, 0.6], L = Math.hypot(...dir);
+    t.controls.target.copy(c); t.camera.position.set(c.x + dir[0] / L * d, c.y + dir[1] / L * d, c.z + dir[2] / L * d); t.camera.near = d / 100; t.camera.far = d * 100; t.camera.updateProjectionMatrix(); t.controls.update(); t.draw();
+  }
 
   // — drawing the scene
-  function holeMarkers() {
+  function overlays() {
     const t = three, { THREE } = t; t.sceneGizmos.clear();
+    const size = new THREE.Box3().setFromObject(t.sceneRoot).getSize(new THREE.Vector3()), U = Math.max(Math.max(size.x, size.y, size.z) * 0.035, 2.5);
     for (const inst of asm.instances) for (const f of inst.part.frames) {
-      const w = worldFrame(inst, f), r = Math.max((f.diameter || 3) / 2, 0.8) + 0.2, mated = asm.isMated(inst.id, f.id);
-      const hot = snapShow && ((snapShow.a === inst.id && snapShow.aFrame === f.id) || (snapShow.b === inst.id && snapShow.bFrame === f.id));
-      const col = hot ? 0x1fae5a : mated ? 0x6f8f7b : 0x1f7a8c, g = new THREE.Mesh(new THREE.CircleGeometry(hot ? r * 1.5 : r, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: hot ? 0.75 : mated ? 0.18 : 0.4, depthTest: false, side: THREE.DoubleSide }));
-      g.position.fromArray(w.pos); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...w.dir)); g.position.addScaledVector(new THREE.Vector3(...w.dir), 0.05);
-      g.renderOrder = 10; g.userData = { label: `${f.diameter ? f.diameter.toFixed(1) + ' mm ' : ''}hole${mated ? ' (joined)' : ''}`, inst: inst.id, frame: f.id }; t.sceneGizmos.add(g);
+      const w = worldFrame(inst, f), mated = asm.isMated(inst.id, f.id), r0 = Math.max((f.diameter || 3) / 2, joinMode ? 2.2 : 1.4) + 0.2;
+      const hot = snapShow && ((snapShow.a === inst.id && snapShow.aFrame === f.id) || (snapShow.b === inst.id && snapShow.bFrame === f.id)), first = joinFirst && joinFirst.inst === inst.id && joinFirst.frame === f.id;
+      const col = first ? 0xe0562a : hot ? 0x1fae5a : mated ? 0x6f8f7b : 0x1f7a8c, r = hot || first ? r0 * 1.4 : r0;
+      const g = new THREE.Mesh(new THREE.CircleGeometry(r, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: hot || first ? 0.85 : mated ? 0.2 : joinMode ? 0.6 : 0.4, depthTest: false, side: THREE.DoubleSide }));
+      g.position.fromArray(w.pos).addScaledVector(new THREE.Vector3(...w.dir), 0.05); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...w.dir));
+      g.renderOrder = 10; g.userData = { hole: true, label: `${f.diameter ? f.diameter.toFixed(1) + ' mm ' : ''}hole ${f.id.replace('hole-', '#')}${mated ? ' (joined)' : ''} on ${inst.part.name}`, inst: inst.id, frame: f.id }; t.sceneGizmos.add(g);
+    }
+    if (snapShow) {                                                                              // a line from the dragged hole to the one it will join
+      const A = asm.get(snapShow.a), B = asm.get(drag?.id), fa = A?.part.frames.find(f => f.id === snapShow.aFrame);
+      if (A && fa) { const p = worldFrame(A, fa).pos, ln = new THREE.Mesh(new THREE.SphereGeometry(U * 0.4, 12, 8), new THREE.MeshBasicMaterial({ color: 0x1fae5a, depthTest: false })); ln.position.fromArray(p); ln.renderOrder = 11; t.sceneGizmos.add(ln); }
+    }
+    const sel = selected && asm.get(selected);                                                   // move handles on the selected part
+    if (sel && !joinMode) {
+      const c = new THREE.Vector3(...centreOf(sel)), L = U * 5;
+      for (const [axis, col, dir] of [['x', 0xd9453b, [1, 0, 0]], ['y', 0x3aa24f, [0, 1, 0]], ['z', 0x2f6fd6, [0, 0, 1]]]) {
+        const grp = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: col, depthTest: false });
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(U * 0.18, U * 0.18, L, 10), mat), tip0 = new THREE.Mesh(new THREE.ConeGeometry(U * 0.55, U * 1.6, 14), mat);
+        shaft.position.y = L / 2; tip0.position.y = L + U * 0.8; grp.add(shaft, tip0); grp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...dir)); grp.position.copy(c);
+        grp.traverse(m => { m.renderOrder = 12; m.userData = { axis, dir }; }); t.sceneGizmos.add(grp);
+      }
     }
   }
   function render() {
     const t = three; if (!t) return;
     for (const inst of asm.instances) {
       inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true);
-      inst.obj.traverse(m => { if (m.isMesh) m.material.emissive.setHex(inst.id === selected ? 0x1d4e75 : snapShow && (snapShow.a === inst.id || snapShow.b === inst.id) ? 0x14602f : 0x000000); });
+      const glow = inst.id === selected ? 0x1d4e75 : snapShow && (snapShow.a === inst.id || snapShow.b === inst.id) ? 0x14602f : inst.id === hoverInst ? 0x2a3a44 : 0x000000;
+      inst.obj.traverse(m => { if (m.isMesh) { m.material.emissive.setHex(glow); m.material.transparent = xray; m.material.opacity = xray ? 0.38 : 1; m.material.depthWrite = !xray; } });
     }
-    holeMarkers(); t.draw(); renderPanel(); refreshTools(); save();
-    helpEl.hidden = false; setHelp(!asm.instances.length ? 'Pick a part on the right to start.' : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag to move · drag the background to look around · scroll to zoom' : 'Click a part to select it');
+    overlays(); t.draw(); renderPanel(); refreshTools(); save();
+    helpEl.hidden = false;
+    helpEl.textContent = !asm.instances.length ? 'Pick a part on the right to start.' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part or its arrows · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
   }
+  const render2 = () => { for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } overlays(); three.draw(); save(); };
+  function setJoin(on) { joinMode = on; joinFirst = null; joinBtn.classList.toggle('on', on); render(); }
+
   function renderPanel() {
     selBox.replaceChildren(); const inst = selected && asm.get(selected); selBox.hidden = !inst;
+    instList.replaceChildren();
+    for (const i of asm.instances) {
+      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: `${i.part.frames.length} holes` }));
+      row.addEventListener('click', () => select(i.id)); row.addEventListener('dblclick', () => viewTo('iso', i)); row.addEventListener('mouseenter', () => { hoverInst = i.id; render2h(); }); row.addEventListener('mouseleave', () => { hoverInst = null; render2h(); });
+      instList.append(row);
+    }
+    if (!asm.instances.length) instList.append(el('p', { className: 'asm-note', textContent: 'Nothing here yet.' }));
     if (inst) {
-      const mates = asm.matesOf(inst.id), mt = mates[0], act = (label, title, fn) => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: label, title, ariaLabel: title }); b.addEventListener('click', fn); return b; };
-      const pivot = () => inst.obj && new three.THREE.Vector3(...worldCenter(inst));
-      const turnZ = deg => { keep(); const c = worldCenter(inst); turn(inst, [0, 0, 1], c, deg); asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); render(); };
-      selBox.append(el('div', { className: 'asm-sel-name', textContent: inst.part.name }),
-        el('div', { className: 'asm-row wrap' }, act('⟲ 90°', 'Turn left', () => turnZ(90)), act('⟳ 90°', 'Turn right', () => turnZ(-90)), act('Flip', 'Turn it over', () => { keep(); turn(inst, [1, 0, 0], worldCenter(inst), 180); asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); render(); }), act('Remove', 'Remove this part', () => removeInst(inst.id))));
+      const act = (label, title, fn) => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: label, title, ariaLabel: title }); b.addEventListener('click', fn); return b; };
+      const rot = (axis, deg) => { keep(); turn(inst, axis, centreOf(inst), deg); detach(inst); render(); };
+      const c = centreOf(inst), num = (label, k) => { const inp = el('input', { type: 'number', step: 1, value: +c[k].toFixed(1), ariaLabel: `${label} position in mm`, id: `asmPos-${label.toLowerCase()}` }); inp.addEventListener('change', () => { const v = Number(inp.value); if (!Number.isFinite(v)) return; keep(); const cur = centreOf(inst); inst.T.t[k] += v - cur[k]; detach(inst); render(); }); return el('label', { className: 'asm-field' }, el('span', { textContent: label }), inp); };
+      const mt = asm.matesOf(inst.id)[0];
+      selBox.append(
+        el('div', { className: 'asm-sel-name' }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(inst))}` }), inst.part.name),
+        el('div', { className: 'asm-row' }, num('X', 0), num('Y', 1), num('Z', 2)),
+        el('div', { className: 'asm-row wrap' }, el('span', { className: 'asm-lbl', textContent: 'Turn' }), ...[['X', [1, 0, 0]], ['Y', [0, 1, 0]], ['Z', [0, 0, 1]]].flatMap(([n, ax]) => [act(`${n} −90°`, `Turn 90° back about ${n}`, () => rot(ax, -90)), act(`${n} +90°`, `Turn 90° about ${n}`, () => rot(ax, 90))])),
+        el('div', { className: 'asm-row wrap' }, act('Drop to floor', 'Lower it until it rests on the floor', () => { keep(); const b = new three.THREE.Box3().setFromObject(inst.obj); inst.T.t[2] -= b.min.z; detach(inst); render(); }), act('Join holes…', 'Pick two holes to join this part to another', () => setJoin(true)), act('Remove', 'Remove this part', () => removeInst(inst.id))));
       if (mt) {
-        const mine = mt.b.inst === inst.id ? mt.b : mt.a, other = mt.b.inst === inst.id ? mt.a : mt.b, A = asm.get(other.inst), fa = A.part.frames.find(f => f.id === other.frame), wf = worldFrame(A, fa);
-        let last = 0; const sl = el('input', { type: 'range', min: -180, max: 180, value: 0, step: 1, ariaLabel: 'Spin around the screw', id: 'asmSpin' });
-        sl.addEventListener('pointerdown', () => keep());
-        sl.addEventListener('input', () => { const v = Number(sl.value); turn(inst, wf.dir, wf.pos, v - last); last = v; render2(); });
-        selBox.append(el('label', { className: 'asm-field' }, el('span', { textContent: 'Spin around the screw' }), sl));
+        const mine = mt.b.inst === inst.id ? mt.b : mt.a, other = mt.b.inst === inst.id ? mt.a : mt.b, A = asm.get(other.inst), fa = A?.part.frames.find(f => f.id === other.frame);
+        if (A && fa) {
+          const wf = worldFrame(A, fa); let last = 0; const sl = el('input', { type: 'range', min: -180, max: 180, value: 0, step: 1, ariaLabel: 'Spin around the screw', id: 'asmSpin' });
+          sl.addEventListener('pointerdown', () => keep()); sl.addEventListener('input', () => { const v = Number(sl.value); turn(inst, wf.dir, wf.pos, v - last); last = v; render2(); });
+          selBox.append(el('label', { className: 'asm-field' }, el('span', { textContent: 'Spin around the screw' }), sl));
+        }
       }
     }
     mateList.replaceChildren();
@@ -448,42 +495,61 @@ export function initAssembly({ editor }) {
       scr.addEventListener('change', () => { m.screw = scr.value || null; render(); });
       const un = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Unjoin (the parts stay where they are)', ariaLabel: 'Unjoin' });
       un.addEventListener('click', () => { keep(); asm.mates.splice(i, 1); render(); });
-      mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: `asm-dot ${ck.level}` }), el('span', { className: 'asm-lib-name', textContent: `${A.part.name.replace(/^Kame32 /, '')} + ${B.part.name.replace(/^Kame32 /, '')}` }), scr, un), el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
+      const nm = x => x.part.name.replace(/^Kame32 /, '');
+      mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: `asm-dot ${ck.level}` }), el('span', { className: 'asm-lib-name', textContent: `${nm(A)} ⇄ ${nm(B)}` }), scr, un), el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
     });
     const bom = asm.bom();
     bomEl.textContent = asm.instances.length ? `${bom.parts.map(p => `${p.count} × ${p.name}`).join(', ')}${bom.screws.length ? ' · screws: ' + bom.screws.map(s => `${s.count} × ${s.thread.replace('_', '.')}`).join(', ') : ''} · about ${bom.grams} g` : '';
   }
-  const render2 = () => { const t = three; for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } holeMarkers(); t.draw(); save(); };
-  const worldCenter = inst => { const b = new three.THREE.Box3().setFromObject(inst.obj), c = b.getCenter(new three.THREE.Vector3()); return [c.x, c.y, c.z]; };
+  const render2h = () => { for (const inst of asm.instances) inst.obj.traverse(m => { if (m.isMesh) m.material.emissive.setHex(inst.id === selected ? 0x1d4e75 : inst.id === hoverInst ? 0x2a3a44 : 0x000000); }); three?.draw(); };
+  /** The point on the line p + s·a that is closest to a ray, as the parameter s. */
+  function axisParam(ray, p, a) {
+    const d = ray.direction, w = [p.x - ray.origin.x, p.y - ray.origin.y, p.z - ray.origin.z], B = a[0] * d.x + a[1] * d.y + a[2] * d.z, D = a[0] * w[0] + a[1] * w[1] + a[2] * w[2], E = d.x * w[0] + d.y * w[1] + d.z * w[2], den = 1 - B * B;
+    return Math.abs(den) < 1e-6 ? null : (B * E - D) / den;
+  }
 
-  // — the mouse: grab a part to move it, drag the background to look around
+  // — the mouse: grab a part or an arrow to move it, drag the background to look around
   function attach(t) {
     if (attached) return; attached = true; const dom = t.renderer.domElement, { THREE } = t, plane = new THREE.Plane(), hitPt = new THREE.Vector3();
     const ndc = e => { const r = dom.getBoundingClientRect(); return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)); };
+    const ownerOf = o => { while (o && !o.userData.inst && !o.userData.axis) o = o.parent; return o; };
     const instAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const h = t.ray.intersectObjects(t.sceneRoot.children, true)[0]; if (!h) return null; let o = h.object; while (o && !o.userData.inst) o = o.parent; return o ? { id: o.userData.inst, point: h.point } : null; };
+    const gizmoAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const hs = t.ray.intersectObjects(t.sceneGizmos.children, true); return hs.map(h => ({ data: h.object.userData, point: h.point })).find(x => x.data.axis || x.data.hole) || null; };
+    const snapAndPlace = inst => {
+      const r0 = dom.getBoundingClientRect(), px = p => { const v = new THREE.Vector3(...p).project(t.camera); return [(v.x + 1) / 2 * r0.width, (1 - v.y) / 2 * r0.height]; };
+      const s = asm.snapFor(inst.id, { reach: 30, maxSizeGap: 1.5, measure: (a, b) => { const A = px(a), B = px(b); return Math.hypot(A[0] - B[0], A[1] - B[1]); } }); snapShow = s;      // close ON SCREEN counts, so you needn't judge depth
+      if (s) { const A = asm.get(s.a); inst.T = mateTransform(A, A.part.frames.find(f => f.id === s.aFrame), inst, inst.part.frames.find(f => f.id === s.bFrame)); }
+    };
     dom.addEventListener('pointerdown', e => {
       if (mode !== 'build' || e.button !== 0) return;
+      const g = gizmoAt(e);
+      if (joinMode) { if (g?.data.hole) joinPick(g.data.inst, g.data.frame); else if (joinFirst) { joinFirst = null; render(); } return; }
+      if (g?.data.axis && selected && asm.get(selected)) {                                    // an arrow: slide along that axis
+        const inst = asm.get(selected), a = g.data.dir, c = new THREE.Vector3(...centreOf(inst)); t.ray.setFromCamera(ndc(e), t.camera);
+        const s0 = axisParam(t.ray.ray, c, a); if (s0 == null) return; t.controls.enabled = false; dom.setPointerCapture(e.pointerId);
+        drag = { id: inst.id, mode: 'axis', a, c, s0, start: { x: e.clientX, y: e.clientY }, t0: [...inst.T.t], moved: false, pending: asm.snapshot() }; return;
+      }
       const h = instAt(e); if (!h) { if (selected) select(null); return; }
-      t.controls.enabled = false; dom.setPointerCapture(e.pointerId); select(h.id);
+      t.controls.enabled = false; dom.setPointerCapture(e.pointerId); selected = h.id;
       const inst = asm.get(h.id); plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), h.point);
-      drag = { id: h.id, start: { x: e.clientX, y: e.clientY }, t0: [...inst.T.t], grab: h.point.clone(), moved: false, pending: asm.snapshot() };
+      drag = { id: h.id, mode: 'plane', start: { x: e.clientX, y: e.clientY }, t0: [...inst.T.t], grab: h.point.clone(), moved: false, pending: asm.snapshot() }; render();
     }, true);
     dom.addEventListener('pointermove', e => {
       if (mode !== 'build') return;
-      if (!drag) {                                                                           // hovering: say what a hole is
-        t.ray.setFromCamera(ndc(e), t.camera); const g = t.ray.intersectObjects(t.sceneGizmos.children, false)[0], over = instAt(e);
-        dom.style.cursor = over ? 'grab' : ''; if (tip) tip.hidden = !g; if (g && tip) { tip.textContent = g.object.userData.label; tip.style.left = `${e.clientX - dom.getBoundingClientRect().left + 12}px`; tip.style.top = `${e.clientY - dom.getBoundingClientRect().top + 12}px`; }
+      if (!drag) {                                                                             // hovering: say what a hole is
+        const g = gizmoAt(e), over = instAt(e); dom.style.cursor = g?.data.axis ? 'grab' : joinMode && g?.data.hole ? 'pointer' : over ? 'grab' : '';
+        const lab = g?.data.hole ? g.data.label : g?.data.axis ? `Drag to move along ${g.data.axis.toUpperCase()}` : '';
+        if (tip) { tip.hidden = !lab; if (lab) { tip.textContent = lab; tip.style.left = `${e.clientX - dom.getBoundingClientRect().left + 12}px`; tip.style.top = `${e.clientY - dom.getBoundingClientRect().top + 12}px`; } }
+        const nh = over?.id || null; if (nh !== hoverInst) { hoverInst = nh; render2h(); }
         return;
       }
       if (!drag.moved && Math.hypot(e.clientX - drag.start.x, e.clientY - drag.start.y) < 4) return;
       const inst = asm.get(drag.id); if (!inst) return;
-      if (!drag.moved) { drag.moved = true; history.push(drag.pending); future = []; asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); dom.style.cursor = 'grabbing'; }
-      t.ray.setFromCamera(ndc(e), t.camera); if (!t.ray.ray.intersectPlane(plane, hitPt)) return;
-      inst.T = { q: inst.T.q, t: [drag.t0[0] + hitPt.x - drag.grab.x, drag.t0[1] + hitPt.y - drag.grab.y, drag.t0[2] + hitPt.z - drag.grab.z] };
-      const r0 = dom.getBoundingClientRect(), px = p => { const v = new THREE.Vector3(...p).project(t.camera); return [(v.x + 1) / 2 * r0.width, (1 - v.y) / 2 * r0.height]; };
-      const s = asm.snapFor(inst.id, { reach: 30, maxSizeGap: 1.5, measure: (a, b) => { const A = px(a), B = px(b); return Math.hypot(A[0] - B[0], A[1] - B[1]); } }); snapShow = s;      // close ON SCREEN counts, so you needn't judge depth
-      if (s) { const A = asm.get(s.a); inst.T = mateTransform(A, A.part.frames.find(f => f.id === s.aFrame), inst, inst.part.frames.find(f => f.id === s.bFrame)); }
-      render();
+      if (!drag.moved) { drag.moved = true; history.push(drag.pending); future = []; detach(inst); dom.style.cursor = 'grabbing'; }
+      t.ray.setFromCamera(ndc(e), t.camera);
+      if (drag.mode === 'axis') { const s = axisParam(t.ray.ray, drag.c, drag.a); if (s == null) return; const d = s - drag.s0; inst.T = { q: inst.T.q, t: [drag.t0[0] + drag.a[0] * d, drag.t0[1] + drag.a[1] * d, drag.t0[2] + drag.a[2] * d] }; }
+      else { if (!t.ray.ray.intersectPlane(plane, hitPt)) return; inst.T = { q: inst.T.q, t: [drag.t0[0] + hitPt.x - drag.grab.x, drag.t0[1] + hitPt.y - drag.grab.y, drag.t0[2] + hitPt.z - drag.grab.z] }; }
+      snapAndPlace(inst); render();
     });
     const end = e => {
       if (!drag) return; const d = drag; drag = null; t.controls.enabled = true; dom.style.cursor = ''; try { dom.releasePointerCapture(e.pointerId); } catch { /* already released */ }
@@ -492,6 +558,7 @@ export function initAssembly({ editor }) {
       snapShow = null; render();
     };
     dom.addEventListener('pointerup', end); dom.addEventListener('pointercancel', end);
+    dom.addEventListener('dblclick', e => { if (mode !== 'build') return; const h = instAt(e); if (h) { select(h.id); viewTo('iso', asm.get(h.id)); } });
     dom.addEventListener('dragover', e => { if (mode === 'build') e.preventDefault(); });
     dom.addEventListener('drop', e => {
       const m = /^circuitbench-part:(.+)$/.exec(e.dataTransfer?.getData('text/plain') || ''); if (!m || mode !== 'build') return; e.preventDefault();
@@ -501,10 +568,22 @@ export function initAssembly({ editor }) {
     tip = el('div', { className: 'asm-tip', hidden: true }); stage.append(tip);
     addEventListener('keydown', e => {
       if (mode !== 'build' || pane.hidden || /input|select|textarea/i.test(document.activeElement?.tagName || '')) return;
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
-      else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+      const k = e.key.toLowerCase();
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z') { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); redo(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); removeInst(selected); }
+      else if (k === 'j') setJoin(!joinMode);
+      else if (e.key === 'Escape') { if (joinMode) setJoin(false); else if (selected) select(null); }
+      else if (k === 'f') fitScene();
     });
+  }
+  /** The Join tool: the first hole stays put, the part with the second hole moves onto it. */
+  function joinPick(instId, frameId) {
+    if (!joinFirst) { joinFirst = { inst: instId, frame: frameId }; return render(); }
+    if (joinFirst.inst === instId) { joinFirst = { inst: instId, frame: frameId }; bsay('Pick the second hole on a different part.'); return render(); }
+    const a = joinFirst; keep(); const r = asm.mate(a.inst, a.frame, instId, frameId); joinFirst = null;
+    if (!r.ok) bsay(r.error, true); else { bsay(`Joined. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); selected = instId; }
+    joinMode = false; joinBtn.classList.remove('on'); render();
   }
   async function setMode(m) {
     mode = m; for (const [k, b] of Object.entries(modeBtn)) { b.classList.toggle('on', k === m); b.setAttribute('aria-pressed', String(k === m)); }
