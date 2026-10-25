@@ -262,8 +262,14 @@ export function initAssembly({ editor }) {
     const v = draft.validate(); if (!v.ok) return say(`Cannot export yet: ${v.errors.slice(0, 3).join(' ')}`, true);
     const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(v.part, null, 1)], { type: 'application/json' })), download: `${v.part.id}.circuitbench-part.json` }); a.click(); URL.revokeObjectURL(a.href);
   });
+  let examples = [];                                  // ready-made parts shipped with the app (public/robot-parts)
+  const EX_DIR = '/robot-parts/kame32/';
+  async function loadExamples() {
+    if (examples.length) return;
+    try { const r = await fetch(`${EX_DIR}index.json`); if (!r.ok) return; const j = await r.json(); examples = (j.parts || []).map(p => validateRobotPart(p)).filter(x => x.ok).map(x => ({ ...x.part, example: true })); } catch { /* offline: the examples just don't show */ }
+  }
   async function openPart(part) {
-    const buf = await getMesh(`${part.id}/${part.model.file}`);
+    let buf = part.example ? await fetch(EX_DIR + part.model.file).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : await getMesh(`${part.id}/${part.model.file}`);
     if (!buf) return say('The model file for this part is not stored in this browser (re-import it, then save again).', true);
     const t = await load3d();
     const obj = await parseModel(t.THREE, { name: part.model.file }, buf);
@@ -273,7 +279,11 @@ export function initAssembly({ editor }) {
   }
   function renderLibrary() {
     const list = libraryParts(); libEl.replaceChildren();
-    if (!list.length) libEl.append(el('p', { className: 'asm-note', textContent: 'Saved parts appear here.' }));
+    if (!list.length) libEl.append(el('p', { className: 'asm-note', textContent: 'Parts you save appear here.' }));
+    if (examples.length) {
+      libEl.append(el('p', { className: 'asm-note', textContent: 'Examples: the Kame32 SG90 quadruped leg (GPL-3.0, by Javier Isabel). Open one, then click its holes to mark them.' }));
+      for (const p of examples) { const open = el('button', { type: 'button', className: 'asm-lib-open', textContent: p.name, title: `${p.dims?.size?.map(v => +v.toFixed(1)).join(' × ')} mm` }); open.addEventListener('click', () => openPart(p)); libEl.append(el('div', { className: 'asm-lib-row' }, open, el('span', { className: 'asm-badge', textContent: 'example' }))); }
+    }
     for (const p of list) {
       const open = el('button', { type: 'button', className: 'asm-lib-open', textContent: p.name, title: `${p.frames.length} frames · ${p.mass.grams} g` });
       open.addEventListener('click', () => openPart(p));
@@ -289,7 +299,7 @@ export function initAssembly({ editor }) {
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
     pane.hidden = v !== 'assembly'; testPane.hidden = v !== 'test';
-    if (v === 'assembly') { syncForm(); renderFrames(); renderLibrary(); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
+    if (v === 'assembly') { syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v);
   }
   for (const [id, b] of Object.entries(tabBtn)) b.addEventListener('click', () => show(id));

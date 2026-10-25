@@ -1,0 +1,237 @@
+{
+ "source": "https://github.com/JavierIH/kame32",
+ "licence": "GPL-3.0",
+ "parts": [
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-bracket-left-sg90",
+   "name": "Kame32 bracket (left, SG90)",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "bracket-left-sg90.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 495684
+   },
+   "mass": {
+    "grams": 4.7,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     48.995,
+     43,
+     24
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-bracket-right-sg90",
+   "name": "Kame32 bracket (right, SG90)",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "bracket-right-sg90.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 941684
+   },
+   "mass": {
+    "grams": 4.7,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     48.996,
+     43,
+     24
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-leg-left-sg90",
+   "name": "Kame32 leg (left, SG90)",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "leg-left-sg90.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 534084
+   },
+   "mass": {
+    "grams": 2.5,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     55.993,
+     41.5,
+     24
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-leg-right-sg90",
+   "name": "Kame32 leg (right, SG90)",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "leg-right-sg90.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 1326084
+   },
+   "mass": {
+    "grams": 2.5,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     55.996,
+     41.5,
+     24
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-leg-link",
+   "name": "Kame32 leg link",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "leg-link.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 141884
+   },
+   "mass": {
+    "grams": 1.9,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     49.997,
+     17.998,
+     13.5
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-foot",
+   "name": "Kame32 foot",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "foot.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 371984
+   },
+   "mass": {
+    "grams": 4.1,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     56.499,
+     24,
+     23.5
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-bushing",
+   "name": "Kame32 bushing",
+   "category": "Example parts",
+   "blurb": "Printed part from Kame32 by Javier Isabel (github.com/JavierIH/kame32), GPL-3.0. Click its holes to mark them.",
+   "author": "",
+   "model": {
+    "file": "bushing.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 143884
+   },
+   "mass": {
+    "grams": 0.1,
+    "source": "estimated"
+   },
+   "dims": {
+    "size": [
+     9.199,
+     9.2,
+     4
+    ],
+    "source": "measured"
+   },
+   "frames": [],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
+  }
+ ]
+}

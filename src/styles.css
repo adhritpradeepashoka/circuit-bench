@@ -912,6 +912,7 @@ html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"
 .asm-stage { position: relative; flex: 1; min-width: 0; cursor: crosshair; touch-action: none; }
 .asm-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .asm-hint { position: absolute; inset: 0; display: grid; place-items: center; color: #48564f; font-size: 13px; text-align: center; padding: 24px; pointer-events: none; }
+.asm-hint[hidden] { display: none; }
 .test-pane .asm-hint { pointer-events: auto; }
 .asm-side { width: 330px; flex: none; overflow: auto; padding: 12px 14px 20px; background: var(--surface, #fff); border-left: 1px solid var(--line, #d5ddd8); display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
 .asm-side h4 { margin: 10px 0 0; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: #5b6a63; }
