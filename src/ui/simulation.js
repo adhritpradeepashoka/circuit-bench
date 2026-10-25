@@ -337,6 +337,17 @@ export class Simulation {
           this.mcu.setInput(pin, v == null ? m === 'U' : v > (this.spec?.inputThreshold ?? 2.5));
         }
       }
+      // a closed switch between two pins of THIS chip (a keypad key, a button): the chip applies it between instructions, because a scan
+      // reads the columns microseconds after it drives a row, long before the next frame's solve could
+      if (this.mcu.setCoupling) {
+        const pairs = [];
+        for (const e of circuit.elements) {
+          if (e.kind !== 'SW' || e.a === e.b || !(e.closed || (!e.fixed && this.pressed.has(e.partId)))) continue;
+          const as = view.uno.pins.filter(p => p.port && p.net === e.a), bs = view.uno.pins.filter(p => p.port && p.net === e.b);
+          for (const a of as) for (const b of bs) pairs.push([a, b]);
+        }
+        this.mcu.setCoupling(pairs);
+      }
       for (const pin of view.uno.pins) {                 // ADC: every analog pin sees the solved net voltage
         if (pin.adc == null) continue;
         const key = pin.key ?? pin.name, v = this.result.voltage(pin.net);

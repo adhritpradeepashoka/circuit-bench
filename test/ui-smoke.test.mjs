@@ -2243,3 +2243,32 @@ test('ui: learning from the AI — an applied AI build becomes a template, is ve
   doc.getElementById('aiLearnToggle').click();
   assert.equal(w.localStorage.getItem('virtual-lab:learn-from-ai'), '0');
 });
+
+test('ui: a keypad works through the whole app — holding a key while the sketch scans it reaches the firmware (rows driven low, columns read microseconds later)', async () => {
+  const { plan } = await import('../src/core/hookup/plan.js');
+  const { applyCircuitActions } = await import('../src/core/ai-actions.js');
+  const res = plan([{ type: 'keypad-4x4' }, { type: 'ssd1306' }], { parts: [], wires: [] }, { calculator: true });
+  assert.equal(norm(res.code), norm(fixtures.sketches['calculator-oled'].source), 'the compiled fixture is the sketch the recipe writes');
+  const after = applyCircuitActions({ parts: [], wires: [] }, res.actions);
+  const { w, editor, code, sim } = boot();
+  editor.importProject({ format: 'virtual-lab', version: 1, parts: after.parts, wires: after.wires });
+  code.source = res.code;
+  await sim.start();
+  assert.ok(sim.running, 'the calculator sketch runs');
+  const kp = editor.state.parts.find(p => p.type === 'keypad-4x4');
+  const MAP = ['123A', '456B', '789C', '*0#D'];
+  const slice = s => { for (let i = 0; i < Math.round(s / 0.016); i++) { sim.mcu.run(0.016 * 16e6); sim.step(); } };
+  const press = k => {
+    const r = MAP.findIndex(row => row.includes(k)), bit = 1 << (r * 4 + MAP[r].indexOf(k));
+    kp.keys = (kp.keys || 0) | bit; editor.applyPartValues(); editor.markDirty?.(); slice(0.25);
+    kp.keys &= ~bit; editor.applyPartValues(); editor.markDirty?.(); slice(0.15);
+  };
+  const shown = () => code.serial.text.split(/\r?\n/).filter(Boolean).at(-1);
+  slice(0.5);
+  assert.equal(shown(), '0');
+  for (const k of '12A30#') press(k);
+  assert.equal(shown(), '42', '12 + 30 typed on the keypad');
+  for (const k of '*9C9#') press(k);
+  assert.equal(shown(), '81');
+  sim.stop();
+});

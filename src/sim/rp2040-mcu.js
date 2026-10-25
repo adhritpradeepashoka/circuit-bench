@@ -8,6 +8,7 @@
 //  • Time: the clock is the emulator's own, in nanoseconds; `cpu.cycles` is exposed at `hz` so cycle-based parts work.
 import { Simulator, USBCDC, GPIOPinState, I2CMode } from 'rp2040js';
 import { bootromB1 } from './rp2040-bootrom.js';
+import { PinCoupling } from './coupling.js';
 
 export const RP_HZ = 125_000_000;
 export const RP_VCC = 3.3;
@@ -195,5 +196,10 @@ export class Rp2040Mcu {
     }
   }
   /** Feed the outside world back into an input pin. */
-  setInput({ port, bit }, high) { if (port === 'GP') this.ports.GP.setPin(bit, high); }
+  setInput({ port, bit }, high) {
+    if (port !== 'GP') return;
+    if (this.coupling?.has({ port, bit })) this.coupling.input({ port, bit }, high); else this.ports.GP.setPin(bit, high);
+  }
+  /** Closed switches between two of this chip's own pins (a keypad key): applied at once, between instructions. */
+  setCoupling(pairs) { (this.coupling ||= new PinCoupling(this)).set(pairs); }
 }

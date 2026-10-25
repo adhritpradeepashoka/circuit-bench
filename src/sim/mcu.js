@@ -1,6 +1,7 @@
 import { CPU, AVRIOPort, AVRTimer, PinState, avrInstruction, AVRADC, AVRUSART, AVRTWI } from 'avr8js';
 import { I2CBus } from './i2c.js';
 import { CHIPS } from './chips.js';
+import { PinCoupling } from './coupling.js';
 
 export const CPU_HZ = 16_000_000;
 
@@ -139,5 +140,10 @@ export class Mcu {
     }
   }
   /** Feed the outside world back into an input pin. */
-  setInput({ port, bit }, high) { if (port && this.ports[port]) this.ports[port].setPin(bit, high); }
+  setInput({ port, bit }, high) {
+    if (!port || !this.ports[port]) return;
+    if (this.coupling?.has({ port, bit })) this.coupling.input({ port, bit }, high); else this.ports[port].setPin(bit, high);
+  }
+  /** Closed switches between two of this chip's own pins (a keypad key): the chip applies them at once, between instructions. */
+  setCoupling(pairs) { (this.coupling ||= new PinCoupling(this)).set(pairs); }
 }

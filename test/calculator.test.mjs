@@ -108,3 +108,20 @@ test('calculator plan wires the keypad to free pins on other boards too', () => 
     assert.ok(r.ok && /void calculate\(\)/.test(r.code), board);
   }
 });
+
+test('pin coupling: a closed switch between two chip pins applies at once — low wins, then the circuit\'s own reading returns', async () => {
+  const { PinCoupling } = await import('../src/sim/coupling.js');
+  const state = { r: 'H', c: 'U' }, levels = {};
+  const mcu = { ports: { D: { addListener() {}, setPin: (bit, v) => { levels[bit] = v; } } }, pinMode: p => state[p.bit === 0 ? 'r' : 'c'] };
+  const row = { port: 'D', bit: 0 }, col = { port: 'D', bit: 1 };
+  const c = new PinCoupling(mcu);
+  c.set([[row, col]]);
+  c.input(col, true);
+  assert.equal(levels[1], true, 'row idle high: the column sits at its pull-up');
+  state.r = 'L'; c.settle();
+  assert.equal(levels[1], false, 'row driven low: the column reads low straight away');
+  state.r = 'H'; c.settle();
+  assert.equal(levels[1], true, 'row released: back to high');
+  c.set([]); state.r = 'L'; levels[1] = 'untouched'; c.settle();
+  assert.equal(levels[1], 'untouched', 'switch released: nothing is coupled');
+});
