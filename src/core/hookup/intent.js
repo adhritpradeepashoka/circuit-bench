@@ -11,6 +11,7 @@ const CIRCUIT = /\b(circuit|set-?up|project|demo|example|starter|hookup|hook-up|
 const WIRING = /\b(hook ?up|wire ?up|set ?up|get\b.{0,30}\bworking|try out|play with|test out|experiment with)\b/;
 const NOT_A_REQUEST = /\b(why|how|what|which|when|where|who|explain|wrong|broken|not working|doesn'?t|isn'?t|won'?t|error|help me understand|tell me|can you explain|difference|compare|versus|vs|remove|delete|erase|clear|undo|change|replace|rename|move|swap|fix|debug|optimi[sz]e|improve|rewrite|modify|edit|update|increase|decrease|reduce|bigger|smaller|faster|slower)\b|\?\s*$/;
 const PRECISE_PIN = /\b(pins?\s*[ad]?\d+|[ad]\d{1,2}\b)(?!\s*(?:ohm|k\b))|\bon (?:the )?(?:left|right|top|bottom)\b/;
+const CALCULATOR = /\bcalculators?\b/;
 const SKETCH_ONLY = /\b(code|sketch|program|script)\b/;
 
 const nameOf = t => (PART_DEFS[t]?.name || t).replace(/\s*\(.*$/, '');
@@ -21,12 +22,19 @@ export function makeCircuit(instruction, circuit = { parts: [], wires: [] }, opt
   const t = String(instruction || '').toLowerCase().replace(/[!.]+$/, '').replace(/\s+/g, ' ').trim();
   if (!t || t.length > 240) return null;
   if (NOT_A_REQUEST.test(t)) return null;
-  const circuitWord = CIRCUIT.test(t), wiringVerb = WIRING.test(t);
+  const calc = CALCULATOR.test(t);
+  const circuitWord = CIRCUIT.test(t) || calc, wiringVerb = WIRING.test(t);
   if (!circuitWord && !wiringVerb) return null;
   if (SKETCH_ONLY.test(t) && !circuitWord) return null;
   if (PRECISE_PIN.test(t)) return null;
 
   const read = readParts(t);
+  if (calc) {          // a calculator is a keypad plus a screen: add whichever of the two the sentence did not name
+    const has = type => read.requests.some(r => r.type === type);
+    if (!has('keypad-4x4')) read.requests.push({ type: 'keypad-4x4', count: 1 });
+    if (!has('ssd1306') && !has('lcd1602')) read.requests.push({ type: 'ssd1306', count: 1 });
+    read.requests = read.requests.filter(r => r.type === 'keypad-4x4' || r.type === 'ssd1306' || r.type === 'lcd1602');
+  }
   if (!read.requests.length) {
     if (read.family) {
       const names = read.family.types.map(nameOf);
@@ -35,7 +43,7 @@ export function makeCircuit(instruction, circuit = { parts: [], wires: [] }, opt
     return null;
   }
   const board = circuit.parts?.find(p => BOARD_SPECS[p.type]);
-  const res = plan(read.requests, circuit, { board: read.board || undefined });
+  const res = plan(read.requests, circuit, { board: read.board || undefined, calculator: calc });
   if (!res.ok) return { ...res, actions: [], code: null };
   const extra = [];
   if (read.board && board && board.type !== read.board) extra.push(`Your bench already has ${nameOf(board.type)}, so I used it rather than adding ${nameOf(read.board)}.`);

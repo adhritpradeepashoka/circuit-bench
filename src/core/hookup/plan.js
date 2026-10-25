@@ -6,6 +6,7 @@ import { createPlanner, PlanError } from './engine.js';
 import { recipeFor, SOURCE, ACTUATOR, OTHER, ledOnPin } from './recipes.js';
 import { BY_TYPE } from './recipes.js';
 import { fixArticles } from './helpers.js';
+import { calculatorSketch } from './calculator.js';
 
 const MAX_COUNT = 8;
 const NO_BOARD = new Set(['battery', 'custom-slime-mold']);
@@ -40,5 +41,12 @@ export function plan(requests, circuit = { parts: [], wires: [] }, opts = {}) {
   const parts = [...out.said];
   for (const n of out.notes) parts.push(n);
   if (noChange && parts.length && !out.mem.informational && !unknown.length) parts.push('Everything was already wired, so the circuit is unchanged.');
-  return { ok: true, actions: out.actions, code: hasCode ? s.render() : null, explanation: fixArticles(parts.join(' ')), notes: out.notes, checks: out.checks, noChange, pins: out.dirs, informational: !!out.mem.informational, noBoard: !!out.mem.noBoard };
+  let code = hasCode ? s.render() : null;
+  const screen = s.sinks.has('oled') ? 'oled' : s.sinks.has('lcd') ? 'lcd' : null;
+  if (opts.calculator && c.signals.keypad && screen) {
+    code = calculatorSketch(c.signals.keypad, screen, s.sinks.get(screen), [s.title, ...s.wiring].filter(Boolean).map(x => x.replace(/^Keypad.*$/, 'Calculator: 4×4 keypad in, screen out')));
+    for (let i = 0; i < parts.length; i++) parts[i] = parts[i].replace('; the sketch prints each key you press.', '.').replace('; it shows the readings of the other parts (or the uptime, if there are none).', '.');
+    parts.push('The sketch is a four-function calculator: A + , B − , C × , D ÷ , # equals, * clear.');
+  }
+  return { ok: true, actions: out.actions, code, explanation: fixArticles(parts.join(' ')), notes: out.notes, checks: out.checks, noChange, pins: out.dirs, informational: !!out.mem.informational, noBoard: !!out.mem.noBoard };
 }

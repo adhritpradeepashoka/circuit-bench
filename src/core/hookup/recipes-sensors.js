@@ -183,6 +183,7 @@ const keypad = phase(SOURCE)((c, { n, type }) => {
   const rows = b.rows.map(p => c.hook(h, p, 'digital', { prefer: ['9', '8', '7', '6', '5', '4'], dir: 'out' }));
   const cols = b.cols.map(p => c.hook(h, p, 'digital', { prefer: ['5', '4', '3', '2', '10', '11', '12'] }));
   const map = rows.length === 4 && cols.length === 4 ? ['123A', '456B', '789C', '*0#D'] : rows.map((_, i) => cols.map((_, j) => String.fromCharCode(48 + ((i * cols.length + j) % 10))).join(''));
+  c.signals.keypad = { rows, cols, map };
   const keys = s.uid('KEYS'), rp = s.uid('rowPins'), cp = s.uid('colPins'), last = s.uid('lastKey');
   s.global(`const char ${keys}[${rows.length}][${cols.length}] = {${map.map(r => `{${[...r].map(ch => `'${ch}'`).join(', ')}}`).join(', ')}};`);
   s.global(`const int ${rp}[] = {${rows.join(', ')}};`); s.global(`const int ${cp}[] = {${cols.join(', ')}};`); s.global(`char ${last} = 0;`);
