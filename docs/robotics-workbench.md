@@ -29,8 +29,21 @@ sketch → pins → circuit solver (motor voltage/current, battery sag) → phys
 - Bindings are "work in progress"; embind objects must be `.delete()`d exactly once; `data.contact` is a copy.
 Still to check: in-browser (Chromium) load, memory on the 512 MB host (the wasm runs client-side so the server is unaffected), gzip serving.
 
+## Decisions (owner, 2026-10-25)
+- **Three tabs**: Circuit (today's editor) · Assembly (import, annotate, mate, BOM, fit checks) · Test (sketch + physics, sensors back to the sketch).
+- **No native CAD.** Geometry comes from the user's own CAD (Fusion, Onshape, FreeCAD) or downloads. Assembly never edits geometry — it annotates and mates.
+  Parametric bracket generators are therefore out of scope.
+- Import: STEP (exact cylinders → reliable hole detection; reader lazy-loaded, size still to be measured) · STL/OBJ/glTF (click a hole/face, app proposes a frame and bolt size) · AI proposals from datasheet drawings, always confirmed by the user.
+- Lives in the **Robotics workspace** (`robotics` is already a placeholder in `core/projects.js` WORKSPACES, currently unavailable). Electronics workspaces keep only the Circuit tab.
+
+## Part description format (built: `src/core/robot-part.js`, tests: `test/robot-part.test.mjs`)
+Data only (`circuitbench-robot-part` v1). mm / g / deg / N·m. Blocks: model reference, mass (+COM), dims, frames (hole, shaft, horn, face, connector, point),
+joints (fixed, revolute, prismatic, ball), actuators (servo, dc-motor, stepper, linear — each with its own physical parameters), sensors, ports (circuit parts).
+Every numeric group has provenance (datasheet | measured | estimated); `provenanceOf()` lists what is still unverified for the BOM.
+The validator resolves every reference (joint→frame, actuator→joint, encoder→joint), clamps numbers, cleans strings and caps counts.
+
 ## Order of work
-1. Part description format + provenance + validator (JSON, versioned).
+1. ✅ Part description format + provenance + validator (JSON, versioned).
 2. Assembly view (three.js is already a dependency): real hole positions, snapping, fit checks, BOM.
 3. Circuit link + motion (sketch drives servo joints).
 4. Human body model + alignment/torque checks.
