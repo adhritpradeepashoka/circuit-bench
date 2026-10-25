@@ -28,6 +28,19 @@ export function screwFor(diameter) {
   return best && best.name;
 }
 
+/** Where instance B must sit so frame fb lands on frame fa of A, facing it. B keeps its own twist as far as possible. Does not change anything. */
+export function mateTransform(A, fa, B, fb) {
+  const wa = worldFrame(A, fa), wb = worldFrame(B, fb);
+  const q = qmul(arc(wb.dir, wa.dir.map(v => -v)), B.T.q), pb = place({ q, t: [0, 0, 0] }, fb.pos);
+  return { q, t: [wa.pos[0] - pb[0], wa.pos[1] - pb[1], wa.pos[2] - pb[2]] };
+}
+const axisAngle = (axis, deg) => { const a = unit(axis), h = (deg * Math.PI) / 360, s = Math.sin(h); return [a[0] * s, a[1] * s, a[2] * s, Math.cos(h)]; };
+/** Turn an instance by `deg` about a world axis through `pivot`. */
+export function turn(inst, axis, pivot, deg) {
+  const r = axisAngle(axis, deg), rel = [inst.T.t[0] - pivot[0], inst.T.t[1] - pivot[1], inst.T.t[2] - pivot[2]], m = rotate(r, rel);
+  const q = qmul(r, inst.T.q), l = Math.hypot(...q); inst.T = { q: q.map(v => v / l), t: [pivot[0] + m[0], pivot[1] + m[1], pivot[2] + m[2]] };
+}
+
 export class Assembly {
   constructor() { this.instances = []; this.mates = []; this.counter = 0; }
   /** @param part a validated robot part  @param at where to put it (mm) */
@@ -43,14 +56,33 @@ export class Assembly {
     if (A === B) return { ok: false, error: 'Pick frames on two different parts.' };
     const fa = A.part.frames.find(f => f.id === aFrame), fb = B.part.frames.find(f => f.id === bFrame);
     if (!fa || !fb) return { ok: false, error: 'Unknown frame.' };
-    const wa = worldFrame(A, fa), wb = worldFrame(B, fb);
-    const twist = arc(wb.dir, wa.dir.map(v => -v)), q = qmul(twist, B.T.q);              // keeps B's own twist as far as possible
-    const moved = { q, t: [0, 0, 0] }, pb = place(moved, fb.pos);
-    B.T = { q, t: [wa.pos[0] - pb[0], wa.pos[1] - pb[1], wa.pos[2] - pb[2]] };
+    B.T = mateTransform(A, fa, B, fb);
     this.mates = this.mates.filter(m => !(m.b.inst === bInst && m.b.frame === bFrame) && !(m.a.inst === bInst && m.a.frame === bFrame && m.b.inst === aInst));
     const m = { a: { inst: aInst, frame: aFrame }, b: { inst: bInst, frame: bFrame }, screw: screw || null }; this.mates.push(m);
     return { ok: true, mate: m, check: this.check(m) };
   }
+  isMated(instId, frameId) { return this.mates.some(m => (m.a.inst === instId && m.a.frame === frameId) || (m.b.inst === instId && m.b.frame === frameId)); }
+  matesOf(instId) { return this.mates.filter(m => m.a.inst === instId || m.b.inst === instId); }
+  /** While B is being dragged: the nearest free hole pair (a hole of B, a hole of another part) within `reach` (mm, or whatever `measure` returns, e.g. pixels on screen) whose sizes are compatible, else null. */
+  snapFor(bInst, { reach = 7, maxSizeGap = 1.2, measure = null } = {}) {
+    const B = this.get(bInst); if (!B) return null; let best = null;
+    for (const fb of B.part.frames) {
+      if (this.isMated(B.id, fb.id)) continue; const wb = worldFrame(B, fb);
+      for (const A of this.instances) {
+        if (A === B) continue;
+        for (const fa of A.part.frames) {
+          if (this.isMated(A.id, fa.id)) continue;
+          if (fa.diameter && fb.diameter && Math.abs(fa.diameter - fb.diameter) > maxSizeGap) continue;
+          const wa = worldFrame(A, fa), d = measure ? measure(wa.pos, wb.pos) : Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]);
+          if (d <= reach && (!best || d < best.dist)) best = { a: A.id, aFrame: fa.id, bFrame: fb.id, dist: d };
+        }
+      }
+    }
+    return best;
+  }
+  /** A copy of the arrangement, for undo. Part objects are shared, transforms and mates are copied. */
+  snapshot() { return { instances: this.instances.map(i => ({ ...i, T: { q: [...i.T.q], t: [...i.T.t] } })), mates: this.mates.map(m => ({ a: { ...m.a }, b: { ...m.b }, screw: m.screw })), counter: this.counter }; }
+  restore(s) { this.instances = s.instances.map(i => ({ ...i, T: { q: [...i.T.q], t: [...i.T.t] } })); this.mates = s.mates.map(m => ({ a: { ...m.a }, b: { ...m.b }, screw: m.screw })); this.counter = s.counter; }
   /** How well a mate fits: hole sizes, the screw that suits them, and whether the frames are still lined up (a later move can break it). */
   check(m) {
     const A = this.get(m.a.inst), B = this.get(m.b.inst); if (!A || !B) return { ok: false, notes: ['A part of this mate is gone.'], level: 'bad' };

@@ -4,7 +4,7 @@
 import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
-import { Assembly, worldFrame, screwFor } from '../core/assembly-scene.js';
+import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -32,10 +32,10 @@ export function initAssembly({ editor }) {
   const sepAfter = el('span', { className: 'sep', hidden: true });
   toolbar.prepend(tabs, sepAfter);
 
-  const draft = new PartDraft(); let mode = 'part';
+  const draft = new PartDraft(); let mode = 'build';
   const pane = el('div', { className: 'asm-pane', hidden: true });
   const stage = el('div', { className: 'asm-stage' });
-  const hint = el('div', { className: 'asm-hint', textContent: 'Import a 3D model of a part (STL, OBJ or glTF) to start marking where it connects.' });
+  const hint = el('div', { className: 'asm-hint', textContent: '', hidden: true });
   stage.append(hint);
   const side = el('div', { className: 'asm-side' });
   const testPane = el('div', { className: 'asm-pane test-pane', hidden: true }, el('div', { className: 'asm-hint', textContent: 'Test is next: the sketch will drive the assembled robot with real physics. For now, build and check your parts in Assembly.' }));
@@ -60,10 +60,11 @@ export function initAssembly({ editor }) {
   const saveBtn = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Save part', id: 'asmSave' });
   const exportBtn = el('button', { type: 'button', className: 'asm-btn', textContent: 'Download description', id: 'asmExport' });
   const libEl = el('div', { className: 'asm-lib', id: 'asmLib' });
-  const partBox = el('div', { className: 'asm-box' }), buildBox = el('div', { className: 'asm-box', hidden: true });
+  const DEV = (() => { try { return localStorage.getItem('circuitbench:parts-dev') === '1' || /[?&]partsdev\b/.test(location.search); } catch { return false; } })();      // marking holes on your own models is a maker's tool, kept out of the way
+  const partBox = el('div', { className: 'asm-box', hidden: true }), buildBox = el('div', { className: 'asm-box' });
   const modeBar = el('div', { className: 'view-toggle asm-mode', role: 'group', ariaLabel: 'Mark parts or build' });
   const modeBtn = { part: el('button', { type: 'button', id: 'asmModePart', textContent: 'Mark a part' }), build: el('button', { type: 'button', id: 'asmModeBuild', textContent: 'Build' }) };
-  modeBar.append(modeBtn.part, modeBtn.build); side.append(modeBar, partBox, buildBox);
+  modeBar.append(modeBtn.part, modeBtn.build); modeBar.hidden = !DEV; modeBtn.build.classList.add('on'); side.append(modeBar, partBox, buildBox);
   const holesBtn = el('button', { type: 'button', className: 'asm-btn', textContent: 'Find all holes', id: 'asmFindHoles', title: 'Mark every round hole in the model' });
   partBox.append(
     el('div', { className: 'asm-row' }, importBtn, fileIn),
@@ -168,7 +169,7 @@ export function initAssembly({ editor }) {
       el3.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; });
       el3.addEventListener('pointerup', e => {
         if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 4) { down = null; return; }
-        down = null; if (mode === 'build') return buildClick(e.clientX, e.clientY);
+        down = null; if (mode !== 'part') return;
         const p = pick(e.clientX, e.clientY);
         if (p.hit === 'frame') { draft.selected = p.id; renderFrames(); drawGizmos(); draw(); }
         else if (p.hit === 'model') { draft.addFrame({ pos: p.pos, dir: p.dir, kind: kindSel.value, diameter: p.diameter }); renderFrames(); drawGizmos(); draw(); }
@@ -302,112 +303,221 @@ export function initAssembly({ editor }) {
     }
   }
 
-  // ── building: several parts in one space, joined by mates ─────
-  const asm = new Assembly(), meshCache = new Map(), objCache = new Map();
-  let pickA = null, bmsg = '';
-  const instList = el('div', { className: 'asm-lib', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' });
-  const addSel = el('select', { id: 'asmAddSel', ariaLabel: 'Part to add' }), addBtn = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Add to scene', id: 'asmAdd' });
+  // ── building: drag parts around, they snap together at their holes ─────
+  const asm = new Assembly(), objCache = new Map(), SCENE_KEY = 'circuitbench:robot-scene';
+  let selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null;
+  const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
   buildBox.append(
-    el('p', { className: 'asm-note', textContent: 'Add parts, then click a hole ring on one part and a hole ring on another. The second part moves onto the first, holes lined up and facing each other.' }),
-    el('div', { className: 'asm-row' }, addSel, addBtn), bnote,
-    el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Mates' }), mateList, el('h4', { textContent: 'Parts & screws' }), bomEl);
+    el('p', { className: 'asm-note', textContent: 'Click a part, or drag it into the scene. Drag a part near a hole on another part and it snaps on.' }), bnote, selBox, cards,
+    el('h4', { textContent: 'Joints' }), mateList, bomEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
-  const everyPart = () => [...libraryParts().map(p => ({ ...p, example: false })), ...examples];
-  function refreshAddList() {
-    const parts = everyPart(), cur = addSel.value; addSel.replaceChildren(...parts.map(p => el('option', { value: p.id, textContent: p.name })));
-    if (parts.some(p => p.id === cur)) addSel.value = cur;
-  }
+  const everyPart = () => [...examples, ...libraryParts().map(p => ({ ...p, example: false }))];
+  const findPart = id => everyPart().find(p => p.id === id);
+  // the floating bar and the hint over the 3D view
+  const mkBtn = (label, title, fn, id) => { const b = el('button', { type: 'button', className: 'asm-tool', textContent: label, title, ariaLabel: title, id }); b.addEventListener('click', fn); return b; };
+  const undoBtn = mkBtn('↶', 'Undo (Ctrl+Z)', () => undo(), 'asmUndo'), redoBtn = mkBtn('↷', 'Redo (Ctrl+Y)', () => redo(), 'asmRedo');
+  const toolbarEl = el('div', { className: 'asm-floating', hidden: true }, undoBtn, redoBtn, mkBtn('⤢', 'Fit everything in view', () => fitScene(), 'asmFit'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
+  const helpEl = el('div', { className: 'asm-help', hidden: true });
+  stage.append(toolbarEl, helpEl);
+  const setHelp = t => { helpEl.textContent = t; };
+
   async function meshOf(part) { return part.example ? fetch(EX_DIR + part.model.file).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : getMesh(`${part.id}/${part.model.file}`); }
-  /** A part's mesh in the same space the frames were marked in: scaled to mm, turned Z-up, centred in X/Y and resting on z = 0. */
+  /** A part's mesh in the space its holes were marked in: mm, Z up, centred in X/Y, resting on z = 0. */
   async function partObject(t, part) {
     if (!objCache.has(part.id)) {
-      const buf = await meshOf(part); if (!buf) throw new Error(`The model file for “${part.name}” is not stored in this browser.`);
+      const buf = await meshOf(part); if (!buf) throw new Error(`The model for “${part.name}” could not be loaded.`);
       const raw = await parseModel(t.THREE, { name: part.model.file }, buf), g = new t.THREE.Group(); g.add(raw);
-      raw.traverse(o => { if (o.isMesh) o.material = new t.THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.15, roughness: 0.6, side: t.THREE.DoubleSide }); });
       g.rotation.set(part.model.up === 'y' ? Math.PI / 2 : 0, 0, 0); g.scale.setScalar(UNIT_MM[part.model.units] || 1); g.updateMatrixWorld(true);
       const b = new t.THREE.Box3().setFromObject(g), c = b.getCenter(new t.THREE.Vector3()); g.position.set(-c.x, -c.y, -b.min.z);
       const holder = new t.THREE.Group(); holder.add(g); objCache.set(part.id, holder);
     }
-    return objCache.get(part.id).clone(true);
+    const o = objCache.get(part.id).clone(true);
+    o.traverse(m => { if (m.isMesh) m.material = new t.THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.15, roughness: 0.6, side: t.THREE.DoubleSide, emissive: 0x000000 }); });
+    return o;
   }
-  const colourOf = (inst, f) => pickA && pickA.inst === inst.id && pickA.frame === f.id ? 0xe0562a : asm.mates.some(m => (m.a.inst === inst.id && m.a.frame === f.id) || (m.b.inst === inst.id && m.b.frame === f.id)) ? 0x4aa36b : 0x1f7a8c;
-  function drawBuild() {
-    const t = three; if (!t) return; const { THREE } = t;
-    t.sceneGizmos.clear();
-    for (const inst of asm.instances) {
-      const grp = inst.obj; if (!grp) continue;
-      grp.position.fromArray(inst.T.t); grp.quaternion.set(...inst.T.q); grp.updateMatrixWorld(true);
-      for (const f of inst.part.frames) {
-        const w = worldFrame(inst, f), r = Math.max((f.diameter || 3) / 2, 0.8) + 0.3, ring = new THREE.Mesh(new THREE.TorusGeometry(r, 0.28, 8, 28), new THREE.MeshBasicMaterial({ color: colourOf(inst, f), depthTest: false }));
-        const col = colourOf(inst, f), disc = new THREE.Mesh(new THREE.CircleGeometry(r, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.28, depthTest: false, side: THREE.DoubleSide }));   // a filled target: a bare ring is hard to hit
-        ring.add(disc); ring.position.fromArray(w.pos); ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...w.dir)); ring.renderOrder = disc.renderOrder = 10; ring.userData = { inst: inst.id, frame: f.id };
-        t.sceneGizmos.add(ring);
-      }
+  /** A small picture of each part for its card, drawn once with a throwaway renderer. */
+  async function makeThumbs() {
+    const t = await load3d(), parts = everyPart().filter(p => !thumbs.has(p.id)); if (!parts.length) return;
+    const { THREE } = t; let r; try { r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); } catch { return; }
+    r.setSize(120, 90); const sc = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 120 / 90, 0.1, 5000);
+    sc.add(new THREE.HemisphereLight(0xffffff, 0x667788, 1.5)); const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(100, -150, 200); sc.add(sun);
+    for (const p of parts) {
+      try {
+        const o = await partObject(t, p); o.traverse(m => { if (m.isMesh) m.material.color.set(0x9fb0ba); }); sc.add(o); o.updateMatrixWorld(true);
+        const b = new THREE.Box3().setFromObject(o), c = b.getCenter(new THREE.Vector3()), d = Math.max(...b.getSize(new THREE.Vector3()).toArray()) * 2.6;
+        cam.up.set(0, 0, 1); cam.position.set(c.x + d * 0.6, c.y - d * 0.8, c.z + d * 0.55); cam.lookAt(c); r.render(sc, cam); thumbs.set(p.id, r.domElement.toDataURL('image/png')); sc.remove(o);
+      } catch { /* a part without a picture still has its name */ }
     }
-    t.draw();
+    r.dispose(); r.forceContextLoss?.(); renderCards();
   }
-  async function addToScene(part) {
+  function renderCards() {
+    cards.replaceChildren();
+    for (const p of everyPart()) {
+      const img = thumbs.get(p.id) ? el('img', { src: thumbs.get(p.id), alt: '', draggable: false }) : el('div', { className: 'asm-thumb-empty' });
+      const c = el('button', { type: 'button', className: 'asm-card', draggable: true, title: `${p.name} · ${p.frames.length} holes` }, img, el('span', { textContent: p.name.replace(/^Kame32 /, '') }));
+      c.dataset.part = p.id; c.addEventListener('click', () => addToScene(p)); c.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', `circuitbench-part:${p.id}`); e.dataTransfer.effectAllowed = 'copy'; });
+      cards.append(c);
+    }
+  }
+
+  // — history, saving
+  const objOf = id => asm.get(id)?.obj;
+  const keep = () => { history.push(asm.snapshot()); if (history.length > 60) history.shift(); future = []; refreshTools(); };
+  const refreshTools = () => { undoBtn.disabled = !history.length; redoBtn.disabled = !future.length; };
+  function applyScene() {
+    const t = three; if (!t) return;
+    for (const c of [...t.sceneRoot.children]) if (!asm.instances.some(i => i.obj === c)) t.sceneRoot.remove(c);
+    for (const i of asm.instances) if (i.obj && !i.obj.parent) t.sceneRoot.add(i.obj);
+    if (selected && !asm.get(selected)) selected = null; render();
+  }
+  function undo() { if (!history.length) return; future.push(asm.snapshot()); asm.restore(history.pop()); applyScene(); }
+  function redo() { if (!future.length) return; history.push(asm.snapshot()); asm.restore(future.pop()); applyScene(); }
+  function save() { try { localStorage.setItem(SCENE_KEY, JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw })) })); } catch { /* unsaved is fine */ } }
+  async function restoreSaved() {
+    if (asm.instances.length) return; let j = null; try { j = JSON.parse(localStorage.getItem(SCENE_KEY) || 'null'); } catch { /* none */ }
+    if (!j?.parts?.length) return; const t = await load3d(), ids = [];
+    for (const rec of j.parts) { const p = findPart(rec.part); if (!p) { ids.push(null); continue; } try { const inst = asm.add(p); inst.T = rec.T; inst.obj = await partObject(t, p); inst.obj.userData.inst = inst.id; ids.push(inst.id); } catch { ids.push(null); } }
+    for (const m of j.mates || []) if (ids[m.a] && ids[m.b]) asm.mates.push({ a: { inst: ids[m.a], frame: m.af }, b: { inst: ids[m.b], frame: m.bf }, screw: m.screw || null });
+    applyScene(); fitScene();
+  }
+
+  // — adding and removing
+  async function addToScene(part, at = null) {
     const t = await load3d();
     try {
-      const obj = await partObject(t, part), inst = asm.add(part, [0, 0, 0]); inst.obj = obj; t.sceneRoot.add(obj);
-      const bb = new t.THREE.Box3().setFromObject(obj).getSize(new t.THREE.Vector3()), n = asm.instances.length - 1;      // lay new parts out in a row so they start apart
-      inst.T.t = [n * (Math.max(bb.x, 30) + 15) - 40, 0, 0]; hint.hidden = true; renderBuild(); drawBuild(); fitScene();
-      if (!part.frames.length) bsay(`“${part.name}” has no marked holes yet. Mark them in “Mark a part”, save, and add it again.`, true);
+      const obj = await partObject(t, part); keep(); const inst = asm.add(part);
+      inst.obj = obj; obj.userData.inst = inst.id; t.sceneRoot.add(obj);
+      const sz = new t.THREE.Box3().setFromObject(obj).getSize(new t.THREE.Vector3());
+      if (at) inst.T.t = [at[0], at[1], 0];
+      else { const others = asm.instances.filter(i => i !== inst); let x = 0; if (others.length) { const bb = new t.THREE.Box3(); others.forEach(o => bb.expandByObject(o.obj)); x = bb.max.x + 14 + sz.x / 2; } inst.T.t = [x, 0, 0]; }
+      select(inst.id); applyScene(); if (!at) fitScene(); bsay('');
+      if (!part.frames.length) bsay(`“${part.name}” has no marked holes, so it cannot snap to anything.`, true);
     } catch (e) { bsay(e.message, true); }
   }
+  function removeInst(id) { keep(); const i = asm.get(id); if (i) three?.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; applyScene(); }
+  function clearAll() { if (!asm.instances.length) return; keep(); for (const i of asm.instances) three?.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null; applyScene(); }
+  const select = id => { selected = id; render(); };
   function fitScene() {
     const t = three, b = new t.THREE.Box3().setFromObject(t.sceneRoot); if (b.isEmpty()) return;
-    const s = b.getSize(new t.THREE.Vector3()), c = b.getCenter(new t.THREE.Vector3()), d = Math.max(s.x, s.y, s.z, 20) * 2.2;
+    const s = b.getSize(new t.THREE.Vector3()), c = b.getCenter(new t.THREE.Vector3()), d = Math.max(s.x, s.y, s.z, 40) * 2.2;
     t.controls.target.copy(c); t.camera.position.set(c.x + d * 0.5, c.y - d, c.z + d * 0.6); t.camera.near = d / 100; t.camera.far = d * 100; t.camera.updateProjectionMatrix(); t.controls.update(); t.draw();
   }
-  function buildClick(x, y) {
-    const t = three; if (!t) return; const r = t.renderer.domElement.getBoundingClientRect();
-    t.ray.setFromCamera(new t.THREE.Vector2(((x - r.left) / r.width) * 2 - 1, -(((y - r.top) / r.height) * 2 - 1)), t.camera);
-    const g = t.ray.intersectObjects(t.sceneGizmos.children, true)[0]; if (g) { let o = g.object; while (o && !o.userData.inst) o = o.parent; g.object = o || g.object; }
-    if (!g) { if (pickA) { pickA = null; bsay('Pick cancelled.'); drawBuild(); } return; }
-    pickFrame(g.object.userData.inst, g.object.userData.frame);
-  }
-  function pickFrame(instId, frameId) {
-    if (!pickA) { pickA = { inst: instId, frame: frameId }; bsay(`Now click a hole on a different part. It will move onto ${frameId} of ${asm.get(instId).part.name}.`); return drawBuild(); }
-    if (pickA.inst === instId) { pickA = { inst: instId, frame: frameId }; bsay('Pick a hole on a different part.'); return drawBuild(); }
-    const a = pickA; pickA = null; const res = asm.mate(a.inst, a.frame, instId, frameId);
-    if (!res.ok) bsay(res.error, true); else bsay(`Mated. ${res.check.notes[0] || ''}`, res.check.level === 'bad');
-    renderBuild(); drawBuild();
-  }
-  function renderBuild() {
-    refreshAddList(); instList.replaceChildren(); mateList.replaceChildren();
-    if (!asm.instances.length) instList.append(el('p', { className: 'asm-note', textContent: 'Nothing here yet. Add a part above.' }));
-    for (const inst of asm.instances) {
-      const del = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Remove from the scene', ariaLabel: `Remove ${inst.part.name}` });
-      del.addEventListener('click', () => { three?.sceneRoot.remove(inst.obj); asm.remove(inst.id); if (pickA?.inst === inst.id) pickA = null; renderBuild(); drawBuild(); });
-      instList.append(el('div', { className: 'asm-lib-row' }, el('span', { className: 'asm-lib-name', textContent: inst.part.name, title: inst.id }), el('span', { className: 'asm-badge', textContent: `${inst.part.frames.length} holes` }), del));
+
+  // — drawing the scene
+  function holeMarkers() {
+    const t = three, { THREE } = t; t.sceneGizmos.clear();
+    for (const inst of asm.instances) for (const f of inst.part.frames) {
+      const w = worldFrame(inst, f), r = Math.max((f.diameter || 3) / 2, 0.8) + 0.2, mated = asm.isMated(inst.id, f.id);
+      const hot = snapShow && ((snapShow.a === inst.id && snapShow.aFrame === f.id) || (snapShow.b === inst.id && snapShow.bFrame === f.id));
+      const col = hot ? 0x1fae5a : mated ? 0x6f8f7b : 0x1f7a8c, g = new THREE.Mesh(new THREE.CircleGeometry(hot ? r * 1.5 : r, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: hot ? 0.75 : mated ? 0.18 : 0.4, depthTest: false, side: THREE.DoubleSide }));
+      g.position.fromArray(w.pos); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...w.dir)); g.position.addScaledVector(new THREE.Vector3(...w.dir), 0.05);
+      g.renderOrder = 10; g.userData = { label: `${f.diameter ? f.diameter.toFixed(1) + ' mm ' : ''}hole${mated ? ' (joined)' : ''}`, inst: inst.id, frame: f.id }; t.sceneGizmos.add(g);
     }
+  }
+  function render() {
+    const t = three; if (!t) return;
+    for (const inst of asm.instances) {
+      inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true);
+      inst.obj.traverse(m => { if (m.isMesh) m.material.emissive.setHex(inst.id === selected ? 0x1d4e75 : snapShow && (snapShow.a === inst.id || snapShow.b === inst.id) ? 0x14602f : 0x000000); });
+    }
+    holeMarkers(); t.draw(); renderPanel(); refreshTools(); save();
+    helpEl.hidden = false; setHelp(!asm.instances.length ? 'Pick a part on the right to start.' : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag to move · drag the background to look around · scroll to zoom' : 'Click a part to select it');
+  }
+  function renderPanel() {
+    selBox.replaceChildren(); const inst = selected && asm.get(selected); selBox.hidden = !inst;
+    if (inst) {
+      const mates = asm.matesOf(inst.id), mt = mates[0], act = (label, title, fn) => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: label, title, ariaLabel: title }); b.addEventListener('click', fn); return b; };
+      const pivot = () => inst.obj && new three.THREE.Vector3(...worldCenter(inst));
+      const turnZ = deg => { keep(); const c = worldCenter(inst); turn(inst, [0, 0, 1], c, deg); asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); render(); };
+      selBox.append(el('div', { className: 'asm-sel-name', textContent: inst.part.name }),
+        el('div', { className: 'asm-row wrap' }, act('⟲ 90°', 'Turn left', () => turnZ(90)), act('⟳ 90°', 'Turn right', () => turnZ(-90)), act('Flip', 'Turn it over', () => { keep(); turn(inst, [1, 0, 0], worldCenter(inst), 180); asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); render(); }), act('Remove', 'Remove this part', () => removeInst(inst.id))));
+      if (mt) {
+        const mine = mt.b.inst === inst.id ? mt.b : mt.a, other = mt.b.inst === inst.id ? mt.a : mt.b, A = asm.get(other.inst), fa = A.part.frames.find(f => f.id === other.frame), wf = worldFrame(A, fa);
+        let last = 0; const sl = el('input', { type: 'range', min: -180, max: 180, value: 0, step: 1, ariaLabel: 'Spin around the screw', id: 'asmSpin' });
+        sl.addEventListener('pointerdown', () => keep());
+        sl.addEventListener('input', () => { const v = Number(sl.value); turn(inst, wf.dir, wf.pos, v - last); last = v; render2(); });
+        selBox.append(el('label', { className: 'asm-field' }, el('span', { textContent: 'Spin around the screw' }), sl));
+      }
+    }
+    mateList.replaceChildren();
+    if (!asm.mates.length) mateList.append(el('p', { className: 'asm-note', textContent: 'Nothing joined yet.' }));
     asm.mates.forEach((m, i) => {
-      const ck = asm.check(m), A = asm.get(m.a.inst), B = asm.get(m.b.inst);
-      const scr = el('select', { ariaLabel: 'Screw', className: 'asm-mini-sel' }, el('option', { value: '', textContent: 'auto screw' }), ...Object.keys(THREADS).map(k => el('option', { value: k, textContent: k.replace('_', '.'), selected: k === m.screw })));
-      scr.addEventListener('change', () => { m.screw = scr.value || null; renderBuild(); });
-      const del = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Undo this mate (the part stays where it is)', ariaLabel: 'Remove mate' });
-      del.addEventListener('click', () => { asm.mates.splice(i, 1); renderBuild(); drawBuild(); });
-      mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: 'asm-lib-name', textContent: `${A?.part.name ?? '?'} ${m.a.frame} ⇄ ${B?.part.name ?? '?'} ${m.b.frame}` }), el('span', { className: `asm-badge ${ck.level}`, textContent: ck.level === 'ok' ? 'fits' : ck.level === 'warn' ? 'check' : 'problem' }), scr, del), el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
+      const ck = asm.check(m), A = asm.get(m.a.inst), B = asm.get(m.b.inst); if (!A || !B) return;
+      const scr = el('select', { ariaLabel: 'Screw', className: 'asm-mini-sel' }, el('option', { value: '', textContent: 'auto' }), ...Object.keys(THREADS).map(k => el('option', { value: k, textContent: k.replace('_', '.'), selected: k === m.screw })));
+      scr.addEventListener('change', () => { m.screw = scr.value || null; render(); });
+      const un = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Unjoin (the parts stay where they are)', ariaLabel: 'Unjoin' });
+      un.addEventListener('click', () => { keep(); asm.mates.splice(i, 1); render(); });
+      mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: `asm-dot ${ck.level}` }), el('span', { className: 'asm-lib-name', textContent: `${A.part.name.replace(/^Kame32 /, '')} + ${B.part.name.replace(/^Kame32 /, '')}` }), scr, un), el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
     });
     const bom = asm.bom();
-    bomEl.textContent = asm.instances.length ? `${bom.parts.map(p => `${p.count} × ${p.name}`).join(', ')}${bom.screws.length ? '; screws: ' + bom.screws.map(s => `${s.count} × ${s.thread.replace('_', '.')}`).join(', ') : ''}. About ${bom.grams} g (printed-part masses are estimates).` : '';
+    bomEl.textContent = asm.instances.length ? `${bom.parts.map(p => `${p.count} × ${p.name}`).join(', ')}${bom.screws.length ? ' · screws: ' + bom.screws.map(s => `${s.count} × ${s.thread.replace('_', '.')}`).join(', ') : ''} · about ${bom.grams} g` : '';
   }
-  addBtn.addEventListener('click', () => { const p = everyPart().find(q => q.id === addSel.value); if (p) addToScene(p); });
+  const render2 = () => { const t = three; for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } holeMarkers(); t.draw(); save(); };
+  const worldCenter = inst => { const b = new three.THREE.Box3().setFromObject(inst.obj), c = b.getCenter(new three.THREE.Vector3()); return [c.x, c.y, c.z]; };
+
+  // — the mouse: grab a part to move it, drag the background to look around
+  function attach(t) {
+    if (attached) return; attached = true; const dom = t.renderer.domElement, { THREE } = t, plane = new THREE.Plane(), hitPt = new THREE.Vector3();
+    const ndc = e => { const r = dom.getBoundingClientRect(); return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)); };
+    const instAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const h = t.ray.intersectObjects(t.sceneRoot.children, true)[0]; if (!h) return null; let o = h.object; while (o && !o.userData.inst) o = o.parent; return o ? { id: o.userData.inst, point: h.point } : null; };
+    dom.addEventListener('pointerdown', e => {
+      if (mode !== 'build' || e.button !== 0) return;
+      const h = instAt(e); if (!h) { if (selected) select(null); return; }
+      t.controls.enabled = false; dom.setPointerCapture(e.pointerId); select(h.id);
+      const inst = asm.get(h.id); plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), h.point);
+      drag = { id: h.id, start: { x: e.clientX, y: e.clientY }, t0: [...inst.T.t], grab: h.point.clone(), moved: false, pending: asm.snapshot() };
+    }, true);
+    dom.addEventListener('pointermove', e => {
+      if (mode !== 'build') return;
+      if (!drag) {                                                                           // hovering: say what a hole is
+        t.ray.setFromCamera(ndc(e), t.camera); const g = t.ray.intersectObjects(t.sceneGizmos.children, false)[0], over = instAt(e);
+        dom.style.cursor = over ? 'grab' : ''; if (tip) tip.hidden = !g; if (g && tip) { tip.textContent = g.object.userData.label; tip.style.left = `${e.clientX - dom.getBoundingClientRect().left + 12}px`; tip.style.top = `${e.clientY - dom.getBoundingClientRect().top + 12}px`; }
+        return;
+      }
+      if (!drag.moved && Math.hypot(e.clientX - drag.start.x, e.clientY - drag.start.y) < 4) return;
+      const inst = asm.get(drag.id); if (!inst) return;
+      if (!drag.moved) { drag.moved = true; history.push(drag.pending); future = []; asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); dom.style.cursor = 'grabbing'; }
+      t.ray.setFromCamera(ndc(e), t.camera); if (!t.ray.ray.intersectPlane(plane, hitPt)) return;
+      inst.T = { q: inst.T.q, t: [drag.t0[0] + hitPt.x - drag.grab.x, drag.t0[1] + hitPt.y - drag.grab.y, drag.t0[2] + hitPt.z - drag.grab.z] };
+      const r0 = dom.getBoundingClientRect(), px = p => { const v = new THREE.Vector3(...p).project(t.camera); return [(v.x + 1) / 2 * r0.width, (1 - v.y) / 2 * r0.height]; };
+      const s = asm.snapFor(inst.id, { reach: 30, maxSizeGap: 1.5, measure: (a, b) => { const A = px(a), B = px(b); return Math.hypot(A[0] - B[0], A[1] - B[1]); } }); snapShow = s;      // close ON SCREEN counts, so you needn't judge depth
+      if (s) { const A = asm.get(s.a); inst.T = mateTransform(A, A.part.frames.find(f => f.id === s.aFrame), inst, inst.part.frames.find(f => f.id === s.bFrame)); }
+      render();
+    });
+    const end = e => {
+      if (!drag) return; const d = drag; drag = null; t.controls.enabled = true; dom.style.cursor = ''; try { dom.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+      if (d.moved && snapShow) { const s = snapShow, r = asm.mate(s.a, s.aFrame, d.id, s.bFrame); if (r.ok) bsay(`Joined. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); }
+      else if (d.moved) bsay('');
+      snapShow = null; render();
+    };
+    dom.addEventListener('pointerup', end); dom.addEventListener('pointercancel', end);
+    dom.addEventListener('dragover', e => { if (mode === 'build') e.preventDefault(); });
+    dom.addEventListener('drop', e => {
+      const m = /^circuitbench-part:(.+)$/.exec(e.dataTransfer?.getData('text/plain') || ''); if (!m || mode !== 'build') return; e.preventDefault();
+      const p = findPart(m[1]); if (!p) return; t.ray.setFromCamera(ndc(e), t.camera); const g0 = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), at = new THREE.Vector3();
+      addToScene(p, t.ray.ray.intersectPlane(g0, at) ? [at.x, at.y] : null);
+    });
+    tip = el('div', { className: 'asm-tip', hidden: true }); stage.append(tip);
+    addEventListener('keydown', e => {
+      if (mode !== 'build' || pane.hidden || /input|select|textarea/i.test(document.activeElement?.tagName || '')) return;
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      else if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) { e.preventDefault(); redo(); }
+      else if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); removeInst(selected); }
+    });
+  }
   async function setMode(m) {
     mode = m; for (const [k, b] of Object.entries(modeBtn)) { b.classList.toggle('on', k === m); b.setAttribute('aria-pressed', String(k === m)); }
     partBox.hidden = m !== 'part'; buildBox.hidden = m !== 'build';
     const t = await load3d();
-    t.root.visible = t.gizmos.visible = m === 'part'; t.sceneRoot.visible = t.sceneGizmos.visible = m === 'build';
-    if (m === 'build') { await loadExamples(); renderBuild(); hint.textContent = 'Add parts from the list on the right.'; hint.hidden = asm.instances.length > 0; drawBuild(); if (asm.instances.length) fitScene(); }
+    t.root.visible = t.gizmos.visible = m === 'part'; t.sceneRoot.visible = t.sceneGizmos.visible = m === 'build'; toolbarEl.hidden = m !== 'build'; helpEl.hidden = m !== 'build';
+    if (m === 'build') { attach(t); await loadExamples(); renderCards(); makeThumbs(); await restoreSaved(); hint.hidden = true; render(); if (asm.instances.length) fitScene(); }
     else { hint.textContent = 'Import a 3D model of a part (STL, OBJ or glTF) to start marking where it connects.'; hint.hidden = t.hasModel(); t.drawGizmos(); t.draw(); }
   }
   for (const [k, b] of Object.entries(modeBtn)) b.addEventListener('click', () => setMode(k));
-  modeBtn.part.classList.add('on');
   holesBtn.addEventListener('click', async () => {
     const t = await load3d(); if (!t.hasModel()) return say('Import or open a model first.', true);
-    let found; try { found = findHoles(edges()); } catch { found = []; }
+    let found; try { found = findHoles(t.edges()); } catch { found = []; }
     if (!found.length) return say('No round holes found. Click the model to mark them by hand.', true);
     let added = 0;
     for (const h of found) { if (draft.frames.some(f => f.kind === 'hole' && Math.hypot(f.pos[0] - h.center[0], f.pos[1] - h.center[1], f.pos[2] - h.center[2]) < 0.3)) continue; draft.addFrame({ pos: h.center, dir: h.axis, kind: 'hole', diameter: h.radius * 2 }); added++; }
@@ -431,5 +541,5 @@ export function initAssembly({ editor }) {
     if (on && !tabBtn.circuit.classList.contains('on') && !tabBtn.assembly.classList.contains('on') && !tabBtn.test.classList.contains('on')) tabBtn.circuit.classList.add('on');
   };
   editor.on('catalog', sync); sync();
-  return { show, sync, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
+  return { show, sync, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
 }

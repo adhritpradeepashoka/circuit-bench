@@ -49,3 +49,28 @@ test('findHoles lists every hole on a plate, once per axis', () => {
   assert.deepEqual(hs.map(h => +(h.radius * 2).toFixed(1)).sort(), [2.2, 2.2, 3.2]);
   assert.ok(hs.every(h => Math.abs(Math.abs(h.axis[2]) - 1) < 1e-3), 'axes are along the plate normal');
 });
+
+test('dragging: a free hole near a free hole of another part is offered, sizes must be compatible, mated holes are not', async () => {
+  const { turn, mateTransform } = await import('../src/core/assembly-scene.js');
+  const as = new Assembly(), a = as.add(part('a', [hole('h', [0, 0, 5], [0, 0, 1], 3.2)])), b = as.add(part('b', [hole('h', [0, 0, 0], [0, 0, -1], 3)]), [3, 2, 5]);
+  const s = as.snapFor(b.id); assert.ok(s && s.a === a.id && s.dist < 4.0, JSON.stringify(s));
+  b.T.t = [30, 0, 5]; assert.equal(as.snapFor(b.id), null, 'too far');
+  b.T.t = [3, 2, 5]; const big = as.add(part('c', [hole('h', [0, 0, 0], [0, 0, -1], 8)]), [3, 2, 5]); assert.equal(as.snapFor(big.id), null, 'an 8 mm hole is not a 3.2 mm hole');
+  as.mate(a.id, 'h', b.id, 'h'); assert.equal(as.snapFor(b.id), null, 'already mated holes are taken');
+  const T = mateTransform(a, a.part.frames[0], b, b.part.frames[0]); assert.ok(close(T.t, b.T.t, 1e-6), 'preview equals what mating does');
+});
+
+test('turning a mated part about its screw keeps the holes together', async () => {
+  const { turn } = await import('../src/core/assembly-scene.js');
+  const as = new Assembly(), a = as.add(part('a', [hole('h', [0, 0, 5], [0, 0, 1], 3)])), b = as.add(part('b', [hole('h', [4, 0, 0], [0, 0, -1], 3)]));
+  as.mate(a.id, 'h', b.id, 'h'); const wa = worldFrame(a, a.part.frames[0]); const before = worldFrame(b, b.part.frames[0]).pos, far = [b.T.t[0], b.T.t[1], b.T.t[2]];
+  turn(b, wa.dir, wa.pos, 90);
+  assert.ok(close(worldFrame(b, b.part.frames[0]).pos, before, 1e-6), 'the screw point stays put'); assert.ok(!close(b.T.t, far, 1e-3), 'the part itself swung round');
+  assert.equal(as.check(as.mates[0]).level, 'ok'); turn(b, wa.dir, wa.pos, -90); assert.ok(close(b.T.t, far, 1e-6), 'turning back returns it');
+});
+
+test('snapshot and restore give undo', () => {
+  const as = new Assembly(), a = as.add(part('a', [hole('h', [0, 0, 0], [0, 0, 1], 3)])), b = as.add(part('b', [hole('h', [0, 0, 0], [0, 0, 1], 3)]), [20, 0, 0]);
+  const s = as.snapshot(); as.mate(a.id, 'h', b.id, 'h'); as.remove(a.id); assert.equal(as.instances.length, 1);
+  as.restore(s); assert.equal(as.instances.length, 2); assert.equal(as.mates.length, 0); assert.deepEqual(as.get(b.id).T.t, [20, 0, 0]);
+});
