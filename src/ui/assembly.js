@@ -40,6 +40,7 @@ export function initAssembly({ editor }) {
   const side = el('div', { className: 'asm-side' });
   const testPane = el('div', { className: 'asm-pane test-pane', hidden: true }, el('div', { className: 'asm-hint', textContent: 'Test is next: the sketch will drive the assembled robot with real physics. For now, build and check your parts in Assembly.' }));
   canvas.append(pane, testPane);
+  for (const t of ['pointerdown', 'mousedown']) for (const el0 of [pane, testPane]) el0.addEventListener(t, e => e.stopPropagation());      // the circuit canvas starts a pan on press and cancels it, which closed every dropdown here
   for (const t of ['wheel', 'touchmove']) side.addEventListener(t, e => e.stopPropagation(), { passive: true });      // the circuit canvas zooms on wheel; the side panel must just scroll
   pane.append(stage, side);
 
