@@ -945,3 +945,5 @@ html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"
 .robot-asm .code-dock { display: none; }          /* the sketch editor has no place in the Assembly and Test views */
 .asm-mode { position: sticky; top: -12px; z-index: 2; align-self: flex-start; }
 .asm-btn { white-space: nowrap; }
+.asm-side > *, .asm-box > * { flex-shrink: 0; }
+.asm-box { display: flex; flex-direction: column; gap: 8px; }
