@@ -442,6 +442,8 @@ export function initAssembly({ editor }) {
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(U * 0.18, U * 0.18, L, 10), mat), tip0 = new THREE.Mesh(new THREE.ConeGeometry(U * 0.55, U * 1.6, 14), mat);
         shaft.position.y = L / 2; tip0.position.y = L + U * 0.8; grp.add(shaft, tip0); grp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...dir)); grp.position.copy(c);
         grp.traverse(m => { m.renderOrder = 12; m.userData = { axis, dir }; }); t.sceneGizmos.add(grp);
+        const bb = new THREE.Box3().setFromObject(sel.obj).getSize(new THREE.Vector3()), R = Math.max(L * 1.15, bb.length() * 0.5), ring = new THREE.Mesh(new THREE.TorusGeometry(R, U * 0.22, 8, 64), new THREE.MeshBasicMaterial({ color: col, depthTest: false, transparent: true, opacity: 0.8 }));
+        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...dir)); ring.position.copy(c); ring.renderOrder = 12; ring.userData = { ring: axis, dir }; t.sceneGizmos.add(ring);
       }
     }
   }
@@ -454,7 +456,7 @@ export function initAssembly({ editor }) {
     }
     overlays(); t.draw(); renderPanel(); refreshTools(); save();
     helpEl.hidden = false;
-    helpEl.textContent = !asm.instances.length ? 'Pick a part on the right to start.' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part or its arrows · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
+    helpEl.textContent = !asm.instances.length ? 'Pick a part on the right to start.' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
   }
   const render2 = () => { for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } overlays(); three.draw(); save(); };
   function setJoin(on) { joinMode = on; joinFirst = null; joinBtn.classList.toggle('on', on); render(); }
@@ -470,13 +472,11 @@ export function initAssembly({ editor }) {
     if (!asm.instances.length) instList.append(el('p', { className: 'asm-note', textContent: 'Nothing here yet.' }));
     if (inst) {
       const act = (label, title, fn) => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: label, title, ariaLabel: title }); b.addEventListener('click', fn); return b; };
-      const rot = (axis, deg) => { keep(); turn(inst, axis, centreOf(inst), deg); detach(inst); render(); };
       const c = centreOf(inst), num = (label, k) => { const inp = el('input', { type: 'number', step: 1, value: +c[k].toFixed(1), ariaLabel: `${label} position in mm`, id: `asmPos-${label.toLowerCase()}` }); inp.addEventListener('change', () => { const v = Number(inp.value); if (!Number.isFinite(v)) return; keep(); const cur = centreOf(inst); inst.T.t[k] += v - cur[k]; detach(inst); render(); }); return el('label', { className: 'asm-field' }, el('span', { textContent: label }), inp); };
       const mt = asm.matesOf(inst.id)[0];
       selBox.append(
         el('div', { className: 'asm-sel-name' }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(inst))}` }), inst.part.name),
         el('div', { className: 'asm-row' }, num('X', 0), num('Y', 1), num('Z', 2)),
-        el('div', { className: 'asm-row wrap' }, el('span', { className: 'asm-lbl', textContent: 'Turn' }), ...[['X', [1, 0, 0]], ['Y', [0, 1, 0]], ['Z', [0, 0, 1]]].flatMap(([n, ax]) => [act(`${n} −90°`, `Turn 90° back about ${n}`, () => rot(ax, -90)), act(`${n} +90°`, `Turn 90° about ${n}`, () => rot(ax, 90))])),
         el('div', { className: 'asm-row wrap' }, act('Drop to floor', 'Lower it until it rests on the floor', () => { keep(); const b = new three.THREE.Box3().setFromObject(inst.obj); inst.T.t[2] -= b.min.z; detach(inst); render(); }), act('Join holes…', 'Pick two holes to join this part to another', () => setJoin(true)), act('Remove', 'Remove this part', () => removeInst(inst.id))));
       if (mt) {
         const mine = mt.b.inst === inst.id ? mt.b : mt.a, other = mt.b.inst === inst.id ? mt.a : mt.b, A = asm.get(other.inst), fa = A?.part.frames.find(f => f.id === other.frame);
@@ -514,7 +514,7 @@ export function initAssembly({ editor }) {
     const ndc = e => { const r = dom.getBoundingClientRect(); return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)); };
     const ownerOf = o => { while (o && !o.userData.inst && !o.userData.axis) o = o.parent; return o; };
     const instAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const h = t.ray.intersectObjects(t.sceneRoot.children, true)[0]; if (!h) return null; let o = h.object; while (o && !o.userData.inst) o = o.parent; return o ? { id: o.userData.inst, point: h.point } : null; };
-    const gizmoAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const hs = t.ray.intersectObjects(t.sceneGizmos.children, true); return hs.map(h => ({ data: h.object.userData, point: h.point })).find(x => x.data.axis || x.data.hole) || null; };
+    const gizmoAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const hs = t.ray.intersectObjects(t.sceneGizmos.children, true); return hs.map(h => ({ data: h.object.userData, point: h.point })).find(x => x.data.axis || x.data.hole || x.data.ring) || null; };
     const snapAndPlace = inst => {
       const r0 = dom.getBoundingClientRect(), px = p => { const v = new THREE.Vector3(...p).project(t.camera); return [(v.x + 1) / 2 * r0.width, (1 - v.y) / 2 * r0.height]; };
       const s = asm.snapFor(inst.id, { reach: 30, maxSizeGap: 1.5, measure: (a, b) => { const A = px(a), B = px(b); return Math.hypot(A[0] - B[0], A[1] - B[1]); } }); snapShow = s;      // close ON SCREEN counts, so you needn't judge depth
@@ -524,6 +524,12 @@ export function initAssembly({ editor }) {
       if (mode !== 'build' || e.button !== 0) return;
       const g = gizmoAt(e);
       if (joinMode) { if (g?.data.hole) joinPick(g.data.inst, g.data.frame); else if (joinFirst) { joinFirst = null; render(); } return; }
+      if (g?.data.ring && selected && asm.get(selected)) {                                    // a ring: turn about that axis, 15° steps (Shift = free)
+        const inst = asm.get(selected), c = new THREE.Vector3(...centreOf(inst)), a = new THREE.Vector3(...g.data.dir), ref = Math.abs(a.z) < 0.9 ? new THREE.Vector3(0, 0, 1) : new THREE.Vector3(1, 0, 0), u = ref.clone().sub(a.clone().multiplyScalar(ref.dot(a))).normalize(), v = a.clone().cross(u);
+        const ang = ev => { t.ray.setFromCamera(ndc(ev), t.camera); const pl = new THREE.Plane().setFromNormalAndCoplanarPoint(a, c), q = new THREE.Vector3(); if (!t.ray.ray.intersectPlane(pl, q)) return null; q.sub(c); return Math.atan2(q.dot(v), q.dot(u)) * 180 / Math.PI; };
+        const a0 = ang(e); if (a0 == null) return; t.controls.enabled = false; dom.setPointerCapture(e.pointerId);
+        drag = { id: inst.id, mode: 'ring', ang, a0, applied: 0, axis: g.data.dir, c: [c.x, c.y, c.z], start: { x: e.clientX, y: e.clientY }, moved: false, pending: asm.snapshot() }; return;
+      }
       if (g?.data.axis && selected && asm.get(selected)) {                                    // an arrow: slide along that axis
         const inst = asm.get(selected), a = g.data.dir, c = new THREE.Vector3(...centreOf(inst)); t.ray.setFromCamera(ndc(e), t.camera);
         const s0 = axisParam(t.ray.ray, c, a); if (s0 == null) return; t.controls.enabled = false; dom.setPointerCapture(e.pointerId);
@@ -537,8 +543,8 @@ export function initAssembly({ editor }) {
     dom.addEventListener('pointermove', e => {
       if (mode !== 'build') return;
       if (!drag) {                                                                             // hovering: say what a hole is
-        const g = gizmoAt(e), over = instAt(e); dom.style.cursor = g?.data.axis ? 'grab' : joinMode && g?.data.hole ? 'pointer' : over ? 'grab' : '';
-        const lab = g?.data.hole ? g.data.label : g?.data.axis ? `Drag to move along ${g.data.axis.toUpperCase()}` : '';
+        const g = gizmoAt(e), over = instAt(e); dom.style.cursor = g?.data.axis || g?.data.ring ? 'grab' : joinMode && g?.data.hole ? 'pointer' : over ? 'grab' : '';
+        const lab = g?.data.hole ? g.data.label : g?.data.axis ? `Drag to move along ${g.data.axis.toUpperCase()}` : g?.data.ring ? `Drag to turn about ${g.data.ring.toUpperCase()} (Shift for free)` : '';
         if (tip) { tip.hidden = !lab; if (lab) { tip.textContent = lab; tip.style.left = `${e.clientX - dom.getBoundingClientRect().left + 12}px`; tip.style.top = `${e.clientY - dom.getBoundingClientRect().top + 12}px`; } }
         const nh = over?.id || null; if (nh !== hoverInst) { hoverInst = nh; render2h(); }
         return;
@@ -546,6 +552,7 @@ export function initAssembly({ editor }) {
       if (!drag.moved && Math.hypot(e.clientX - drag.start.x, e.clientY - drag.start.y) < 4) return;
       const inst = asm.get(drag.id); if (!inst) return;
       if (!drag.moved) { drag.moved = true; history.push(drag.pending); future = []; detach(inst); dom.style.cursor = 'grabbing'; }
+      if (drag.mode === 'ring') { const cur = drag.ang(e); if (cur == null) return; let d = cur - drag.a0; d = ((d + 540) % 360) - 180; if (!e.shiftKey) d = Math.round(d / 15) * 15; if (d !== drag.applied) { turn(inst, drag.axis, drag.c, d - drag.applied); drag.applied = d; bsay(`Turned ${d}°`); render(); } return; }
       t.ray.setFromCamera(ndc(e), t.camera);
       if (drag.mode === 'axis') { const s = axisParam(t.ray.ray, drag.c, drag.a); if (s == null) return; const d = s - drag.s0; inst.T = { q: inst.T.q, t: [drag.t0[0] + drag.a[0] * d, drag.t0[1] + drag.a[1] * d, drag.t0[2] + drag.a[2] * d] }; }
       else { if (!t.ray.ray.intersectPlane(plane, hitPt)) return; inst.T = { q: inst.T.q, t: [drag.t0[0] + hitPt.x - drag.grab.x, drag.t0[1] + hitPt.y - drag.grab.y, drag.t0[2] + hitPt.z - drag.grab.z] }; }
@@ -553,7 +560,7 @@ export function initAssembly({ editor }) {
     });
     const end = e => {
       if (!drag) return; const d = drag; drag = null; t.controls.enabled = true; dom.style.cursor = ''; try { dom.releasePointerCapture(e.pointerId); } catch { /* already released */ }
-      if (d.moved && snapShow) { const s = snapShow, r = asm.mate(s.a, s.aFrame, d.id, s.bFrame); if (r.ok) bsay(`Joined. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); }
+      if (d.moved && snapShow && d.mode !== 'ring') { const s = snapShow, r = asm.mate(s.a, s.aFrame, d.id, s.bFrame); if (r.ok) bsay(`Joined. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); }
       else if (d.moved) bsay('');
       snapShow = null; render();
     };
