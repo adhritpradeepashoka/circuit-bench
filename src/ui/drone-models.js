@@ -16,8 +16,18 @@ export function buildDroneMesh(THREE, part) {
   const slot = (shape, cx, cy, w, h) => { const p = new THREE.Path(), x = cx - w / 2, y = cy - h / 2; p.moveTo(x, y); p.lineTo(x + w, y); p.lineTo(x + w, y + h); p.lineTo(x, y + h); p.closePath(); shape.holes.push(p); return shape; };
   const sq = (a, b = a) => [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([x, y]) => [x * a / 2, y * b / 2]);
   if (d.kind === 'motor') {
-    const [a, b] = d.motor.mount.pattern, hd = part.frames[0].diameter, s = new THREE.Shape(); s.absarc(0, 0, d.baseR, 0, Math.PI * 2, false);
-    plate(holes(s, sq(a, b), hd / 2), d.baseT, 0, C.motorBase, { metal: 0.4 });
+    const [a, b] = d.motor.mount.pattern, hd = part.frames[0].diameter, pts = sq(a, b), lug = hd / 2 + 1.6, hub = Math.min(d.baseR, d.bellR * 1.05);
+    // a real motor base: a round hub with four lugs reaching out to the screw holes (a flat cross), the holes at the part's mounting pattern, with a screw head in each
+    const s = new THREE.Shape(); s.absarc(0, 0, hub, 0, Math.PI * 2, false);
+    plate(holes(s, [], 0), d.baseT, 0, C.motorBase, { metal: 0.4 });
+    for (const [x, y] of pts) {
+      const L = Math.hypot(x, y), ang = Math.atan2(y, x), c = Math.cos(ang), s2 = Math.sin(ang), arm = [[0, -lug * 0.8], [L, -lug], [L, lug], [0, lug * 0.8]].map(([u, v]) => [u * c - v * s2, u * s2 + v * c]);
+      const lugShape = new THREE.Shape(); arm.forEach(([px, py], k) => (k ? lugShape.lineTo(px, py) : lugShape.moveTo(px, py))); lugShape.closePath();
+      const rim = new THREE.Path(); rim.absarc(x, y, hd / 2, 0, Math.PI * 2, true); lugShape.holes.push(rim); plate(lugShape, d.baseT, 0, C.motorBase, { metal: 0.4 });
+      const head = new THREE.CylinderGeometry(hd / 2 + 0.7, hd / 2 + 0.7, 1.4, 20); head.rotateX(Math.PI / 2); add(head, x, y, d.baseT + 0.7, C.steel, { metal: 0.9, rough: 0.3 });   // the screw head on top of the lug
+    }
+    cyl(d.bellR * 0.85, Math.max(1, d.baseT * 0.5), d.baseT, 0xb87333, 36, { metal: 0.6, rough: 0.4 });                                           // the copper windings (stator)
+    for (const dx of [-1.2, 0, 1.2]) { const w = new THREE.CylinderGeometry(0.45, 0.45, d.baseR * 1.6, 8); w.rotateZ(Math.PI / 2); add(w, -d.baseR * 0.9, dx, d.baseT * 0.5, [0xc23b2f, 0x1c1c1c, 0xd9a400][dx < 0 ? 0 : dx > 0 ? 2 : 1]); }
     const bellH = d.root - d.baseT; cyl(d.bellR * 0.97, 1.2, d.baseT, C.motorBase, 48, { metal: 0.4 });                                   // a dark ring at the foot
     cyl(d.bellR, bellH - 1.2 - 0.8, d.baseT + 1.2, C.bell, 48, { metal: 0.7, rough: 0.35 }); cyl(d.bellR * 0.78, 0.8, d.root - 0.8, C.motorBase, 48, { metal: 0.4 }, d.bellR * 0.9);    // the anodised bell, and its cap
     cyl(d.motor.shaftMm / 2, d.shaftLen, d.root, C.steel, 24, { metal: 0.9, rough: 0.25 });
