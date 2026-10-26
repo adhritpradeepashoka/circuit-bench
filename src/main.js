@@ -74,7 +74,7 @@ const ai = initAiPanel(editor, code, sim);
 const projects = initProjects({ editor, code, sim });
 const workspaces = initWorkspaces({ editor, code, projects });
 initVisualizer({ editor });
-const assembly = initAssembly({ editor });
+const assembly = initAssembly({ editor, projects });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
 initFeatures({ blocks });

@@ -30,7 +30,7 @@ export const libraryParts = () => {
 };
 const saveLibrary = list => { try { localStorage.setItem(LIB_KEY, JSON.stringify(list)); memLib = null; } catch { memLib = list; } };
 
-export function initAssembly({ editor }) {
+export function initAssembly({ editor, projects = null }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar');
   const tabs = el('div', { className: 'view-toggle robot-tabs', role: 'group', ariaLabel: 'Robot views', hidden: true });
   const tabBtn = {};
@@ -310,7 +310,10 @@ export function initAssembly({ editor }) {
   }
 
   // ── building: move parts with handles or the mouse; join holes by dragging them together or with the Join tool ─────
-  const asm = new Assembly(), objCache = new Map(), SCENE_KEY = 'circuitbench:robot-scene';
+  const asm = new Assembly(), objCache = new Map(), LEGACY_SCENE_KEY = 'circuitbench:robot-scene';
+  // Each project keeps its own 3D scene. (It used to be one scene shared by every project, so opening a new project showed the last project's parts, and deleting them here deleted them there.)
+  const legacyBox = el('div', { className: 'asm-note', id: 'asmLegacy', hidden: true });
+  let sceneFor = null, restoreToken = 0; const sceneKey = () => `${LEGACY_SCENE_KEY}:${sceneFor || 'none'}`;
   const PALETTE = [0xb8c4cc, 0x7fb3d5, 0xe8b26a, 0x9ccc9c, 0xd59fb8, 0xb7a3d8, 0xd9d27a, 0x8fd0c8], hex = n => `#${n.toString(16).padStart(6, '0')}`;
   const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
   let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, joinMode = false, joinFirst = null, hoverInst = null;
@@ -318,7 +321,7 @@ export function initAssembly({ editor }) {
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
   buildBox.append(
     el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes.' }), bnote, selBox,
-    el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, droneEl);
+    legacyBox, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, droneEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const dyn = new Map();                                                   // drone parts, made from their ids on demand
   const dronePart = id => { if (dyn.has(id)) return dyn.get(id); const raw = makeDronePart(id), v = raw && validateRobotPart(raw); if (!v?.ok) return null; const p = { ...v.part, drone: raw.drone, generated: true }; dyn.set(id, p); return p; };
@@ -424,14 +427,35 @@ export function initAssembly({ editor }) {
   }
   function undo() { if (!history.length) return; future.push(asm.snapshot()); asm.restore(history.pop()); applyScene(); }
   function redo() { if (!future.length) return; history.push(asm.snapshot()); asm.restore(future.pop()); applyScene(); }
-  function save() { try { localStorage.setItem(SCENE_KEY, JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); } catch { /* unsaved is fine */ } }
+  function save() { try { localStorage.setItem(sceneKey(), JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); } catch { /* unsaved is fine */ } }
   async function restoreSaved() {
-    if (asm.instances.length) return; let j = null; try { j = JSON.parse(localStorage.getItem(SCENE_KEY) || 'null'); } catch { /* none */ }
-    if (!j?.parts?.length) return; const t = await load3d(), ids = [];
-    for (const rec of j.parts) { const p = findPart(rec.part); if (!p) { ids.push(null); continue; } try { const inst = asm.add(p); inst.T = rec.T; inst.obj = await partObject(t, p); inst.obj.userData.inst = inst.id; tint(inst); ids.push(inst.id); } catch { ids.push(null); } }
+    if (asm.instances.length) return; const tok = ++restoreToken; let j = null; try { j = JSON.parse(localStorage.getItem(sceneKey()) || 'null'); } catch { /* none */ }
+    if (!j?.parts?.length) { legacyOffer(); return; } legacyBox.hidden = true; const t = await load3d(), ids = [];
+    for (const rec of j.parts) {
+      const p = findPart(rec.part); if (!p) { ids.push(null); continue; }
+      try { const obj = await partObject(t, p); if (tok !== restoreToken) return; const inst = asm.add(p); inst.T = rec.T; inst.obj = obj; inst.obj.userData.inst = inst.id; tint(inst); ids.push(inst.id); } catch { ids.push(null); }       // (a project switch mid-way drops the rest)
+    }
+    if (tok !== restoreToken) return;
     for (const m of j.mates || []) if (ids[m.a] && ids[m.b]) asm.mates.push({ a: { inst: ids[m.a], frame: m.af }, b: { inst: ids[m.b], frame: m.bf }, screw: m.screw || null, angle: m.angle || 0, min: m.min, max: m.max, fixed: !!m.fixed });
     if (j.anchor >= 0 && ids[j.anchor]) anchorId = ids[j.anchor];
     applyScene(); fitScene();
+  }
+  /** A scene saved before projects had their own: offered once to whichever project is open, never forced on one. */
+  function legacyOffer() {
+    let j = null; try { j = JSON.parse(localStorage.getItem(LEGACY_SCENE_KEY) || 'null'); } catch { /* none */ }
+    if (!j?.parts?.length) { legacyBox.hidden = true; return; }
+    const use = el('button', { type: 'button', className: 'asm-btn', id: 'asmLegacyUse', textContent: 'Bring it into this project' }), skip = el('button', { type: 'button', className: 'asm-btn', textContent: 'Not now' });
+    use.addEventListener('click', async () => { try { localStorage.setItem(sceneKey(), localStorage.getItem(LEGACY_SCENE_KEY)); localStorage.removeItem(LEGACY_SCENE_KEY); } catch { /* keep it where it is */ } legacyBox.hidden = true; await restoreSaved(); });
+    skip.addEventListener('click', () => { legacyBox.hidden = true; });
+    legacyBox.replaceChildren(`An earlier 3D scene (${j.parts.length} part${j.parts.length > 1 ? 's' : ''}) was saved before each project kept its own. It is not in this project unless you bring it in. `, use, ' ', skip); legacyBox.hidden = false;
+  }
+  /** The open project changed: put away its scene, show the new project's own. */
+  async function switchScene(id) {
+    if (id === sceneFor) return; if (sceneFor && asm.instances.length) save();
+    sceneFor = id; restoreToken++; for (const i of asm.instances) three?.sceneRoot.remove(i.obj);
+    asm.instances = []; asm.mates = []; selected = null; anchorId = null; history = []; future = []; joinFirst = null; legacyBox.hidden = true;
+    if (three && view !== 'circuit') { await restoreSaved(); render(); }
+    three?.draw();
   }
   const tint = inst => inst.obj.traverse(m => { if (m.isMesh && !m.userData.fixed) m.material.color.setHex(colourOf(inst)); });
 
@@ -737,5 +761,6 @@ export function initAssembly({ editor }) {
       applyScene(); if (out.done) fitScene(); return out;
     },
   };
+  projects?.onSwitch(p => { switchScene(p.id); });
   return { ai, show, sync, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
 }
