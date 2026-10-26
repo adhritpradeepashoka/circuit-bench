@@ -5,7 +5,7 @@ import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
 import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
-import { buildRig, dragTo, setAngle, connected, pointOn } from '../core/assembly-pose.js';
+import { buildRig, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -468,7 +468,7 @@ export function initAssembly({ editor }) {
     selBox.replaceChildren(); const inst = selected && asm.get(selected); selBox.hidden = !inst;
     instList.replaceChildren();
     for (const i of asm.instances) {
-      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: i.id === anchorId ? 'held ⚓' : `${i.part.frames.length} holes` }));
+      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: connected(asm, i.id).length > 1 && heldPart(asm, anchorId, i.id) === i.id ? 'held ⚓' : `${i.part.frames.length} holes` }));
       row.addEventListener('click', () => select(i.id)); row.addEventListener('dblclick', () => viewTo('iso', i)); row.addEventListener('mouseenter', () => { hoverInst = i.id; render2h(); }); row.addEventListener('mouseleave', () => { hoverInst = null; render2h(); });
       instList.append(row);
     }
@@ -493,6 +493,10 @@ export function initAssembly({ editor }) {
       const hinge = buildRig(asm).joints.some(j => j.mate === m), fx = el('select', { ariaLabel: 'Joint type', className: 'asm-mini-sel' }, el('option', { value: 'hinge', textContent: 'Hinge', selected: !m.fixed }), el('option', { value: 'fixed', textContent: 'Fixed', selected: !!m.fixed }));
       fx.addEventListener('change', () => { keep(); m.fixed = fx.value === 'fixed'; if (m.fixed && m.angle) { setAngle(asm, anchorId, m, 0); } render(); });
       const jbox = el('div', { className: 'asm-joint' }, el('span', { className: 'asm-lbl', textContent: 'Joint' }), fx);
+      if (hinge && !m.fixed) {
+        const mv = movingSide(asm, anchorId, m), swap = el('button', { type: 'button', className: 'asm-btn', textContent: '⇄ Swap', title: mv ? `Now ${asm.get(mv)?.part.name} swings. Click to hold it still and let the other side swing instead.` : 'Swap which side moves', ariaLabel: 'Swap which side of this joint moves' });
+        swap.addEventListener('click', () => { if (!mv) return; anchorId = mv; render(); }); jbox.append(swap);
+      }
       if (hinge && !m.fixed) {
         const lo = m.min ?? -90, hi = m.max ?? 90, sl = el('input', { type: 'range', min: lo, max: hi, step: 1, value: m.angle || 0, ariaLabel: 'Joint angle', className: 'asm-jslider' }), val = el('span', { className: 'asm-lbl', textContent: `${Math.round(m.angle || 0)}°` });
         const lim = (k, v0) => { const inp = el('input', { type: 'number', value: v0, step: 5, ariaLabel: k === 'min' ? 'Lowest angle' : 'Highest angle', className: 'asm-limit' }); inp.addEventListener('change', () => { const v = Number(inp.value); if (!Number.isFinite(v)) return; keep(); m[k] = v; if (k === 'min' && (m.angle || 0) < v) setAngle(asm, anchorId, m, v); if (k === 'max' && (m.angle || 0) > v) setAngle(asm, anchorId, m, v); render(); }); return inp; };

@@ -42,3 +42,12 @@ test('dragging the held part moves the whole robot; setAngle swings one hinge', 
   assert.ok(Math.abs(pointOn(ps[0], [0, 0, 0])[0] - p0[0] - 10) < 1e-9); assert.ok(joined(as));
   assert.ok(setAngle(as, ps[0].id, as.mates[0], 45)); assert.equal(as.mates[0].angle, 45); assert.ok(joined(as));
 });
+test('swapping which side moves: hold the far part and the near part swings instead', async () => {
+  const { heldPart, movingSide } = await import('../src/core/assembly-pose.js');
+  const { as, ps } = arm(2), m = as.mates[0];
+  assert.equal(heldPart(as, null, ps[1].id), ps[0].id, 'first part is held by default'); assert.equal(movingSide(as, null, m), ps[1].id);
+  const held = movingSide(as, null, m), before = pointOn(ps[1], [0, 0, 0]);
+  assert.equal(movingSide(as, held, m), ps[0].id, 'after the swap the other side swings');
+  const p0 = pointOn(ps[0], [0, 0, 0]), out = dragTo(as, held, ps[0].id, [0, 0, 0], [p0[0], p0[1], p0[2] + 25]);
+  assert.equal(out.mode, 'pose'); assert.deepEqual(pointOn(ps[1], [0, 0, 0]).map(v => +v.toFixed(6)), before.map(v => +v.toFixed(6))); assert.ok(joined(as));
+});

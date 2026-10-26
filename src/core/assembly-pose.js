@@ -89,3 +89,14 @@ export function setAngle(asm, anchorId, mate, deg) {
   const tree = treeFor(asm, rig, mate.a.inst, anchorId), link = tree.up.get(j.a) && tree.up.get(j.a).joint === j ? tree.up.get(j.a) : tree.up.get(j.b);
   if (!link) return false; swing(asm, tree, link, deg - (mate.angle || 0)); return true;
 }
+/** The part that stays put for the robot `instId` belongs to: the held part if it is in this robot, else the robot's first part. */
+export function heldPart(asm, anchorId, instId) {
+  const comp = connected(asm, instId); if (comp.includes(anchorId)) return anchorId;
+  return comp.sort((a, b) => asm.instances.findIndex(i => i.id === a) - asm.instances.findIndex(i => i.id === b))[0];
+}
+/** For a hinge: the part on the side that swings (the far side from the held part), so that holding it instead swaps which side moves. */
+export function movingSide(asm, anchorId, mate) {
+  const rig = buildRig(asm), j = rig.joints.find(x => x.mate === mate); if (!j) return null;
+  const tree = treeFor(asm, rig, mate.a.inst, anchorId), u = tree.up.get(j.a)?.joint === j ? tree.up.get(j.a) : tree.up.get(j.b); if (!u) return null;
+  const child = u.parent === j.a ? j.b : j.a; return rig.members.get(child)[0];
+}
