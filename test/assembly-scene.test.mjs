@@ -75,3 +75,11 @@ test('snapshot and restore give undo', () => {
   const s = as.snapshot(); as.mate(a.id, 'h', b.id, 'h'); as.remove(a.id); assert.equal(as.instances.length, 1);
   as.restore(s); assert.equal(as.instances.length, 2); assert.equal(as.mates.length, 0); assert.deepEqual(as.get(b.id).T.t, [20, 0, 0]);
 });
+
+test('joining a part that is already attached to others brings them along, and keeps their joints', () => {
+  const as = new Assembly(), bracket = as.add(part('bracket', [hole('h', [10, 0, 5], [0, 0, 1], 3)])), leg = as.add(part('leg', [hole('a', [0, 4, 0], [0, 1, 0], 3), hole('b', [30, 0, 0], [1, 0, 0], 3)]), [50, 50, 50]);
+  as.mate(bracket.id, 'h', leg.id, 'a'); const servo = as.add(part('servo', [hole('s', [0, 0, 0], [0, 0, 1], 3)]), [-80, 20, 0]);
+  const r = as.mate(servo.id, 's', leg.id, 'b'); assert.ok(r.ok);
+  assert.ok(as.mates.every(m => as.check(m).level !== 'bad'), 'both joints still line up'); assert.ok(close(servo.T.t, [-80, 20, 0]), 'the servo stayed put');
+  const loop = as.mate(bracket.id, 'h', servo.id, 's'); assert.equal(loop.ok, false, 'holes that do not meet cannot be joined through a loop');
+});

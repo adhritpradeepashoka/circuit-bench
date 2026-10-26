@@ -601,8 +601,8 @@ export function initAssembly({ editor }) {
   function joinPick(instId, frameId) {
     if (!joinFirst) { joinFirst = { inst: instId, frame: frameId }; return render(); }
     if (joinFirst.inst === instId) { joinFirst = { inst: instId, frame: frameId }; bsay('Pick the second hole on a different part.'); return render(); }
-    const a = joinFirst; keep(); const r = asm.mate(a.inst, a.frame, instId, frameId); joinFirst = null;
-    if (!r.ok) bsay(r.error, true); else { bsay(`Joined. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); selected = instId; }
+    const a = joinFirst, carried = asm.component(instId).length - 1; keep(); const r = asm.mate(a.inst, a.frame, instId, frameId); joinFirst = null;
+    if (!r.ok) { history.pop(); bsay(r.error, true); } else { bsay(`Joined${carried > 0 ? ` (brought ${carried} connected part${carried > 1 ? 's' : ''} along)` : ''}. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); selected = instId; }
     joinMode = false; joinBtn.classList.remove('on'); render();
   }
   async function setMode(m) {

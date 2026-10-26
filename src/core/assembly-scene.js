@@ -56,10 +56,21 @@ export class Assembly {
     if (A === B) return { ok: false, error: 'Pick frames on two different parts.' };
     const fa = A.part.frames.find(f => f.id === aFrame), fb = B.part.frames.find(f => f.id === bFrame);
     if (!fa || !fb) return { ok: false, error: 'Unknown frame.' };
-    B.T = mateTransform(A, fa, B, fb);
-    this.mates = this.mates.filter(m => !(m.b.inst === bInst && m.b.frame === bFrame) && !(m.a.inst === bInst && m.a.frame === bFrame && m.b.inst === aInst));
+    const kept = this.mates.filter(m => !(m.b.inst === bInst && m.b.frame === bFrame) && !(m.a.inst === bInst && m.a.frame === bFrame && m.b.inst === aInst));
+    const group = this.component(bInst, kept);                                       // B brings everything already attached to it
+    const fits = (() => { const wa = worldFrame(A, fa), wb = worldFrame(B, fb); return Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]) < 0.1 && dot(wa.dir, wb.dir) < -0.999; })();
+    if (group.includes(aInst) && !fits) return { ok: false, error: 'These two parts are already connected through other parts, and these holes do not line up where they are. Straighten the joints so the holes meet, or unjoin one first.' };
+    const T0 = B.T, T1 = mateTransform(A, fa, B, fb), inv0 = [-T0.q[0], -T0.q[1], -T0.q[2], T0.q[3]], dq = qmul(T1.q, inv0);
+    if (!group.includes(aInst)) for (const id of group) { const X = this.get(id), r = rotate(dq, [X.T.t[0] - T0.t[0], X.T.t[1] - T0.t[1], X.T.t[2] - T0.t[2]]), q = qmul(dq, X.T.q), l = Math.hypot(...q); X.T = { q: q.map(v => v / l), t: [T1.t[0] + r[0], T1.t[1] + r[1], T1.t[2] + r[2]] }; }
+    this.mates = kept;
     const m = { a: { inst: aInst, frame: aFrame }, b: { inst: bInst, frame: bFrame }, screw: screw || null }; this.mates.push(m);
     return { ok: true, mate: m, check: this.check(m) };
+  }
+  /** Every part reachable from `instId` through mates (optionally through a given list of mates instead of the current ones). */
+  component(instId, mates = this.mates) {
+    const seen = new Set([instId]), stack = [instId];
+    while (stack.length) { const v = stack.pop(); for (const m of mates) for (const [x, y] of [[m.a.inst, m.b.inst], [m.b.inst, m.a.inst]]) if (x === v && !seen.has(y)) { seen.add(y); stack.push(y); } }
+    return [...seen];
   }
   isMated(instId, frameId) { return this.mates.some(m => (m.a.inst === instId && m.a.frame === frameId) || (m.b.inst === instId && m.b.frame === frameId)); }
   matesOf(instId) { return this.mates.filter(m => m.a.inst === instId || m.b.inst === instId); }
