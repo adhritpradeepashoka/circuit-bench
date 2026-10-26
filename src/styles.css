@@ -985,8 +985,13 @@ html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"
 .asm-sel .asm-field input[type=number] { width: 64px; }
 .asm-joint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .asm-jslider { flex: 1; min-width: 80px; } .asm-limit { width: 52px; }
-/* Assembly and Test have their own 3D parts list, so the electronics Parts panel steps aside (the AI panel still opens) */
-.robot-asm .main:not(.ai-open) { --parts-width: 0px; }
-.robot-asm .main:not(.ai-open) .side, .robot-asm .main:not(.ai-open) .side-rail { display: none; }
-.robot-asm #partsPanel { display: none; }
+/* In Assembly and Test the right-hand Parts panel lists 3D parts instead of electronics */
+.robot-asm #partsBody { display: none; }
+body:not(.robot-asm) #robotParts { display: none; }
+#robotParts { padding: 10px 12px 16px; overflow-y: auto; min-height: 0; flex: 1; }
+#robotParts .asm-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+#robotParts .group-title { margin: 12px 0 6px; }
+
 .asm-sel[hidden] { display: none; }
+.asm-group { grid-column: 1 / -1; }
+.asm-dock-search { width: 100%; box-sizing: border-box; height: 32px; margin-bottom: 8px; padding: 0 10px; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; font: inherit; font-size: 13px; background: #fff; }

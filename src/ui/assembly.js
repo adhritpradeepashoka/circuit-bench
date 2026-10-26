@@ -313,7 +313,7 @@ export function initAssembly({ editor }) {
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
   buildBox.append(
     el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes.' }), bnote, selBox,
-    el('h4', { textContent: 'Parts' }), cards, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl);
+    el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const everyPart = () => [...examples, ...libraryParts().map(p => ({ ...p, example: false }))];
   const findPart = id => everyPart().find(p => p.id === id);
@@ -325,6 +325,10 @@ export function initAssembly({ editor }) {
     undoBtn, redoBtn, el('span', { className: 'asm-tsep' }), ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
     el('span', { className: 'asm-tsep' }), joinBtn, xrayBtn, mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
+  // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
+  const robotDock = el('div', { id: 'robotParts', role: 'region', ariaLabel: '3D parts' }), dockSearch = el('input', { type: 'search', placeholder: 'Search 3D parts', ariaLabel: 'Search 3D parts', className: 'asm-dock-search', id: 'robotPartsSearch', autocomplete: 'off' });
+  robotDock.append(dockSearch, cards); document.getElementById('partsPanel')?.append(robotDock);
+  dockSearch.addEventListener('input', () => renderCards());
   stage.append(toolbarEl, helpEl);
 
   async function meshOf(part) { return part.example ? fetch(EX_DIR + part.model.file).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : getMesh(`${part.id}/${part.model.file}`); }
@@ -357,8 +361,9 @@ export function initAssembly({ editor }) {
     r.dispose(); r.forceContextLoss?.(); renderCards();
   }
   function renderCards() {
-    cards.replaceChildren();
-    for (const p of everyPart()) {
+    cards.replaceChildren(); const q = dockSearch.value.trim().toLowerCase(); let group = null;
+    for (const p of everyPart().filter(p => !q || `${p.name} ${p.category || ''}`.toLowerCase().includes(q))) {
+      if (p.category !== group) { group = p.category; cards.append(el('div', { className: 'group-title asm-group', textContent: group || 'Parts' })); }
       const img = thumbs.get(p.id) ? el('img', { src: thumbs.get(p.id), alt: '', draggable: false }) : el('div', { className: 'asm-thumb-empty' });
       const c = el('button', { type: 'button', className: 'asm-card', draggable: true, title: `${p.name} · ${p.frames.length} holes` }, img, el('span', { textContent: p.name.replace(/^Kame32 /, '') }));
       c.dataset.part = p.id; c.addEventListener('click', () => addToScene(p)); c.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', `circuitbench-part:${p.id}`); e.dataTransfer.effectAllowed = 'copy'; });
@@ -628,6 +633,7 @@ export function initAssembly({ editor }) {
   async function show(v) {
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
+    document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
     pane.hidden = v !== 'assembly'; testPane.hidden = v !== 'test'; document.body.classList.toggle('robot-asm', v !== 'circuit');
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v);
