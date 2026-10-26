@@ -1002,3 +1002,34 @@ body:not(.robot-asm) #robotParts { display: none; }
 .asm-builder .asm-field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; } .asm-builder .asm-field input, .asm-builder .asm-field select { height: 30px; padding: 0 8px; border: 1px solid var(--line, #d5ddd8); border-radius: 7px; font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; }
 .asm-btn.primary { background: #1d4e75; color: #fff; border-color: #1d4e75; height: 32px; }
 .asm-drone { border-top: 1px solid var(--line, #d5ddd8); margin-top: 8px; padding-top: 6px; }
+
+/* ── Test tab: flying a drone ── */
+.fly-stage { cursor: grab; background: #cfe3f1; overflow: hidden; }
+.fly-stage canvas { touch-action: none; }
+.fly-hud { position: absolute; left: 12px; top: 12px; display: grid; grid-template-columns: auto auto; gap: 2px 14px; padding: 8px 12px; background: rgba(255, 255, 255, .86); border-radius: 9px; font-size: 12px; box-shadow: 0 1px 6px rgba(0, 0, 0, .12); pointer-events: none; max-width: calc(100% - 24px); }
+.fly-hud[hidden] { display: none; }
+.fly-hud span { color: #5b6a63; } .fly-hud b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.fly-msg { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: min(520px, calc(100% - 24px)); padding: 7px 14px; border-radius: 9px; background: rgba(29, 78, 117, .93); color: #fff; font-size: 13px; text-align: center; pointer-events: none; }
+.fly-msg.bad { background: rgba(176, 52, 38, .94); }
+.fly-msg[hidden] { display: none; }
+.fly-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(238, 243, 240, .92); }
+.fly-empty[hidden] { display: none; }
+.fly-empty-box { max-width: 420px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.fly-empty-box h3 { margin: 0; } .fly-empty-box p { margin: 0; color: #48564f; font-size: 13px; }
+.fly-sticks { position: absolute; left: 0; right: 0; bottom: 34px; display: flex; justify-content: space-between; padding: 0 14px; pointer-events: none; }
+.fly-stick { position: relative; width: 132px; height: 132px; border-radius: 50%; background: rgba(255, 255, 255, .55); border: 2px solid rgba(43, 58, 52, .35); touch-action: none; pointer-events: auto; cursor: grab; }
+.fly-stick::before, .fly-stick::after { content: ''; position: absolute; background: rgba(43, 58, 52, .18); }
+.fly-stick::before { left: 50%; top: 10%; bottom: 10%; width: 1px; } .fly-stick::after { top: 50%; left: 10%; right: 10%; height: 1px; }
+.fly-knob { position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%; background: #1d4e75; border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .3); left: 50%; top: 50%; pointer-events: none; }
+.fly-stick-label { position: absolute; left: 0; right: 0; bottom: -17px; text-align: center; font-size: 11px; color: #34443d; pointer-events: none; }
+.fly-arm.on { background: #b03426; border-color: #b03426; }
+.fly-motors { display: flex; flex-direction: column; gap: 6px; }
+.fly-mrow { display: grid; grid-template-columns: 1fr 70px; gap: 2px 8px; align-items: center; font-size: 12px; }
+.fly-mname { grid-column: 1 / 3; font-weight: 600; }
+.fly-bar { height: 8px; background: #e3e9e5; border-radius: 4px; overflow: hidden; } .fly-bar i { display: block; height: 100%; width: 0; background: #2d9f6a; }
+.fly-minfo { grid-column: 1 / 2; color: #5b6a63; font-variant-numeric: tabular-nums; } .fly-mtest { grid-column: 2 / 3; grid-row: 2 / 4; width: 70px; }
+.fly-code { width: 100%; box-sizing: border-box; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padding: 8px; border: 1px solid var(--line, #d5ddd8); border-radius: 7px; background: #f7faf8; color: #20302a; resize: vertical; min-height: 220px; tab-size: 2; white-space: pre; overflow: auto; }
+.fly-code[readonly] { background: #eef2ef; color: #3c4a44; }
+.fly-log { margin: 0; padding: 6px 8px; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; background: #20302a; color: #cde9d9; border-radius: 6px; max-height: 120px; overflow: auto; white-space: pre-wrap; }
+.fly-log[hidden], #flyErr[hidden] { display: none; }
+@media (max-width: 760px) { .fly-stick { width: 104px; height: 104px; } .fly-hud { font-size: 11px; } }

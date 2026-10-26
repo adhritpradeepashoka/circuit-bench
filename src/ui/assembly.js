@@ -8,6 +8,7 @@ import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scen
 import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
+import { initDroneTest } from './drone-test.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
 import { buildRig, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
@@ -43,10 +44,10 @@ export function initAssembly({ editor }) {
   const hint = el('div', { className: 'asm-hint', textContent: '', hidden: true });
   stage.append(hint);
   const side = el('div', { className: 'asm-side' });
-  const testPane = el('div', { className: 'asm-pane test-pane', hidden: true }, el('div', { className: 'asm-hint', textContent: 'Test is next: the sketch will drive the assembled robot with real physics. For now, build and check your parts in Assembly.' }));
+  const testPane = el('div', { className: 'asm-pane test-pane', hidden: true }, el('div', { className: 'asm-hint', textContent: 'Opening the flight test…' }));
   canvas.append(pane, testPane);
   for (const t of ['pointerdown', 'mousedown']) for (const el0 of [pane, testPane]) el0.addEventListener(t, e => e.stopPropagation());      // the circuit canvas starts a pan on press and cancels it, which closed every dropdown here
-  for (const t of ['wheel', 'touchmove']) side.addEventListener(t, e => e.stopPropagation(), { passive: true });      // the circuit canvas zooms on wheel; the side panel must just scroll
+  for (const t of ['wheel', 'touchmove']) { side.addEventListener(t, e => e.stopPropagation(), { passive: true }); testPane.addEventListener(t, e => e.stopPropagation(), { passive: true }); }      // the circuit canvas zooms on wheel; the side panel must just scroll
   pane.append(stage, side);
 
   // ── side panel ────────────────────────────────────────────────
@@ -382,7 +383,7 @@ export function initAssembly({ editor }) {
       const holder = new t.THREE.Group(); holder.add(g); objCache.set(part.id, holder);
     }
     const o = objCache.get(part.id).clone(true);
-    o.traverse(m => { if (m.isMesh) m.material = new t.THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.1, roughness: 0.55, side: t.THREE.DoubleSide, emissive: 0x000000 }); });
+    o.traverse(m => { if (m.isMesh) m.material = m.userData.fixed ? m.material.clone() : new t.THREE.MeshStandardMaterial({ color: 0xb8c4cc, metalness: 0.1, roughness: 0.55, side: t.THREE.DoubleSide, emissive: 0x000000 }); });      // drone parts keep their own colours (one material each, so selecting one does not light them all)
     return o;
   }
   /** A small picture of each part for its card, drawn once with a throwaway renderer. */
@@ -393,7 +394,7 @@ export function initAssembly({ editor }) {
     sc.add(new THREE.HemisphereLight(0xffffff, 0x667788, 1.5)); const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(100, -150, 200); sc.add(sun);
     for (const p of parts) {
       try {
-        const o = await partObject(t, p); o.traverse(m => { if (m.isMesh) m.material.color.set(0x9fb0ba); }); sc.add(o); o.updateMatrixWorld(true);
+        const o = await partObject(t, p); o.traverse(m => { if (m.isMesh) { if (m.userData.fixed) m.material.color.offsetHSL(0, 0, 0.22); else m.material.color.set(0x9fb0ba); } }); sc.add(o); o.updateMatrixWorld(true);
         const b = new THREE.Box3().setFromObject(o), c = b.getCenter(new THREE.Vector3()), d = Math.max(...b.getSize(new THREE.Vector3()).toArray()) * 2.6;
         cam.up.set(0, 0, 1); cam.position.set(c.x + d * 0.6, c.y - d * 0.8, c.z + d * 0.55); cam.lookAt(c); r.render(sc, cam); thumbs.set(p.id, r.domElement.toDataURL('image/png')); sc.remove(o);
       } catch { /* a part without a picture still has its name */ }
@@ -432,7 +433,7 @@ export function initAssembly({ editor }) {
     if (j.anchor >= 0 && ids[j.anchor]) anchorId = ids[j.anchor];
     applyScene(); fitScene();
   }
-  const tint = inst => inst.obj.traverse(m => { if (m.isMesh) m.material.color.setHex(colourOf(inst)); });
+  const tint = inst => inst.obj.traverse(m => { if (m.isMesh && !m.userData.fixed) m.material.color.setHex(colourOf(inst)); });
 
   // — adding and removing
   async function addToScene(part, at = null) {
@@ -447,6 +448,26 @@ export function initAssembly({ editor }) {
       if (!part.frames.length) bsay(`“${part.name}” has no marked holes, so it cannot snap to anything.`, true);
       return inst;
     } catch (e) { bsay(e.message, true); return null; }
+  }
+  /** A ready 5-inch quad (frame, four motors with props, a battery under it, an ESC and flight-controller board, an FPV camera), joined the way a person would join it, as one undo step. */
+  async function buildExampleQuad() {
+    const t = await load3d(); await loadExamples(); keep(); batch = true;
+    try {
+      for (const i of asm.instances) t.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null;
+      const add = (id, at = [0, 0]) => addToScene(dronePart(id), at), fail = (r, what) => { if (!r.ok) throw new Error(`${what}: ${r.error}`); };
+      const frame = await add('frame-quad-220-16-30.5'); let k = 0;
+      for (const n of ['fr', 'fl', 'bl', 'br']) {
+        const m = await add('motor-2207-1900', [300 + 70 * k, 0]); fail(asm.mateAll(frame.id, `${n}-1-top`, m.id, 'mount-1'), 'motor');
+        const p = await add('prop-5x4.3x3-b5', [300 + 70 * k, 200]); fail(asm.mateAll(m.id, 'shaft', p.id, 'bore-bottom'), 'prop'); k++;
+      }
+      const bat = await add('battery-4s-1500-75', [0, 400]); fail(asm.mateAll(frame.id, 'strap-1-bottom', bat.id, 'strap-top-a'), 'battery');
+      for (let q = 0; q < 4 && !asm.autoMatch(frame.id, bat.id); q++) turn(bat, [0, 0, 1], worldFrame(frame, frame.part.frames.find(f => f.id === 'strap-1-bottom')).pos, 90);      // swing it round until its second strap hole meets the frame's
+      const esc = await add('board-esc-30.5', [0, -300]); fail(asm.mateAll(frame.id, 'stack-1-top', esc.id, 'mount-1-bottom'), 'ESC');
+      const fcb = await add('board-fc-30.5', [0, -400]); fail(asm.mateAll(esc.id, 'mount-1-top', fcb.id, 'mount-1-bottom'), 'flight controller');
+      const cam = await add('camera-micro', [0, 500]); fail(asm.mateAll(frame.id, 'camera-1-top', cam.id, 'mount-1-bottom'), 'camera');
+      anchorId = frame.id; selected = null;
+    } finally { batch = false; }
+    applyScene(); render2(); fitScene(); bsay('Built a 5-inch quad. Open Test to fly it.');
   }
   function removeInst(id) { keep(); const i = asm.get(id); if (i) three?.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; applyScene(); }
   function clearAll() { if (!asm.instances.length) return; keep(); for (const i of asm.instances) three?.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null; applyScene(); }
@@ -568,7 +589,7 @@ export function initAssembly({ editor }) {
     const other = asm.instances.filter(i => !i.part.drone || !['motor', 'prop', 'battery'].includes(i.part.drone.kind)).reduce((g, i) => g + (i.part.mass?.grams || 0), 0) + 5, r = analyseQuad({ motor, prop, battery, extraGrams: other, motors: motors.length });
     line(`${motors.length} motors (${withProp} with a prop) · ${r.massGrams} g · thrust-to-weight ${r.twr}:1${r.hoverThrottle ? ` · hovers at ${Math.round(r.hoverThrottle * 100)} % throttle, about ${r.hoverAmps} A, about ${r.flightMinutes} min` : ''}`);
     if (withProp < motors.length) line(`${motors.length - withProp} motor${motors.length - withProp > 1 ? 's have' : ' has'} no prop yet.`, 'bad');
-    for (const n of r.notes) line(n, 'bad'); line('Estimates from typical values. Open “Advanced” when you make a motor to enter your own numbers.');
+    for (const n of r.notes) line(n, 'bad'); line('Estimates from typical values. Open “Advanced” when you make a motor to enter your own numbers. Open the Test tab to fly it.');
   }
   const render2h = () => { for (const inst of asm.instances) inst.obj.traverse(m => { if (m.isMesh) m.material.emissive.setHex(inst.id === selected ? 0x1d4e75 : inst.id === hoverInst ? 0x2a3a44 : 0x000000); }); three?.draw(); };
   /** The point on the line p + s·a that is closest to a ray, as the parameter s. */
@@ -686,12 +707,14 @@ export function initAssembly({ editor }) {
   });
 
   // ── tabs ──────────────────────────────────────────────────────
-  let view = 'circuit';
+  let view = 'circuit', droneTest = null;
   async function show(v) {
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
     document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
     pane.hidden = v !== 'assembly'; testPane.hidden = v !== 'test'; document.body.classList.toggle('robot-asm', v !== 'circuit');
+    if (v !== 'test') droneTest?.leave();
+    if (v === 'test') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, prepare: async () => { await load3d(); await loadExamples(); await restoreSaved(); }, buildExample: buildExampleQuad, goAssembly: () => show('assembly') }); await droneTest.enter(); }
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v);
   }

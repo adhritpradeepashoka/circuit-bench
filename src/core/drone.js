@@ -77,7 +77,7 @@ export function operatingPoint(motor, prop, battery, throttle, motorsOnPack = 4)
   return { throttle, rpm: w / RPM, thrustGrams: thrustN / G * 1000, motorAmps: I, packAmpsPerMotor: packAmps, electricalW: vt * packAmps, shaftW, efficiencyGPerW: packAmps ? (thrustN / G * 1000) / (vt * packAmps) : 0, packVolts: vt };
 }
 /** What a quad built from these parts does: weight, thrust-to-weight, hover throttle and current, and flight time. extraGrams = frame, boards, camera, wires. */
-export function analyseQuad({ motor, prop, battery, extraGrams = 0, motors = 4, avionicsAmps = 0.4 }) {
+export function analyseQuad({ motor, prop, battery, extraGrams = 0, motors = 4, avionicsAmps = 1.0 }) {
   const mass = motors * (motor.massGrams + prop.massGrams) + battery.massGrams + extraGrams, weightN = mass / 1000 * G, notes = [];
   const full = operatingPoint(motor, prop, battery, 1, motors), twr = motors * full.thrustGrams / mass;
   let lo = 0, hi = 1; for (let k = 0; k < 40; k++) { const d = (lo + hi) / 2; operatingPoint(motor, prop, battery, d, motors).thrustGrams * motors / 1000 * G > weightN ? (hi = d) : (lo = d); }
