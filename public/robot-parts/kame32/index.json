@@ -1327,6 +1327,159 @@
    "actuators": [],
    "sensors": [],
    "ports": []
+  },
+  {
+   "format": "circuitbench-robot-part",
+   "version": 1,
+   "id": "kame32-servo-sg90",
+   "name": "SG90 servo",
+   "category": "Example parts",
+   "blurb": "SG90 micro servo model from the FreeCAD parts library (github.com/FreeCAD/FreeCAD-library). Body, mounting ears and splined output shaft; no horn.",
+   "author": "",
+   "model": {
+    "file": "servo-sg90.stl",
+    "format": "stl",
+    "units": "mm",
+    "up": "z",
+    "bytes": 116384
+   },
+   "mass": {
+    "grams": 9,
+    "source": "datasheet"
+   },
+   "dims": {
+    "size": [
+     11.8,
+     32.4,
+     29.9
+    ],
+    "source": "measured"
+   },
+   "frames": [
+    {
+     "id": "hole-1",
+     "kind": "hole",
+     "pos": [
+      0,
+      5.1,
+      29.9
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 1.7,
+     "through": true
+    },
+    {
+     "id": "hole-2",
+     "kind": "hole",
+     "pos": [
+      0,
+      5.1,
+      26.7
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 1.7,
+     "through": true
+    },
+    {
+     "id": "hole-3",
+     "kind": "hole",
+     "pos": [
+      0,
+      5.1,
+      26.7
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 4.6,
+     "through": true
+    },
+    {
+     "id": "hole-4",
+     "kind": "hole",
+     "pos": [
+      0,
+      -13.9,
+      18.4
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 2,
+     "through": true
+    },
+    {
+     "id": "hole-5",
+     "kind": "hole",
+     "pos": [
+      0,
+      -13.9,
+      15.9
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 2,
+     "through": true
+    },
+    {
+     "id": "hole-6",
+     "kind": "hole",
+     "pos": [
+      0,
+      13.5,
+      18.4
+     ],
+     "dir": [
+      0,
+      0,
+      1
+     ],
+     "source": "measured",
+     "diameter": 2,
+     "through": true
+    },
+    {
+     "id": "hole-7",
+     "kind": "hole",
+     "pos": [
+      0,
+      13.5,
+      15.9
+     ],
+     "dir": [
+      0,
+      0,
+      -1
+     ],
+     "source": "measured",
+     "diameter": 2,
+     "through": true
+    }
+   ],
+   "joints": [],
+   "actuators": [],
+   "sensors": [],
+   "ports": []
   }
  ]
 }
