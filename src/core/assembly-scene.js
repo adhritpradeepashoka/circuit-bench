@@ -66,6 +66,19 @@ export class Assembly {
     const m = { a: { inst: aInst, frame: aFrame }, b: { inst: bInst, frame: bFrame }, screw: screw || null }; this.mates.push(m);
     return { ok: true, mate: m, check: this.check(m) };
   }
+  /** After one join, also join every other pair of free holes that now sit exactly on each other (a motor's four screws, a board's four). Moves nothing. */
+  autoMatch(aInst, bInst) {
+    const A = this.get(aInst), B = this.get(bInst); if (!A || !B) return 0; let n = 0;
+    for (const fa of A.part.frames) for (const fb of B.part.frames) {
+      if (this.isMated(A.id, fa.id) || this.isMated(B.id, fb.id)) continue;
+      if (fa.diameter && fb.diameter && Math.abs(fa.diameter - fb.diameter) > 1.2) continue;
+      const wa = worldFrame(A, fa), wb = worldFrame(B, fb);
+      if (Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]) < 0.3 && dot(wa.dir, wb.dir) < -0.99) { this.mates.push({ a: { inst: A.id, frame: fa.id }, b: { inst: B.id, frame: fb.id }, screw: null }); n++; }
+    }
+    return n;
+  }
+  /** mate(), then autoMatch(). */
+  mateAll(aInst, aFrame, bInst, bFrame, opts) { const r = this.mate(aInst, aFrame, bInst, bFrame, opts); if (r.ok) r.extra = this.autoMatch(aInst, bInst); return r; }
   /** Every part reachable from `instId` through mates (optionally through a given list of mates instead of the current ones). */
   component(instId, mates = this.mates) {
     const seen = new Set([instId]), stack = [instId];

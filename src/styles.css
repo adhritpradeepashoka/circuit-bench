@@ -995,3 +995,10 @@ body:not(.robot-asm) #robotParts { display: none; }
 .asm-sel[hidden] { display: none; }
 .asm-group { grid-column: 1 / -1; }
 .asm-dock-search { width: 100%; box-sizing: border-box; height: 32px; margin-bottom: 8px; padding: 0 10px; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; font: inherit; font-size: 13px; background: #fff; }
+.asm-builder { border: 1px solid var(--line, #d5ddd8); border-radius: 10px; padding: 8px 10px; margin-bottom: 10px; background: #fff; }
+.asm-builder > summary, .asm-adv > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.asm-builder-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+.asm-adv { border-top: 1px dashed var(--line, #d5ddd8); padding-top: 6px; } .asm-adv > summary { font-weight: 500; font-size: 12.5px; }
+.asm-builder .asm-field { display: flex; flex-direction: column; gap: 2px; font-size: 12px; } .asm-builder .asm-field input, .asm-builder .asm-field select { height: 30px; padding: 0 8px; border: 1px solid var(--line, #d5ddd8); border-radius: 7px; font: inherit; font-size: 13px; width: 100%; box-sizing: border-box; }
+.asm-btn.primary { background: #1d4e75; color: #fff; border-color: #1d4e75; height: 32px; }
+.asm-drone { border-top: 1px solid var(--line, #d5ddd8); margin-top: 8px; padding-top: 6px; }

@@ -34,3 +34,24 @@ test('every motor size and board has a mount pattern the Assembly can turn into 
   for (const [id, s] of Object.entries(MOTOR_SIZES)) assert.ok(s.mount.pattern[0] > 0 && s.mount.screw, id);
   for (const [id, b] of Object.entries(BOARDS)) assert.ok(STACKS[b.stack], id);
 });
+
+import { parseDroneId, makeDronePart, DRONE_PRESETS, motorId } from '../src/core/drone-parts.js';
+import { validateRobotPart } from '../src/core/robot-part.js';
+import { Assembly } from '../src/core/assembly-scene.js';
+import { MOTOR_NAMES } from '../src/core/drone.js';
+
+test('there are plenty of motor sizes, each with sane numbers', () => {
+  assert.ok(MOTOR_NAMES.length >= 40); for (const n of MOTOR_NAMES) { const s = MOTOR_SIZES[n]; assert.ok(s.kvRef > 500 && s.rRef > 0.001 && s.mass > 0.5 && s.mount.pattern[0] > 0, n); const m = makeMotor({ size: n }); assert.ok(Number.isFinite(m.resistance) && m.resistance > 0, n); }
+});
+test('every drone part id makes a valid robot part, and ids round-trip', () => {
+  for (const [, id] of DRONE_PRESETS) { const p = makeDronePart(id); assert.ok(p, id); const v = validateRobotPart(p); assert.ok(v.ok, `${id}: ${v.errors}`); }
+  const id = motorId({ size: '2207', kv: 1900, over: { resistance: 0.03, massGrams: 29 } }); assert.equal(id, 'motor-2207-1900-r30-m29'); const d = parseDroneId(id); assert.equal(d.over.resistance, 0.03); assert.equal(d.over.massGrams, 29);
+  assert.equal(parseDroneId('motor-9999-1'), null); assert.equal(makeDronePart('nonsense'), null);
+});
+test('a motor screws onto a frame with one join: its other three holes line up and are joined too; the prop sits on the bell around the shaft', () => {
+  const as = new Assembly(), part = id => { const p = makeDronePart(id); return validateRobotPart(p).part; };
+  const f = as.add(part('frame-quad-220-16-30.5')), m = as.add(part('motor-2207-1900'), [200, 0, 0]), p = as.add(part('prop-5x4.3x3-b5'), [0, 200, 0]);
+  const r = as.mateAll(f.id, 'fr-1-top', m.id, 'mount-1'); assert.ok(r.ok, r.error); assert.equal(r.extra, 3); assert.equal(as.mates.length, 4);
+  assert.ok(as.mates.every(x => as.check(x).level !== 'bad'));
+  const r2 = as.mateAll(m.id, 'shaft', p.id, 'bore-bottom'); assert.ok(r2.ok); assert.ok(as.check(r2.mate).level !== 'bad', as.check(r2.mate).notes.join(' '));
+});

@@ -3,8 +3,8 @@
 // and each number is overridable ("Advanced") so someone with a thrust table can enter real data. SI units inside; grams, mm, mAh, Kv at the edges.
 const RHO = 1.225, G = 9.80665, IN = 0.0254, RPM = Math.PI / 30;
 
-/** Standard stator sizes: diameter × height (mm), a reference Kv with its phase resistance and no-load current, mass, mount pattern. */
-export const MOTOR_SIZES = {
+/** Standard stator sizes named the way the hobby does: the first two digits are the stator diameter and the last two its height, in mm (2207 = 22 × 7). */
+const CORE = {
   '0802': { stator: [8, 2], mass: 1.6, kvRef: 22000, rRef: 0.9, i0Ref: 0.35, maxA: 4, shaft: 1.0, mount: { pattern: [6, 6], screw: 'M1_4', note: 'tiny whoop motors differ a lot between brands' }, cells: [1, 1], estimated: true },
   '1103': { stator: [11, 3], mass: 4.5, kvRef: 8000, rRef: 0.2, i0Ref: 0.5, maxA: 8, shaft: 1.5, mount: { pattern: [9, 9], screw: 'M2' }, cells: [2, 3], estimated: false },
   '1404': { stator: [14, 4], mass: 9.5, kvRef: 4600, rRef: 0.12, i0Ref: 0.6, maxA: 14, shaft: 2.0, mount: { pattern: [9, 9], screw: 'M2' }, cells: [3, 4], estimated: true },
@@ -13,6 +13,16 @@ export const MOTOR_SIZES = {
   '2306': { stator: [23, 6], mass: 33, kvRef: 2400, rRef: 0.04, i0Ref: 1.1, maxA: 35, shaft: 5.0, mount: { pattern: [16, 16], screw: 'M3' }, cells: [4, 6], estimated: false },
   '2806': { stator: [28, 6], mass: 52, kvRef: 1300, rRef: 0.06, i0Ref: 1.0, maxA: 40, shaft: 5.0, mount: { pattern: [19, 19], screw: 'M3' }, cells: [4, 6], estimated: false },
 };
+/** Every other size is derived from its stator volume with the scaling real motors follow (mass, current, winding), and is marked estimated. */
+export const MOTOR_NAMES = ['0603', '0702', '0703', '0802', '0803', '0804', '0903', '1002', '1102', '1103', '1104', '1105', '1106', '1202', '1204', '1303', '1306', '1404', '1407', '1408', '1507', '1606', '1704', '1806', '1808', '2004', '2005', '2006', '2204', '2205', '2206', '2207', '2208', '2304', '2305', '2306', '2307', '2308', '2506', '2507', '2806', '2807', '2808', '3004', '3110', '3508'];
+function derive(name) {
+  const d = Number(name.slice(0, 2)), h = Number(name.slice(2)), vol = d * d * h, ratio = vol / 3388;
+  const cells = d <= 8 ? [1, 1] : d <= 12 ? [2, 3] : d <= 15 ? [3, 4] : d <= 19 ? [3, 4] : d <= 23 ? [4, 6] : d <= 28 ? [4, 6] : [6, 6], c = d <= 8 ? 1 : d <= 12 ? 2 : d <= 15 ? 3 : d <= 23 ? 4 : 6;
+  const kvRef = Math.round(32000 * (22 / d) ** 0.9 / (c * 3.7) / 50) * 50, k = kvRef / 1900;
+  return { stator: [d, h], mass: Math.round((0.0092 * vol + 0.6) * 10) / 10, kvRef, rRef: Math.round(1.25e-8 * ratio ** 0.58 * kvRef * kvRef * 1e4) / 1e4, i0Ref: Math.round(0.9 * ratio ** 0.55 * k ** 0.5 * 100) / 100, maxA: Math.max(3, Math.round(35 * ratio ** 0.8)), shaft: d < 9 ? 1.0 : d < 12 ? 1.5 : d < 15 ? 2 : d < 19 ? 3 : 5,
+    mount: d <= 8 ? { pattern: [6, 6], screw: 'M1_4' } : d <= 15 ? { pattern: [9, 9], screw: 'M2' } : d <= 18 ? { pattern: [12, 12], screw: 'M3' } : d <= 24 ? { pattern: [16, 16], screw: 'M3' } : { pattern: [19, 19], screw: 'M3' }, cells, estimated: true };
+}
+export const MOTOR_SIZES = Object.fromEntries(MOTOR_NAMES.map(n => [n, CORE[n] || derive(n)]));
 /** Build a motor from a size and a Kv. Winding resistance scales with Kv² and no-load current with Kv, as it does for real windings of one size. Overrides win. */
 export function makeMotor({ size = '2207', kv, over = {} } = {}) {
   const s = MOTOR_SIZES[size]; if (!s) throw new Error(`Unknown motor size ${size}.`);

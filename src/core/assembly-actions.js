@@ -38,7 +38,7 @@ export async function runAssemblyOps(asm, ops, ctx) {
         done++;
       } else if (o.op === 'join') {
         const A = inst(o.a?.id), B = inst(o.b?.id); if (!A || !B) { say('both parts must exist.'); continue; }
-        const r = asm.mate(A.id, o.a.hole, B.id, o.b.hole); if (!r.ok) { say(r.error); continue; }
+        const r = asm.mateAll(A.id, o.a.hole, B.id, o.b.hole); if (!r.ok) { say(r.error); continue; }
         if (r.check.level === 'bad') warnings.push(`join: ${r.check.notes.join(' ')}`); done++;
       } else if (o.op === 'unjoin') {
         const A = inst(o.a), B = o.b ? inst(o.b) : null; if (!A) { say('no such part.'); continue; }

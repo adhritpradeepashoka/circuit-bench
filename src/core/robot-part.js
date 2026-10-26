@@ -57,7 +57,7 @@ export function validateRobotPart(raw) {
   // model: a reference to a mesh the workspace stores separately (the description itself stays small and diff-able)
   const m = raw.model && typeof raw.model === 'object' ? raw.model : {};
   const model = {
-    file: str(m.file, 120), format: ['stl', 'obj', 'glb', 'step'].includes(str(m.format, 8).toLowerCase()) ? str(m.format, 8).toLowerCase() : null,
+    file: str(m.file, 120), format: ['stl', 'obj', 'glb', 'step', 'gen'].includes(str(m.format, 8).toLowerCase()) ? str(m.format, 8).toLowerCase() : null,
     units: ['mm', 'cm', 'm', 'in'].includes(m.units) ? m.units : 'mm', up: m.up === 'y' ? 'y' : 'z',
   };
   if (model.file && !/^[\w.\- ()]+$/.test(model.file)) errors.push('The model file name may only use letters, digits, spaces and . - _ ( ).');
