@@ -104,3 +104,17 @@ test('the numbers inside are exact where they can be: the motor settles where to
   const kt = 1 / (motor.kv * Math.PI / 30), I = (16 - kt * w) / motor.resistance, drive = kt * (I - motor.noLoadAmps), D = 5 * 0.0254, n = w / (2 * Math.PI), load = (prop.cp / (2 * Math.PI)) * 1.225 * n * n * D ** 5;
   assert.ok(Math.abs(drive - load) / load < 1e-6);
 });
+
+test('a motor screwed on by one hole swings round that screw, and the second hole then joins by swinging it into line (rigid after that)', async () => {
+  const { Assembly, worldFrame, turn } = await import('../src/core/assembly-scene.js'), { part } = await import('./helpers/quad.mjs');
+  for (const [frame, motor] of [['frame-quad-220-16-30.5', 'motor-2207-1900'], ['frame-quad-75-t6-16', 'motor-0802-22000']]) {
+    const as = new Assembly(), f = as.add(part(frame)), mo = as.add(part(motor));
+    const r1 = as.mate(f.id, 'fr-1-top', mo.id, 'mount-1'); assert.ok(r1.ok, r1.error);
+    const w = worldFrame(mo, mo.part.frames.find(x => x.id === 'mount-1')); turn(mo, w.dir, w.pos, 53);                      // the motor has swung out of line
+    const r2 = as.mate(f.id, 'fr-2-top', mo.id, 'mount-2'); assert.ok(r2.ok, `${frame}: ${r2.error}`);
+    const wa = worldFrame(f, f.part.frames.find(x => x.id === 'fr-2-top')), wb = worldFrame(mo, mo.part.frames.find(x => x.id === 'mount-2'));
+    assert.ok(Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]) < 0.1, `${frame}: the second holes meet`);
+    assert.ok(as.autoMatch(f.id, mo.id) >= 1, `${frame}: the remaining holes join`);
+    const far = as.mate(f.id, 'bl-1-top', mo.id, 'mount-3'); assert.ok(!far.ok && /swing|apart/.test(far.error), 'a hole on the far arm cannot be reached by swinging');
+  }
+});
