@@ -53,7 +53,7 @@ export function circleNear(fe, P, N, { reach = 8, maxRadius = 30, planeTol = 0.0
  * One entry per axis (a through-hole has a rim on each side; the one facing away from the part's middle is kept).
  * @returns {{center:number[], axis:number[], radius:number}[]}  axis is a unit vector pointing out of the part
  */
-export function findHoles(fe, { minRadius = 0.4, maxRadius = 12, roundness = 0.04, max = 40 } = {}) {
+export function findHoles(fe, { minRadius = 0.4, maxRadius = 12, roundness = 0.04, max = 80 } = {}) {
   const { segs, verts } = fe, adj = new Map();
   for (const s of segs) { (adj.get(s.ia) || adj.set(s.ia, []).get(s.ia)).push(s.ib); (adj.get(s.ib) || adj.set(s.ib, []).get(s.ib)).push(s.ia); }
   let mid = [0, 0, 0]; for (const v of verts) for (let k = 0; k < 3; k++) mid[k] += v[k] / verts.length;
@@ -74,11 +74,13 @@ export function findHoles(fe, { minRadius = 0.4, maxRadius = 12, roundness = 0.0
     const out = [c[0] - mid[0], c[1] - mid[1], c[2] - mid[2]]; if (out[0] * n[0] + out[1] * n[1] + out[2] * n[2] < 0) n = n.map(v => -v);
     found.push({ center: c, axis: n, radius: r, away: Math.hypot(...out) });
   }
-  const kept = [];
-  for (const h of found.sort((a, b) => b.away - a.away)) {                 // same axis line and radius = the other rim of one hole
-    const dup = kept.find(k => Math.abs(k.radius - h.radius) < 0.05 && Math.abs(k.axis[0] * h.axis[0] + k.axis[1] * h.axis[1] + k.axis[2] * h.axis[2]) > 0.99 &&
-      (() => { const d = [h.center[0] - k.center[0], h.center[1] - k.center[1], h.center[2] - k.center[2]], t = d[0] * k.axis[0] + d[1] * k.axis[1] + d[2] * k.axis[2]; return Math.hypot(d[0] - t * k.axis[0], d[1] - t * k.axis[1], d[2] - t * k.axis[2]) < 0.1; })());
-    if (!dup) kept.push(h);
+  // a through-hole has a rim at each end: keep both, each pointing away from the other (so a part can be joined on either side)
+  const coaxial = (h, k) => Math.abs(k.radius - h.radius) < 0.05 && Math.abs(k.axis[0] * h.axis[0] + k.axis[1] * h.axis[1] + k.axis[2] * h.axis[2]) > 0.99 &&
+    (() => { const d = [h.center[0] - k.center[0], h.center[1] - k.center[1], h.center[2] - k.center[2]], t = d[0] * k.axis[0] + d[1] * k.axis[1] + d[2] * k.axis[2]; return Math.hypot(d[0] - t * k.axis[0], d[1] - t * k.axis[1], d[2] - t * k.axis[2]) < 0.1; })();
+  for (const h of found) {
+    let near = null, nd = Infinity;
+    for (const k of found) if (k !== h && coaxial(h, k)) { const d = Math.hypot(h.center[0] - k.center[0], h.center[1] - k.center[1], h.center[2] - k.center[2]); if (d > 0.2 && d < nd) { nd = d; near = k; } }
+    if (near) h.axis = h.center.map((v, i) => (v - near.center[i]) / nd);
   }
-  return kept.slice(0, max).map(({ center, axis, radius }) => ({ center, axis, radius }));
+  return found.sort((a, b) => b.away - a.away).slice(0, max).map(({ center, axis, radius }) => ({ center, axis, radius }));
 }

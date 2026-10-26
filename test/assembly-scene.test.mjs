@@ -40,14 +40,15 @@ test('bill of materials counts parts, screws and mass; removing a part drops its
   as.remove(b.id); assert.equal(as.mates.length, 0); assert.equal(as.instances.length, 2);
 });
 
-test('findHoles lists every hole on a plate, once per axis', () => {
+test('findHoles lists both openings of every hole, pointing away from each other', () => {
   const s = new THREE.Shape(); s.moveTo(-16, -6); s.lineTo(16, -6); s.lineTo(16, 6); s.lineTo(-16, 6); s.closePath();
   for (const [x, r] of [[-12, 1.1], [12, 1.1], [0, 1.6]]) { const h = new THREE.Path(); h.absarc(x, 0, r, 0, Math.PI * 2, true); s.holes.push(h); }
   const g = new THREE.ExtrudeGeometry(s, { depth: 2.5, bevelEnabled: false, curveSegments: 24 });
   const hs = findHoles(featureEdges(Float32Array.from(g.toNonIndexed().attributes.position.array)));
-  assert.equal(hs.length, 3, JSON.stringify(hs.map(h => [h.center.map(v => +v.toFixed(1)), +h.radius.toFixed(2)])));
-  assert.deepEqual(hs.map(h => +(h.radius * 2).toFixed(1)).sort(), [2.2, 2.2, 3.2]);
+  assert.equal(hs.length, 6, JSON.stringify(hs.map(h => [h.center.map(v => +v.toFixed(1)), +h.radius.toFixed(2)])));
+  assert.deepEqual(hs.map(h => +(h.radius * 2).toFixed(1)).sort(), [2.2, 2.2, 2.2, 2.2, 3.2, 3.2]);
   assert.ok(hs.every(h => Math.abs(Math.abs(h.axis[2]) - 1) < 1e-3), 'axes are along the plate normal');
+  assert.ok(hs.filter(h => h.axis[2] > 0).length === 3 && hs.filter(h => h.axis[2] < 0).length === 3, 'top rims point up, bottom rims point down');
 });
 
 test('dragging: a free hole near a free hole of another part is offered, sizes must be compatible, mated holes are not', async () => {
