@@ -383,8 +383,8 @@ export function initAssembly({ editor, projects = null }) {
       const cells = bSel([1, 2, 3, 4, 5, 6], 4), mah = bNum(1500, { step: 50, min: 100 }), c = bNum(75, { step: 5, min: 10 });
       bBody.append(bField('Cells (S)', cells, 'asmBBS'), bField('Capacity, mAh', mah, 'asmBBM'), bField('Discharge rating, C', c, 'asmBBC')); make = () => `battery-${cells.value}s-${Math.round(Number(mah.value))}-${Math.round(Number(c.value))}`;
     } else if (k === 'Frame') {
-      const wb = bNum(220, { step: 5, min: 40 }), mp = bSel([9, 12, 16, 19], 16), st = bSel(Object.keys(STACKS), '30.5');
-      bBody.append(bField('Wheelbase (motor to motor), mm', wb, 'asmBFW'), bField('Motor mount, mm', mp, 'asmBFM'), bField('Stack, mm', st, 'asmBFS')); make = () => `frame-quad-${Math.round(Number(wb.value))}-${mp.value}-${st.value}`;
+      const wb = bNum(220, { step: 5, min: 40 }), mp = bSel([9, 12, 16, 19, 't6'], 16), st = bSel(Object.keys(STACKS), '30.5');
+      bBody.append(bField('Wheelbase (motor to motor), mm', wb, 'asmBFW'), bField('Motor mount, mm (t6 = 3-prong whoop)', mp, 'asmBFM'), bField('Stack, mm', st, 'asmBFS')); make = () => `frame-quad-${Math.round(Number(wb.value))}-${mp.value}-${st.value}`;
     } else {
       const sc = bSel(['M2', 'M3', 'M1_6'], 'M3'), h = bNum(6, { step: 1, min: 2, max: 40 }); bBody.append(bField('Screw', sc, 'asmBSS'), bField('Height, mm', h, 'asmBSH')); make = () => `standoff-${sc.value.toLowerCase()}-${Number(h.value)}`;
     }

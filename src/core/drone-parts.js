@@ -9,6 +9,8 @@ const r2 = v => Math.round(v * 100) / 100;
 const hole = (id, pos, dir, diameter) => ({ id, kind: 'hole', pos: pos.map(r2), dir, diameter, source: 'estimated' });
 const UP = [0, 0, 1], DOWN = [0, 0, -1];
 const sq = (a, b = a) => [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([x, y]) => [x * a / 2, y * b / 2]);
+/** Where a motor's screws go: 'cross' is the usual four on a square (the pattern is the side), 'tri' is the three-prong base of tiny-whoop motors, three screws 120° apart on a circle (the pattern is its diameter). Motor and frame use the same function, so they always line up. */
+export const mountPoints = (kind, p, q = p) => kind === 'tri' ? [0, 1, 2].map(k => [Math.cos(Math.PI / 2 + k * 2 * Math.PI / 3) * p / 2, Math.sin(Math.PI / 2 + k * 2 * Math.PI / 3) * p / 2]) : sq(p, q);
 const fin = (v, lo, hi, d) => (Number.isFinite(v) ? Math.max(lo, Math.min(hi, v)) : d);
 
 /** The hobby's motor name → numbers, with any "Advanced" overrides carried in the id: -r (mΩ), -i (mA), -m (g), -a (A). */
@@ -18,7 +20,7 @@ export function parseDroneId(id) {
   let m;
   if ((m = /^prop-([\d.]+)x([\d.]+)x(\d)(?:-b([\d.]+))?$/.exec(s))) return { kind: 'prop', dia: fin(Number(m[1]), 0.8, 12, 5), pitch: fin(Number(m[2]), 0.5, 10, 4.3), blades: fin(Number(m[3]), 2, 6, 3), bore: m[4] ? fin(Number(m[4]), 0.8, 8, 5) : null };
   if ((m = /^battery-(\d)s-(\d+)(?:-(\d+))?$/.exec(s))) return { kind: 'battery', cells: fin(Number(m[1]), 1, 6, 4), mAh: fin(Number(m[2]), 100, 10000, 1500), c: fin(Number(m[3] || 75), 10, 200, 75) };
-  if ((m = /^frame-quad-(\d+)-(\d+)-([\d.]+)$/.exec(s)) && STACKS[m[3]]) return { kind: 'frame', wheelbase: fin(Number(m[1]), 40, 600, 220), motorPattern: fin(Number(m[2]), 6, 30, 16), stack: m[3] };
+  if ((m = /^frame-quad-(\d+)-(t?)(\d+)-([\d.]+)$/.exec(s)) && STACKS[m[4]]) return { kind: 'frame', wheelbase: fin(Number(m[1]), 40, 600, 220), motorPattern: fin(Number(m[3]), m[2] ? 3 : 6, 30, m[2] ? 6 : 16), mountKind: m[2] ? 'tri' : 'cross', stack: m[4] };
   if (BOARDS[s.replace(/^board-/, '')] && s.startsWith('board-')) return { kind: 'board', key: s.slice(6) };
   if (s.startsWith('camera-') && CAMERAS[`cam-${s.slice(7)}`]) return { kind: 'camera', key: `cam-${s.slice(7)}` };
   if ((m = /^standoff-(m1_6|m2|m3)-(\d+(?:\.\d+)?)$/.exec(s))) return { kind: 'standoff', screw: m[1].toUpperCase(), h: fin(Number(m[2]), 2, 40, 6) };
@@ -33,11 +35,11 @@ export function makeDronePart(id) {
   const d = parseDroneId(id); if (!d) return null;
   const base = { format: ROBOT_PART_FORMAT, version: ROBOT_PART_VERSION, id, category: 'Drone', model: { file: `${id}.gen`, format: 'gen', units: 'mm', up: 'z' } };
   if (d.kind === 'motor') {
-    const mo = makeMotor({ size: d.size, kv: d.kv, over: d.over }), [sd, sh] = mo.stator, [a, b] = mo.mount.pattern, hd = clear(mo.mount.screw);
-    const bellR = sd / 2 + 2.2, baseT = Math.max(1.2, sd / 9), bellH = sh + 3.5, shaftLen = 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = Math.hypot(a, b) / 2 + hd;
+    const mo = makeMotor({ size: d.size, kv: d.kv, over: d.over }), [sd, sh] = mo.stator, [a, b] = mo.mount.pattern, mk = mo.mount.kind || 'cross', hd = clear(mo.mount.screw);
+    const bellR = sd / 2 + 2.2, baseT = Math.max(1.2, sd / 9), bellH = sh + 3.5, shaftLen = 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = (mk === 'tri' ? a / 2 : Math.hypot(a, b) / 2) + hd;
     const baseR = Math.max(bellR, hx + 0.8);
-    return { ...base, name: `Motor ${d.size} ${Math.round(d.kv)}Kv`, mass: { grams: mo.massGrams, source: d.over.massGrams ? 'datasheet' : 'estimated' }, dims: { size: [2 * baseR, 2 * baseR, root + shaftLen], source: 'estimated' }, drone: { ...d, motor: mo, bellR, baseR, baseT, root, shaftLen },
-      frames: [...sq(a, b).map(([x, y], k) => hole(`mount-${k + 1}`, [x, y, 0], DOWN, hd)), { id: 'shaft', kind: 'shaft', pos: [0, 0, root], dir: UP, diameter: mo.shaftMm, source: 'estimated' }] };
+    return { ...base, name: `Motor ${d.size} ${Math.round(d.kv)}Kv`, mass: { grams: mo.massGrams, source: d.over.massGrams ? 'datasheet' : 'estimated' }, dims: { size: [2 * baseR, 2 * baseR, root + shaftLen], source: 'estimated' }, drone: { ...d, motor: mo, bellR, baseR, baseT, root, shaftLen, mountKind: mk },
+      frames: [...mountPoints(mk, a, b).map(([x, y], k) => hole(`mount-${k + 1}`, [x, y, 0], DOWN, hd)), { id: 'shaft', kind: 'shaft', pos: [0, 0, root], dir: UP, diameter: mo.shaftMm, source: 'estimated' }] };
   }
   if (d.kind === 'prop') {
     const p = makeProp({ diameterIn: d.dia, pitchIn: d.pitch, blades: d.blades }), bore = d.bore ?? defaultBore(d.dia), hubR = Math.max(bore * 0.95 + 1.6, 4), hubH = Math.max(4, bore * 1.1), R = d.dia * 25.4 / 2;
@@ -50,15 +52,15 @@ export function makeDronePart(id) {
       frames: [[-10, 'a'], [10, 'b']].flatMap(([x, k]) => [hole(`strap-top-${k}`, [x, 0, h], UP, 3.4), hole(`strap-bottom-${k}`, [x, 0, 0], DOWN, 3.4)]) };
   }
   if (d.kind === 'frame') {
-    const W = d.wheelbase, t = W < 100 ? 1.5 : W < 180 ? 3 : 4, st = STACKS[d.stack], hd = clear(st.screw), mhd = clear(d.motorPattern <= 9 ? 'M2' : 'M3'), arm = Math.max(9, d.motorPattern + 5), plate = Math.max(st.pattern[0] + 9, 22);
+    const W = d.wheelbase, t = W < 100 ? 1.5 : W < 180 ? 3 : 4, st = STACKS[d.stack], hd = clear(st.screw), mk = d.mountKind || 'cross', mhd = clear(d.motorPattern <= 6 ? 'M1_4' : d.motorPattern <= 9 ? 'M2' : 'M3'), arm = Math.max(9, d.motorPattern + 5), plate = Math.max(st.pattern[0] + 9, 22);
     const tips = [45, 135, 225, 315].map((deg, k) => [['fr', 'fl', 'bl', 'br'][k], Math.cos(deg * Math.PI / 180) * W / 2, Math.sin(deg * Math.PI / 180) * W / 2]);
     const frames = [];
-    for (const [n, x, y] of tips) sq(d.motorPattern).forEach(([hx, hy], k) => { frames.push(hole(`${n}-${k + 1}-top`, [x + hx, y + hy, t], UP, mhd), hole(`${n}-${k + 1}-bottom`, [x + hx, y + hy, 0], DOWN, mhd)); });
+    for (const [n, x, y] of tips) mountPoints(mk, d.motorPattern).forEach(([hx, hy], k) => { frames.push(hole(`${n}-${k + 1}-top`, [x + hx, y + hy, t], UP, mhd), hole(`${n}-${k + 1}-bottom`, [x + hx, y + hy, 0], DOWN, mhd)); });
     sq(...st.pattern).forEach(([x, y], k) => frames.push(hole(`stack-${k + 1}-top`, [x, y, t], UP, hd), hole(`stack-${k + 1}-bottom`, [x, y, 0], DOWN, hd)));
     [-10, 10].forEach((y, k) => frames.push(hole(`strap-${k + 1}-bottom`, [0, y, 0], DOWN, 3.4), hole(`strap-${k + 1}-top`, [0, y, t], UP, 3.4)));
     [-6, 6].forEach((x, k) => frames.push(hole(`camera-${k + 1}-top`, [x, plate / 2 + 8, t], UP, 2.4)));
     const R = W / 2 + arm;
-    return { ...base, name: `Quad frame ${W} mm (${d.motorPattern}×${d.motorPattern} motors, ${d.stack} stack)`, mass: { grams: Math.round(0.0016 * W * W * t / 4 * 10) / 10, source: 'estimated' }, dims: { size: [2 * R, 2 * R, t], source: 'estimated' }, drone: { ...d, t, arm, plate, tips, mhd, hd }, frames };
+    return { ...base, name: `Quad frame ${W} mm (${mk === 'tri' ? `3-prong ${d.motorPattern} mm` : `${d.motorPattern}×${d.motorPattern}`} motors, ${d.stack} stack)`, mass: { grams: Math.round(0.0016 * W * W * t / 4 * 10) / 10, source: 'estimated' }, dims: { size: [2 * R, 2 * R, t], source: 'estimated' }, drone: { ...d, t, arm, plate, tips, mhd, hd, mountKind: mk }, frames };
   }
   if (d.kind === 'board') {
     const b = BOARDS[d.key], st = STACKS[b.stack], hd = clear(st.screw), [l, w] = b.sizeMm;
@@ -78,7 +80,7 @@ export function makeDronePart(id) {
 }
 /** Parts offered ready-made in the list (the builder makes the rest). */
 export const DRONE_PRESETS = [
-  ['Whoop frame 65 mm', 'frame-quad-65-9-16'], ['3 inch frame 142 mm', 'frame-quad-142-12-20'], ['5 inch frame 220 mm', 'frame-quad-220-16-30.5'], ['7 inch frame 300 mm', 'frame-quad-300-16-30.5'],
+  ['Tiny whoop 75 mm (3-prong 0802 motors)', 'frame-quad-75-t6-16'], ['Whoop frame 65 mm', 'frame-quad-65-9-16'], ['3 inch frame 142 mm', 'frame-quad-142-12-20'], ['5 inch frame 220 mm', 'frame-quad-220-16-30.5'], ['7 inch frame 300 mm', 'frame-quad-300-16-30.5'],
   ['Motor 0802 22000Kv (1S whoop)', 'motor-0802-22000'], ['Motor 1404 4600Kv', 'motor-1404-4600'], ['Motor 2207 1900Kv', 'motor-2207-1900'], ['Motor 2806 1300Kv', 'motor-2806-1300'],
   ['Prop 5×4.3×3', 'prop-5x4.3x3-b5'], ['Prop 3×3×3', 'prop-3x3x3-b2'], ['Flight controller 30.5', 'board-fc-30.5'], ['4-in-1 ESC 30.5', 'board-esc-30.5'], ['AIO 25.5', 'board-aio-25.5'], ['Whoop AIO 16', 'board-aio-16'],
   ['Battery 4S 1500 mAh', 'battery-4s-1500-75'], ['Battery 6S 1300 mAh', 'battery-6s-1300-100'], ['Battery 1S 450 mAh', 'battery-1s-450-60'], ['Camera micro', 'camera-micro'], ['Camera nano', 'camera-nano'], ['Standoff M3 × 6', 'standoff-m3-6'], ['Standoff M2 × 6', 'standoff-m2-6'],

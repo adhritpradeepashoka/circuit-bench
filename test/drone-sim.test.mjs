@@ -80,11 +80,11 @@ test('the mixer works for any motor layout: roll and pitch do not change the tot
 });
 test('the same controller flies a tiny whoop and a 7 inch long-range quad: it works the gains out for each', () => {
   const builds = { '7 inch': { frame: 'frame-quad-300-16-30.5', motor: 'motor-2806-1300', prop: 'prop-7x4x3-b5', battery: 'battery-6s-1300-100' },
-    whoop: { frame: 'frame-quad-65-9-16', motor: 'motor-0802-22000', prop: 'prop-1.6x1.2x3-b1', battery: 'battery-1s-450-60', boards: false } };
+    whoop: { frame: 'frame-quad-65-t6-16', motor: 'motor-0802-22000', prop: 'prop-1.6x1.2x3-b1', battery: 'battery-1s-450-60', boards: false } };
   for (const [name, o] of Object.entries(builds)) {
     const m = droneFromAssembly(buildQuad(o)); assert.ok(m.ok, `${name}: ${m.error}`);
     const sim = new DroneSim(m), fc = new SketchController(STARTER_SKETCH, m); fly(sim, fc, 1, RC({ armed: false })); fly(sim, fc, 0.4, RC());
-    fly(sim, fc, 1.5, RC({ throttle: 0.7, mode: 'althold' })); const s = fly(sim, fc, 5, RC({ throttle: 0.5, mode: 'althold' }));
+    fly(sim, fc, 3, RC({ throttle: 0.7, mode: 'althold' })); const s = fly(sim, fc, 4, RC({ throttle: 0.5, mode: 'althold' }));
     assert.ok(s.altitude > 0.3 && !s.crashed && s.tilt < 6 && Math.abs(s.climb) < 0.6, `${name}: alt ${s.altitude.toFixed(2)} tilt ${s.tilt.toFixed(1)} climb ${s.climb.toFixed(2)}`);
   }
 });

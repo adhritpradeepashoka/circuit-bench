@@ -14,9 +14,10 @@ export function buildDroneMesh(THREE, part) {
   const rrect = (w, h, r) => { const s = new THREE.Shape(), x = -w / 2, y = -h / 2; r = Math.min(r, w / 2, h / 2); s.moveTo(x + r, y); s.lineTo(x + w - r, y); s.quadraticCurveTo(x + w, y, x + w, y + r); s.lineTo(x + w, y + h - r); s.quadraticCurveTo(x + w, y + h, x + w - r, y + h); s.lineTo(x + r, y + h); s.quadraticCurveTo(x, y + h, x, y + h - r); s.lineTo(x, y + r); s.quadraticCurveTo(x, y, x + r, y); return s; };
   const holes = (shape, pts, r) => { for (const [x, y] of pts) { const h = new THREE.Path(); h.absarc(x, y, r, 0, Math.PI * 2, true); shape.holes.push(h); } return shape; };
   const slot = (shape, cx, cy, w, h) => { const p = new THREE.Path(), x = cx - w / 2, y = cy - h / 2; p.moveTo(x, y); p.lineTo(x + w, y); p.lineTo(x + w, y + h); p.lineTo(x, y + h); p.closePath(); shape.holes.push(p); return shape; };
+  const mountPts = (kind, p, q = p) => kind === 'tri' ? [0, 1, 2].map(k => [Math.cos(Math.PI / 2 + k * 2 * Math.PI / 3) * p / 2, Math.sin(Math.PI / 2 + k * 2 * Math.PI / 3) * p / 2]) : sq(p, q);
   const sq = (a, b = a) => [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([x, y]) => [x * a / 2, y * b / 2]);
   if (d.kind === 'motor') {
-    const [a, b] = d.motor.mount.pattern, hd = part.frames[0].diameter, pts = sq(a, b), lug = hd / 2 + 1.6, hub = Math.min(d.baseR, d.bellR * 1.05);
+    const [a, b] = d.motor.mount.pattern, hd = part.frames[0].diameter, pts = mountPts(d.mountKind, a, b), lug = hd / 2 + 1.6, hub = Math.min(d.baseR, d.bellR * 1.05);
     // a real motor base: a round hub with four lugs reaching out to the screw holes (a flat cross), the holes at the part's mounting pattern, with a screw head in each
     const s = new THREE.Shape(); s.absarc(0, 0, hub, 0, Math.PI * 2, false);
     plate(holes(s, [], 0), d.baseT, 0, C.motorBase, { metal: 0.4 });
@@ -43,10 +44,10 @@ export function buildDroneMesh(THREE, part) {
     add(new THREE.BoxGeometry(l * 0.14, w * 0.34, Math.min(8, h * 0.55)), l / 2 + l * 0.07, 0, Math.min(8, h * 0.55) / 2 + 1, C.xt60, { rough: 0.5 });          // XT60 plug
     for (const dy of [-1.5, 1.5]) { const wire = new THREE.CylinderGeometry(0.9, 0.9, l * 0.2, 8); wire.rotateZ(Math.PI / 2); add(wire, l / 2 + l * 0.04, dy, h * 0.4, 0xc23b2f); }
   } else if (d.kind === 'frame') {
-    const { t, arm, plate: P, tips, mhd, hd } = d, W = d.wheelbase, st = d.stack, mp = d.motorPattern, stackPat = sq(...(({ '30.5': [30.5], '25.5': [25.5], '20': [20], '16': [16] })[st]));
+    const { t, arm, plate: P, tips, mhd, hd } = d, W = d.wheelbase, st = d.stack, mp = d.motorPattern, mk = d.mountKind || 'cross', stackPat = sq(...(({ '30.5': [30.5], '25.5': [25.5], '20': [20], '16': [16] })[st]));
     for (const [, x, y] of tips) {                                                       // an arm: a bar from the middle out to the motor, with the motor's four holes at its end
       const ang = Math.atan2(y, x), c = Math.cos(ang), s2 = Math.sin(ang), hw = arm / 2, Lr = Math.hypot(x, y) + hw * 0.9, pts = [[0, -hw], [Lr, -hw], [Lr, hw], [0, hw]].map(([u, v]) => [u * c - v * s2, u * s2 + v * c]);
-      const s = new THREE.Shape(); pts.forEach(([px, py], i) => (i ? s.lineTo(px, py) : s.moveTo(px, py))); s.closePath(); plate(holes(s, sq(mp).map(([hx, hy]) => [x + hx, y + hy]), mhd / 2), t, 0, C.carbon, { metal: 0.3 });
+      const s = new THREE.Shape(); pts.forEach(([px, py], i) => (i ? s.lineTo(px, py) : s.moveTo(px, py))); s.closePath(); plate(holes(s, mountPts(mk, mp).map(([hx, hy]) => [x + hx, y + hy]), mhd / 2), t, 0, C.carbon, { metal: 0.3 });
     }
     const body = holes(rrect(P, P, 4), stackPat, hd / 2); for (const sy of [-10, 10]) slot(body, 0, sy, 14, 3.8);                                                 // the battery strap passes through these slots
     plate(body, t, 0, C.carbon, { metal: 0.3 });
