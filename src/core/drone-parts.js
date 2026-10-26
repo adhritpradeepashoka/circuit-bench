@@ -36,7 +36,7 @@ export function makeDronePart(id) {
   const base = { format: ROBOT_PART_FORMAT, version: ROBOT_PART_VERSION, id, category: 'Drone', model: { file: `${id}.gen`, format: 'gen', units: 'mm', up: 'z' } };
   if (d.kind === 'motor') {
     const mo = makeMotor({ size: d.size, kv: d.kv, over: d.over }), [sd, sh] = mo.stator, [a, b] = mo.mount.pattern, mk = mo.mount.kind || 'cross', hd = clear(mo.mount.screw);
-    const bellR = sd / 2 + 2.2, baseT = Math.max(1.2, sd / 9), bellH = sh + 3.5, shaftLen = 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = (mk === 'tri' ? a / 2 : Math.hypot(a, b) / 2) + hd;
+    const bellR = sd / 2 + (sd < 12 ? 1.1 : 2.2), baseT = Math.max(1.2, sd / 9), bellH = sh + 3.5, shaftLen = 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = (mk === 'tri' ? a / 2 : Math.hypot(a, b) / 2) + hd;
     const baseR = Math.max(bellR, hx + 0.8);
     return { ...base, name: `Motor ${d.size} ${Math.round(d.kv)}Kv`, mass: { grams: mo.massGrams, source: d.over.massGrams ? 'datasheet' : 'estimated' }, dims: { size: [2 * baseR, 2 * baseR, root + shaftLen], source: 'estimated' }, drone: { ...d, motor: mo, bellR, baseR, baseT, root, shaftLen, mountKind: mk },
       frames: [...mountPoints(mk, a, b).map(([x, y], k) => hole(`mount-${k + 1}`, [x, y, 0], DOWN, hd)), { id: 'shaft', kind: 'shaft', pos: [0, 0, root], dir: UP, diameter: mo.shaftMm, source: 'estimated' }] };
