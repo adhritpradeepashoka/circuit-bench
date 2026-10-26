@@ -423,11 +423,12 @@ export function initAssembly({ editor }) {
     const t = three, { THREE } = t; t.sceneGizmos.clear();
     const size = new THREE.Box3().setFromObject(t.sceneRoot).getSize(new THREE.Vector3()), U = Math.max(Math.max(size.x, size.y, size.z) * 0.035, 2.5);
     for (const inst of asm.instances) for (const f of inst.part.frames) {
-      const w = worldFrame(inst, f), mated = asm.isMated(inst.id, f.id), r0 = Math.max((f.diameter || 3) / 2, joinMode ? 2.2 : 1.4) + 0.2;
+      const w = worldFrame(inst, f), mated = asm.isMated(inst.id, f.id), r0 = Math.max((f.diameter || 3) / 2, joinMode ? 2.6 : 2.0) + 0.3;
       const hot = snapShow && ((snapShow.a === inst.id && snapShow.aFrame === f.id) || (snapShow.b === inst.id && snapShow.bFrame === f.id)), first = joinFirst && joinFirst.inst === inst.id && joinFirst.frame === f.id;
       const col = first ? 0xe0562a : hot ? 0x1fae5a : mated ? 0x6f8f7b : 0x1f7a8c, r = hot || first ? r0 * 1.4 : r0;
-      const g = new THREE.Mesh(new THREE.CircleGeometry(r, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: hot || first ? 0.85 : mated ? 0.2 : joinMode ? 0.6 : 0.4, depthTest: false, side: THREE.DoubleSide }));
+      const g = new THREE.Mesh(new THREE.CircleGeometry(r, 24), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: hot || first ? 0.85 : mated ? 0.3 : joinMode ? 0.7 : 0.55, depthTest: false, side: THREE.DoubleSide }));
       g.position.fromArray(w.pos).addScaledVector(new THREE.Vector3(...w.dir), 0.05); g.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...w.dir));
+      const edge = new THREE.Mesh(new THREE.RingGeometry(r * 0.88, r, 28), new THREE.MeshBasicMaterial({ color: col, depthTest: false, side: THREE.DoubleSide })); edge.renderOrder = 10; g.add(edge);
       g.renderOrder = 10; g.userData = { hole: true, label: `${f.diameter ? f.diameter.toFixed(1) + ' mm ' : ''}hole ${f.id.replace('hole-', '#')}${mated ? ' (joined)' : ''} on ${inst.part.name}`, inst: inst.id, frame: f.id }; t.sceneGizmos.add(g);
     }
     if (snapShow) {                                                                              // a line from the dragged hole to the one it will join
@@ -442,7 +443,7 @@ export function initAssembly({ editor }) {
         const shaft = new THREE.Mesh(new THREE.CylinderGeometry(U * 0.18, U * 0.18, L, 10), mat), tip0 = new THREE.Mesh(new THREE.ConeGeometry(U * 0.55, U * 1.6, 14), mat);
         shaft.position.y = L / 2; tip0.position.y = L + U * 0.8; grp.add(shaft, tip0); grp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...dir)); grp.position.copy(c);
         grp.traverse(m => { m.renderOrder = 12; m.userData = { axis, dir }; }); t.sceneGizmos.add(grp);
-        const bb = new THREE.Box3().setFromObject(sel.obj).getSize(new THREE.Vector3()), R = Math.max(L * 1.15, bb.length() * 0.5), ring = new THREE.Mesh(new THREE.TorusGeometry(R, U * 0.22, 8, 64), new THREE.MeshBasicMaterial({ color: col, depthTest: false, transparent: true, opacity: 0.8 }));
+        const bb = new THREE.Box3().setFromObject(sel.obj).getSize(new THREE.Vector3()), R = Math.max(L * 0.75, bb.length() * 0.42), ring = new THREE.Mesh(new THREE.TorusGeometry(R, U * 0.14, 8, 64), new THREE.MeshBasicMaterial({ color: col, depthTest: false, transparent: true, opacity: 0.8 }));
         ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(...dir)); ring.position.copy(c); ring.renderOrder = 12; ring.userData = { ring: axis, dir }; t.sceneGizmos.add(ring);
       }
     }
