@@ -68,9 +68,9 @@ export function initAssembly({ editor, projects = null }) {
   const libEl = el('div', { className: 'asm-lib', id: 'asmLib' });
   const DEV = (() => { try { return localStorage.getItem('circuitbench:parts-dev') === '1' || /[?&]partsdev\b/.test(location.search); } catch { return false; } })();      // marking holes on your own models is a maker's tool, kept out of the way
   const partBox = el('div', { className: 'asm-box', hidden: true }), buildBox = el('div', { className: 'asm-box' });
-  const modeBar = el('div', { className: 'view-toggle asm-mode', role: 'group', ariaLabel: 'Mark parts or build' });
-  const modeBtn = { part: el('button', { type: 'button', id: 'asmModePart', textContent: 'Mark a part' }), build: el('button', { type: 'button', id: 'asmModeBuild', textContent: 'Build' }) };
-  modeBar.append(modeBtn.part, modeBtn.build); modeBar.hidden = !DEV; modeBtn.build.classList.add('on'); side.append(modeBar, partBox, buildBox);
+  const modeBar = el('div', { className: 'view-toggle asm-mode', role: 'group', ariaLabel: 'Import a part or build' });
+  const modeBtn = { part: el('button', { type: 'button', id: 'asmModePart', textContent: 'Import a part' }), build: el('button', { type: 'button', id: 'asmModeBuild', textContent: 'Build' }) };
+  modeBar.append(modeBtn.part, modeBtn.build); modeBtn.build.classList.add('on'); side.append(modeBar, partBox, buildBox);
   const holesBtn = el('button', { type: 'button', className: 'asm-btn', textContent: 'Find all holes', id: 'asmFindHoles', title: 'Mark every round hole in the model' });
   partBox.append(
     el('div', { className: 'asm-row' }, importBtn, fileIn),
@@ -181,7 +181,14 @@ export function initAssembly({ editor, projects = null }) {
         else if (p.hit === 'model') { draft.addFrame({ pos: p.pos, dir: p.dir, kind: kindSel.value, diameter: p.diameter }); renderFrames(); drawGizmos(); draw(); }
       });
       addEventListener('resize', size);
-      three = { edges, THREE, root, gizmos, sceneRoot, sceneGizmos, controls, ray, setModel, applyUnits, drawGizmos, draw, size, pick, hasModel: () => !!model, camera, renderer, scene, fit: () => model && (fit(), draw()) };
+      /** The model's volume in mm³ (from its triangles; a mesh with holes in it is approximate), used to guess how much a 3D-printed part weighs. */
+      function volumeMm3() {
+        if (!model) return 0; model.updateMatrixWorld(true); let vol = 0; const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3();
+        model.traverse(o => { if (!o.isMesh) return; const g = o.geometry, pos = g.attributes.position, idx = g.index, n = idx ? idx.count : pos.count;
+          for (let i = 0; i + 2 < n; i += 3) { const i0 = idx ? idx.getX(i) : i, i1 = idx ? idx.getX(i + 1) : i + 1, i2 = idx ? idx.getX(i + 2) : i + 2; a.fromBufferAttribute(pos, i0).applyMatrix4(o.matrixWorld); b.fromBufferAttribute(pos, i1).applyMatrix4(o.matrixWorld); c.fromBufferAttribute(pos, i2).applyMatrix4(o.matrixWorld); vol += a.dot(b.cross(c)) / 6; } });
+        if (Math.abs(vol) < 1) { const s = new THREE.Box3().setFromObject(model).getSize(new THREE.Vector3()); return s.x * s.y * s.z * 0.15; } return Math.abs(vol);
+      }
+      three = { volumeMm3, edges, THREE, root, gizmos, sceneRoot, sceneGizmos, controls, ray, setModel, applyUnits, drawGizmos, draw, size, pick, hasModel: () => !!model, camera, renderer, scene, fit: () => model && (fit(), draw()) };
       size(); return three;
     })();
     return loading;
@@ -207,15 +214,26 @@ export function initAssembly({ editor, projects = null }) {
       draft.setMesh({ file: file.name, format: fmt, bytes: file.size, rawSize: null });
       draft.model.units = unitsSel.value; draft.model.up = upSel.value;
       t.setModel(obj); hint.hidden = true; stagedMesh = buf;
-      syncForm(); renderFrames(); say(`Loaded ${file.name}. Check the size below, set the units if it looks wrong, then click the model to mark connection points.`);
+      draft.name = draft.name || file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 60); massTouched = false; estimateMass(t);
+      syncForm(); renderFrames(); const n = await autoHoles(); const s = draft.sizeMm;
+      say(`Loaded ${file.name}${s ? ` (${s.map(v => +v.toFixed(1)).join(' × ')} mm)` : ''}. ${n ? `Marked ${n} round hole${n > 1 ? 's' : ''} for you. ` : 'No round holes found; click the model to mark connection points by hand. '}Check the size and units, then Save part.`);
     } catch (e) { say(`Could not read that model: ${e?.message || e}`, true); }
   }
-  let stagedMesh = null;
+  let stagedMesh = null, massTouched = false;
+  /** A guess at a printed part's weight: its volume as PLA (1.24 g/cm³) at about a third solid. Labelled "estimated" until you weigh it. */
+  function estimateMass(t) { if (massTouched || !t?.hasModel()) return; const g = t.volumeMm3() * 0.00124 * 0.33; if (g > 0) { draft.massGrams = Math.max(0.1, Math.round(g * 10) / 10); draft.massSource = 'estimated'; } }
+  async function autoHoles() {
+    const t = await load3d(); if (!t.hasModel()) return 0; let found; try { found = findHoles(t.edges()); } catch { found = []; } let added = 0;
+    for (const h of found) { if (draft.frames.some(f => f.kind === 'hole' && Math.hypot(f.pos[0] - h.center[0], f.pos[1] - h.center[1], f.pos[2] - h.center[2]) < 0.3)) continue; draft.addFrame({ pos: h.center, dir: h.axis, kind: 'hole', diameter: h.radius * 2 }); added++; }
+    renderFrames(); t.drawGizmos(); t.draw(); return added;
+  }
+  /** Bring in a file from anywhere (the list, a drop on the 3D view): go to the import screen first. */
+  async function startImport(file) { if (!file) return; if (view !== 'assembly') await show('assembly'); if (mode !== 'part') await setMode('part'); await importFile(file); }
   importBtn.addEventListener('click', () => fileIn.click());
-  fileIn.addEventListener('change', () => { const f = fileIn.files[0]; fileIn.value = ''; if (f) importFile(f); });
+  fileIn.addEventListener('change', () => { const f = fileIn.files[0]; fileIn.value = ''; if (f) startImport(f); });
   // dropping a file onto the stage works too
   stage.addEventListener('dragover', e => e.preventDefault());
-  stage.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) importFile(f); });
+  stage.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) startImport(f); });
 
   // ── forms ─────────────────────────────────────────────────────
   function say(text, bad = false) { msg.textContent = text; msg.classList.toggle('bad', !!bad); }
@@ -224,10 +242,10 @@ export function initAssembly({ editor, projects = null }) {
     const s = draft.sizeMm; dimsEl.textContent = s ? `Size from the model: ${s.map(v => +v.toFixed(2)).join(' × ')} mm (check this against the real part).` : 'No model yet.';
   }
   nameIn.addEventListener('input', () => { draft.name = nameIn.value; });
-  massIn.addEventListener('input', () => { draft.massGrams = massIn.value; });
+  massIn.addEventListener('input', () => { draft.massGrams = massIn.value; massTouched = true; if (massSrc.value === 'estimated' && massIn.value !== '') { draft.massSource = 'measured'; massSrc.value = 'measured'; } });
   massSrc.addEventListener('change', () => { draft.massSource = massSrc.value; });
-  unitsSel.addEventListener('change', () => { draft.setUnits(unitsSel.value); three?.applyUnits(true); syncForm(); });
-  upSel.addEventListener('change', () => { draft.model.up = upSel.value; three?.applyUnits(true); syncForm(); });
+  unitsSel.addEventListener('change', () => { draft.setUnits(unitsSel.value); three?.applyUnits(true); estimateMass(three); syncForm(); });
+  upSel.addEventListener('change', () => { draft.model.up = upSel.value; three?.applyUnits(true); estimateMass(three); syncForm(); });
 
   function numField(label, value, onChange, { step = 'any', min = 0 } = {}) {
     const i = el('input', { type: 'number', step, min, value: value ?? '' }); i.addEventListener('change', () => onChange(i.value === '' ? '' : Number(i.value)));
@@ -264,7 +282,7 @@ export function initAssembly({ editor, projects = null }) {
   }
 
   // ── saving ────────────────────────────────────────────────────
-  async function save() {
+  async function savePart() {
     const v = draft.validate();
     if (!v.ok) return say(`Not saved: ${v.errors.slice(0, 3).join(' ')}`, true);
     if (!stagedMesh && !(await getMesh(`${v.part.id}/${v.part.model.file}`))) return say('Import a model first.', true);
@@ -272,8 +290,9 @@ export function initAssembly({ editor, projects = null }) {
     if (stagedMesh) await putMesh(`${v.part.id}/${v.part.model.file}`, stagedMesh);
     renderLibrary(); const pv = provenanceOf(v.part);
     say(`Saved “${v.part.name}”.${pv.verified ? '' : ` Still estimated: ${pv.estimated.slice(0, 4).join(', ')}${pv.estimated.length > 4 ? '…' : ''} — measure and mark them when you can.`}`);
+    const made = findPart(v.part.id); if (made) { await setMode('build'); await addToScene(made); bsay(`“${v.part.name}” is saved in your 3D parts list and added to the scene.`); }
   }
-  saveBtn.addEventListener('click', save);
+  saveBtn.addEventListener('click', savePart);
   exportBtn.addEventListener('click', () => {
     const v = draft.validate(); if (!v.ok) return say(`Cannot export yet: ${v.errors.slice(0, 3).join(' ')}`, true);
     const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(v.part, null, 1)], { type: 'application/json' })), download: `${v.part.id}.circuitbench-part.json` }); a.click(); URL.revokeObjectURL(a.href);
@@ -320,7 +339,7 @@ export function initAssembly({ editor, projects = null }) {
   const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' }), droneEl = el('div', { className: 'asm-drone', id: 'asmDrone', hidden: true });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
   buildBox.append(
-    el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes.' }), bnote, selBox,
+    el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes. Have your own STL, OBJ or glTF file? Drop it on the 3D view or use “Import your own 3D part”.' }), bnote, selBox,
     legacyBox, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, droneEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const dyn = new Map();                                                   // drone parts, made from their ids on demand
@@ -338,6 +357,8 @@ export function initAssembly({ editor, projects = null }) {
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
   const robotDock = el('div', { id: 'robotParts', role: 'region', ariaLabel: '3D parts' }), dockSearch = el('input', { type: 'search', placeholder: 'Search 3D parts', ariaLabel: 'Search 3D parts', className: 'asm-dock-search', id: 'robotPartsSearch', autocomplete: 'off' });
   robotDock.append(dockSearch, cards); document.getElementById('partsPanel')?.append(robotDock);
+  const dockImport = el('button', { type: 'button', className: 'asm-btn primary asm-dock-import', id: 'asmDockImport', textContent: 'Import your own 3D part…', title: 'STL, OBJ, GLB or glTF. You can also drop a file onto the 3D view.' });
+  dockImport.addEventListener('click', () => fileIn.click()); robotDock.insertBefore(dockImport, dockSearch); robotDock.append(fileIn);
   dockSearch.addEventListener('input', () => renderCards());
   // "Make a drone part": a few numbers in, a real part (with its holes and weight) out. Nothing is stored; the numbers live in the part's name.
   const bField = (label, input, id) => { input.id = id; return el('label', { className: 'asm-field' }, el('span', { textContent: label }), input); };
@@ -723,11 +744,7 @@ export function initAssembly({ editor, projects = null }) {
   for (const [k, b] of Object.entries(modeBtn)) b.addEventListener('click', () => setMode(k));
   holesBtn.addEventListener('click', async () => {
     const t = await load3d(); if (!t.hasModel()) return say('Import or open a model first.', true);
-    let found; try { found = findHoles(t.edges()); } catch { found = []; }
-    if (!found.length) return say('No round holes found. Click the model to mark them by hand.', true);
-    let added = 0;
-    for (const h of found) { if (draft.frames.some(f => f.kind === 'hole' && Math.hypot(f.pos[0] - h.center[0], f.pos[1] - h.center[1], f.pos[2] - h.center[2]) < 0.3)) continue; draft.addFrame({ pos: h.center, dir: h.axis, kind: 'hole', diameter: h.radius * 2 }); added++; }
-    renderFrames(); t.drawGizmos(); t.draw(); say(`Marked ${added} hole${added === 1 ? '' : 's'}. Check each one, then save the part.`);
+    const n = await autoHoles(); say(n ? `Marked ${n} hole${n === 1 ? '' : 's'}. Check each one, then save the part.` : 'No new round holes found. Click the model to mark them by hand.', !n);
   });
 
   // ── tabs ──────────────────────────────────────────────────────
