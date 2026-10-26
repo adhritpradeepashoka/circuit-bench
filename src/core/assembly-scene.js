@@ -81,8 +81,8 @@ export class Assembly {
     return best;
   }
   /** A copy of the arrangement, for undo. Part objects are shared, transforms and mates are copied. */
-  snapshot() { return { instances: this.instances.map(i => ({ ...i, T: { q: [...i.T.q], t: [...i.T.t] } })), mates: this.mates.map(m => ({ a: { ...m.a }, b: { ...m.b }, screw: m.screw })), counter: this.counter }; }
-  restore(s) { this.instances = s.instances.map(i => ({ ...i, T: { q: [...i.T.q], t: [...i.T.t] } })); this.mates = s.mates.map(m => ({ a: { ...m.a }, b: { ...m.b }, screw: m.screw })); this.counter = s.counter; }
+  snapshot() { return { instances: this.instances.map(i => ({ ...i, T: { q: [...i.T.q], t: [...i.T.t] } })), mates: this.mates.map(m => ({ a: { ...m.a }, b: { ...m.b }, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), counter: this.counter }; }
+  restore(s) { this.instances = s.instances.map(i => ({ ...i, T: { q: [...i.T.q], t: [...i.T.t] } })); this.mates = s.mates.map(m => ({ a: { ...m.a }, b: { ...m.b }, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })); this.counter = s.counter; }
   /** How well a mate fits: hole sizes, the screw that suits them, and whether the frames are still lined up (a later move can break it). */
   check(m) {
     const A = this.get(m.a.inst), B = this.get(m.b.inst); if (!A || !B) return { ok: false, notes: ['A part of this mate is gone.'], level: 'bad' };

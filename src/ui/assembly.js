@@ -5,6 +5,7 @@ import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
 import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
+import { buildRig, dragTo, setAngle, connected, pointOn } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -307,7 +308,7 @@ export function initAssembly({ editor }) {
   const asm = new Assembly(), objCache = new Map(), SCENE_KEY = 'circuitbench:robot-scene';
   const PALETTE = [0xb8c4cc, 0x7fb3d5, 0xe8b26a, 0x9ccc9c, 0xd59fb8, 0xb7a3d8, 0xd9d27a, 0x8fd0c8], hex = n => `#${n.toString(16).padStart(6, '0')}`;
   const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
-  let selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, joinMode = false, joinFirst = null, hoverInst = null;
+  let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, joinMode = false, joinFirst = null, hoverInst = null;
   const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
   buildBox.append(
@@ -376,12 +377,13 @@ export function initAssembly({ editor }) {
   }
   function undo() { if (!history.length) return; future.push(asm.snapshot()); asm.restore(history.pop()); applyScene(); }
   function redo() { if (!future.length) return; history.push(asm.snapshot()); asm.restore(future.pop()); applyScene(); }
-  function save() { try { localStorage.setItem(SCENE_KEY, JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw })) })); } catch { /* unsaved is fine */ } }
+  function save() { try { localStorage.setItem(SCENE_KEY, JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); } catch { /* unsaved is fine */ } }
   async function restoreSaved() {
     if (asm.instances.length) return; let j = null; try { j = JSON.parse(localStorage.getItem(SCENE_KEY) || 'null'); } catch { /* none */ }
     if (!j?.parts?.length) return; const t = await load3d(), ids = [];
     for (const rec of j.parts) { const p = findPart(rec.part); if (!p) { ids.push(null); continue; } try { const inst = asm.add(p); inst.T = rec.T; inst.obj = await partObject(t, p); inst.obj.userData.inst = inst.id; tint(inst); ids.push(inst.id); } catch { ids.push(null); } }
-    for (const m of j.mates || []) if (ids[m.a] && ids[m.b]) asm.mates.push({ a: { inst: ids[m.a], frame: m.af }, b: { inst: ids[m.b], frame: m.bf }, screw: m.screw || null });
+    for (const m of j.mates || []) if (ids[m.a] && ids[m.b]) asm.mates.push({ a: { inst: ids[m.a], frame: m.af }, b: { inst: ids[m.b], frame: m.bf }, screw: m.screw || null, angle: m.angle || 0, min: m.min, max: m.max, fixed: !!m.fixed });
+    if (j.anchor >= 0 && ids[j.anchor]) anchorId = ids[j.anchor];
     applyScene(); fitScene();
   }
   const tint = inst => inst.obj.traverse(m => { if (m.isMesh) m.material.color.setHex(colourOf(inst)); });
@@ -403,7 +405,7 @@ export function initAssembly({ editor }) {
   function clearAll() { if (!asm.instances.length) return; keep(); for (const i of asm.instances) three?.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null; applyScene(); }
   const select = id => { selected = id; render(); };
   const centreOf = inst => { const b = new three.THREE.Box3().setFromObject(inst.obj), c = b.getCenter(new three.THREE.Vector3()); return [c.x, c.y, c.z]; };
-  const detach = inst => { asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); };
+  const detach = inst => { const n = asm.mates.length; asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); if (asm.mates.length < n) bsay('Unjoined from the parts it was attached to, so it can move freely. Ctrl+Z undoes this.'); };
 
   // — the camera
   function fitScene() {
@@ -457,7 +459,7 @@ export function initAssembly({ editor }) {
     }
     overlays(); t.draw(); renderPanel(); refreshTools(); save();
     helpEl.hidden = false;
-    helpEl.textContent = !asm.instances.length ? 'Pick a part on the right to start.' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
+    helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
   }
   const render2 = () => { for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } overlays(); three.draw(); save(); };
   function setJoin(on) { joinMode = on; joinFirst = null; joinBtn.classList.toggle('on', on); render(); }
@@ -466,7 +468,7 @@ export function initAssembly({ editor }) {
     selBox.replaceChildren(); const inst = selected && asm.get(selected); selBox.hidden = !inst;
     instList.replaceChildren();
     for (const i of asm.instances) {
-      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: `${i.part.frames.length} holes` }));
+      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: i.id === anchorId ? 'held ⚓' : `${i.part.frames.length} holes` }));
       row.addEventListener('click', () => select(i.id)); row.addEventListener('dblclick', () => viewTo('iso', i)); row.addEventListener('mouseenter', () => { hoverInst = i.id; render2h(); }); row.addEventListener('mouseleave', () => { hoverInst = null; render2h(); });
       instList.append(row);
     }
@@ -474,19 +476,10 @@ export function initAssembly({ editor }) {
     if (inst) {
       const act = (label, title, fn) => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: label, title, ariaLabel: title }); b.addEventListener('click', fn); return b; };
       const c = centreOf(inst), num = (label, k) => { const inp = el('input', { type: 'number', step: 1, value: +c[k].toFixed(1), ariaLabel: `${label} position in mm`, id: `asmPos-${label.toLowerCase()}` }); inp.addEventListener('change', () => { const v = Number(inp.value); if (!Number.isFinite(v)) return; keep(); const cur = centreOf(inst); inst.T.t[k] += v - cur[k]; detach(inst); render(); }); return el('label', { className: 'asm-field' }, el('span', { textContent: label }), inp); };
-      const mt = asm.matesOf(inst.id)[0];
       selBox.append(
         el('div', { className: 'asm-sel-name' }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(inst))}` }), inst.part.name),
         el('div', { className: 'asm-row' }, num('X', 0), num('Y', 1), num('Z', 2)),
-        el('div', { className: 'asm-row wrap' }, act('Drop to floor', 'Lower it until it rests on the floor', () => { keep(); const b = new three.THREE.Box3().setFromObject(inst.obj); inst.T.t[2] -= b.min.z; detach(inst); render(); }), act('Join holes…', 'Pick two holes to join this part to another', () => setJoin(true)), act('Remove', 'Remove this part', () => removeInst(inst.id))));
-      if (mt) {
-        const mine = mt.b.inst === inst.id ? mt.b : mt.a, other = mt.b.inst === inst.id ? mt.a : mt.b, A = asm.get(other.inst), fa = A?.part.frames.find(f => f.id === other.frame);
-        if (A && fa) {
-          const wf = worldFrame(A, fa); let last = 0; const sl = el('input', { type: 'range', min: -180, max: 180, value: 0, step: 1, ariaLabel: 'Spin around the screw', id: 'asmSpin' });
-          sl.addEventListener('pointerdown', () => keep()); sl.addEventListener('input', () => { const v = Number(sl.value); turn(inst, wf.dir, wf.pos, v - last); last = v; render2(); });
-          selBox.append(el('label', { className: 'asm-field' }, el('span', { textContent: 'Spin around the screw' }), sl));
-        }
-      }
+        el('div', { className: 'asm-row wrap' }, act('Drop to floor', 'Lower it until it rests on the floor', () => { keep(); const b = new three.THREE.Box3().setFromObject(inst.obj); inst.T.t[2] -= b.min.z; detach(inst); render(); }), act(anchorId === inst.id ? 'Held still ✓' : 'Hold still', 'Keep this part in place while you pull the rest of the robot around', () => { anchorId = anchorId === inst.id ? null : inst.id; render(); }), act('Join holes…', 'Pick two holes to join this part to another', () => setJoin(true)), act('Remove', 'Remove this part', () => removeInst(inst.id))));
     }
     mateList.replaceChildren();
     if (!asm.mates.length) mateList.append(el('p', { className: 'asm-note', textContent: 'Nothing joined yet.' }));
@@ -497,7 +490,16 @@ export function initAssembly({ editor }) {
       const un = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Unjoin (the parts stay where they are)', ariaLabel: 'Unjoin' });
       un.addEventListener('click', () => { keep(); asm.mates.splice(i, 1); render(); });
       const nm = x => x.part.name.replace(/^Kame32 /, '');
-      mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: `asm-dot ${ck.level}` }), el('span', { className: 'asm-lib-name', textContent: `${nm(A)} ⇄ ${nm(B)}` }), scr, un), el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
+      const hinge = buildRig(asm).joints.some(j => j.mate === m), fx = el('select', { ariaLabel: 'Joint type', className: 'asm-mini-sel' }, el('option', { value: 'hinge', textContent: 'Hinge', selected: !m.fixed }), el('option', { value: 'fixed', textContent: 'Fixed', selected: !!m.fixed }));
+      fx.addEventListener('change', () => { keep(); m.fixed = fx.value === 'fixed'; if (m.fixed && m.angle) { setAngle(asm, anchorId, m, 0); } render(); });
+      const jbox = el('div', { className: 'asm-joint' }, el('span', { className: 'asm-lbl', textContent: 'Joint' }), fx);
+      if (hinge && !m.fixed) {
+        const lo = m.min ?? -90, hi = m.max ?? 90, sl = el('input', { type: 'range', min: lo, max: hi, step: 1, value: m.angle || 0, ariaLabel: 'Joint angle', className: 'asm-jslider' }), val = el('span', { className: 'asm-lbl', textContent: `${Math.round(m.angle || 0)}°` });
+        const lim = (k, v0) => { const inp = el('input', { type: 'number', value: v0, step: 5, ariaLabel: k === 'min' ? 'Lowest angle' : 'Highest angle', className: 'asm-limit' }); inp.addEventListener('change', () => { const v = Number(inp.value); if (!Number.isFinite(v)) return; keep(); m[k] = v; if (k === 'min' && (m.angle || 0) < v) setAngle(asm, anchorId, m, v); if (k === 'max' && (m.angle || 0) > v) setAngle(asm, anchorId, m, v); render(); }); return inp; };
+        sl.addEventListener('pointerdown', () => keep()); sl.addEventListener('input', () => { setAngle(asm, anchorId, m, Number(sl.value)); val.textContent = `${Math.round(m.angle || 0)}°`; render2(); });
+        jbox.append(lim('min', lo), sl, lim('max', hi), val);
+      } else if (!hinge && !m.fixed) jbox.append(el('span', { className: 'asm-note', textContent: 'Held by two or more screws, so it is rigid.' }));
+      mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: `asm-dot ${ck.level}` }), el('span', { className: 'asm-lib-name', textContent: `${nm(A)} ⇄ ${nm(B)}` }), scr, un), jbox, el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
     });
     const bom = asm.bom();
     bomEl.textContent = asm.instances.length ? `${bom.parts.map(p => `${p.count} × ${p.name}`).join(', ')}${bom.screws.length ? ' · screws: ' + bom.screws.map(s => `${s.count} × ${s.thread.replace('_', '.')}`).join(', ') : ''} · about ${bom.grams} g` : '';
@@ -538,7 +540,12 @@ export function initAssembly({ editor }) {
       }
       const h = instAt(e); if (!h) { if (selected) select(null); return; }
       t.controls.enabled = false; dom.setPointerCapture(e.pointerId); selected = h.id;
-      const inst = asm.get(h.id); plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), h.point);
+      const inst = asm.get(h.id);
+      if (connected(asm, h.id).length > 1 && !e.altKey) {                                      // part of a robot: pull it and the rest follows, within the hinges
+        const dirV = new THREE.Vector3(); t.camera.getWorldDirection(dirV); plane.setFromNormalAndCoplanarPoint(dirV, h.point); const lp = inst.obj.worldToLocal(h.point.clone());
+        drag = { id: h.id, mode: 'pose', local: [lp.x, lp.y, lp.z], grab: h.point.clone(), start: { x: e.clientX, y: e.clientY }, moved: false, pending: asm.snapshot() }; render(); return;
+      }
+      plane.setFromNormalAndCoplanarPoint(new THREE.Vector3(0, 0, 1), h.point);
       drag = { id: h.id, mode: 'plane', start: { x: e.clientX, y: e.clientY }, t0: [...inst.T.t], grab: h.point.clone(), moved: false, pending: asm.snapshot() }; render();
     }, true);
     dom.addEventListener('pointermove', e => {
@@ -552,9 +559,10 @@ export function initAssembly({ editor }) {
       }
       if (!drag.moved && Math.hypot(e.clientX - drag.start.x, e.clientY - drag.start.y) < 4) return;
       const inst = asm.get(drag.id); if (!inst) return;
-      if (!drag.moved) { drag.moved = true; history.push(drag.pending); future = []; detach(inst); dom.style.cursor = 'grabbing'; }
+      if (!drag.moved) { drag.moved = true; history.push(drag.pending); future = []; if (drag.mode !== 'pose') detach(inst); dom.style.cursor = 'grabbing'; }
       if (drag.mode === 'ring') { const cur = drag.ang(e); if (cur == null) return; let d = cur - drag.a0; d = ((d + 540) % 360) - 180; if (!e.shiftKey) d = Math.round(d / 15) * 15; if (d !== drag.applied) { turn(inst, drag.axis, drag.c, d - drag.applied); drag.applied = d; bsay(`Turned ${d}°`); render(); } return; }
       t.ray.setFromCamera(ndc(e), t.camera);
+      if (drag.mode === 'pose') { if (!t.ray.ray.intersectPlane(plane, hitPt)) return; const r = dragTo(asm, anchorId, drag.id, drag.local, [hitPt.x, hitPt.y, hitPt.z]); bsay(r.mode === 'move' ? '' : r.miss > 2 ? 'The joints will not bend any further that way.' : ''); render2(); return; }
       if (drag.mode === 'axis') { const s = axisParam(t.ray.ray, drag.c, drag.a); if (s == null) return; const d = s - drag.s0; inst.T = { q: inst.T.q, t: [drag.t0[0] + drag.a[0] * d, drag.t0[1] + drag.a[1] * d, drag.t0[2] + drag.a[2] * d] }; }
       else { if (!t.ray.ray.intersectPlane(plane, hitPt)) return; inst.T = { q: inst.T.q, t: [drag.t0[0] + hitPt.x - drag.grab.x, drag.t0[1] + hitPt.y - drag.grab.y, drag.t0[2] + hitPt.z - drag.grab.z] }; }
       snapAndPlace(inst); render();
