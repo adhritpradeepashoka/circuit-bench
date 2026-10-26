@@ -985,3 +985,8 @@ html[data-off~="ai"] .ai-only, html[data-off~="ai"] #railAi, html[data-off~="ai"
 .asm-sel .asm-field input[type=number] { width: 64px; }
 .asm-joint { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .asm-jslider { flex: 1; min-width: 80px; } .asm-limit { width: 52px; }
+/* Assembly and Test have their own 3D parts list, so the electronics Parts panel steps aside (the AI panel still opens) */
+.robot-asm .main:not(.ai-open) { --parts-width: 0px; }
+.robot-asm .main:not(.ai-open) .side, .robot-asm .main:not(.ai-open) .side-rail { display: none; }
+.robot-asm #partsPanel { display: none; }
+.asm-sel[hidden] { display: none; }
