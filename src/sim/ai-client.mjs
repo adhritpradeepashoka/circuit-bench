@@ -58,12 +58,12 @@ export async function createPart({ description, provider = getStoredProvider(), 
 /**
  * @returns {Promise<{ok:boolean, code?:string, explanation?:string, error?:string, needsKey?:boolean}>}
  */
-export async function generateCode({ instruction, circuit, code, context = null, history = [], provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(), signal, hosted = false } = {}) {
+export async function generateCode({ instruction, circuit, code, context = null, history = [], assembly = null, provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(), signal, hosted = false } = {}) {
   if (!userKey && !hosted) return { ok: false, needsKey: true, error: 'Add a free API key in Settings → AI to use this (beta, bring-your-own-key for now).' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask. Run the app from the server (npm run server) to use AI features.' };
   let res;
   try {
-    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { instruction, circuit, code, context, history, hosted: true } : { instruction, circuit, code, context, history, userKey, provider, model }), signal });
+    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { instruction, circuit, code, context, history, assembly, hosted: true } : { instruction, circuit, code, context, history, assembly, userKey, provider, model }), signal });
   } catch (err) {
     if (err?.name === 'AbortError') throw err;
     return { ok: false, error: `Could not reach ${endpoint}.` };

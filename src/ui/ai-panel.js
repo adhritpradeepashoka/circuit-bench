@@ -148,6 +148,11 @@ export function initAiPanel(editor, code, sim = null) {
 
   function applyProposal(m) {
     const p = proposals.get(m.id); if (!p) return;
+    if (p.assemblyOps) {
+      const api = window.__vlab?.assembly?.ai; m.state = 'applied'; proposals.delete(m.id);
+      api?.run(p.assemblyOps).then(r => { editor.status(`AI edit applied to the 3D scene (${r.done} change${r.done === 1 ? '' : 's'})`); if (r.warnings.length) { messages.push({ id: ++seq, role: 'error', text: `Some 3D changes could not be made: ${r.warnings.join(' ')}` }); } saveChat(); render(); }).catch(e => { messages.push({ id: ++seq, role: 'error', text: e?.message || 'The 3D edit failed.' }); render(); });
+      saveChat(); render(); return;
+    }
     if (p.circuitEdit) editor.importProject(toProjectFileShape(p.circuitEdit.parts, p.circuitEdit.wires, p.circuitEdit.customParts));
     if (p.code) { code.source = p.code; code.open(); }
     editor.status(p.circuitEdit && p.code ? 'AI edit applied — circuit and sketch.ino both updated' : p.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify or Run to compile it');
@@ -346,14 +351,20 @@ export function initAiPanel(editor, code, sim = null) {
     if (busy) return setStatus('Wait for the current reply first.');
     // Tier 1: plainly worded edits are answered instantly by rules. Tier 2: the CircuitBench tiny model (2.5 MB, in-page, no GPU) understands
     // looser wording and politely declines what is outside the bench. Anything either is unsure about goes on to the chosen AI.
-    let quick = recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(text, editor.exportProject()), tinyMs = 0;
-    if (!quick && !globalThis.VLAB_NO_TINY) {
+    const asmApi = window.__vlab?.assembly?.ai, in3d = !!asmApi?.active?.();
+    let quick = in3d ? null : recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(text, editor.exportProject()), tinyMs = 0;
+    if (!quick && !in3d && !globalThis.VLAB_NO_TINY) {
       try {
         const t0 = Date.now(), tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
         const u = understand(tiny, text, editor.exportProject());
         if (u) quick = u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation } : u;
         tinyMs = Date.now() - t0; if (quick) quick.viaModel = true;
       } catch { /* the model is optional: no file, still loading, or an old browser — carry on */ }
+    }
+    if (!quick && tinyOn() && in3d) {
+      messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
+      messages.push({ id: ++seq, role: 'assistant', text: 'The tiny model only does circuit edits. To edit the 3D scene, switch the AI to Gemini, Groq or your own key (the menu at the bottom of this chat), or the AI that comes with your account.' });
+      saveChat(); render(); return;
     }
     if (!quick && tinyOn()) {          // the tiny model is the chosen AI: nothing else to hand the request to
       messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
@@ -368,8 +379,8 @@ export function initAiPanel(editor, code, sim = null) {
     promptEl.value = ''; autosize();
     busy = true; sendBtn.disabled = true; saveChat(); render();
     try {
-      const circuit = editor.exportProject();
-      const args = { instruction: text, circuit, code: code.source, context: gatherContext(code, sim), history };
+      const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
+      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : gatherContext(code, sim), history, ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {
@@ -385,6 +396,11 @@ export function initAiPanel(editor, code, sim = null) {
         return;
       }
       if (res.meta) setStatus(`${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s${res.meta.tried ? ` (${res.meta.tried} unavailable model${res.meta.tried > 1 ? 's' : ''} skipped)` : ''}`);
+      if (in3d) {                                                                // the reply is 3D edits: keep them for Apply, nothing to compile
+        const ops = Array.isArray(res.actions) ? res.actions.filter(a => a && typeof a === 'object').slice(0, 60) : [];
+        const m3 = { id: ++seq, role: 'assistant', text: res.explanation || (ops.length ? 'Here is the change.' : 'Done.'), summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
+        if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); return;
+      }
       await resolveNewParts(res);
       let check = { failed: null, fixed: 0 };
       if (res.code && !quick) { check = await selfCheck(res, args, circuit, text, history); res = check.res; }

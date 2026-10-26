@@ -190,16 +190,18 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
     throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')} Try describing it differently, or build it in the Part Creator.`, 502);
   }
 
-  async function generateCode({ instruction, circuit, code, context, history, userKey, provider = 'gemini', model }) {
+  /** The 3D scene text from the browser: three bounded strings, nothing else. */
+  const cleanAssembly = a => (a && typeof a === 'object' ? { parts: String(a.parts || '').slice(0, 20000), instances: String(a.instances || '').slice(0, 6000), joints: String(a.joints || '').slice(0, 6000) } : null);
+  async function generateCode({ instruction, circuit, code, context, history, assembly, userKey, provider = 'gemini', model }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = needKey(userKey, provider);
     // Free tiers cap tokens per minute (Groq: 8,000 on gpt-oss-120b), and the full part catalogue alone is ~9k tokens —
     // so those providers get the compact prompt, and any provider that says the request is too big gets one compact retry.
     let asked;
-    try { asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, compact: !!p.compact }), { model }); }
+    try { asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, assembly: cleanAssembly(assembly), compact: !!p.compact }), { model }); }
     catch (err) {
       if (p.compact || !/too large|tokens per minute|\bTPM\b|context (length|window)|maximum context|reduce (your|the) (message|prompt)/i.test(String(err?.message))) throw err;
-      asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, compact: true }), { model });
+      asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, assembly: cleanAssembly(assembly), compact: true }), { model });
     }
     const { text, meta } = asked;
     const result = parseReply(text);

@@ -6,6 +6,7 @@ import { PART_DEFS } from './parts.js';
 import { BEHAVIOURS, validatePartSpec, describeCustomSpecs } from './custom-parts.js';
 
 export const LIMITS = { promptChars: 4_000, codeChars: 20_000 };
+import { ASSEMBLY_OPS } from './assembly-actions.js';
 export const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire, create_part';
 
 // A part's catalogue note (see describeCatalog) states its electrical behavior, but a model that reads
@@ -127,7 +128,8 @@ export function relevantTypes(instruction, circuit) {
   return set;
 }
 
-export function buildPrompt({ instruction, circuit, code, context, history, compact = false }) {
+export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null }) {
+  if (assembly) return buildAssemblyPrompt({ instruction, assembly, history });
   const past = describeHistory(history);
   const historyBlock = past
     ? `\n\nConversation so far (oldest first). The circuit and sketch above are the CURRENT state: edits marked "applied" are already in them; edits marked "not applied" were never made, so don't assume them. Use this to resolve follow-ups like "now make it faster" or "undo that":\n${past}`
@@ -322,4 +324,39 @@ PACKAGE — get this right or the part will be the wrong shape and unusable:
   - "quad": a quad flat pack (QFP/QFN/PLCC) — pins on all FOUR sides, which is how most microprocessors, microcontrollers and FPGAs are actually packaged. Numbering is the QFP standard: anticlockwise seen from above, starting at the TOP of the LEFT side, so pin 1 runs down the left side, then along the bottom left→right, then up the right side, then back along the top right→left. The total must divide by 4 (the same number of pins on each side), minimum 8. Surface mount, so it does not plug into a breadboard — that's expected, wire to it directly.
   - "module" for a breakout board or anything with its own header: then "side" places each pin ("left" | "right" | "top" | "bottom"), and "breadboard": true means a single row of pins along the bottom edge.
 1–64 pins.`;
+}
+
+/** The prompt for the 3D Assembly view: the same reply shape (one json block, "actions" + "explanation"), a different set of edits. */
+export function buildAssemblyPrompt({ instruction, assembly, history }) {
+  const past = describeHistory(history);
+  return `You are editing a LIVE 3D robot assembly inside a browser tool called CircuitBench, for a student. Parts are rigid 3D models with marked holes. Parts are joined by putting one hole on another hole (a screw goes through): a part joined by ONE screw is a hinge that swings about that screw; parts joined at two or more separate holes are rigid. You change the scene yourself by emitting edits as data; you never tell the student to do it by hand. You can only use the parts listed below. You cannot create new parts or change a model's shape.
+
+Units: millimetres and degrees. +Z is up, the floor is z = 0. Each part has its own space; a hole's position and direction are given in that space.
+
+Parts you can add (use these exact ids; hole ids are per part):
+${assembly.parts}
+
+Placed in the scene now:
+${assembly.instances}
+
+Joints now (hole id on each side):
+${assembly.joints}${past ? `\n\nConversation so far (oldest first):\n${past}` : ''}
+
+Student's latest message: ${String(instruction || '').slice(0, LIMITS.promptChars)}
+
+If the message only asks a question, answer in "explanation" (plain text, a few short sentences) with "actions": []. Otherwise reply with EXACTLY ONE fenced \`\`\`json block and nothing else:
+{
+  "actions": [ ... ],   // in order. Allowed "op" values: ${ASSEMBLY_OPS}.
+                         //   add_part: {"op":"add_part","id":"<short name you invent, to refer to it later>","part":"<part id from the list>","x":<mm optional>,"y":<mm optional>,"z":<mm optional>}
+                         //   move_part: {"op":"move_part","id":"<instance id or your short name>","x":<mm>,"y":<mm>,"z":<mm>}   (only parts that are not joined; sets the part's origin)
+                         //   rotate_part: {"op":"rotate_part","id":"<id>","axis":"x"|"y"|"z","deg":<number>}   (only parts that are not joined)
+                         //   join: {"op":"join","a":{"id":"<instance>","hole":"<hole id>"},"b":{"id":"<instance>","hole":"<hole id>"}}   (the b part moves, with everything attached to it, so its hole lands on a's hole, facing it)
+                         //   unjoin: {"op":"unjoin","a":"<instance>","b":"<instance optional: only that pair>"}
+                         //   set_angle: {"op":"set_angle","a":"<instance>","b":"<instance>","deg":<number>}   (the two must be joined by a hinge; stays inside its limits)
+                         //   set_joint: {"op":"set_joint","a":"<instance>","b":"<instance>","type":"hinge"|"fixed","min":<deg optional>,"max":<deg optional>}
+                         //   hold: {"op":"hold","id":"<instance>"}   (that part stays still when the student pulls the rest of the robot)
+                         //   remove_part: {"op":"remove_part","id":"<instance>"}
+  "explanation": "<your reply, plain text, no markdown, at most three short sentences. Describe only what the actions really do.>"
+}
+Only use hole ids that exist on those parts, and only join holes whose sizes are compatible (a 2 mm hole will not take an M3 screw). Mind which side is which: a hole listed with an outward direction points away from the part, and joining puts the two holes facing each other. When you add several parts, join them in the order that makes the chain you were asked for. If something cannot be done with these parts and edits, say so in "explanation" with "actions": [] instead of faking it.`;
 }

@@ -5,6 +5,7 @@ import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
 import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
+import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
 import { buildRig, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
@@ -372,7 +373,8 @@ export function initAssembly({ editor }) {
   }
 
   // — history, saving
-  const keep = () => { history.push(asm.snapshot()); if (history.length > 60) history.shift(); future = []; refreshTools(); };
+  let batch = false;
+  const keep = () => { if (batch) return; history.push(asm.snapshot()); if (history.length > 60) history.shift(); future = []; refreshTools(); };
   const refreshTools = () => { undoBtn.disabled = !history.length; redoBtn.disabled = !future.length; };
   function applyScene() {
     const t = three; if (!t) return;
@@ -404,7 +406,8 @@ export function initAssembly({ editor }) {
       else { const others = asm.instances.filter(i => i !== inst); let x = 0; if (others.length) { const bb = new t.THREE.Box3(); others.forEach(o => bb.expandByObject(o.obj)); x = bb.max.x + 14 + sz.x / 2; } inst.T.t = [x, 0, 0]; }
       selected = inst.id; applyScene(); if (!at) fitScene(); bsay('');
       if (!part.frames.length) bsay(`“${part.name}” has no marked holes, so it cannot snap to anything.`, true);
-    } catch (e) { bsay(e.message, true); }
+      return inst;
+    } catch (e) { bsay(e.message, true); return null; }
   }
   function removeInst(id) { keep(); const i = asm.get(id); if (i) three?.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; applyScene(); }
   function clearAll() { if (!asm.instances.length) return; keep(); for (const i of asm.instances) three?.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null; applyScene(); }
@@ -646,5 +649,16 @@ export function initAssembly({ editor }) {
     if (on && !tabBtn.circuit.classList.contains('on') && !tabBtn.assembly.classList.contains('on') && !tabBtn.test.classList.contains('on')) tabBtn.circuit.classList.add('on');
   };
   editor.on('catalog', sync); sync();
-  return { show, sync, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
+  /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */
+  const ai = {
+    active: () => view === 'assembly',
+    async describe() { await loadExamples(); return describeAssembly(asm, everyPart(), anchorId); },
+    async run(ops) {
+      const t = await load3d(); attach(t); await loadExamples(); const before = asm.snapshot(), ctx = { anchorId, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
+      batch = true; let out; try { out = await runAssemblyOps(asm, ops, ctx); } finally { batch = false; }
+      anchorId = ctx.anchorId; if (out.done) { history.push(before); if (history.length > 60) history.shift(); future = []; }
+      applyScene(); if (out.done) fitScene(); return out;
+    },
+  };
+  return { ai, show, sync, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
 }
