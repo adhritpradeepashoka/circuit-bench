@@ -2,6 +2,7 @@
 // change (core/drone-fc.js). This file is the screen: a 3D view with spinning props, sticks and keys, readouts, a motor monitor and the sketch editor.
 // three.js loads the first time this opens. Everything shown is an ESTIMATE from typical part values, and the page says so.
 import { droneFromAssembly, DroneSim, DT } from '../core/drone-sim.js';
+import { SLOT_POSITIONS } from '../core/drone-wiring.js';
 import { SketchController, STARTER_SKETCH } from '../core/drone-fc.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -11,7 +12,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 const MODES = [['angle', 'Level (self-levelling)'], ['althold', 'Hold height'], ['acro', 'Rate (acro)']];
 const motorName = (m, i, n) => (n === 4 ? `${m.r[1] >= 0 ? 'front' : 'back'} ${m.r[0] >= 0 ? 'right' : 'left'}` : `motor ${i + 1}`);
 
-export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly }) {
+export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, goAssembly }) {
   host.replaceChildren();
   const stage = el('div', { className: 'asm-stage fly-stage' }), side = el('div', { className: 'asm-side fly-side' });
   host.append(stage, side); host.classList.add('fly-pane');
@@ -62,7 +63,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
   applyBtn.addEventListener('click', () => reset());
 
   /* ── state ── */
-  let readySaid = false, T = null, loading = null, model = null, sim = null, fc = null, rig = null, inner = null, spinners = [], shadow = null, fpvCam = null, active = false, raf = 0, last = 0, acc = 0, hudAt = 0, ctrlTarget = null;
+  let wiring = null, route = null, readySaid = false, T = null, loading = null, model = null, sim = null, fc = null, rig = null, inner = null, spinners = [], shadow = null, fpvCam = null, active = false, raf = 0, last = 0, acc = 0, hudAt = 0, ctrlTarget = null;
   const motorTest = [], rows = [];
   let sayTimer = 0;
   const say = (t, bad = false) => { msg.textContent = t; msg.hidden = !t; msg.classList.toggle('bad', bad); clearTimeout(sayTimer); if (t) sayTimer = setTimeout(() => { msg.hidden = true; }, bad ? 9000 : 5000); };
@@ -111,7 +112,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
     if (cam) { fpvCam = new THREE.PerspectiveCamera(105, 1, 10, 400000); fpvCam.up.set(0, 0, 1); const sz = cam.part.drone.sizeMm, p = new THREE.Vector3(...cam.T.t).add(new THREE.Vector3(0, sz[1] / 2 + 2, sz[2] * 0.6));
       fpvCam.position.copy(p).sub(new THREE.Vector3(...model.com.map(v => v * 1000))); const tilt = 25 * Math.PI / 180, f = new THREE.Vector3(0, Math.cos(tilt), Math.sin(tilt)), u = new THREE.Vector3(0, -Math.sin(tilt), Math.cos(tilt)), r = new THREE.Vector3().crossVectors(f, u);
       fpvCam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(r, u, f.clone().negate())); inner.add(fpvCam); }
-    camSel.querySelector('option[value=fpv]').disabled = !fpvCam; if (!fpvCam && camSel.value === 'fpv') camSel.value = 'follow'; size();
+    camSel.querySelector('option[value=fpv]').disabled = !fpvCam || !!(wiring?.present && !wiring.camera); if (!fpvCam && camSel.value === 'fpv') camSel.value = 'follow'; size();
   }
   function placeCamera() {
     const { THREE, camera, controls } = T, p = new THREE.Vector3(sim.p[0] * 1000, sim.p[1] * 1000, sim.p[2] * 1000);
@@ -132,8 +133,13 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
   function rebuild() {
     const asm = getAsm(), mdl = droneFromAssembly(asm);
     if (!mdl.ok) { model = null; sim = null; fc = null; if (rig) dispose(); empty.hidden = false; empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('h3', { textContent: 'Nothing to fly yet' }), el('p', { textContent: mdl.error }), el('div', { className: 'asm-row' }, (() => { const b = el('button', { type: 'button', className: 'asm-btn primary', id: 'flyBuildExample', textContent: 'Build a 5-inch quad for me' }); b.addEventListener('click', async () => { b.disabled = true; b.textContent = 'Building…'; await buildExample(); await rebuild(); }); return b; })(), (() => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: 'Open Assembly' }); b.addEventListener('click', () => goAssembly()); return b; })()))); hud.hidden = true; return; }
-    empty.hidden = true; hud.hidden = false; model = mdl; sim = new DroneSim(mdl); buildRig(); makeMotorRows();
-    summary.textContent = `${Math.round(mdl.massKg * 1000)} g · ${mdl.motors.length} motors · ${mdl.battery.cells}S ${mdl.battery.mAh} mAh${mdl.escAmps ? ` · ESC ${mdl.escAmps} A` : ''}`; notes.textContent = mdl.notes.join(' ');
+    empty.hidden = true; hud.hidden = false; model = mdl; sim = new DroneSim(mdl); wiring = getWiring?.() || null; route = null; buildRig(); makeMotorRows();
+                                        // with an AIO on the Circuit tab, the wires decide which output drives which motor
+    if (wiring?.present) {
+      if (mdl.motors.length === 4) { const pos = mdl.motors.map((m, i) => motorName(m, i, 4)); route = pos.map(p => { const s = wiring.slotOf[p]; return s === undefined ? -1 : pos.indexOf(SLOT_POSITIONS[s]); }); }
+      else wiring = { ...wiring, problems: [...wiring.problems, 'Wiring from the Circuit tab only steers four-motor drones for now.'] };
+    }
+    summary.textContent = `${Math.round(mdl.massKg * 1000)} g · ${mdl.motors.length} motors · ${mdl.battery.cells}S ${mdl.battery.mAh} mAh${mdl.escAmps ? ` · ESC ${mdl.escAmps} A` : ''}`; notes.textContent = [...mdl.notes, ...(wiring?.present ? [wiring.fatal, ...wiring.problems].filter(Boolean) : [])].join(' ');
     T.prev = null; reset(true);
   }
   function reset(keepMsg = false) {
@@ -145,6 +151,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
   function toggleArm() {
     if (!sim) return;
     if (rc.armed) { rc.armed = false; say(''); return updateArm(); }
+    if (wiring?.present && wiring.fatal) return say(wiring.fatal, true);
     if (sim.crashed) return say('It crashed. Press R to reset it.', true);
     if (fc.error) return say('The sketch has an error, so there is no flight controller to arm.', true);
     if (!sim.escs.every(e => e.armed)) return say('The speed controllers are still starting up. Wait a second and try again.', true);
@@ -177,6 +184,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
     acc += dt; let n = 0;
     while (acc >= DT && n < 80) {
       let us = fc.tick(sim.sense(), rc, sim.t); if (fc.error) { us = us.map(() => 1000); if (rc.armed) { rc.armed = false; updateArm(); } }
+      if (route) us = us.map((_, j) => (route[j] < 0 ? 1000 : us[route[j]]));
       for (let i = 0; i < us.length; i++) if (motorTest[i] > 0) us[i] = 1050 + 950 * motorTest[i];
       sim.step(us); acc -= DT; n++;
     }

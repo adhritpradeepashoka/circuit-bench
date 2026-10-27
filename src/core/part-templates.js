@@ -12,7 +12,7 @@ const chip = (name, label, color, pkg, pins, behaviour, description = '') => ({
   name, label, color, textColor: '#e8e8e8', description, package: pkg, breadboard: true, pins: pins.map(p => (Array.isArray(p) ? { id: p[0], label: p[1] || p[0] } : { id: p, label: p })), behaviour,
 });
 
-export const TEMPLATE_GROUPS = ['Switches & resistors', 'Diodes & transistors', 'Power', 'Capacitors & coils', 'Sound, light & motion', 'Sensors & inputs', 'Chips'];
+export const TEMPLATE_GROUPS = ['Switches & resistors', 'Diodes & transistors', 'Power', 'Capacitors & coils', 'Sound, light & motion', 'Sensors & inputs', 'Chips', 'Drone'];
 
 export const TEMPLATES = [
   // ── Switches & resistors
@@ -35,6 +35,14 @@ export const TEMPLATES = [
   { group: 1, id: 'opamp-op07', ...mod('Op-amp OP07 (precision)', 'OP07', '#2b2f36', [['IN+', 'Non-inverting input (+)'], ['IN-', 'Inverting input (−)'], ['OUT', 'Output'], ['V+', 'Supply +'], ['V-', 'Supply − (or GND)']], { kind: 'opamp', roles: { inp: 'IN+', inn: 'IN-', out: 'OUT', vcc: 'V+', vee: 'V-' }, dropHigh: 2, dropLow: 2, minSupply: 9 }, { description: 'Low-offset precision op-amp for small DC signals. Needs about ±4.5 V; the output stays 2 V inside each rail.' }) },
   { group: 1, id: 'opamp-741', ...mod('Op-amp LM741 (classic)', 'LM741', '#2b2f36', [['IN+', 'Non-inverting input (+)'], ['IN-', 'Inverting input (−)'], ['OUT', 'Output'], ['V+', 'Supply +'], ['V-', 'Supply − (or GND)']], { kind: 'opamp', roles: { inp: 'IN+', inn: 'IN-', out: 'OUT', vcc: 'V+', vee: 'V-' }, dropHigh: 2, dropLow: 2, minSupply: 10 }, { description: 'The textbook op-amp. Needs about ±5 V (10 V across the supplies); the output stays 2 V inside each rail.' }) },
   { group: 1, id: 'inamp-ina128', ...mod('Instrumentation amp INA128 (gain 100)', 'INA128', '#2b2f36', [['IN+', 'Input +'], ['IN-', 'Input −'], ['OUT', 'Output'], ['REF', 'Reference (output rests here)'], ['V+', 'Supply +'], ['V-', 'Supply − (or GND)']], { kind: 'inamp', roles: { inp: 'IN+', inn: 'IN-', out: 'OUT', vcc: 'V+', vee: 'V-', ref: 'REF' }, gain: 100, bias: 'ref', dropHigh: 1, dropLow: 1, minSupply: 4.5 }, { description: 'Amplifies the DIFFERENCE between IN+ and IN− by 100 (set by its gain resistor on the real chip) and ignores what is common to both. The output rests at the voltage on REF.' }) },
+  // ── Drone (wire these up and the Test tab flies what you wired: see src/core/drone-wiring.js)
+  { group: 7, id: 'drone-aio', ...mod('Drone AIO flight controller (FC + 4-in-1 ESC)', 'AIO', '#1f2a44', [['BAT+', 'Battery +'], ['BAT-', 'Battery −'], ['M1', 'Motor 1 pads (front right)'], ['M2', 'Motor 2 pads (front left)'], ['M3', 'Motor 3 pads (back left)'], ['M4', 'Motor 4 pads (back right)'], ['CAM', 'Camera video in']], { kind: 'none' }, { description: 'The flight controller and speed controllers on one board. Battery to BAT+/BAT−, each motor to one of M1–M4, the camera to CAM. Which motor you wire to which pad decides how the drone flies.', breadboard: false }) },
+  { group: 7, id: 'drone-motor-fr', ...mod('Drone motor — front right', 'MOTOR FR', '#7a2e2e', [['PHASES', 'Three motor wires']], { kind: 'none' }, { description: 'The front-right motor of your drone. Wire it to an AIO motor pad.', breadboard: false }) },
+  { group: 7, id: 'drone-motor-fl', ...mod('Drone motor — front left', 'MOTOR FL', '#2e4f7a', [['PHASES', 'Three motor wires']], { kind: 'none' }, { description: 'The front-left motor of your drone. Wire it to an AIO motor pad.', breadboard: false }) },
+  { group: 7, id: 'drone-motor-bl', ...mod('Drone motor — back left', 'MOTOR BL', '#2e6a4a', [['PHASES', 'Three motor wires']], { kind: 'none' }, { description: 'The back-left motor of your drone. Wire it to an AIO motor pad.', breadboard: false }) },
+  { group: 7, id: 'drone-motor-br', ...mod('Drone motor — back right', 'MOTOR BR', '#7a6a2e', [['PHASES', 'Three motor wires']], { kind: 'none' }, { description: 'The back-right motor of your drone. Wire it to an AIO motor pad.', breadboard: false }) },
+  { group: 7, id: 'drone-battery', ...mod('Drone LiPo battery', 'LIPO', '#222222', [['+', 'Positive (red)'], ['-', 'Negative (black)']], { kind: 'none' }, { description: 'Connect + to BAT+ and − to BAT− on the AIO. The cells and capacity come from the battery in your Assembly.', breadboard: false }) },
+  { group: 7, id: 'drone-camera', ...mod('Drone FPV camera', 'CAM', '#444444', [['VID', 'Video out']], { kind: 'none' }, { description: 'Wire VID to the CAM pad on the AIO to fly by its view (FPV).', breadboard: false }) },
   { group: 5, id: 'signal-source', ...mod('Biosignal source (body)', 'BODY', '#7a3b2e', [['E+', 'Electrode + (to IN+)'], ['E-', 'Electrode − (to IN−)'], ['REF', 'Reference electrode (to REF)']], { kind: 'signal-source', roles: { pos: 'E+', neg: 'E-', ref: 'REF' } }, { breadboard: false, description: 'A simulated body: ECG, EMG, EEG or EOG between its electrodes. Right-click to choose the signal, its strength, electrode contact and mains hum. Illustrative waveforms, not medical data.' }) },
   { group: 5, id: 'bioamp-exg-pill', name: 'BioAmp EXG Pill', label: 'EXG Pill', color: '#5b2ca0', textColor: '#ffffff', package: 'sprite', breadboard: false,
     description: 'Upside Down Labs biopotential amplifier (ECG / EMG / EEG / EOG). Electrodes on IN+, IN− and REF; VCC/GND from the Arduino 5 V; read OUT with analogRead(). Idle output is half the supply.',
@@ -131,6 +139,7 @@ function chipCounter() {
 
 /** Common parts that ship in the default catalogue (sidebar) instead of the Part Creator's template list: template id → sidebar category. */
 export const POPULAR = {
+  'drone-aio': 'Drone', 'drone-motor-fr': 'Drone', 'drone-motor-fl': 'Drone', 'drone-motor-bl': 'Drone', 'drone-motor-br': 'Drone', 'drone-battery': 'Drone', 'drone-camera': 'Drone',
   'stepper': 'Motors', 'fan': 'Motors',
   'hall': 'Sensors',
   'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors', 'opamp-lm358': 'Semiconductors', 'opamp-rr': 'Semiconductors', 'opamp-tl07x': 'Semiconductors', 'opamp-op07': 'Semiconductors', 'opamp-741': 'Semiconductors', 'inamp-ina128': 'Semiconductors', 'bioamp-exg-pill': 'Biosignal', 'signal-source': 'Biosignal', 'slime-mold': 'Biosignal',

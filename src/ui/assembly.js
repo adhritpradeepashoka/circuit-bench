@@ -9,6 +9,7 @@ import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_L
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
 import { initDroneTest } from './drone-test.js';
+import { droneWiring } from '../core/drone-wiring.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
 import { buildRig, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
@@ -755,7 +756,7 @@ export function initAssembly({ editor, projects = null }) {
     document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
     pane.hidden = v !== 'assembly'; testPane.hidden = v !== 'test'; document.body.classList.toggle('robot-asm', v !== 'circuit');
     if (v !== 'test') droneTest?.leave();
-    if (v === 'test') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, prepare: async () => { await load3d(); await loadExamples(); await restoreSaved(); }, buildExample: buildExampleQuad, goAssembly: () => show('assembly') }); await droneTest.enter(); }
+    if (v === 'test') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare: async () => { await load3d(); await loadExamples(); await restoreSaved(); }, buildExample: buildExampleQuad, goAssembly: () => show('assembly') }); await droneTest.enter(); }
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v);
   }

@@ -294,7 +294,7 @@ test('ui: catalogue lists the new parts by category, and each can be added', () 
   const { w, editor } = boot();
   const doc = w.document;
   const titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
-  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Biosignal', 'Passives', 'Logic', 'Chips', 'Sound', 'My parts']);
+  assert.deepEqual(titles, ['Boards', 'Prototyping', 'Basic', 'Input', 'Displays', 'Sensors', 'Motors', 'Power', 'Semiconductors', 'Drone', 'Biosignal', 'Passives', 'Logic', 'Chips', 'Sound', 'My parts']);
   const names = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
   for (const n of ['Servo Motor', 'Ultrasonic Sensor HC-SR04', 'Stepper 28BYJ-48 + ULN2003', 'Rotary Encoder (KY-040)', 'NPN transistor 2N2222', 'Buzzer', 'LED Bar Graph (10 segments)', 'Relay (KS2E-M-DC5)']) assert.ok(names.includes(n), `${n} ships in the default catalogue`);
   assert.equal(doc.querySelectorAll('#catalog .part-card .edit-part').length, 0, 'built-in parts have no edit button');
