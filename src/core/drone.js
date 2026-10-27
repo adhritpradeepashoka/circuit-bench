@@ -49,6 +49,7 @@ export function makeBattery({ cells = 4, mAh = 1500, c = 75, over = {} } = {}) {
 export const STACKS = {
   '30.5': { pattern: [30.5, 30.5], screw: 'M3', note: 'standard stack (5 in and up)' },
   '25.5': { pattern: [25.5, 25.5], screw: 'M2', note: 'AIO and 3–4 in stacks' },
+  '26': { pattern: [26, 26], screw: 'M2', note: 'BetaFPV toothpick / 20 A AIO' },
   '20': { pattern: [20, 20], screw: 'M2', note: 'micro stack' },
   '16': { pattern: [16, 16], screw: 'M1_6', note: 'whoop AIO' },
 };
@@ -56,6 +57,14 @@ export const BOARDS = {
   'fc-30.5': { name: 'Flight controller 30.5', kind: 'fc', stack: '30.5', sizeMm: [36, 36, 5], mass: 8, cost: 3500 },
   'esc-30.5': { name: '4-in-1 ESC 30.5 (45 A)', kind: 'esc', stack: '30.5', sizeMm: [41, 36, 6], mass: 14, cost: 4500, maxAmps: 45 },
   'aio-25.5': { name: 'AIO board 25.5 (FC + 4-in-1 ESC)', kind: 'aio', stack: '25.5', sizeMm: [32, 32, 5], mass: 6, cost: 4000, maxAmps: 25 },
+  // Real boards: size, mount, weight and ESC rating are the makers' published figures (as collected by oscarliang.com/whoop-toothpick-fc); prices are rough Indian street prices in ₹.
+  'aio-iflight-blitz-f411-1s': { name: 'iFlight BLITZ F411 1S AIO (5 A)', kind: 'aio', stack: '25.5', sizeMm: [29, 29, 4.5], mass: 4.6, cost: 3300, maxAmps: 5, real: true },
+  'aio-betafpv-f4-1s': { name: 'BetaFPV F4 1S AIO (5 A)', kind: 'aio', stack: '25.5', sizeMm: [29, 29, 4.5], mass: 3.9, cost: 3200, maxAmps: 5, real: true },
+  'aio-happymodel-x12': { name: 'Happymodel X12 AIO 5-in-1 ELRS (12 A, 1–2S)', kind: 'aio', stack: '25.5', sizeMm: [30, 30, 8], mass: 5.1, cost: 5200, maxAmps: 12, real: true },
+  'aio-betafpv-f405-20a': { name: 'BetaFPV F405 2–4S AIO (20 A)', kind: 'aio', stack: '26', sizeMm: [26, 26, 5], mass: 5.3, cost: 6000, maxAmps: 20, real: true },
+  'aio-hglrc-zeus13': { name: 'HGLRC Zeus13 AIO (13 A, 3–6S)', kind: 'aio', stack: '25.5', sizeMm: [32.5, 32.5, 5.5], mass: 7.9, cost: 5600, maxAmps: 13, real: true },
+  'aio-jhemcu-f405pro': { name: 'JHEMCU AIO F405 PRO (25 A, 3–6S)', kind: 'aio', stack: '25.5', sizeMm: [33, 33, 5.5], mass: 7.1, cost: 6500, maxAmps: 25, real: true },
+  'aio-iflight-beast-f7': { name: 'iFlight Beast F7 AIO (45 A, 2–6S)', kind: 'aio', stack: '25.5', sizeMm: [32.5, 32.5, 6], mass: 8.5, cost: 9500, maxAmps: 45, real: true },
   'aio-16': { name: 'Whoop AIO 16 (FC + ESC, 1S)', kind: 'aio', stack: '16', sizeMm: [26, 26, 4], mass: 3, cost: 2800, maxAmps: 5 },
 };
 export const CAMERAS = {

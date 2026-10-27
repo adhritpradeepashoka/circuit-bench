@@ -47,7 +47,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
   const code = el('textarea', { id: 'flyCode', className: 'fly-code', spellcheck: false, rows: 16, ariaLabel: 'Flight controller sketch' });
   const applyBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'flyApply', textContent: 'Run this sketch' }), restoreBtn = el('button', { type: 'button', className: 'asm-btn', id: 'flyRestore', textContent: 'Start from the starter' });
   const errBox = el('div', { className: 'asm-note bad', id: 'flyErr', hidden: true }), logBox = el('pre', { className: 'fly-log', id: 'flyLog', hidden: true });
-  const keysHelp = el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> Space arm · ↑↓ throttle · ←→ turn · W/S forward/back · A/D left/right · Shift = harder · R reset · C camera · M mode. Or drag the two sticks on screen.' });
+  const keysHelp = el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> Space arm · ↑↓ throttle · ←→ turn · W/S forward/back · A/D left/right · Shift = harder · R reset · C camera · M mode. Or drag the two sticks on screen, or plug in a game pad or USB radio (A / ✕ arms, Y / △ resets).' });
   side.append(el('h4', { textContent: 'Fly' }), armBtn, field('Mode', modeSel), el('div', { className: 'asm-row' }, resetBtn), field('Camera', camSel), field('Time', speedSel), keysHelp,
     el('h4', { textContent: 'This drone' }), summary, notes, el('h4', { textContent: 'Motors' }), motorBox, el('p', { className: 'asm-note', textContent: 'The small sliders spin one motor by itself (a motor test, with the props on).' }),
     el('h4', { textContent: 'Flight controller' }), field('Runs', whichSel), code, el('div', { className: 'asm-row' }, applyBtn, restoreBtn), errBox, logBox,
@@ -153,13 +153,24 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
     rc.armed = true; say(rc.mode === 'althold' ? 'Armed. Push the throttle up to take off; the middle holds the height.' : 'Armed. Raise the throttle to take off.'); updateArm();
   }
   function setMode(m) { rc.mode = m; modeSel.value = m; left.springY = m === 'althold'; input.thr = m === 'althold' ? 0.5 : 0; left.y = m === 'althold' ? 0 : -1; }
+  // Game pads and radios (the Gamepad API). A standard pad (Xbox, PlayStation) has two spring-centred sticks; a radio set to USB joystick sends separate axes in the usual roll, pitch, throttle, yaw order and its throttle stays where you leave it.
+  const pad = { id: '', prev: [], radio: false, thr: 0, on: false };
+  function readPad() {
+    const gp = [...(navigator.getGamepads?.() || [])].find(g => g && g.connected);
+    if (!gp) { if (pad.on) { pad.on = false; pad.id = ''; say('Controller disconnected. The keyboard and on-screen sticks work again.'); } return null; }
+    const dz = v => Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94, ax = i => dz(gp.axes[i] || 0), radio = gp.mapping !== 'standard' && gp.axes.length >= 4;
+    if (!pad.on || pad.id !== gp.id) { pad.on = true; pad.id = gp.id; pad.radio = radio; say(`Controller connected: ${gp.id.slice(0, 48)}. ${radio ? 'Treated as a radio (roll, pitch, throttle, yaw).' : 'Left stick throttle and turn, right stick tilt.'} A / ✕ arms, Y / △ resets.`); }
+    const down = i => !!gp.buttons[i]?.pressed, edge = i => down(i) && !pad.prev[i]; const e = { arm: edge(0), reset: edge(3) }; pad.prev = gp.buttons.map(b => b.pressed);
+    return radio ? { roll: ax(0), pitch: -ax(1), thr: (gp.axes[2] + 1) / 2, yaw: ax(3), radio, ...e } : { roll: ax(2), pitch: -ax(3), thr: -ax(1), yaw: ax(0), radio, ...e };
+  }
   function pilot(dt) {
+    const gp = readPad(); if (gp?.arm) toggleArm(); if (gp?.reset) reset();
     const k = input.keys, s = input.shift ? 1 : 0.5, kv = (a, b) => (k.has(a) ? 1 : 0) - (k.has(b) ? 1 : 0);
-    const want = { roll: clamp(right.x + s * kv('d', 'a')), pitch: clamp(right.y + s * kv('w', 's')), yaw: clamp(left.x + s * kv('arrowright', 'arrowleft')) };
+    const want = { roll: clamp(right.x + s * kv('d', 'a') + (gp?.roll || 0)), pitch: clamp(right.y + s * kv('w', 's') + (gp?.pitch || 0)), yaw: clamp(left.x + s * kv('arrowright', 'arrowleft') + (gp?.yaw || 0)) };
     for (const a of ['roll', 'pitch', 'yaw']) { const d = want[a] - rc[a], step = 6 * dt; rc[a] += clamp(d, -step, step); }
     const up = kv('arrowup', 'arrowdown');
-    if (rc.mode === 'althold') rc.throttle = clamp(0.5 + 0.5 * left.y + up * (input.shift ? 0.5 : 0.3), 0, 1);            // the stick springs back to the middle, which holds the height
-    else { if (left.active) input.thr = clamp((left.y + 1) / 2, 0, 1); input.thr = clamp(input.thr + up * (input.shift ? 0.5 : 0.22) * dt, 0, 1); rc.throttle = input.thr; if (!left.active) left.y = input.thr * 2 - 1; }       // the stick stays where you leave it
+    if (rc.mode === 'althold') rc.throttle = clamp(0.5 + 0.5 * left.y + up * (input.shift ? 0.5 : 0.3) + (gp ? (gp.radio ? gp.thr - 0.5 : 0.5 * gp.thr) : 0), 0, 1);            // the stick springs back to the middle, which holds the height
+    else { if (left.active) input.thr = clamp((left.y + 1) / 2, 0, 1); input.thr = clamp(input.thr + (up + (gp && !gp.radio ? gp.thr : 0)) * (input.shift ? 0.5 : 0.22) * dt, 0, 1); rc.throttle = gp?.radio ? gp.thr : input.thr; if (gp?.radio) input.thr = gp.thr; if (!left.active) left.y = input.thr * 2 - 1; }       // the stick stays where you leave it
     left.show(rc.yaw, (rc.throttle - 0.5) * 2); right.show(rc.roll, rc.pitch);
   }
   function advance(dt) {
@@ -183,7 +194,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
   function paintHud(now) {
     if (now - hudAt < 90) return; hudAt = now; const s = sim.state, minLeft = s.amps > 0.3 ? Math.max(0, s.left - 0.15) * 0.95 * model.battery.mAh / 1000 / s.amps * 60 : null;
     const line = (k, v) => `<span>${k}</span><b>${v}</b>`;
-    hud.innerHTML = [line('Height', `${Math.max(0, s.altitude).toFixed(1)} m`), line('Speed', `${(s.speed * 3.6).toFixed(0)} km/h`), line('Climb', `${s.climb.toFixed(1)} m/s`), line('Tilt', `${s.tilt.toFixed(0)}°`), line('Facing', (() => { const { THREE } = T, f = new THREE.Vector3(0, 1, 0).applyQuaternion(rig.quaternion), h = (Math.atan2(f.x, f.y) * 180 / Math.PI + 360) % 360; return `${['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(h / 45) % 8]} ${h.toFixed(0)}°`; })()), line('Battery', `${s.volts.toFixed(1)} V (${s.cell.toFixed(2)} per cell)`), line('Current', `${s.amps.toFixed(1)} A`), line('Used', `${Math.round(s.usedMah)} mAh · ${Math.round(s.left * 100)} % left`), line('Time', `${s.t.toFixed(0)} s${minLeft && rc.armed ? ` · about ${minLeft.toFixed(1)} min until you should land, at this draw` : ''}`)].join('');
+    hud.innerHTML = [line('Height', `${Math.max(0, s.altitude).toFixed(1)} m`), line('Speed', `${(s.speed * 3.6).toFixed(0)} km/h`), line('Climb', `${s.climb.toFixed(1)} m/s`), line('Tilt', `${s.tilt.toFixed(0)}°`), line('Facing', (() => { const { THREE } = T, f = new THREE.Vector3(0, 1, 0).applyQuaternion(rig.quaternion), h = (Math.atan2(f.x, f.y) * 180 / Math.PI + 360) % 360; return `${["N", "NE", "E", "SE", "S", "SW", "W", "NW"][Math.round(h / 45) % 8]} ${(Math.round(h) % 360)}°`; })()), line('Battery', `${s.volts.toFixed(1)} V (${s.cell.toFixed(2)} per cell)`), line('Current', `${s.amps.toFixed(1)} A`), line('Used', `${Math.round(s.usedMah)} mAh · ${Math.round(s.left * 100)} % left`), line('Time', `${s.t.toFixed(0)} s${minLeft && rc.armed ? ` · about ${minLeft.toFixed(1)} min until you should land, at this draw` : ''}`)].join('');
     s.rpm.forEach((r, i) => { const row = rows[i]; if (!row) return; row.bar.style.width = `${Math.round(s.throttle[i] * 100)}%`; row.info.textContent = `${Math.round(r).toLocaleString()} rpm · ${Math.round(s.thrustGrams[i])} g`; });
     const st = sim.escs.find(e => e.status !== 'armed')?.status; if (st && sim.t > 1.3 && rc.armed) say(`Speed controller: ${st}`, true);
     if (fc && fc.log.length) { logBox.hidden = false; logBox.textContent = fc.log.slice(-8).join('\n'); }
