@@ -4,6 +4,7 @@
 //   GET  /api/config    →  { googleClientId, accounts }   (public settings; GOOGLE_CLIENT_ID env)
 //   POST /api/auth/google {credential} → { token, me }   ·   GET /api/me · POST /api/presence (Bearer token)
 //   POST /api/account/kind {kind}   ·   /api/classes … (teachers: create/settings/roster/review; students: join/submit)   ·   POST /api/admin/kind
+//   GET /api/projects · GET/PUT/DELETE /api/projects/:id   (signed-in people: a cloud copy of their projects)
 //   GET/POST/DELETE /api/admin/users   (admins; the owner also manages admins)
 //   Env for accounts: OWNER_EMAIL, DATABASE_URL, SESSION_SECRET, MAX_FREE_CONCURRENT, FREE_HOSTED_AI=1, HOSTED_AI_KEY/_PROVIDER/_MODEL
 // Env: PORT (8787), HOST (127.0.0.1), VLAB_CORS_ORIGIN (e.g. * — only needed when the page is served from somewhere else),
@@ -16,11 +17,12 @@ import { createCompiler, RequestError, BOARDS } from './compile-service.mjs';
 import { createAiService } from './ai-service.mjs';
 import { createCommunity, createMemoryCommunity, createPgCommunity } from './community.mjs';
 import { createClasses, createMemoryClassStore, createPgClassStore } from './classes.mjs';
+import { createCloudProjects, createMemoryProjectStore, createPgProjectStore } from './cloud-projects.mjs';
 import { createAccounts, createMemoryStore, createPgStore, createSessions, createGoogleVerifier, createPresence } from './accounts.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2' };
 
-export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null, community = null, classes = null } = {}) {
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null, community = null, classes = null, cloudProjects = null } = {}) {
   // hostedAi = { provider, key, model? }: the owner's own AI key, used only for signed-in users whose role entitles them to it.
   const bearer = req => /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1] || '';
   /** A student whose class turned a feature off may not use it, even by calling the API directly. */
@@ -49,7 +51,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
     list.push(now); buckets.set(ip, list);
     return list.length > 40;
   };
-  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '600', vary: 'origin' } : {};
+  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '600', vary: 'origin' } : {};
   const send = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors, ...headers }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
 
   return http.createServer(async (req, res) => {
@@ -70,6 +72,16 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
         const me = await accounts.me(bearer(req), { beat: url.pathname === '/api/presence' });
         return me ? send(res, 200, { ok: true, me: { ...me, hostedAiReady: !!hostedAi?.key } }) : send(res, 401, { ok: false, error: 'Please sign in again.' });
+      }
+      if (url.pathname === '/api/projects' || url.pathname.startsWith('/api/projects/')) {
+        if (!cloudProjects) return send(res, 404, { ok: false, error: 'Project sync is not enabled on this server.' });
+        const id = decodeURIComponent(url.pathname.split('/')[3] || ''), tok = bearer(req);
+        const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
+        if (!id && req.method === 'GET') return out(await cloudProjects.list(tok));
+        if (id && req.method === 'GET') return out(await cloudProjects.get(tok, id));
+        if (id && req.method === 'PUT') return out(await cloudProjects.put(tok, id, await readJson(req, 3_000_000)));
+        if (id && req.method === 'DELETE') return out(await cloudProjects.remove(tok, id));
+        return send(res, 405, { ok: false, error: 'Use GET, PUT or DELETE.' });
       }
       if (url.pathname.startsWith('/api/community')) {
         if (!community) return send(res, 404, { ok: false, error: 'The community is not enabled on this server.' });
@@ -211,14 +223,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const compiler = createCompiler();
   const clientId = process.env.GOOGLE_CLIENT_ID || '137986291175-5s42d2u26q1029oo1v5dhged48dg79fb.apps.googleusercontent.com';
   // Accounts: DATABASE_URL (Supabase/Neon Postgres) keeps roles across deploys; without it they live in memory and reset on restart.
-  let store = createMemoryStore(), communityStore = createMemoryCommunity(), classStore = createMemoryClassStore();
+  let store = createMemoryStore(), communityStore = createMemoryCommunity(), classStore = createMemoryClassStore(), projectStore = createMemoryProjectStore();
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 4 });
     try {
-      const pgStore = createPgStore(pool), pgCommunity = createPgCommunity(pool), pgClasses = createPgClassStore(pool);
-      await pgStore.init(); await pgCommunity.init(); await pgClasses.init();
-      store = pgStore; communityStore = pgCommunity; classStore = pgClasses;
+      const pgStore = createPgStore(pool), pgCommunity = createPgCommunity(pool), pgClasses = createPgClassStore(pool), pgProjects = createPgProjectStore(pool);
+      await pgStore.init(); await pgCommunity.init(); await pgClasses.init(); await pgProjects.init();
+      store = pgStore; communityStore = pgCommunity; classStore = pgClasses; projectStore = pgProjects;
     } catch (e) {
       // Keep the site up on a bad DATABASE_URL (wrong password, unreachable host): fall back to memory and say why.
       console.log(`[vlab] ERROR: database unavailable (${e.code || ''} ${e.message}) — using in-memory accounts until DATABASE_URL is fixed`);
@@ -238,7 +250,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const hostedAi = process.env.HOSTED_AI_KEY ? { key: process.env.HOSTED_AI_KEY, provider: process.env.HOSTED_AI_PROVIDER || 'groq', model: process.env.HOSTED_AI_MODEL || '' } : null;
   const community = createCommunity({ accounts, store: communityStore });
   const classes = createClasses({ accounts, store: classStore });
-  const server = createServer({ compiler, staticDir, accounts, hostedAi, community, classes, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
+  const cloudProjects = createCloudProjects({ accounts, store: projectStore });
+  const server = createServer({ compiler, staticDir, accounts, hostedAi, community, classes, cloudProjects, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
   server.listen(port, host, async () => {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);

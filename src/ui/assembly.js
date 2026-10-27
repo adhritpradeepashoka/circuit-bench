@@ -448,7 +448,7 @@ export function initAssembly({ editor, projects = null }) {
   }
   function undo() { if (!history.length) return; future.push(asm.snapshot()); asm.restore(history.pop()); applyScene(); }
   function redo() { if (!future.length) return; history.push(asm.snapshot()); asm.restore(future.pop()); applyScene(); }
-  function save() { try { localStorage.setItem(sceneKey(), JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); } catch { /* unsaved is fine */ } }
+  function save() { try { localStorage.setItem(sceneKey(), JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); try { dispatchEvent(new CustomEvent('cb-scene-saved', { detail: sceneKey().split(':').pop() })); } catch { /* no window (tests) */ } } catch { /* unsaved is fine */ } }
   async function restoreSaved() {
     if (asm.instances.length) return; const tok = ++restoreToken; let j = null; try { j = JSON.parse(localStorage.getItem(sceneKey()) || 'null'); } catch { /* none */ }
     if (!j?.parts?.length) { legacyOffer(); return; } legacyBox.hidden = true; const t = await load3d(), ids = [];

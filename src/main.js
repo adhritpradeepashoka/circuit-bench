@@ -15,6 +15,9 @@ import { initPartCreator } from './ui/part-creator.js';
 import './parts/elements.js';
 import { initAiPanel } from './ui/ai-panel.js';
 import { initProjects } from './ui/projects.js';
+import { createLocalStore } from './core/projects.js';
+import { createSyncedStore } from './core/cloud-sync.js';
+import { getToken, authed } from './sim/session.mjs';
 import { initMpuInspector } from './ui/mpu-inspector.js';
 import { initTour } from './ui/tour.js';
 import { initSettings } from './ui/settings.js';
@@ -71,7 +74,18 @@ initValueEditor(editor);
 initSettingsEditor(editor);
 initMpuInspector(editor);
 const ai = initAiPanel(editor, code, sim);
-const projects = initProjects({ editor, code, sim });
+// Projects live in this browser; once you are signed in a copy follows you to every other browser and device (src/core/cloud-sync.js).
+const cloud = async (path, method = 'GET', body) => { if (!getToken()) return null; try { const r = await authed(path, { method, body }); return r.status === 401 || r.status === 404 ? null : await r.json(); } catch { return null; } };
+const sceneKey = id => `circuitbench:robot-scene:${id}`;
+const syncedStore = createSyncedStore(createLocalStore(), {
+  api: { list: () => cloud('/api/projects'), get: id => cloud(`/api/projects/${id}`), put: (id, p) => cloud(`/api/projects/${id}`, 'PUT', p), remove: id => cloud(`/api/projects/${id}`, 'DELETE') },
+  scene: { read: id => { try { return JSON.parse(localStorage.getItem(sceneKey(id)) || 'null'); } catch { return null; } }, write: (id, v) => { try { v ? localStorage.setItem(sceneKey(id), JSON.stringify(v)) : localStorage.removeItem(sceneKey(id)); } catch { /* full or blocked */ } } },
+  skip: () => projects?.current?.id, status: t => editor.status(t),
+});
+const projects = initProjects({ editor, code, sim, store: syncedStore });
+{ let last = 0; const sync = () => { if (!getToken() || Date.now() - last < 30_000) return; last = Date.now(); syncedStore.sync(); };
+  addEventListener('cb-session', () => { last = 0; sync(); }); addEventListener('focus', sync); document.addEventListener('visibilitychange', () => { document.hidden ? syncedStore.flush() : sync(); }); addEventListener('pagehide', () => syncedStore.flush());
+  addEventListener('cb-scene-saved', e => syncedStore.scheduleScene(e.detail)); setTimeout(sync, 1500); }
 const workspaces = initWorkspaces({ editor, code, projects });
 initVisualizer({ editor });
 const assembly = initAssembly({ editor, projects });
