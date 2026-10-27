@@ -79,6 +79,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
       const grid = new THREE.GridHelper(200000, 200, 0x8da08a, 0xaabda6); grid.rotation.x = Math.PI / 2; scene.add(grid);
       const pad = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshBasicMaterial({ color: 0xf3c24b })); pad.position.z = 0.5; scene.add(pad);
       const pole = new THREE.Group(); for (let k = 0; k < 20; k++) { const seg = new THREE.Mesh(new THREE.CylinderGeometry(35, 35, 1000, 8), new THREE.MeshStandardMaterial({ color: k % 2 ? 0xffffff : 0xe2552d })); seg.rotation.x = Math.PI / 2; seg.position.z = 500 + k * 1000; pole.add(seg); } pole.position.set(4000, 3000, 0); scene.add(pole);   // a 20 m pole, one band per metre
+      for (const [x, y, c] of [[0, 30000, 0xe2332d], [30000, 0, 0x2d7fe2], [0, -30000, 0xf3c24b], [-30000, 0, 0x2dab5f]]) { const m = new THREE.Mesh(new THREE.CylinderGeometry(300, 300, 8000, 12), new THREE.MeshStandardMaterial({ color: c })); m.rotation.x = Math.PI / 2; m.position.set(x, y, 4000); scene.add(m); }   // four coloured towers: red north, blue east, yellow south, green west
       for (const [r, c] of [[5000, 0x2d7fe2], [10000, 0x2d7fe2], [20000, 0x2d7fe2]]) { const ring = new THREE.Mesh(new THREE.RingGeometry(r - 25, r + 25, 96), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.55, side: THREE.DoubleSide })); ring.position.z = 1; scene.add(ring); }
       const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = false; controls.maxDistance = 60000;
       T = { THREE, renderer, scene, camera, controls }; new ResizeObserver(size).observe(stage); size(); return T;
@@ -103,6 +104,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
       }
       inner.add(c);
     }
+    { const { THREE } = T, front = new THREE.Mesh(new THREE.ConeGeometry(14, 55, 16), new THREE.MeshBasicMaterial({ color: 0xff6a00, depthTest: false })); front.renderOrder = 5; front.position.set(0, 75, 45); rig.add(front); }   // an orange arrow on top, pointing to the front of the drone
     T.scene.add(rig);
     shadow = new THREE.Mesh(new THREE.CircleGeometry(110, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })); shadow.position.z = 2; T.scene.add(shadow);
     const cam = asm.instances.find(i => i.part.drone?.kind === 'camera' && !model.leftOut.includes(i.id));
@@ -157,7 +159,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
     for (const a of ['roll', 'pitch', 'yaw']) { const d = want[a] - rc[a], step = 6 * dt; rc[a] += clamp(d, -step, step); }
     const up = kv('arrowup', 'arrowdown');
     if (rc.mode === 'althold') rc.throttle = clamp(0.5 + 0.5 * left.y + up * (input.shift ? 0.5 : 0.3), 0, 1);            // the stick springs back to the middle, which holds the height
-    else { if (left.active) input.thr = clamp((left.y + 1) / 2, 0, 1); input.thr = clamp(input.thr + up * (input.shift ? 0.9 : 0.4) * dt, 0, 1); rc.throttle = input.thr; if (!left.active) left.y = input.thr * 2 - 1; }       // the stick stays where you leave it
+    else { if (left.active) input.thr = clamp((left.y + 1) / 2, 0, 1); input.thr = clamp(input.thr + up * (input.shift ? 0.5 : 0.22) * dt, 0, 1); rc.throttle = input.thr; if (!left.active) left.y = input.thr * 2 - 1; }       // the stick stays where you leave it
     left.show(rc.yaw, (rc.throttle - 0.5) * 2); right.show(rc.roll, rc.pitch);
   }
   function advance(dt) {
@@ -181,7 +183,7 @@ export function initDroneTest({ host, getAsm, prepare, buildExample, goAssembly 
   function paintHud(now) {
     if (now - hudAt < 90) return; hudAt = now; const s = sim.state, minLeft = s.amps > 0.3 ? Math.max(0, s.left - 0.15) * 0.95 * model.battery.mAh / 1000 / s.amps * 60 : null;
     const line = (k, v) => `<span>${k}</span><b>${v}</b>`;
-    hud.innerHTML = [line('Height', `${Math.max(0, s.altitude).toFixed(1)} m`), line('Speed', `${(s.speed * 3.6).toFixed(0)} km/h`), line('Climb', `${s.climb.toFixed(1)} m/s`), line('Tilt', `${s.tilt.toFixed(0)}°`), line('Battery', `${s.volts.toFixed(1)} V (${s.cell.toFixed(2)} per cell)`), line('Current', `${s.amps.toFixed(1)} A`), line('Used', `${Math.round(s.usedMah)} mAh · ${Math.round(s.left * 100)} % left`), line('Time', `${s.t.toFixed(0)} s${minLeft && rc.armed ? ` · about ${minLeft.toFixed(1)} min until you should land, at this draw` : ''}`)].join('');
+    hud.innerHTML = [line('Height', `${Math.max(0, s.altitude).toFixed(1)} m`), line('Speed', `${(s.speed * 3.6).toFixed(0)} km/h`), line('Climb', `${s.climb.toFixed(1)} m/s`), line('Tilt', `${s.tilt.toFixed(0)}°`), line('Facing', (() => { const { THREE } = T, f = new THREE.Vector3(0, 1, 0).applyQuaternion(rig.quaternion), h = (Math.atan2(f.x, f.y) * 180 / Math.PI + 360) % 360; return `${['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(h / 45) % 8]} ${h.toFixed(0)}°`; })()), line('Battery', `${s.volts.toFixed(1)} V (${s.cell.toFixed(2)} per cell)`), line('Current', `${s.amps.toFixed(1)} A`), line('Used', `${Math.round(s.usedMah)} mAh · ${Math.round(s.left * 100)} % left`), line('Time', `${s.t.toFixed(0)} s${minLeft && rc.armed ? ` · about ${minLeft.toFixed(1)} min until you should land, at this draw` : ''}`)].join('');
     s.rpm.forEach((r, i) => { const row = rows[i]; if (!row) return; row.bar.style.width = `${Math.round(s.throttle[i] * 100)}%`; row.info.textContent = `${Math.round(r).toLocaleString()} rpm · ${Math.round(s.thrustGrams[i])} g`; });
     const st = sim.escs.find(e => e.status !== 'armed')?.status; if (st && sim.t > 1.3 && rc.armed) say(`Speed controller: ${st}`, true);
     if (fc && fc.log.length) { logBox.hidden = false; logBox.textContent = fc.log.slice(-8).join('\n'); }
