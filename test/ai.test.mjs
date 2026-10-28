@@ -510,3 +510,13 @@ test('groq gets the compact prompt, and a too-large error retries other provider
   assert.ok(sizes.groq.at(-1) < 12000, 'groq is compact on the first try');
   assert.ok(sizes.openrouter.length >= 2 && sizes.openrouter.at(-1) < 12000, 'a too-large error gets one compact retry');
 });
+
+test('in the Robotics workspace the assistant is told it is not an Arduino-only bench (no Uno on its own, drones need no sketch)', async () => {
+  const { buildPrompt } = await import('../src/core/ai-prompt.js');
+  const base = { instruction: 'wire up my drone', circuit: { parts: [], wires: [] }, code: '', history: [] };
+  const robo = buildPrompt({ ...base, workspace: 'robotics' }), plain = buildPrompt(base);
+  assert.match(robo, /ROBOTICS workspace/); assert.match(robo, /Do NOT add an Arduino Uno/); assert.match(robo, /AIO/);
+  assert.doesNotMatch(plain, /ROBOTICS workspace/);
+  const asm = { parts: 'p', instances: 'i', joints: 'j' };
+  assert.match(buildPrompt({ ...base, assembly: asm, workspace: 'robotics' }), /Test tab does with this scene/); assert.doesNotMatch(buildPrompt({ ...base, assembly: asm }), /Test tab does with this scene/);
+});

@@ -70,13 +70,13 @@ export async function loadLocal(modelId = getLocalModel(), { onProgress, factory
 export function resetLocal() { engine = null; engineModel = null; loading = null; }
 
 /** Same contract as generateCode() in ai-client.mjs: { ok, code, actions, explanation, meta } or { ok:false, error }. */
-export async function generateLocal({ instruction, circuit, code, context = null, history = [], assembly = null, modelId = getLocalModel(), onProgress, factory, now = () => Date.now() }) {
+export async function generateLocal({ instruction, circuit, code, context = null, history = [], assembly = null, workspace = null, modelId = getLocalModel(), onProgress, factory, now = () => Date.now() }) {
   if (!String(instruction || '').trim()) return { ok: false, error: 'Describe what you want the sketch to do.' };
   const t0 = now();
   let eng;
   try { eng = await loadLocal(modelId, { onProgress, factory }); }
   catch (err) { return { ok: false, error: `Could not start the on-device model: ${err?.message || err}. Try another model, or add a free API key instead.` }; }
-  const prompt = buildPrompt({ instruction, circuit, code, context, history, assembly, compact: true });
+  const prompt = buildPrompt({ instruction, circuit, code, context, history, assembly, workspace, compact: true });
   let text = '';
   try {
     const r = await eng.chat.completions.create({ messages: [{ role: 'user', content: prompt }], temperature: 0.2, max_tokens: 2048 });

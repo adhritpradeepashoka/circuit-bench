@@ -17,6 +17,7 @@ import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL
 import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { BOARD_SPECS } from '../core/boards.js';
+import { activeWorkspace } from '../core/workspaces.js';
 import { FORMAT, VERSION } from '../core/project.js';
 import { sidePanes } from './side-panes.js';
 
@@ -380,7 +381,7 @@ export function initAiPanel(editor, code, sim = null) {
     busy = true; sendBtn.disabled = true; saveChat(); render();
     try {
       const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
-      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : gatherContext(code, sim), history, ...(in3d ? { assembly: await asmApi.describe() } : {}) };
+      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : gatherContext(code, sim), history, workspace: activeWorkspace().id, ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {

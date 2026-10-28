@@ -128,8 +128,15 @@ export function relevantTypes(instruction, circuit) {
   return set;
 }
 
-export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null }) {
-  if (assembly) return buildAssemblyPrompt({ instruction, assembly, history });
+/** What the assistant must know when the student is in the Robotics workspace (it is easy to mistake it for a plain Arduino bench). */
+export const ROBOTICS_NOTES = `This student is in CircuitBench's ROBOTICS workspace, which has three tabs: Circuit (the electronics, wired like any circuit), Assembly (the 3D robot built from real 3D parts joined at screw holes; a part joined by one screw is a hinge) and Test (a physics simulator that flies a drone or drives any robot: dog, car, arm, a single limb). It is NOT an Arduino-only bench.
+- Do NOT add an Arduino Uno (or any microcontroller board) on your own. A robot's circuit often has no Arduino at all. Only add a board when the student asks for one by name or asks for Arduino/ESP code; if they do, say which board you picked.
+- Drones: the "Drone AIO flight controller (FC + 4-in-1 ESC)" IS the flight controller and the speed controllers. A drone circuit is the AIO, four drone motors, a battery and (optionally) a camera, wired exactly as the part descriptions say (each motor's A, B, C to the three pads of one AIO motor output M1 to M4 in order; battery + and - to BAT+ and BAT-; camera 5V, GND, VID to the AIO). No Arduino and no sketch.ino are involved: the flight sketch is JavaScript that runs in the Test tab, so leave the cpp block out for a drone.
+- Robots with servos and wheels: the joints in the Assembly are what the Test tab moves (a hinge becomes a servo; a round, thin part spinning about a hinge becomes a wheel). Real servos and motors still have to be powered and driven by some controller in the circuit if the student wants a faithful build, so suggest one in "explanation" rather than silently adding it.
+- If something the student asks for belongs in another tab, say which tab in "explanation" instead of faking it here.`;
+
+export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null, workspace = null }) {
+  if (assembly) return buildAssemblyPrompt({ instruction, assembly, history, workspace });
   const past = describeHistory(history);
   const historyBlock = past
     ? `\n\nConversation so far (oldest first). The circuit and sketch above are the CURRENT state: edits marked "applied" are already in them; edits marked "not applied" were never made, so don't assume them. Use this to resolve follow-ups like "now make it faster" or "undo that":\n${past}`
@@ -151,7 +158,8 @@ export function buildPrompt({ instruction, circuit, code, context, history, comp
 
   const board = BOARD_SPECS[parts.find(p => BOARD_SPECS[p.type])?.type] || BOARD_SPECS[DEFAULT_BOARD];
   const boardCount = parts.filter(p => BOARD_SPECS[p.type]).length;
-  return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli) firmware inside a browser simulator called CircuitBench, for a student.
+  const robotBlock = workspace === 'robotics' ? `\n\n${ROBOTICS_NOTES}\n` : '';
+  return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli) firmware inside a browser simulator called CircuitBench, for a student.${robotBlock}
 
 The circuit's board is the ${board.name} (${board.chipName || (board.chip === 'atmega2560' ? 'ATmega2560' : 'ATmega328P')}); the sketch is compiled for it. ${board.aiNote ? board.aiNote : `Its I²C pins are SDA = ${/^\d+$/.test(board.i2c.sda) ? `D${board.i2c.sda}` : board.i2c.sda} and SCL = ${/^\d+$/.test(board.i2c.scl) ? `D${board.i2c.scl}` : board.i2c.scl}${board.chip === 'atmega2560' ? '; PWM (analogWrite) works on D2–D13 and D44–D46; analog inputs are A0–A15' : '; PWM (analogWrite) works on D3, D5, D6, D9, D10, D11'}${board.pins.A6 && !board.pins.A6.port ? '; A6 and A7 are analog-input only (analogRead, never digitalRead/digitalWrite)' : ''}`}. ${boardCount > 1 ? `There are ${boardCount} boards on this bench and every board has its own sketch; the sketch you write is the one on screen. They talk through serial: TX of one board wired to RX of the other (plus a shared GND), both with the same Serial.begin() rate${board.uarts?.length > 1 ? `; extra hardware serial ports: ${board.uarts.slice(1).map(u => `${u.name} (TX D${u.tx}, RX D${u.rx})`).join(', ')}` : ''}.` : `Don't add a second board unless the student asks for one — if they do, each board gets its own sketch and they talk by wiring TX of one to RX of the other (plus a shared GND) with the same Serial.begin() rate.`}
 
@@ -327,9 +335,14 @@ PACKAGE — get this right or the part will be the wrong shape and unusable:
 }
 
 /** The prompt for the 3D Assembly view: the same reply shape (one json block, "actions" + "explanation"), a different set of edits. */
-export function buildAssemblyPrompt({ instruction, assembly, history }) {
+export const ASSEMBLY_ROBOT_NOTES = `What the Test tab does with this scene, so build for it: it reads the joined parts as a robot and simulates it.
+- A drone needs a frame, motors on the frame's motor mounts, a prop on each motor (join the motor's "shaft" to the prop's "bore-bottom"), and a battery joined to the frame. Its front is where the camera points (else +Y). Keep the motors pointing up (+Z).
+- Any other robot: the main body is the part that is held still (or the biggest joined group); every hinge becomes a servo (set its limits with set_joint min/max, the default is -90 to 90), and a thin round part turning about a hinge becomes a wheel. Its forward is +Y. Legs, arms and wheels should hang from the body with one hinge each; two screws make it rigid, which is not a joint.
+- Parts that are not joined to the main body are left out of the test. Everything should rest at or above the floor (z = 0).`;
+
+export function buildAssemblyPrompt({ instruction, assembly, history, workspace = null }) {
   const past = describeHistory(history);
-  return `You are editing a LIVE 3D robot assembly inside a browser tool called CircuitBench, for a student. Parts are rigid 3D models with marked holes. Parts are joined by putting one hole on another hole (a screw goes through): a part joined by ONE screw is a hinge that swings about that screw; parts joined at two or more separate holes are rigid. You change the scene yourself by emitting edits as data; you never tell the student to do it by hand. You can only use the parts listed below. You cannot create new parts or change a model's shape.
+  return `You are editing a LIVE 3D robot assembly inside a browser tool called CircuitBench, for a student. Parts are rigid 3D models with marked holes. Parts are joined by putting one hole on another hole (a screw goes through): a part joined by ONE screw is a hinge that swings about that screw; parts joined at two or more separate holes are rigid. You change the scene yourself by emitting edits as data; you never tell the student to do it by hand. You can only use the parts listed below. You cannot create new parts or change a model's shape.${workspace === 'robotics' ? `\n\n${ASSEMBLY_ROBOT_NOTES}` : ''}
 
 Units: millimetres and degrees. +Z is up, the floor is z = 0. Each part has its own space; a hole's position and direction are given in that space.
 
