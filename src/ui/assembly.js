@@ -866,7 +866,8 @@ export function initAssembly({ editor, projects = null }) {
   /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */
   const ai = {
     active: () => view === 'assembly',
-    async describe() { await loadExamples(); const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId); d.parts += `\n${DRONE_ID_HELP}`; return d; },
+    async describe() { await loadExamples(); const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId); const presets = DRONE_PRESETS.map(([name, id]) => { const p = dronePart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
+      d.parts += `\n${presets.join('\n')}\n${DRONE_ID_HELP}`; return d; },
     async run(ops) {
       const t = await load3d(); attach(t); await loadExamples(); const before = asm.snapshot(), ctx = { anchorId, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
       batch = true; let out; try { out = await runAssemblyOps(asm, ops, ctx); } finally { batch = false; }
