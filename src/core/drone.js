@@ -38,9 +38,12 @@ export function makeProp({ diameterIn = 5, pitchIn = 4.3, blades = 3, over = {} 
   for (const key of ['ct', 'cp', 'massGrams']) if (Number.isFinite(over[key]) && over[key] > 0) { p[key] = over[key]; p.source = 'entered by you'; }
   return p;
 }
-/** A LiPo pack: S cells in series, capacity, discharge rating. Mass, size and resistance from typical energy density (about 125 Wh/kg). */
+/** A LiPo pack: S cells in series, capacity, discharge rating. Resistance from the usual scaling; size and mass from real packs: the cells are stacked, so the pack is about 8 mm taller for every cell
+ *  (a 4S 1550 mAh is about 77 × 38 × 32 mm and 181 g, a 6S 1300 about 78 × 39 × 38 mm; a 1S 450 mAh about 51 × 19 × 9 mm), with a longer, thinner shape for the very small ones. */
 export function makeBattery({ cells = 4, mAh = 1500, c = 75, over = {} } = {}) {
-  const wh = cells * 3.7 * mAh / 1000, mass = wh / 125 * 1000, vol = wh / 0.27 * 1000, h = cells === 1 ? 6 : 17 + (cells - 4) * 1, w = Math.sqrt(vol / h / 1.9) * 1.0, l = w * 1.9;
+  const wh = cells * 3.7 * mAh / 1000, mass = wh / (cells === 1 ? 140 : 120) * 1000, perCell = (wh / cells) / (cells === 1 ? 0.196 : 0.245) * 1000;                      // mm³ of one cell
+  const t = cells === 1 ? 6 + mAh / 150 : Math.min(9, 5.5 + mAh / 1000 * 1.7), aspect = 2 + 0.8 * Math.min(1, Math.max(0, (1000 - mAh) / 600)) + (cells === 1 ? 0.2 : 0), area = perCell / t;
+  const w = Math.sqrt(area / aspect), l = w * aspect, h = cells === 1 ? t : t * cells;
   const b = { cells, mAh, c, volts: cells * 4.2, nominal: cells * 3.7, resistance: cells * 0.0075 / (mAh / 1000) * (75 / c) ** 0.5 / 1.4, massGrams: mass, sizeMm: [l, w, h].map(v => Math.round(v * 10) / 10), maxAmps: mAh / 1000 * c, wh, source: 'estimated' };
   for (const key of ['resistance', 'massGrams', 'mAh']) if (Number.isFinite(over[key]) && over[key] > 0) { b[key] = over[key]; b.source = 'entered by you'; }
   return b;

@@ -89,7 +89,7 @@ export class Assembly {
   }
   /** After one join, also join every other pair of free holes that now sit exactly on each other (a motor's four screws, a board's four). Moves nothing. */
   autoMatch(aInst, bInst) {
-    const A = this.get(aInst), B = this.get(bInst); if (!A || !B) return 0; let n = 0;
+    const A = this.get(aInst), B = this.get(bInst); if (!A || !B || A.noSnap || B.noSnap) return 0; let n = 0;      // a part with snapping turned off never joins extra holes by itself
     for (const fa of A.part.frames) for (const fb of B.part.frames) {
       if (this.isMated(A.id, fa.id) || this.isMated(B.id, fb.id)) continue;
       if (fa.diameter && fb.diameter && Math.abs(fa.diameter - fb.diameter) > 1.2) continue;
@@ -110,11 +110,12 @@ export class Assembly {
   matesOf(instId) { return this.mates.filter(m => m.a.inst === instId || m.b.inst === instId); }
   /** While B is being dragged: the nearest free hole pair (a hole of B, a hole of another part) within `reach` (mm, or whatever `measure` returns, e.g. pixels on screen) whose sizes are compatible, else null. */
   snapFor(bInst, { reach = 7, maxSizeGap = 1.2, measure = null } = {}) {
-    const B = this.get(bInst); if (!B) return null; let best = null;
+    const B = this.get(bInst); if (!B || B.noSnap) return null; let best = null;                      // snapping turned off for this part: it never snaps, and nothing snaps to it
+
     for (const fb of B.part.frames) {
       if (this.isMated(B.id, fb.id)) continue; const wb = worldFrame(B, fb);
       for (const A of this.instances) {
-        if (A === B) continue;
+        if (A === B || A.noSnap) continue;
         for (const fa of A.part.frames) {
           if (this.isMated(A.id, fa.id)) continue;
           if (fa.diameter && fb.diameter && Math.abs(fa.diameter - fb.diameter) > maxSizeGap) continue;

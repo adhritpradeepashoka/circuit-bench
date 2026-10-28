@@ -83,3 +83,12 @@ test('joining a part that is already attached to others brings them along, and k
   assert.ok(as.mates.every(m => as.check(m).level !== 'bad'), 'both joints still line up'); assert.ok(close(servo.T.t, [-80, 20, 0]), 'the servo stayed put');
   const loop = as.mate(bracket.id, 'h', servo.id, 's'); assert.equal(loop.ok, false, 'holes that do not meet cannot be joined through a loop');
 });
+
+test('a part with snapping turned off is never snapped onto, never snaps, and does not auto-join extra holes (Join still works)', async () => {
+  const { buildQuad, part } = await import('./helpers/quad.mjs');
+  const as = buildQuad({ boards: false }), f = as.instances.find(i => i.part.drone?.kind === 'frame'), m = as.instances.find(i => i.part.drone?.kind === 'motor');
+  assert.ok(m.noSnap === undefined);
+  m.noSnap = true; assert.equal(as.snapFor(m.id, { reach: 1e6 }), null); assert.ok(!as.snapFor(f.id, { reach: 1e6 }) || as.snapFor(f.id, { reach: 1e6 }).a !== m.id);
+  assert.equal(as.autoMatch(f.id, m.id), 0);
+  const snap = as.snapshot(); assert.equal(snap.instances.find(i => i.id === m.id).noSnap, true);
+});

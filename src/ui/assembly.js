@@ -449,13 +449,13 @@ export function initAssembly({ editor, projects = null }) {
   }
   function undo() { if (!history.length) return; future.push(asm.snapshot()); asm.restore(history.pop()); applyScene(); }
   function redo() { if (!future.length) return; history.push(asm.snapshot()); asm.restore(future.pop()); applyScene(); }
-  function save() { try { localStorage.setItem(sceneKey(), JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); try { dispatchEvent(new CustomEvent('cb-scene-saved', { detail: sceneKey().split(':').pop() })); } catch { /* no window (tests) */ } } catch { /* unsaved is fine */ } }
+  function save() { try { localStorage.setItem(sceneKey(), JSON.stringify({ parts: asm.instances.map(i => ({ part: i.part.id, T: i.T, ...(i.noSnap ? { noSnap: true } : {}) })), mates: asm.mates.map(m => ({ a: asm.instances.findIndex(i => i.id === m.a.inst), af: m.a.frame, b: asm.instances.findIndex(i => i.id === m.b.inst), bf: m.b.frame, screw: m.screw, angle: m.angle, min: m.min, max: m.max, fixed: m.fixed })), anchor: anchorId && asm.instances.findIndex(i => i.id === anchorId) })); try { dispatchEvent(new CustomEvent('cb-scene-saved', { detail: sceneKey().split(':').pop() })); } catch { /* no window (tests) */ } } catch { /* unsaved is fine */ } }
   async function restoreSaved() {
     if (asm.instances.length) return; const tok = ++restoreToken; let j = null; try { j = JSON.parse(localStorage.getItem(sceneKey()) || 'null'); } catch { /* none */ }
     if (!j?.parts?.length) { legacyOffer(); return; } legacyBox.hidden = true; const t = await load3d(), ids = [];
     for (const rec of j.parts) {
       const p = findPart(rec.part); if (!p) { ids.push(null); continue; }
-      try { const obj = await partObject(t, p); if (tok !== restoreToken) return; const inst = asm.add(p); inst.T = rec.T; inst.obj = obj; inst.obj.userData.inst = inst.id; tint(inst); ids.push(inst.id); } catch { ids.push(null); }       // (a project switch mid-way drops the rest)
+      try { const obj = await partObject(t, p); if (tok !== restoreToken) return; const inst = asm.add(p); inst.T = rec.T; if (rec.noSnap) inst.noSnap = true; inst.obj = obj; inst.obj.userData.inst = inst.id; tint(inst); ids.push(inst.id); } catch { ids.push(null); }       // (a project switch mid-way drops the rest)
     }
     if (tok !== restoreToken) return;
     for (const m of j.mates || []) if (ids[m.a] && ids[m.b]) asm.mates.push({ a: { inst: ids[m.a], frame: m.af }, b: { inst: ids[m.b], frame: m.bf }, screw: m.screw || null, angle: m.angle || 0, min: m.min, max: m.max, fixed: !!m.fixed });
@@ -593,6 +593,7 @@ export function initAssembly({ editor, projects = null }) {
       selBox.append(
         el('div', { className: 'asm-sel-name' }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(inst))}` }), inst.part.name),
         el('div', { className: 'asm-row' }, num('X', 0), num('Y', 1), num('Z', 2)),
+        (() => { const cb = el('input', { type: 'checkbox', id: 'asmSnapOn', checked: !inst.noSnap }); cb.addEventListener('change', () => { keep(); if (cb.checked) delete inst.noSnap; else inst.noSnap = true; save(); bsay(cb.checked ? `“${inst.part.name}” snaps to holes again.` : `“${inst.part.name}” will not snap to holes or join extra ones. Use Join to fasten it yourself.`); }); return el('label', { className: 'asm-row', title: 'Turn off to move this part freely: it will not jump onto holes, and nothing will jump onto it' }, cb, ' Snap to holes'); })(),
         el('div', { className: 'asm-row wrap' }, act('Drop to floor', 'Lower it until it rests on the floor', () => { keep(); const b = new three.THREE.Box3().setFromObject(inst.obj); inst.T.t[2] -= b.min.z; detach(inst); render(); }), act(anchorId === inst.id ? 'Held still ✓' : 'Hold still', 'Keep this part in place while you pull the rest of the robot around', () => { anchorId = anchorId === inst.id ? null : inst.id; render(); }), act('Join holes…', 'Pick two holes to join this part to another', () => setJoin(true)), act('Remove', 'Remove this part', () => removeInst(inst.id))));
     }
     mateList.replaceChildren();
