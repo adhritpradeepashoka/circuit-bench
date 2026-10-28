@@ -131,3 +131,12 @@ test('create_part registers a validated spec, add_part can use it, bad specs war
   assert.ok(r.parts.some(p => p.type === 'custom-aitest-led'));
   assert.ok(r.warnings.some(w => /Could not make/.test(w)));
 });
+
+test('robotics guard: an Arduino the student did not ask for is dropped with its wires; asked-for boards and existing boards are left alone', async () => {
+  const { guardRoboticsBoards } = await import('../src/core/ai-actions.js');
+  const res = { actions: [{ op: 'add_part', id: 'u1', type: 'arduino-uno' }, { op: 'add_wire', from: { part: 'u1', pin: '5V' }, to: { part: 'aio1', pin: '5V' } }, { op: 'add_wire', from: { part: 'aio1', pin: 'G' }, to: { part: 'cam1', pin: 'GND' } }], explanation: 'Added an Uno.' };
+  const out = guardRoboticsBoards(res, 'fix my circuit', { parts: [{ id: 'aio1', type: 'custom-drone-aio' }], wires: [] });
+  assert.deepEqual(out.actions.map(a => a.op), ['add_wire']); assert.match(out.explanation, /left out the Arduino/);
+  assert.equal(guardRoboticsBoards(res, 'add an arduino uno to read the sensor', { parts: [] }).actions.length, 3);
+  assert.equal(guardRoboticsBoards(res, 'fix my circuit', { parts: [{ id: 'u0', type: 'arduino-uno' }] }).actions.length, 3, 'a board that is already there is fine');
+});

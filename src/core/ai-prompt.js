@@ -100,6 +100,12 @@ export function describeContext(context) {
     if (s.error) out.push(`  Simulator error: ${str(s.error, 300)}`);
     for (const i of list(s.issues, 10)) out.push(`Wiring problem detected: ${str(i, 300)}`);
   }
+  const d = context.drone;
+  if (d && typeof d === 'object' && d.present) {                       // the same wiring check the Test tab flies by
+    out.push(`Drone wiring check (what the Test tab will do with this circuit): ${d.fatal ? `BLOCKED — ${str(d.fatal, 300)}` : list(d.problems, 12).length ? 'problems found.' : 'all good, it will fly as wired.'}`);
+    for (const p of list(d.problems, 12)) out.push(`  ${str(p, 300)}`);
+    out.push('  To fix these, use add_wire / remove_wire on the drone parts that are already there (AIO pins BAT+, BAT-, 5V, G, CAM, M1A…M4C). Do not add a flight-controller board.');
+  }
   const serial = str(context.serial, 2000).trim();
   if (serial) out.push('Serial Monitor (most recent output):\n```\n' + serial + '\n```');
   for (const f of list(context.otherFiles, 8)) {

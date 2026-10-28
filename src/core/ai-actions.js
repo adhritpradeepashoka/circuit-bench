@@ -143,3 +143,17 @@ export function applyCircuitActions(project, actions) {
   }
   return { parts, wires, warnings, newSpecs };
 }
+
+const BOARD_TYPES = /^(arduino-|raspberry-pi-pico|esp32|stm32)/;
+/** In the Robotics workspace a board the student did not ask for is dropped, with every wire that went to it (the circuit may be boardless on purpose: a drone's AIO is its flight controller). */
+export function guardRoboticsBoards(res, instruction, circuit) {
+  if (!res || !Array.isArray(res.actions)) return res;
+  const asked = /\b(arduino|uno|nano|mega|esp ?32|esp8266|pico|stm32|microcontroller|board|controller|sketch|code)\b/i.test(String(instruction || ''));
+  if (asked) return res;
+  const have = new Set((circuit?.parts || []).filter(p => BOARD_TYPES.test(p.type)).map(p => p.id));
+  const banned = new Set(res.actions.filter(a => a?.op === 'add_part' && BOARD_TYPES.test(String(a.type || '')) && !have.size).map(a => a.id));
+  if (!banned.size) return res;
+  const actions = res.actions.filter(a => !(a?.op === 'add_part' && banned.has(a.id)) && !(a?.op === 'add_wire' && (banned.has(a.from?.part) || banned.has(a.to?.part))) && !(['move_part', 'rotate_part', 'set_prop', 'remove_part'].includes(a?.op) && banned.has(a.id)));
+  const note = ' (I left out the Arduino it suggested: a robot circuit does not need one unless you ask for it.)';
+  return { ...res, actions, code: null, explanation: `${String(res.explanation || '').replace(/\s+$/, '')}${note}` };
+}

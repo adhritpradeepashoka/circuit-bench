@@ -15,9 +15,10 @@ const isCustomSketch = src => { const t = String(src || '').replace(/\s+/g, ' ')
 import { hasHostedAi } from '../sim/session.mjs';
 import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
-import { applyCircuitActions } from '../core/ai-actions.js';
+import { applyCircuitActions, guardRoboticsBoards } from '../core/ai-actions.js';
 import { BOARD_SPECS } from '../core/boards.js';
 import { activeWorkspace } from '../core/workspaces.js';
+import { droneWiring } from '../core/drone-wiring.js';
 import { FORMAT, VERSION } from '../core/project.js';
 import { sidePanes } from './side-panes.js';
 
@@ -381,7 +382,7 @@ export function initAiPanel(editor, code, sim = null) {
     busy = true; sendBtn.disabled = true; saveChat(); render();
     try {
       const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
-      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : gatherContext(code, sim), history, workspace: activeWorkspace().id, ...(in3d ? { assembly: await asmApi.describe() } : {}) };
+      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().id, ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {
@@ -402,6 +403,7 @@ export function initAiPanel(editor, code, sim = null) {
         const m3 = { id: ++seq, role: 'assistant', text: res.explanation || (ops.length ? 'Here is the change.' : 'Done.'), summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
         if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); return;
       }
+      if (activeWorkspace().robotics) res = guardRoboticsBoards(res, text, circuit);
       await resolveNewParts(res);
       let check = { failed: null, fixed: 0 };
       if (res.code && !quick) { check = await selfCheck(res, args, circuit, text, history); res = check.res; }

@@ -520,3 +520,10 @@ test('in the Robotics workspace the assistant is told it is not an Arduino-only 
   const asm = { parts: 'p', instances: 'i', joints: 'j' };
   assert.match(buildPrompt({ ...base, assembly: asm, workspace: 'robotics' }), /Test tab does with this scene/); assert.doesNotMatch(buildPrompt({ ...base, assembly: asm }), /Test tab does with this scene/);
 });
+
+test('the AI is shown the drone wiring check, so "fix my circuit" fixes real wiring problems', async () => {
+  const { describeContext } = await import('../src/core/ai-prompt.js');
+  const t = describeContext({ drone: { present: true, fatal: null, problems: ['Motor 2 is not wired to the AIO, so it will not spin.'] } });
+  assert.match(t, /Motor 2 is not wired/); assert.match(t, /Do not add a flight-controller board/);
+  assert.equal(describeContext({ drone: { present: false } }), '');
+});
