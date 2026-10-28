@@ -39,7 +39,7 @@ export const BUILTIN_WORKSPACES = [
   },
   {
     format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: 'robotics', builtin: true, name: 'Robotics',
-    blurb: 'Import real parts, mark where they bolt together, and (soon) test the robot', author: 'CircuitBench', menuFirst: [], parts: [], robotics: true,
+    blurb: 'Import real parts, mark where they bolt together, and (soon) test the robot', author: 'CircuitBench', menuFirst: ['Drone', 'Motors'], parts: [], robotics: true,
     hint: { title: 'Build the circuit, then the robot', text: 'Circuit is the electronics, as always. Assembly is where you import 3D parts (STL, OBJ or glTF) and mark their holes, shafts and connectors. Test comes next.' },
     starter: { extra: [] },
   },
