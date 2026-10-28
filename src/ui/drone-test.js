@@ -157,7 +157,14 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
       motorBox.append(el('div', { className: 'fly-mrow' }, el('span', { className: 'fly-mname', textContent: `M${(wiring?.present && model.motors.length === 4 ? SLOT_POSITIONS.indexOf(motorName(m, i, 4)) : i) + 1} ${motorName(m, i, model.motors.length)} ${m.spin > 0 ? '↺' : '↻'}`, title: `This prop turns ${m.spin > 0 ? 'counter-clockwise' : 'clockwise'} seen from above` }), bar, info, slider)); rows.push({ bar: bar.firstChild, info, slider });
     });
   }
+  /** Never leave the Test tab blank: if reading or building the drone fails, say what went wrong. */
   function rebuild() {
+    try { rebuildInner(); } catch (e) {
+      console.error(e); model = null; sim = null; fc = null; try { if (rig) dispose(); } catch { /* nothing to remove */ } hud.hidden = true; empty.hidden = false;
+      empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('h3', { textContent: 'This drone could not be loaded' }), el('p', { textContent: `Something in the assembly could not be read (${e?.message || e}). Check the parts in Assembly, or tell us which part it was.` }), el('div', { className: 'asm-row' }, (() => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: 'Open Assembly' }); b.addEventListener('click', () => goAssembly()); return b; })())));
+    }
+  }
+  function rebuildInner() {
     const asm = getAsm(), mdl = droneFromAssembly(asm);
     if (!mdl.ok) { model = null; sim = null; fc = null; if (rig) dispose(); empty.hidden = false; empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('h3', { textContent: 'Nothing to fly yet' }), el('p', { textContent: mdl.error }), el('div', { className: 'asm-row' }, (() => { const b = el('button', { type: 'button', className: 'asm-btn primary', id: 'flyBuildExample', textContent: 'Build a 5-inch quad for me' }); b.addEventListener('click', async () => { b.disabled = true; b.textContent = 'Building…'; await buildExample(); await rebuild(); }); return b; })(), (() => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: 'Open Assembly' }); b.addEventListener('click', () => goAssembly()); return b; })()))); hud.hidden = true; return; }
     empty.hidden = true; hud.hidden = false; model = mdl; wiring = getWiring?.() || null; route = null;

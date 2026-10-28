@@ -88,7 +88,7 @@ export function droneFromAssembly(asm) {
   const missing = rows.length - live.length; if (missing) notes.push(`${missing} motor${missing > 1 ? 's have' : ' has'} no prop and will just spin its bell.`);
   const bd = bat.part.drone, battery = makeBattery({ cells: bd.cells, mAh: bd.mAh, c: bd.c });
   const cfgs = motors.map(m => { const md = m.inst.part.drone, pd = m.prop.part.drone; return { motor: makeMotor({ size: md.size, kv: md.kv, over: md.over }), prop: makeProp({ diameterIn: pd.dia, pitchIn: pd.pitch, blades: pd.blades }), propMassKg: m.prop.part.mass.grams / 1000 }; });
-  const board = mine.find(i => i.part.drone.kind === 'board' && ['esc', 'aio'].includes(i.part.drone.board.kind)), escAmps = board ? board.part.drone.board.maxAmps : null;
+  const board = mine.find(i => i.part.drone?.kind === 'board' && ['esc', 'aio'].includes(i.part.drone.board?.kind)), escAmps = board ? board.part.drone.board.maxAmps : null;
   const span = Math.max(...motors.map(m => Math.hypot(m.r[0], m.r[1]))), area = Math.PI * span * span;
   return {
     ok: true, notes, massKg: total, com, inertia: I, inertiaInv: invert3(I), battery, escAmps,

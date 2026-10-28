@@ -131,3 +131,8 @@ test('one current limit for all four speed controllers, so a limit never steers 
   const m = droneFromAssembly(buildQuad()), sim = new DroneSim(m); sim.escs[0].limit = 0.5; sim.step([1000, 1000, 1000, 1000]);
   assert.ok(sim.escs.every(e => Math.abs(e.limit - sim.escs[0].limit) < 0.05), sim.escs.map(e => e.limit).join());
 });
+test('a frame (or any part) that is not a generated drone part, such as one you imported, does not break reading the drone', async () => {
+  const { buildQuad } = await import('./helpers/quad.mjs');
+  const as = buildQuad({ boards: false }), f = as.instances.find(i => i.part.drone?.kind === 'frame'), { drone, ...rest } = f.part; f.part = { ...rest, id: 'my-frame', name: 'My own frame' };
+  const m = droneFromAssembly(as); assert.equal(m.ok, true); assert.equal(m.motors.length, 4); assert.ok(m.massKg > 0.2);
+});
