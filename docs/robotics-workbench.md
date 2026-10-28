@@ -48,3 +48,10 @@ The validator resolves every reference (joint→frame, actuator→joint, encoder
 3. Circuit link + motion (sketch drives servo joints).
 4. Human body model + alignment/torque checks.
 5. Authoring: import mesh/STEP, click-to-place frames, AI-drafted descriptions from datasheets, packs.
+
+## Physics test for any robot (built 2026-10-28)
+The Test tab picks what to run from what was built: motors with props → the drone flight sim (`core/drone-sim.js`, its own aerodynamics); anything else → the general robot physics (a switch on the page flips either way).
+- `core/robot-model.js` reads ANY assembly: rigid bodies from how parts are joined (`assembly-pose.js`), a hinge for every single-screw joint, masses and inertia from the parts, shapes from each part's own mesh points (the viewer supplies them; a box otherwise). A round part turning on its axle is found as a wheel and driven as a motor; every other hinge is a servo; "Free" is a hinge with no motor. A part held still in Assembly bolts the robot to the world (an arm on a bench); otherwise it is dropped on the floor. Forward is +Y (+X when the axles run along Y), and a wheel's positive direction is whichever drives forward.
+- `core/robot-sim.js` runs it on MuJoCo (`@mujoco/mujoco`, WebAssembly, lazy-loaded only when this tab opens, on the user's computer). Servos are position actuators slewed at 500°/s and capped at 0.18 N·m; wheels are velocity motors capped at 0.12 N·m. Parts collide with the floor only, not each other (so hulls that touch at rest do not jam), friction 1.0.
+- `core/robot-fc.js` is the sketch layer: a JS sketch with `servoWrite`, `motorWrite`, `angle`, `speed`, `imu()`, `height()`, `input()`, `slider(i)`, `jointSide(i)`. The built-in sketch follows the sliders and the arrow keys.
+- Not yet: closed loops (linkages) are left loose, no battery or current limits, no wiring from the Circuit tab, no sensors beyond IMU and joint angles, no contact or distance sensors, per-joint servo ratings (every servo is a typical 9 g one).

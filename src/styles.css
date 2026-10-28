@@ -1037,3 +1037,6 @@ body:not(.robot-asm) #robotParts { display: none; }
 .robot-asm .toolbar .status { visibility: hidden; }
 .robot-asm .toolbar .zoom-readout:disabled { opacity: .35; cursor: default; }
 .tool.active:disabled { background: none; box-shadow: none; }          /* a greyed-out tool should not also look pressed */
+
+.fly-switch { position: absolute; right: 12px; top: 12px; z-index: 4; }
+.fly-mrow select.asm-mini-sel { max-width: 130px; }

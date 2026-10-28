@@ -8,6 +8,7 @@ import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scen
 import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
+import { initRobotTest } from './robot-test.js';
 import { initDroneTest } from './drone-test.js';
 import { droneWiring } from '../core/drone-wiring.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
@@ -46,9 +47,10 @@ export function initAssembly({ editor, projects = null }) {
   stage.append(hint);
   const side = el('div', { className: 'asm-side' });
   const testPane = el('div', { className: 'asm-pane test-pane', hidden: true }, el('div', { className: 'asm-hint', textContent: 'Opening the flight test…' }));
-  canvas.append(pane, testPane);
-  for (const t of ['pointerdown', 'mousedown']) for (const el0 of [pane, testPane]) el0.addEventListener(t, e => e.stopPropagation());      // the circuit canvas starts a pan on press and cancels it, which closed every dropdown here
-  for (const t of ['wheel', 'touchmove']) { side.addEventListener(t, e => e.stopPropagation(), { passive: true }); testPane.addEventListener(t, e => e.stopPropagation(), { passive: true }); }      // the circuit canvas zooms on wheel; the side panel must just scroll
+  const robotPane = el('div', { className: 'asm-pane test-pane', hidden: true }, el('div', { className: 'asm-hint', textContent: 'Opening the physics test…' }));
+  canvas.append(pane, testPane, robotPane);
+  for (const t of ['pointerdown', 'mousedown']) for (const el0 of [pane, testPane, robotPane]) el0.addEventListener(t, e => e.stopPropagation());      // the circuit canvas starts a pan on press and cancels it, which closed every dropdown here
+  for (const t of ['wheel', 'touchmove']) { side.addEventListener(t, e => e.stopPropagation(), { passive: true }); testPane.addEventListener(t, e => e.stopPropagation(), { passive: true }); robotPane.addEventListener(t, e => e.stopPropagation(), { passive: true }); }      // the circuit canvas zooms on wheel; the side panel must just scroll
   pane.append(stage, side);
 
   // ── side panel ────────────────────────────────────────────────
@@ -816,14 +818,25 @@ export function initAssembly({ editor, projects = null }) {
   });
 
   // ── tabs ──────────────────────────────────────────────────────
-  let view = 'circuit', droneTest = null;
+  let view = 'circuit', droneTest = null, robotTest = null, testChoice = null;
+  /** A drone has motors (and props); anything else that is built is tested as a robot with physics. The person can switch either way. */
+  const autoKind = () => (asm.instances.some(i => i.part.drone?.kind === 'motor') || !asm.instances.length ? 'fly' : 'robot');
+  /** Every vertex of a part in the world (mm, flat x,y,z), for the physics shape. */
+  function hullPoints(inst) {
+    const out = [], t = three; if (!t || !inst.obj) return out; inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); const v = new t.THREE.Vector3();
+    inst.obj.traverse(o => { const pos = o.isMesh && o.geometry?.attributes?.position; if (!pos) return; for (let i = 0; i < pos.count && out.length < 1_500_000; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); out.push(v.x, v.y, v.z); } });
+    return out;
+  }
   async function show(v) {
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
     document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
-    pane.hidden = v !== 'assembly'; testPane.hidden = v !== 'test'; document.body.classList.toggle('robot-asm', v !== 'circuit');
-    if (v !== 'test') droneTest?.leave();
-    if (v === 'test') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare: async () => { await load3d(); await loadExamples(); await restoreSaved(); }, buildExample: buildExampleQuad, goAssembly: () => show('assembly') }); await droneTest.enter(); }
+    let kind = 'fly'; if (v === 'test') { await load3d(); await loadExamples(); await restoreSaved(); kind = testChoice || autoKind(); }
+    pane.hidden = v !== 'assembly'; testPane.hidden = !(v === 'test' && kind === 'fly'); robotPane.hidden = !(v === 'test' && kind === 'robot'); document.body.classList.toggle('robot-asm', v !== 'circuit');
+    if (!(v === 'test' && kind === 'fly')) droneTest?.leave(); if (!(v === 'test' && kind === 'robot')) robotTest?.leave();
+    const switchTo = k => { testChoice = k; show('test'); }, prepare = async () => { await load3d(); await loadExamples(); await restoreSaved(); };
+    if (v === 'test' && kind === 'fly') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare, buildExample: buildExampleQuad, goAssembly: () => show('assembly'), switchTo }); await droneTest.enter(); }
+    if (v === 'test' && kind === 'robot') { robotTest ||= initRobotTest({ host: robotPane, getAsm: () => asm, getAnchor: () => anchorId, getHull: hullPoints, prepare, goAssembly: () => show('assembly'), switchTo }); await robotTest.enter(); }
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v); syncTop();
   }

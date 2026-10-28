@@ -1,7 +1,7 @@
 {
   "name": "circuit-bench",
   "version": "0.1.0",
-  "description": "CircuitBench \u2014 browser-based virtual electronics lab: circuit editor + real Arduino firmware (Arduino CLI) running on a simulated ATmega328P (avr8js)",
+  "description": "CircuitBench — browser-based virtual electronics lab: circuit editor + real Arduino firmware (Arduino CLI) running on a simulated ATmega328P (avr8js)",
   "scripts": {
     "dev": "vite",
     "server": "node server/server.mjs",
@@ -9,7 +9,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "build:single": "SINGLE=1 vite build",
-    "test": "node --test test/blocks.test.mjs test/classes.test.mjs test/core.test.mjs test/firmware.test.mjs test/compile-client.test.mjs test/server.test.mjs test/doctor.test.mjs test/ui-smoke.test.mjs test/ai.test.mjs test/bench-lang.test.mjs test/quick-edits.test.mjs test/tiny-model.test.mjs test/part-art.test.mjs test/community.test.mjs test/accounts.test.mjs test/webllm.test.mjs test/ai-actions.test.mjs test/projects.test.mjs test/i2c.test.mjs test/boards.test.mjs test/rp2040.test.mjs test/uno-r4.test.mjs test/components.test.mjs test/custom-parts.test.mjs test/library-parts.test.mjs test/kicad-import.test.mjs test/body-sites.test.mjs test/slime.test.mjs test/hookups.test.mjs test/multiboard.test.mjs test/calculator.test.mjs test/learned.test.mjs test/robot-part.test.mjs test/assembly-draft.test.mjs test/hole-finder.test.mjs test/example-parts.test.mjs test/assembly-scene.test.mjs test/assembly-pose.test.mjs test/drone.test.mjs test/drone-sim.test.mjs test/drone-models.test.mjs test/drone-wiring.test.mjs test/cloud-projects.test.mjs test/cloud-sync.test.mjs test/assembly-actions.test.mjs test/subject.test.mjs",
+    "test": "node --test test/blocks.test.mjs test/classes.test.mjs test/core.test.mjs test/firmware.test.mjs test/compile-client.test.mjs test/server.test.mjs test/doctor.test.mjs test/ui-smoke.test.mjs test/ai.test.mjs test/bench-lang.test.mjs test/quick-edits.test.mjs test/tiny-model.test.mjs test/part-art.test.mjs test/community.test.mjs test/accounts.test.mjs test/webllm.test.mjs test/ai-actions.test.mjs test/projects.test.mjs test/i2c.test.mjs test/boards.test.mjs test/rp2040.test.mjs test/uno-r4.test.mjs test/components.test.mjs test/custom-parts.test.mjs test/library-parts.test.mjs test/kicad-import.test.mjs test/body-sites.test.mjs test/slime.test.mjs test/hookups.test.mjs test/multiboard.test.mjs test/calculator.test.mjs test/learned.test.mjs test/robot-part.test.mjs test/assembly-draft.test.mjs test/hole-finder.test.mjs test/example-parts.test.mjs test/assembly-scene.test.mjs test/assembly-pose.test.mjs test/drone.test.mjs test/drone-sim.test.mjs test/drone-models.test.mjs test/drone-wiring.test.mjs test/robot-sim.test.mjs test/cloud-projects.test.mjs test/cloud-sync.test.mjs test/assembly-actions.test.mjs test/subject.test.mjs",
     "extract-pins": "node scripts/extract-pins.mjs",
     "extract-native-pins": "node scripts/extract-native-pins.mjs",
     "build-firmware": "node scripts/build-firmware.mjs",
@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@mlc-ai/web-llm": "0.2.86",
+    "@mujoco/mujoco": "^3.17.0",
     "@wokwi/elements": "^1.9.2",
     "avr8js": "^0.21.1",
     "blockly": "^13.4.0",

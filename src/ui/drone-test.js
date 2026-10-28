@@ -12,7 +12,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 const MODES = [['angle', 'Level (self-levelling)'], ['althold', 'Hold height'], ['acro', 'Rate (acro)']];
 const motorName = (m, i, n) => (n === 4 ? `${m.r[1] >= 0 ? 'front' : 'back'} ${m.r[0] >= 0 ? 'right' : 'left'}` : `motor ${i + 1}`);
 
-export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, goAssembly }) {
+export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, goAssembly, switchTo }) {
   host.replaceChildren();
   const stage = el('div', { className: 'asm-stage fly-stage' }), side = el('div', { className: 'asm-side fly-side' });
   host.append(stage, side); host.classList.add('fly-pane');
@@ -33,7 +33,8 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
     box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up); s.show(0, 0); return s;
   }
   const left = stick('Throttle · turn', { springY: false }), right = stick('Forward / back · left / right', { springY: true });
-  stage.append(hud, msg, empty, el('div', { className: 'fly-sticks' }, left.box, right.box));
+  const switchBtn = el('button', { type: 'button', className: 'asm-btn fly-switch', id: 'flySwitch', textContent: 'Test it as a robot (physics) instead', title: 'Gravity, a floor and joints, for a dog, a car or an arm' }); switchBtn.addEventListener('click', () => switchTo?.('robot'));
+  stage.append(hud, msg, empty, switchBtn, el('div', { className: 'fly-sticks' }, left.box, right.box));
 
   /* ── the side panel ── */
   const armBtn = el('button', { type: 'button', className: 'asm-btn primary fly-arm', id: 'flyArm', textContent: 'Arm  (Space)' });
