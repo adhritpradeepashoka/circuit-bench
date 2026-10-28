@@ -616,9 +616,18 @@ export function initAssembly({ editor, projects = null }) {
   function setJoin(on) { joinMode = on; joinFirst = null; if (on) { spotMode = false; spotBtn.classList.remove('on'); } joinBtn.classList.toggle('on', on); render(); }
   /** Lower the whole model, joined or not, until its lowest point rests on the floor. Nothing moves relative to anything else. */
   function dropAll() {
-    if (!asm.instances.length || !three) return; const B = new three.THREE.Box3(); for (const i of asm.instances) { i.obj.updateMatrixWorld(true); B.expandByObject(i.obj); }
-    const dz = -B.min.z; if (Math.abs(dz) < 0.01) return bsay('The whole model is already on the floor.');
-    keep(); for (const i of asm.instances) i.T.t[2] += dz; applyScene(); bsay(`Dropped the whole model ${dz > 0 ? 'down' : 'up'} ${Math.abs(dz).toFixed(1)} mm onto the floor.`);
+    if (!asm.instances.length || !three) return;
+    let levelled = 0;                                                                           // a drone that is tilted is stood level first (motors pointing up), then dropped
+    const ms = asm.instances.filter(i => i.part.drone?.kind === 'motor' && i.part.frames.some(f => f.id === 'shaft'));
+    if (ms.length) {
+      const avg = ms.reduce((a, m) => { const d = worldFrame(m, m.part.frames.find(f => f.id === 'shaft')).dir; return [a[0] + d[0], a[1] + d[1], a[2] + d[2]]; }, [0, 0, 0]), l = Math.hypot(...avg);
+      if (l > 1e-6) { const u = avg.map(v => v / l), tilt = Math.acos(Math.max(-1, Math.min(1, u[2]))) * 180 / Math.PI;
+        if (tilt > 0.3) { const ax = [u[1], -u[0], 0], al = Math.hypot(ax[0], ax[1]) || 1, c = asm.instances.reduce((a, i) => [a[0] + i.T.t[0] / asm.instances.length, a[1] + i.T.t[1] / asm.instances.length, a[2] + i.T.t[2] / asm.instances.length], [0, 0, 0]);
+          keep(); for (const i of asm.instances) turn(i, tilt > 179.7 ? [1, 0, 0] : [ax[0] / al, ax[1] / al, 0], c, tilt); levelled = tilt; applyScene(); } }
+    }
+    const B = new three.THREE.Box3(); for (const i of asm.instances) { i.obj.updateMatrixWorld(true); B.expandByObject(i.obj); }
+    const dz = -B.min.z; if (Math.abs(dz) < 0.01) return bsay(levelled ? `Stood the model level (it was tilted ${levelled.toFixed(0)}°); it is on the floor.` : 'The whole model is already on the floor.');
+    if (!levelled) keep(); for (const i of asm.instances) i.T.t[2] += dz; applyScene(); bsay(`${levelled ? `Stood level (was tilted ${levelled.toFixed(0)}°) and dropped` : 'Dropped'} the whole model ${dz > 0 ? 'down' : 'up'} ${Math.abs(dz).toFixed(1)} mm onto the floor.`);
   }
   function setSpot(on) { spotMode = on; if (on) { joinMode = false; joinFirst = null; joinBtn.classList.remove('on'); } spotBtn.classList.toggle('on', on); if (on) bsay('Click anywhere on a part to add a connection spot there (it faces away from the surface you click). Click a spot to remove it. Then press Join holes and click two spots to fasten the parts.'); render(); }
   /** Add (or take away) a connection spot where the surface was clicked: a joinable point with no hole, so parts can be fastened with glue, tape or a clip. */
