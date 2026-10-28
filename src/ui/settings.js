@@ -4,18 +4,24 @@ import { themesFor, FONTS, getTheme, setTheme, getCustom, setCustom } from './th
 import { initAdmin } from './admin.js';
 import { cachedModels, deleteLocalModels } from '../sim/webllm.mjs';
 import { PROVIDER_IDS, setStoredKey } from '../sim/ai-client.mjs';
+import { createKeySync, syncOn, setSyncOn } from '../sim/key-sync.mjs';
+import { getToken } from '../sim/session.mjs';
 
 export function initSettings({ tour, ai, status = () => {} }) {
   const $ = id => document.getElementById(id);
   const modal = $('settingsModal');
   const admin = initAdmin();
+  const keySync = createKeySync({ onChange: n => { ai.refresh(); status(`Brought ${n} API key${n > 1 ? 's' : ''} from your account`); }, say: t => status(t) });
+  const paintKeySync = () => { $('setKeySync').checked = syncOn(); $('setKeySync').disabled = !getToken() && !syncOn(); };
+  $('setKeySync').addEventListener('change', async e => { setSyncOn(e.target.checked); if (e.target.checked) { if (!getToken()) { setSyncOn(false); e.target.checked = false; return status('Sign in first (top bar), then turn this on'); } status('Syncing your keys…'); const r = await keySync.sync(); status(r ? 'Your keys now follow your account' : 'Could not reach the key sync. Try again in a moment.'); } });
+  addEventListener('cb-keys-changed', () => keySync.changed()); addEventListener('cb-session', () => { paintKeySync(); keySync.sync(); }); addEventListener('focus', () => keySync.sync()); setTimeout(() => keySync.sync(), 2000);
   async function paintModel() {
     const have = await cachedModels();
     $('setModelInfo').textContent = have.length ? `Downloaded on this device: ${have.map(i => i.replace(/-q\d.*$/, '')).join(', ')}. You can delete it any time.` : 'Nothing is downloaded. The on-device model (about 1.6 GB, once) only downloads if you choose “On this device” above.';
     $('setDeleteModel').disabled = !have.length;
   }
   $('setDeleteModel').addEventListener('click', async () => { $('setDeleteModel').disabled = true; const n = await deleteLocalModels(); status(n ? `Deleted ${n} downloaded model${n > 1 ? 's' : ''}` : 'No downloaded models found'); ai.refresh(); paintModel(); });
-  const open = () => { admin.load(); paintModel(); paintThemes(); modal.hidden = false; $('settingsClose').focus(); };
+  const open = () => { paintKeySync(); admin.load(); paintModel(); paintThemes(); modal.hidden = false; $('settingsClose').focus(); };
   const close = () => { modal.hidden = true; };
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 
@@ -45,6 +51,6 @@ export function initSettings({ tour, ai, status = () => {} }) {
   $('setGuide').addEventListener('click', () => { close(); tour.startGuide(); });
   $('setHint').addEventListener('click', () => { const c = $('hintCard'); if (c) c.hidden = false; close(); });
   $('setClearChat').addEventListener('click', () => { ai.clearChat(); status('AI chat history cleared'); });
-  $('setForgetKeys').addEventListener('click', () => { for (const p of PROVIDER_IDS) setStoredKey('', p); ai.refresh(); status('All saved API keys removed from this browser'); });
+  $('setForgetKeys').addEventListener('click', async () => { const was = syncOn(); setSyncOn(false); for (const p of PROVIDER_IDS) setStoredKey('', p); ai.refresh(); const gone = was && await keySync.forget(); setSyncOn(was && !gone); paintKeySync(); status(gone ? 'All saved API keys removed from this browser and your account' : 'All saved API keys removed from this browser'); });
   return { open, close, get isOpen() { return !modal.hidden; } };
 }

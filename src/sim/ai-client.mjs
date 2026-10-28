@@ -27,13 +27,14 @@ export function setStoredKey(key, provider = getStoredProvider()) {
     if (provider === getStoredProvider()) localStorage.removeItem(KEY_STORAGE);      // fold the old single key into the per-provider one
     key ? localStorage.setItem(`${KEY_STORAGE}:${provider}`, key) : localStorage.removeItem(`${KEY_STORAGE}:${provider}`);
   } catch { /* ignore */ }
+  try { globalThis.dispatchEvent?.(new Event('cb-keys-changed')); } catch { /* ignore */ }
 }
 /** True when the student has saved their own key for any hosted provider. */
 export const hasAnyKey = () => PROVIDER_IDS.some(p => !!getStoredKey(p));
 export const providersWithKeys = () => PROVIDER_IDS.filter(p => !!getStoredKey(p));
 /** An optional model id the student typed for a provider ('' = use the built-in list). */
 export function getStoredModel(provider = getStoredProvider()) { try { return localStorage.getItem(MODEL_STORAGE + provider) || ''; } catch { return ''; } }
-export function setStoredModel(model, provider = getStoredProvider()) { try { model ? localStorage.setItem(MODEL_STORAGE + provider, model) : localStorage.removeItem(MODEL_STORAGE + provider); } catch { /* ignore */ } }
+export function setStoredModel(model, provider = getStoredProvider()) { try { model ? localStorage.setItem(MODEL_STORAGE + provider, model) : localStorage.removeItem(MODEL_STORAGE + provider); } catch { /* ignore */ } try { globalThis.dispatchEvent?.(new Event('cb-keys-changed')); } catch { /* ignore */ } }
 
 const noReply = status => (status === 502 || status === 503 || status === 504 ? `The AI took too long and the server gave up (HTTP ${status}). Try again, or switch provider with the menu under the chat box — Groq is usually the quickest.` : `No usable response (HTTP ${status}).`);
 

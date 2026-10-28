@@ -1040,3 +1040,6 @@ body:not(.robot-asm) #robotParts { display: none; }
 
 .fly-switch { position: absolute; right: 12px; top: 12px; z-index: 4; }
 .fly-mrow select.asm-mini-sel { max-width: 130px; }
+
+.set-check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.set-check input { margin-top: 3px; }

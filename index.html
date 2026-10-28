@@ -352,6 +352,10 @@
         <p class="proj-note" id="adminNote" role="status"></p>
         <div class="admin-list" id="adminList"></div>
       </section>
+      <section class="set-sec"><h3>API keys</h3>
+        <label class="set-check"><input type="checkbox" id="setKeySync"> Keep my API keys with my account, so they follow me to other web addresses and devices</label>
+        <p class="proj-note" id="setKeySyncNote">Off by default. When on, your keys are encrypted on CircuitBench's server and only sent back to you. Sign in (top bar) to use it. "Remove all saved API keys" below also clears the synced copy.</p>
+      </section>
       <section class="set-sec"><h3>Other</h3>
         <div class="set-actions">
           <button type="button" class="proj-act" id="setTour">Replay the tour</button>
@@ -360,7 +364,7 @@
           <button type="button" class="proj-act" id="setClearChat">Clear AI chat history</button>
           <button type="button" class="proj-act" id="setForgetKeys">Remove all saved API keys</button>
         </div>
-        <p class="proj-note">Signing in with Google (top bar) only shows your name here; projects and keys stay in this browser.</p>
+        <p class="proj-note">Signing in with Google (top bar) syncs your projects across devices. API keys stay in this browser unless you turn on key sync above.</p>
       </section>
     </div>
   </div>
