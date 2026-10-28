@@ -136,7 +136,8 @@ export class Assembly {
     const wa = worldFrame(A, fa), wb = worldFrame(B, fb), gap = Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]), tilt = dot(wa.dir, wb.dir);
     if (gap > 0.05 || tilt > -0.999) { notes.push(`These frames have come apart (${gap.toFixed(2)} mm off); mate them again.`); level = 'bad'; }
     const da = fa.diameter, db = fb.diameter, est = [fa, fb].some(f => f.source === 'estimated');
-    if (da && db) {
+    if (fa.custom || fb.custom) notes.push('Joined at a connection spot, with no screw: hold it with glue, tape, a zip tie or a clip.');
+    else if (da && db) {
       const small = Math.min(da, db), s = m.screw || screwFor(small);
       if (Math.abs(da - db) > 0.4) { notes.push(`Hole sizes differ by ${Math.abs(da - db).toFixed(1)} mm (${da} and ${db}).`); if (level === 'ok') level = 'warn'; }
       if (m.screw) { const cl = THREADS[m.screw]?.[1]; if (cl && cl > small + 0.05) { notes.push(`${m.screw.replace('_', '.')} needs a ${cl} mm hole; the smaller hole is ${small} mm.`); level = 'bad'; } }

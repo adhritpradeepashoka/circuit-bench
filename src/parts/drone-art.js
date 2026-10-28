@@ -45,7 +45,7 @@ function motor(spec, w, h, pins) {
   const mags = Array.from({ length: 12 }, (_, i) => { const a = i * Math.PI / 6; return `<rect x="${(cx + Math.cos(a) * (R - 6) - 2.6).toFixed(1)}" y="${(cy + Math.sin(a) * (R - 6) - 2.6).toFixed(1)}" width="5.2" height="5.2" rx="1" transform="rotate(${i * 30} ${(cx + Math.cos(a) * (R - 6)).toFixed(1)} ${(cy + Math.sin(a) * (R - 6)).toFixed(1)})" fill="${i % 2 ? '#8e949c' : '#5b6068'}"/>`; }).join('');
   return svg(w, h, `${lines}<circle cx="${cx}" cy="${cy}" r="${R}" fill="#23272d" stroke="#0a0c0f" stroke-width="1.4"/><circle cx="${cx}" cy="${cy}" r="${R - 3}" fill="none" stroke="${col}" stroke-width="3"/>${mags}
     <circle cx="${cx}" cy="${cy}" r="${R - 14}" fill="#2f343b" stroke="#111"/><circle cx="${cx}" cy="${cy}" r="9" fill="#9aa1a9" stroke="#444"/><circle cx="${cx}" cy="${cy}" r="3.2" fill="#2a2d33"/>
-    <rect x="${cx - 14}" y="${cy + 15}" width="28" height="11" rx="2.5" fill="${col}"/><text x="${cx}" y="${cy + 23.4}" text-anchor="middle" font-size="7.4" font-family="sans-serif" font-weight="800" fill="${spec.textColor}">${esc(spec.label.replace('MOTOR ', ''))}</text>
+    <rect x="${cx - 14}" y="${cy + 15}" width="28" height="11" rx="2.5" fill="${col}"/><text x="${cx}" y="${cy + 23.4}" text-anchor="middle" font-size="7.4" font-family="sans-serif" font-weight="800" fill="${spec.textColor}">M</text>
     <text x="${cx}" y="${cy - 19}" text-anchor="middle" font-size="5.2" font-family="sans-serif" fill="#c8ced6">brushless</text>`);
 }
 

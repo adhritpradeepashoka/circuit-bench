@@ -4,7 +4,8 @@
 const T = id => `custom-${id}`;
 /** AIO motor outputs M1…M4 are numbered as in Betaflight. */
 export const SLOT_POSITIONS = ['back right', 'front right', 'back left', 'front left'];
-const MOTOR_POS = { 'drone-motor-fr': 'front right', 'drone-motor-fl': 'front left', 'drone-motor-bl': 'back left', 'drone-motor-br': 'back right' };
+// (every drone motor is the same part: the AIO output its wires go to decides where it sits on the drone)
+const IS_MOTOR = t => /^custom-drone-motor(-(fr|fl|bl|br))?$/.test(t);
 const AIO_PINS = ['BAT+', 'BAT-', '5V', 'G', 'CAM', ...[1, 2, 3, 4].flatMap(k => ['A', 'B', 'C'].map(l => `M${k}${l}`))];
 
 export function droneWiring(state) {
@@ -20,20 +21,21 @@ export function droneWiring(state) {
   if (joined(key(aio.id, 'BAT+'), key(aio.id, 'BAT-'))) fatal = 'Short circuit: BAT+ and BAT− are joined by a wire. Take it off before you connect the battery.';
   else if (!bat || !joined(key(bat.id, '+'), key(aio.id, 'BAT+')) || !joined(key(bat.id, '-'), key(aio.id, 'BAT-'))) fatal = bat && (joined(key(bat.id, '+'), key(aio.id, 'BAT-')) || joined(key(bat.id, '-'), key(aio.id, 'BAT+'))) ? 'The battery is plugged in the wrong way round (+ to −). That would destroy the board: swap its two wires.' : 'The battery is not wired to the AIO. Connect the battery + to BAT+ and − to BAT−.';
 
-  for (const m of parts.filter(p => MOTOR_POS[p.type.replace(/^custom-/, '')])) {
-    const pos = MOTOR_POS[m.type.replace(/^custom-/, '')], land = ['A', 'B', 'C'].map(w => onAio(m.id, w).filter(id => /^M[1-4][ABC]$/.test(id)));
-    if (land.every(l => l.length === 0)) { problems.push(`The ${pos} motor is not wired to the AIO, so it will not spin.`); loose[pos] = true; continue; }
-    if (land.some(l => l.length === 0)) { problems.push(`The ${pos} motor has a wire that is not soldered to a pad (it needs all three), so it will not spin properly.`); loose[pos] = true; continue; }
-    if (land.some(l => l.length > 1)) { problems.push(`The ${pos} motor has two of its wires on the same pad.`); loose[pos] = true; continue; }
+  const motors = parts.filter(p => IS_MOTOR(p.type)); let n = 0;
+  for (const m of motors) {
+    n++; const who = `Motor ${n}`, land = ['A', 'B', 'C'].map(w => onAio(m.id, w).filter(id => /^M[1-4][ABC]$/.test(id)));
+    if (land.every(l => l.length === 0)) { problems.push(`${who} is not wired to the AIO, so it will not spin.`); loose[who] = true; continue; }
+    if (land.some(l => l.length === 0)) { problems.push(`${who} has a wire that is not soldered to a pad (it needs all three), so it will not spin properly.`); loose[who] = true; continue; }
+    if (land.some(l => l.length > 1)) { problems.push(`${who} has two of its wires on the same pad.`); loose[who] = true; continue; }
     const outs = new Set(land.map(l => l[0][1])), letters = land.map(l => l[0][2]);
-    if (outs.size > 1) { problems.push(`The ${pos} motor's wires go to different motor outputs (${[...outs].map(o => `M${o}`).join(', ')}), so it will not spin.`); loose[pos] = true; continue; }
-    if (new Set(letters).size < 3) { problems.push(`The ${pos} motor has two wires on the same pad.`); loose[pos] = true; continue; }
-    const perm = letters.map(l => 'ABC'.indexOf(l)), inversions = (perm[0] > perm[1]) + (perm[0] > perm[2]) + (perm[1] > perm[2]);
-    slotOf[pos] = Number([...outs][0]) - 1;
-    if (inversions % 2) { reversed[pos] = true; problems.push(`The ${pos} motor has two wires swapped, so it spins the wrong way. Swap any two of its wires, or reverse it in the ESC settings.`); }
+    if (outs.size > 1) { problems.push(`${who}'s wires go to different motor outputs (${[...outs].map(o => `M${o}`).join(', ')}), so it will not spin.`); loose[who] = true; continue; }
+    if (new Set(letters).size < 3) { problems.push(`${who} has two wires on the same pad.`); loose[who] = true; continue; }
+    const slot = Number([...outs][0]) - 1, pos = SLOT_POSITIONS[slot], perm = letters.map(l => 'ABC'.indexOf(l)), inversions = (perm[0] > perm[1]) + (perm[0] > perm[2]) + (perm[1] > perm[2]);
+    if (pos in slotOf) { problems.push(`Two motors are on the same AIO output (M${slot + 1}).`); continue; }
+    slotOf[pos] = slot;
+    if (inversions % 2) { reversed[pos] = true; problems.push(`The ${pos} motor (on M${slot + 1}) has two wires swapped, so it spins the wrong way. Swap any two of its wires, or reverse it in the ESC settings.`); }
   }
-  const used = Object.values(slotOf); if (new Set(used).size < used.length) problems.push('Two motors are on the same AIO output.');
-  for (const [pos, s] of Object.entries(slotOf)) if (SLOT_POSITIONS[s] !== pos) problems.push(`The ${pos} motor is on M${s + 1}, which the flight controller treats as the ${SLOT_POSITIONS[s]} one. Expect strange flying.`);
+  if (motors.length && motors.length < 4) problems.push(`Only ${motors.length} motor${motors.length > 1 ? 's are' : ' is'} on the bench; a quadcopter needs four.`);
 
   const cam = parts.find(p => p.type === T('drone-camera')); let camera = false;
   if (cam) {

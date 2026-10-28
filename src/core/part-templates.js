@@ -42,10 +42,10 @@ export const TEMPLATES = [
       ...[['M4', 26, 40], ['M2', 146, 40], ['M3', 26, 160], ['M1', 146, 160]].flatMap(([m, x, y]) => ['A', 'B', 'C'].map((l, i) => ({ id: `${m}${l}`, label: `Motor ${m} pad ${l}`, x: x + i * 14, y }))),
       { id: '5V', label: 'Camera power 5 V', x: 24, y: 88 }, { id: 'G', label: 'Camera ground', x: 24, y: 102 }, { id: 'CAM', label: 'Camera video in', x: 24, y: 116 }],
     sprite: { art: 'drone-aio', w: 200, h: 200, note: 'FC + 4-in-1 ESC' }, behaviour: { kind: 'none' } },
-  ...[['fr', 'FR', 'front right', '#a33232'], ['fl', 'FL', 'front left', '#2f5fa6'], ['bl', 'BL', 'back left', '#2f8a5a'], ['br', 'BR', 'back right', '#b08a22']].map(([k, lab, pos, col]) => ({ group: 7, id: `drone-motor-${k}`, name: `Drone motor — ${pos}`, label: `MOTOR ${lab}`, color: col, textColor: '#ffffff', package: 'sprite', breadboard: false,
-    description: `The ${pos} brushless motor, with its three wires. Solder A, B, C to the three pads of one AIO motor output, in order. Swapping two wires makes it spin the other way, and then the drone will not fly properly.`,
+  { group: 7, id: 'drone-motor', name: 'Drone motor', label: 'MOTOR', color: '#2f5fa6', textColor: '#ffffff', package: 'sprite', breadboard: false,
+    description: 'A brushless drone motor with its three wires. Solder A, B, C to the three pads of one AIO motor output, in order. The output you pick sets where it sits on the drone: M1 back right, M2 front right, M3 back left, M4 front left (as in Betaflight). Swapping two of its wires makes it spin the other way, and then the drone will not fly properly. Its size (0802, 2207 …) is chosen in the Assembly tab.',
     pins: [{ id: 'A', label: 'Wire A (blue)', x: 192, y: 26 }, { id: 'B', label: 'Wire B (yellow)', x: 192, y: 42 }, { id: 'C', label: 'Wire C (white)', x: 192, y: 58 }],
-    sprite: { art: 'drone-motor', w: 200, h: 84 }, behaviour: { kind: 'none' } })),
+    sprite: { art: 'drone-motor', w: 200, h: 84 }, behaviour: { kind: 'none' } },
   { group: 7, id: 'drone-battery', name: 'Drone LiPo battery', label: 'LIPO', color: '#1d2a40', textColor: '#ffffff', package: 'sprite', breadboard: false,
     description: 'The flight battery with its XT30 / XT60 plug. Red (+) to BAT+ and black (−) to BAT− on the AIO. Joining + to − makes a short circuit. The number of cells and the capacity come from the battery in your Assembly.',
     pins: [{ id: '+', label: 'Positive (red)', x: 184, y: 26 }, { id: '-', label: 'Negative (black)', x: 184, y: 52 }], sprite: { art: 'drone-battery', w: 190, h: 78, note: 'flight battery' }, behaviour: { kind: 'none' } },
@@ -148,7 +148,7 @@ function chipCounter() {
 
 /** Common parts that ship in the default catalogue (sidebar) instead of the Part Creator's template list: template id → sidebar category. */
 export const POPULAR = {
-  'drone-aio': 'Drone', 'drone-motor-fr': 'Drone', 'drone-motor-fl': 'Drone', 'drone-motor-bl': 'Drone', 'drone-motor-br': 'Drone', 'drone-battery': 'Drone', 'drone-camera': 'Drone',
+  'drone-aio': 'Drone', 'drone-motor': 'Drone', 'drone-battery': 'Drone', 'drone-camera': 'Drone',
   'stepper': 'Motors', 'fan': 'Motors',
   'hall': 'Sensors',
   'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors', 'opamp-lm358': 'Semiconductors', 'opamp-rr': 'Semiconductors', 'opamp-tl07x': 'Semiconductors', 'opamp-op07': 'Semiconductors', 'opamp-741': 'Semiconductors', 'inamp-ina128': 'Semiconductors', 'bioamp-exg-pill': 'Biosignal', 'signal-source': 'Biosignal', 'slime-mold': 'Biosignal',

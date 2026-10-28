@@ -8,13 +8,13 @@ const P = (id, type) => ({ id, type: `custom-${type}` }), W = (a, ap, b, bp) => 
 const GOOD = { fr: 2, fl: 4, bl: 3, br: 1 };      // Betaflight order: M1 back right, M2 front right, M3 back left, M4 front left
 const motorWires = (k, out, order = 'ABC') => ['A', 'B', 'C'].map((l, i) => W(k, l, 'aio', `M${out}${order[i]}`));
 const bench = ({ map = GOOD, orders = {}, drop = [], cam = true } = {}) => ({
-  parts: [P('aio', 'drone-aio'), P('bat', 'drone-battery'), P('cam', 'drone-camera'), ...Object.keys(GOOD).map(k => P(k, `drone-motor-${k}`))],
+  parts: [P('aio', 'drone-aio'), P('bat', 'drone-battery'), P('cam', 'drone-camera'), ...Object.keys(GOOD).map(k => P(k, 'drone-motor'))],
   wires: [W('bat', '+', 'aio', 'BAT+'), W('bat', '-', 'aio', 'BAT-'), ...(cam ? [W('cam', '5V', 'aio', '5V'), W('cam', 'GND', 'aio', 'G'), W('cam', 'VID', 'aio', 'CAM')] : []),
     ...Object.entries(map).flatMap(([k, out]) => motorWires(k, out, orders[k] || 'ABC'))].filter(w => !drop.includes(`${w.a.part}.${w.a.pin}`)),
 });
 
 test('the drone parts are real sprites with a pin on every pad and wire tip', () => {
-  const ts = TEMPLATES.filter(t => t.id.startsWith('drone-')); assert.equal(ts.length, 7);
+  const ts = TEMPLATES.filter(t => t.id.startsWith('drone-')); assert.equal(ts.length, 4);
   for (const t of ts) { const { id, group, ...raw } = t; const v = validatePartSpec({ ...raw, id: `custom-${id}` }); assert.ok(v.ok, `${id}: ${v.errors}`); assert.equal(v.spec.package, 'sprite'); const l = layoutSpec(v.spec); assert.ok(l.pins.every(p => p.x >= 0 && p.x <= l.w && p.y >= 0 && p.y <= l.h), id); }
   const aio = TEMPLATES.find(t => t.id === 'drone-aio'); assert.equal(aio.pins.length, 2 + 12 + 3);
 });
@@ -23,8 +23,9 @@ test('correct wiring: every motor on its own output, none reversed, camera on', 
   const w = droneWiring(bench()); assert.equal(w.present, true); assert.deepEqual(w.problems, []); assert.equal(w.fatal, null); assert.equal(w.camera, true);
   assert.deepEqual(w.reversed, {}); assert.deepEqual(SLOT_POSITIONS.map(p => w.slotOf[p]), [0, 1, 2, 3]);
 });
-test('two motors on each other\'s outputs are reported', () => {
-  const w = droneWiring(bench({ map: { ...GOOD, fr: 4, fl: 2 } })); assert.equal(w.slotOf['front right'], 3); assert.equal(w.slotOf['front left'], 1); assert.ok(w.problems.some(p => /strange flying/.test(p)));
+test('two motors on one output are reported, and fewer than four motors is flagged', () => {
+  const w = droneWiring(bench({ map: { ...GOOD, fr: 4, fl: 4 } })); assert.ok(w.problems.some(p => /same AIO output \(M4\)/.test(p))); assert.equal(w.slotOf['front left'], 3);
+  assert.ok(droneWiring({ ...bench(), parts: bench().parts.filter(p => p.id !== 'br') }).problems.some(p => /Only 3 motors/.test(p)));
 });
 test('swapping two wires of a motor reverses it; a rotation of the three does not', () => {
   assert.deepEqual(droneWiring(bench({ orders: { br: 'BAC' } })).reversed, { 'back right': true });
@@ -32,9 +33,8 @@ test('swapping two wires of a motor reverses it; a rotation of the three does no
   assert.ok(droneWiring(bench({ orders: { fl: 'CBA' } })).problems.some(p => /wrong way/.test(p)));
 });
 test('a loose motor wire, a motor on two outputs, a missing motor', () => {
-  const w = droneWiring(bench({ drop: ['br.B'] })); assert.equal(w.loose['back right'], true); assert.equal(w.slotOf['back right'], undefined); assert.ok(w.problems.some(p => /not soldered/.test(p)));
+  const w = droneWiring(bench({ drop: ['br.B'] })); assert.equal(w.loose['Motor 4'], true); assert.equal(w.slotOf['back right'], undefined); assert.ok(w.problems.some(p => /not soldered/.test(p)));
   const b = bench(); b.wires = b.wires.filter(x => !(x.a.part === 'fl' && x.a.pin === 'C')).concat(W('fl', 'C', 'aio', 'M1C')); assert.ok(droneWiring(b).problems.some(p => /different motor outputs/.test(p)));
-  assert.ok(droneWiring({ ...bench(), parts: bench().parts.filter(p => p.id !== 'br') }).present);
 });
 test('battery: missing, reversed and shorted are caught', () => {
   assert.match(droneWiring({ ...bench(), wires: bench().wires.filter(w => w.a.part !== 'bat') }).fatal, /not wired/);

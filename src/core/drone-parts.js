@@ -81,7 +81,7 @@ export function makeDronePart(id) {
 /** Parts offered ready-made in the list (the builder makes the rest). */
 export const DRONE_PRESETS = [
   ['Tiny whoop 75 mm (3-prong 0802 motors)', 'frame-quad-75-t6.6-16'], ['Whoop frame 65 mm', 'frame-quad-65-9-16'], ['3 inch frame 142 mm', 'frame-quad-142-12-20'], ['5 inch frame 220 mm', 'frame-quad-220-16-30.5'], ['7 inch frame 300 mm', 'frame-quad-300-16-30.5'],
-  ['Motor 0802 22000Kv (1S whoop)', 'motor-0802-22000'], ['Motor 1404 4600Kv', 'motor-1404-4600'], ['Motor 2207 1900Kv', 'motor-2207-1900'], ['Motor 2806 1300Kv', 'motor-2806-1300'],
+  ['Drone motor (choose its size after adding)', 'motor-2207-1900'],
   ['Prop 5×4.3×3', 'prop-5x4.3x3-b5'], ['Prop 3×3×3', 'prop-3x3x3-b2'], ['Flight controller 30.5', 'board-fc-30.5'], ['4-in-1 ESC 30.5', 'board-esc-30.5'], ['AIO 25.5', 'board-aio-25.5'], ['iFlight BLITZ F411 1S AIO', 'board-aio-iflight-blitz-f411-1s'], ['Happymodel X12 AIO', 'board-aio-happymodel-x12'], ['HGLRC Zeus13 AIO', 'board-aio-hglrc-zeus13'], ['iFlight Beast F7 AIO', 'board-aio-iflight-beast-f7'], ['Whoop AIO 16', 'board-aio-16'],
   ['Battery 4S 1500 mAh', 'battery-4s-1500-75'], ['Battery 6S 1300 mAh', 'battery-6s-1300-100'], ['Battery 1S 450 mAh', 'battery-1s-450-60'], ['Camera micro', 'camera-micro'], ['Camera nano', 'camera-nano'], ['Standoff M3 × 6', 'standoff-m3-6'], ['Standoff M2 × 6', 'standoff-m2-6'],
 ];

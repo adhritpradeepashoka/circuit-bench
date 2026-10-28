@@ -92,3 +92,13 @@ test('a part with snapping turned off is never snapped onto, never snaps, and do
   assert.equal(as.autoMatch(f.id, m.id), 0);
   const snap = as.snapshot(); assert.equal(snap.instances.find(i => i.id === m.id).noSnap, true);
 });
+test('connection spots: two parts with no holes join at user-placed spots, facing each other, with no screw', () => {
+  const box = id => ({ id, name: id, frames: [], mass: { grams: 1 } }), as = new Assembly();
+  const a = as.add(box('plate')), b = as.add(box('block'), [50, 0, 0]);
+  a.part = { ...a.part, frames: [{ id: 'spot-1', pos: [0, 0, 5], dir: [0, 0, 1], custom: true }] };
+  b.part = { ...b.part, frames: [{ id: 'spot-1', pos: [0, 0, -5], dir: [0, 0, -1], custom: true }] };
+  const r = as.mateAll(a.id, 'spot-1', b.id, 'spot-1'); assert.ok(r.ok); assert.equal(r.check.level, 'ok'); assert.match(r.check.notes[0], /no screw/);
+  assert.deepEqual(as.bom().screws, []);                                                                 // a spot needs no screw
+  const wa = worldFrame(a, a.part.frames[0]), wb = worldFrame(b, b.part.frames[0]); assert.ok(Math.hypot(...wa.pos.map((v, i) => v - wb.pos[i])) < 1e-6);
+  assert.ok(as.snapFor(b.id, { reach: 1e6 }) === null, 'a mated spot is not offered again');
+});

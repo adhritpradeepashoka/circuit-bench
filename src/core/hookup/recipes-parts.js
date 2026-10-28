@@ -200,5 +200,5 @@ const drone = phase(OTHER)((c, { type }) => {
   c.mem.informational = true;
 });
 
-export const PARTS_BY_TYPE = { ...Object.fromEntries(['aio', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
+export const PARTS_BY_TYPE = { ...Object.fromEntries(['aio', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
 export const PARTS_BY_KIND = { diode, npn: transistor, pnp: transistor, nmos: transistor, pmos: transistor, regulator, capacitor, inductor, opamp, inamp: bioAmp, 'signal-source': bioAmp, logic: logicChip };
