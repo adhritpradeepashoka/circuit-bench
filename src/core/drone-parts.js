@@ -20,7 +20,7 @@ export function parseDroneId(id) {
   let m;
   if ((m = /^prop-([\d.]+)x([\d.]+)x(\d)(?:-b([\d.]+))?$/.exec(s))) return { kind: 'prop', dia: fin(Number(m[1]), 0.8, 12, 5), pitch: fin(Number(m[2]), 0.5, 10, 4.3), blades: fin(Number(m[3]), 2, 6, 3), bore: m[4] ? fin(Number(m[4]), 0.8, 8, 5) : null };
   if ((m = /^battery-(\d)s-(\d+)(?:-(\d+))?$/.exec(s))) return { kind: 'battery', cells: fin(Number(m[1]), 1, 6, 4), mAh: fin(Number(m[2]), 100, 10000, 1500), c: fin(Number(m[3] || 75), 10, 200, 75) };
-  if ((m = /^frame-quad-(\d+)-(t?)(\d+)-([\d.]+)$/.exec(s)) && STACKS[m[4]]) return { kind: 'frame', wheelbase: fin(Number(m[1]), 40, 600, 220), motorPattern: fin(Number(m[3]), m[2] ? 3 : 6, 30, m[2] ? 6 : 16), mountKind: m[2] ? 'tri' : 'cross', stack: m[4] };
+  if ((m = /^frame-quad-(\d+)-(t?)(\d+(?:\.\d+)?)-([\d.]+)$/.exec(s)) && STACKS[m[4]]) return { kind: 'frame', wheelbase: fin(Number(m[1]), 40, 600, 220), motorPattern: fin(Number(m[3]), m[2] ? 3 : 6, 30, m[2] ? 6 : 16), mountKind: m[2] ? 'tri' : 'cross', stack: m[4] };
   if (BOARDS[s.replace(/^board-/, '')] && s.startsWith('board-')) return { kind: 'board', key: s.slice(6) };
   if (s.startsWith('camera-') && CAMERAS[`cam-${s.slice(7)}`]) return { kind: 'camera', key: `cam-${s.slice(7)}` };
   if ((m = /^standoff-(m1_6|m2|m3)-(\d+(?:\.\d+)?)$/.exec(s))) return { kind: 'standoff', screw: m[1].toUpperCase(), h: fin(Number(m[2]), 2, 40, 6) };
@@ -36,7 +36,7 @@ export function makeDronePart(id) {
   const base = { format: ROBOT_PART_FORMAT, version: ROBOT_PART_VERSION, id, category: 'Drone', model: { file: `${id}.gen`, format: 'gen', units: 'mm', up: 'z' } };
   if (d.kind === 'motor') {
     const mo = makeMotor({ size: d.size, kv: d.kv, over: d.over }), [sd, sh] = mo.stator, [a, b] = mo.mount.pattern, mk = mo.mount.kind || 'cross', hd = clear(mo.mount.screw);
-    const bellR = sd / 2 + (sd < 12 ? 1.1 : 2.2), baseT = Math.max(1.2, sd / 9), bellH = sh + 3.5, shaftLen = 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = (mk === 'tri' ? a / 2 : Math.hypot(a, b) / 2) + hd;
+    const bellR = mo.body ? mo.body.dia / 2 : sd / 2 + (sd < 12 ? 1.1 : 2.2), baseT = Math.max(1.2, sd / 9), bellH = mo.body ? mo.body.h : sh + 3.5, shaftLen = mo.body ? mo.body.shaftLen : 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = (mk === 'tri' ? a / 2 : Math.hypot(a, b) / 2) + hd;
     const baseR = Math.max(bellR, hx + 0.8);
     return { ...base, name: `Motor ${d.size} ${Math.round(d.kv)}Kv`, mass: { grams: mo.massGrams, source: d.over.massGrams ? 'datasheet' : 'estimated' }, dims: { size: [2 * baseR, 2 * baseR, root + shaftLen], source: 'estimated' }, drone: { ...d, motor: mo, bellR, baseR, baseT, root, shaftLen, mountKind: mk },
       frames: [...mountPoints(mk, a, b).map(([x, y], k) => hole(`mount-${k + 1}`, [x, y, 0], DOWN, hd)), { id: 'shaft', kind: 'shaft', pos: [0, 0, root], dir: UP, diameter: mo.shaftMm, source: 'estimated' }] };
@@ -80,7 +80,7 @@ export function makeDronePart(id) {
 }
 /** Parts offered ready-made in the list (the builder makes the rest). */
 export const DRONE_PRESETS = [
-  ['Tiny whoop 75 mm (3-prong 0802 motors)', 'frame-quad-75-t6-16'], ['Whoop frame 65 mm', 'frame-quad-65-9-16'], ['3 inch frame 142 mm', 'frame-quad-142-12-20'], ['5 inch frame 220 mm', 'frame-quad-220-16-30.5'], ['7 inch frame 300 mm', 'frame-quad-300-16-30.5'],
+  ['Tiny whoop 75 mm (3-prong 0802 motors)', 'frame-quad-75-t6.6-16'], ['Whoop frame 65 mm', 'frame-quad-65-9-16'], ['3 inch frame 142 mm', 'frame-quad-142-12-20'], ['5 inch frame 220 mm', 'frame-quad-220-16-30.5'], ['7 inch frame 300 mm', 'frame-quad-300-16-30.5'],
   ['Motor 0802 22000Kv (1S whoop)', 'motor-0802-22000'], ['Motor 1404 4600Kv', 'motor-1404-4600'], ['Motor 2207 1900Kv', 'motor-2207-1900'], ['Motor 2806 1300Kv', 'motor-2806-1300'],
   ['Prop 5×4.3×3', 'prop-5x4.3x3-b5'], ['Prop 3×3×3', 'prop-3x3x3-b2'], ['Flight controller 30.5', 'board-fc-30.5'], ['4-in-1 ESC 30.5', 'board-esc-30.5'], ['AIO 25.5', 'board-aio-25.5'], ['iFlight BLITZ F411 1S AIO', 'board-aio-iflight-blitz-f411-1s'], ['Happymodel X12 AIO', 'board-aio-happymodel-x12'], ['HGLRC Zeus13 AIO', 'board-aio-hglrc-zeus13'], ['iFlight Beast F7 AIO', 'board-aio-iflight-beast-f7'], ['Whoop AIO 16', 'board-aio-16'],
   ['Battery 4S 1500 mAh', 'battery-4s-1500-75'], ['Battery 6S 1300 mAh', 'battery-6s-1300-100'], ['Battery 1S 450 mAh', 'battery-1s-450-60'], ['Camera micro', 'camera-micro'], ['Camera nano', 'camera-nano'], ['Standoff M3 × 6', 'standoff-m3-6'], ['Standoff M2 × 6', 'standoff-m2-6'],

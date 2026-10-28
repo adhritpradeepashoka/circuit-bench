@@ -34,10 +34,10 @@ test('the camera holes on a frame have material around them (the front shelf), n
 });
 
 test('a tiny-whoop motor has a three-prong base that fits the matching 75 mm whoop frame, and a 2207 keeps four lugs', () => {
-  const m = part('motor-0802-22000'), f = part('frame-quad-75-t6-16'), big = part('motor-2207-1900');
+  const m = part('motor-0802-22000'), f = part('frame-quad-75-t6.6-16'), big = part('motor-2207-1900');
   assert.equal(m.frames.filter(x => x.id.startsWith('mount-')).length, 3); assert.equal(big.frames.filter(x => x.id.startsWith('mount-')).length, 4);
   const holes = f.frames.filter(x => x.id.startsWith('fr-') && x.id.endsWith('-top')); assert.equal(holes.length, 3);
   const sides = pts => { const d = []; for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) d.push(Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1])); return d.map(v => Math.round(v * 5) / 5).sort(); };
   assert.deepEqual(sides(m.frames.filter(x => x.id.startsWith('mount-')).map(x => x.pos)), sides(holes.map(x => x.pos)));
-  box('motor-0802-22000'); box('frame-quad-75-t6-16');
+  box('motor-0802-22000'); box('frame-quad-75-t6.6-16');
 });
