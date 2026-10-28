@@ -48,9 +48,32 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
   const code = el('textarea', { id: 'flyCode', className: 'fly-code', spellcheck: false, rows: 16, ariaLabel: 'Flight controller sketch' });
   const applyBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'flyApply', textContent: 'Run this sketch' }), restoreBtn = el('button', { type: 'button', className: 'asm-btn', id: 'flyRestore', textContent: 'Start from the starter' });
   const errBox = el('div', { className: 'asm-note bad', id: 'flyErr', hidden: true }), logBox = el('pre', { className: 'fly-log', id: 'flyLog', hidden: true });
-  const keysHelp = el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> Space arm · ↑↓ throttle · ←→ turn · W/S forward/back · A/D left/right · Shift = harder · R reset · C camera · M mode. Or drag the two sticks on screen, or plug in a game pad or USB radio (A / ✕ arms, Y / △ resets).' });
+  const PAD_KEY = 'circuitbench:pad', padDefaults = () => ({ arm: 0, disarm: null, reset: 3, hold: false, axes: { roll: 'auto', pitch: 'auto', thr: 'auto', yaw: 'auto' }, inv: { roll: false, pitch: false, yaw: false, thr: false } });
+  let padCfg = padDefaults(); try { const o = JSON.parse(store.get(PAD_KEY) || 'null'); if (o) padCfg = { ...padCfg, ...o, axes: { ...padCfg.axes, ...o.axes }, inv: { ...padCfg.inv, ...o.inv } }; } catch { /* use the defaults */ }
+  const savePad = () => { try { store.set(PAD_KEY, JSON.stringify(padCfg)); } catch { /* storage blocked */ } };
+  const pad = { id: '', prev: [], radio: false, on: false, learning: null, held: 0, axesAt: 0 };
+  const btnName = i => (i == null ? 'not set' : `button ${i + 1}`);
+  const padUi = (() => {
+    const learnBtn = (key, label) => { const b = el('button', { type: 'button', className: 'asm-btn', id: `flyPad_${key}` }), upd = () => { b.textContent = pad.learning === key ? 'Press a button…' : `${label}: ${btnName(padCfg[key])}`; }; b.addEventListener('click', () => { if (pad.learning === key) pad.learning = null; else { pad.learning = key; say(`Press the button or switch you want for ${label.toLowerCase()}.`); } padUi.refresh(); }); return { b, upd, key, label }; };
+    const learn = [learnBtn('arm', 'Arm'), learnBtn('disarm', 'Disarm'), learnBtn('reset', 'Reset')];
+    const hold = el('input', { type: 'checkbox', id: 'flyPadHold', checked: padCfg.hold }); hold.addEventListener('change', () => { padCfg.hold = hold.checked; savePad(); });
+    const axRows = ['roll', 'pitch', 'thr', 'yaw'].map(k => {
+      const sel = el('select', { id: `flyPadAx_${k}`, ariaLabel: `${k} axis` }, el('option', { value: 'auto', textContent: 'auto' }), ...Array.from({ length: 8 }, (_, i) => el('option', { value: String(i), textContent: `axis ${i + 1}` })));
+      sel.value = String(padCfg.axes[k]); sel.addEventListener('change', () => { padCfg.axes[k] = sel.value; savePad(); });
+      const inv = el('input', { type: 'checkbox', id: `flyPadInv_${k}`, checked: padCfg.inv[k] }); inv.addEventListener('change', () => { padCfg.inv[k] = inv.checked; savePad(); });
+      return el('div', { className: 'asm-row' }, el('span', { textContent: { roll: 'Left / right tilt', pitch: 'Forward / back tilt', thr: 'Throttle', yaw: 'Turn' }[k] }), sel, el('label', {}, inv, ' flip'));
+    });
+    const live = el('p', { className: 'asm-note', id: 'flyPadLive', textContent: 'No controller found yet. Plug one in and press a button.' });
+    const box = el('details', { className: 'asm-note', id: 'flyPadBox' }, el('summary', { textContent: 'Controller' }), el('div', { className: 'asm-row' }, ...learn.map(l => l.b)),
+      el('label', {}, hold, ' Arm button is a switch (armed while it is on)'), ...axRows, live,
+      (() => { const r = el('button', { type: 'button', className: 'asm-btn', id: 'flyPadReset', textContent: 'Back to the defaults' }); r.addEventListener('click', () => { padCfg = padDefaults(); savePad(); padUi.sync(); }); return r; })());
+    const sync = () => { hold.checked = padCfg.hold; for (const k of ['roll', 'pitch', 'thr', 'yaw']) { box.querySelector(`#flyPadAx_${k}`).value = String(padCfg.axes[k]); box.querySelector(`#flyPadInv_${k}`).checked = padCfg.inv[k]; } refresh(); };
+    const refresh = () => learn.forEach(l => l.upd());
+    refresh(); return { box, live, refresh, sync };
+  })();
+  const keysHelp = el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> Space arm · ↑↓ throttle · ←→ turn · W/S forward/back · A/D left/right · Shift = harder · R reset · C camera · M mode. Or drag the two sticks on screen, or plug in a game pad or USB radio' });
   side.append(el('h4', { textContent: 'Fly' }), armBtn, field('Mode', modeSel), el('div', { className: 'asm-row' }, resetBtn), field('Camera', camSel), field('Time', speedSel), keysHelp,
-    el('h4', { textContent: 'This drone' }), summary, notes, el('h4', { textContent: 'Motors' }), motorBox, el('p', { className: 'asm-note', textContent: 'The small sliders spin one motor by itself (a motor test, with the props on).' }),
+    padUi.box, el('h4', { textContent: 'This drone' }), summary, notes, el('h4', { textContent: 'Motors' }), motorBox, el('p', { className: 'asm-note', textContent: 'The small sliders spin one motor by itself (a motor test, with the props on).' }),
     el('h4', { textContent: 'Flight controller' }), field('Runs', whichSel), code, el('div', { className: 'asm-row' }, applyBtn, restoreBtn), errBox, logBox,
     el('p', { className: 'asm-note', textContent: 'An estimate from typical part values: an ideal rigid body, no wind, no ground effect or prop wash, and a battery that gives its full rated capacity. Real hover times are usually shorter. Your sketch runs as code in this page, so only run sketches you wrote or have read.' }));
   const saved = store.get(SKETCH_KEY); let mine = saved && saved.includes('loop') ? saved : STARTER_SKETCH, which = store.get(MODE_KEY) === 'mine' ? 'mine' : 'starter';
@@ -165,17 +188,30 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
   }
   function setMode(m) { rc.mode = m; modeSel.value = m; left.springY = m === 'althold'; input.thr = m === 'althold' ? 0.5 : 0; left.y = m === 'althold' ? 0 : -1; }
   // Game pads and radios (the Gamepad API). A standard pad (Xbox, PlayStation) has two spring-centred sticks; a radio set to USB joystick sends separate axes in the usual roll, pitch, throttle, yaw order and its throttle stays where you leave it.
-  const pad = { id: '', prev: [], radio: false, thr: 0, on: false };
+  // Everything is changeable in the Controller box (buttons for arm / disarm / reset, which axis is which, and a flip for each), and is remembered in this browser.
   function readPad() {
     const gp = [...(navigator.getGamepads?.() || [])].find(g => g && g.connected);
-    if (!gp) { if (pad.on) { pad.on = false; pad.id = ''; say('Controller disconnected. The keyboard and on-screen sticks work again.'); } return null; }
-    const dz = v => Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94, ax = i => dz(gp.axes[i] || 0), radio = gp.mapping !== 'standard' && gp.axes.length >= 4;
-    if (!pad.on || pad.id !== gp.id) { pad.on = true; pad.id = gp.id; pad.radio = radio; say(`Controller connected: ${gp.id.slice(0, 48)}. ${radio ? 'Treated as a radio (roll, pitch, throttle, yaw).' : 'Left stick throttle and turn, right stick tilt.'} A / ✕ arms, Y / △ resets.`); }
-    const down = i => !!gp.buttons[i]?.pressed, edge = i => down(i) && !pad.prev[i]; const e = { arm: edge(0), reset: edge(3) }; pad.prev = gp.buttons.map(b => b.pressed);
-    return radio ? { roll: ax(0), pitch: -ax(1), thr: (gp.axes[2] + 1) / 2, yaw: ax(3), radio, ...e } : { roll: ax(2), pitch: -ax(3), thr: -ax(1), yaw: ax(0), radio, ...e };
+    if (!gp) { if (pad.on) { pad.on = false; pad.id = ''; padUi.live.textContent = 'Controller disconnected.'; say('Controller disconnected. The keyboard and on-screen sticks work again.'); } return null; }
+    const radio = gp.mapping !== 'standard' && gp.axes.length >= 4;
+    if (!pad.on || pad.id !== gp.id) { pad.on = true; pad.id = gp.id; pad.radio = radio; say(`Controller connected: ${gp.id.slice(0, 48)}. ${radio ? 'Treated as a radio (roll, pitch, throttle, yaw).' : 'Left stick throttle and turn, right stick tilt.'} Change buttons and directions in the Controller box.`); }
+    const dz = v => (Math.abs(v) < 0.06 ? 0 : (v - Math.sign(v) * 0.06) / 0.94), def = radio ? { roll: 0, pitch: 1, thr: 2, yaw: 3 } : { roll: 2, pitch: 3, thr: 1, yaw: 0 };
+    const raw = k => gp.axes[padCfg.axes[k] === 'auto' ? def[k] : Number(padCfg.axes[k])] || 0, sgn = k => (padCfg.inv[k] ? -1 : 1);
+    const down = i => i != null && !!gp.buttons[i]?.pressed, edge = i => down(i) && !pad.prev[i];
+    if (pad.learning) { const hit = gp.buttons.findIndex((b, i) => b.pressed && !pad.prev[i]); if (hit >= 0) { padCfg[pad.learning] = hit; savePad(); say(`${pad.learning[0].toUpperCase()}${pad.learning.slice(1)} is now button ${hit + 1}.`); pad.learning = null; padUi.refresh(); } }
+    const e = { arm: !pad.learning && edge(padCfg.arm), disarm: !pad.learning && edge(padCfg.disarm), reset: !pad.learning && edge(padCfg.reset), swOn: down(padCfg.arm) }; pad.prev = gp.buttons.map(b => b.pressed);
+    const now = performance.now(); if (now - pad.axesAt > 150) { pad.axesAt = now; padUi.live.textContent = `${gp.id.slice(0, 40)} · ${radio ? 'radio' : 'game pad'} · axes ${[...gp.axes].slice(0, 8).map((v, i) => `${i + 1}:${v.toFixed(2)}`).join(' ')}`; }
+    // sticks: up is a negative number on most devices, so forward tilt and throttle are the flipped ones by default
+    const roll = dz(raw('roll')) * sgn('roll'), pitch = -dz(raw('pitch')) * sgn('pitch'), yaw = dz(raw('yaw')) * sgn('yaw'), t = radio ? (padCfg.inv.thr ? (1 - raw('thr')) / 2 : (raw('thr') + 1) / 2) : -dz(raw('thr')) * sgn('thr');
+    return { roll, pitch, yaw, thr: t, radio, ...e };
   }
   function pilot(dt) {
-    const gp = readPad(); if (gp?.arm) toggleArm(); if (gp?.reset) reset();
+    const gp = readPad();
+    if (gp) {
+      if (padCfg.hold && padCfg.arm != null) { if (gp.swOn && !rc.armed) { pad.held += dt; if (pad.held > 0.4 || gp.arm) { pad.held = 0; toggleArm(); } } else if (!gp.swOn && rc.armed) toggleArm(); if (!gp.swOn) pad.held = 0; }     // a switch: armed while it is on
+      else if (padCfg.disarm != null) { if (gp.arm && !rc.armed) toggleArm(); if (gp.disarm && rc.armed) toggleArm(); }                              // separate arm and disarm buttons
+      else if (gp.arm) toggleArm();                                                                                                                  // one button that flips it
+      if (gp.reset) reset();
+    }
     const k = input.keys, s = input.shift ? 1 : 0.5, kv = (a, b) => (k.has(a) ? 1 : 0) - (k.has(b) ? 1 : 0);
     const want = { roll: clamp(right.x + s * kv('d', 'a') + (gp?.roll || 0)), pitch: clamp(right.y + s * kv('w', 's') + (gp?.pitch || 0)), yaw: clamp(left.x + s * kv('arrowright', 'arrowleft') + (gp?.yaw || 0)) };
     for (const a of ['roll', 'pitch', 'yaw']) { const d = want[a] - rc[a], step = 6 * dt; rc[a] += clamp(d, -step, step); }
