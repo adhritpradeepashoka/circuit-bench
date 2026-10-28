@@ -41,6 +41,8 @@ export function turn(inst, axis, pivot, deg) {
   const q = qmul(r, inst.T.q), l = Math.hypot(...q); inst.T = { q: q.map(v => v / l), t: [pivot[0] + m[0], pivot[1] + m[1], pivot[2] + m[2]] };
 }
 
+/** How far apart (mm) two hand-placed connection spots may sit and still count as one joint. */
+export const SPOT_MM = 3;
 export class Assembly {
   constructor() { this.instances = []; this.mates = []; this.counter = 0; }
   /** @param part a validated robot part  @param at where to put it (mm) */
@@ -59,7 +61,7 @@ export class Assembly {
     const kept = this.mates.filter(m => !(m.b.inst === bInst && m.b.frame === bFrame) && !(m.a.inst === bInst && m.a.frame === bFrame && m.b.inst === aInst));
     const group = this.component(bInst, kept);                                       // B brings everything already attached to it
     const fits = (() => { const wa = worldFrame(A, fa), wb = worldFrame(B, fb); return Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]) < 0.1 && dot(wa.dir, wb.dir) < -0.999; })();
-    if (group.includes(aInst) && !fits && !this.swingToFit(A, fa, B, fb, kept)) return { ok: false, error: this.whyNoFit(A, fa, B, fb) };
+    if (group.includes(aInst) && !fits && !this.swingToFit(A, fa, B, fb, kept, { loose: !!(fa.custom || fb.custom) })) return { ok: false, error: this.whyNoFit(A, fa, B, fb) };
     const T0 = B.T, T1 = mateTransform(A, fa, B, fb), inv0 = [-T0.q[0], -T0.q[1], -T0.q[2], T0.q[3]], dq = qmul(T1.q, inv0);
     if (!group.includes(aInst)) for (const id of group) { const X = this.get(id), r = rotate(dq, [X.T.t[0] - T0.t[0], X.T.t[1] - T0.t[1], X.T.t[2] - T0.t[2]]), q = qmul(dq, X.T.q), l = Math.hypot(...q); X.T = { q: q.map(v => v / l), t: [T1.t[0] + r[0], T1.t[1] + r[1], T1.t[2] + r[2]] }; }
     this.mates = kept;
@@ -67,19 +69,19 @@ export class Assembly {
     return { ok: true, mate: m, check: this.check(m) };
   }
   /** B is already screwed to A by one screw, so it can still swing about that screw. Swing B (and everything hanging off it) about that screw until this second pair of holes meets. Returns true when it did. */
-  swingToFit(A, fa, B, fb, mates = this.mates) {
+  swingToFit(A, fa, B, fb, mates = this.mates, { loose = false } = {}) {      // loose: hand-placed spots are never exact, so a few degrees and a couple of mm are forgiven
     const direct = mates.filter(m => (m.a.inst === A.id && m.b.inst === B.id) || (m.a.inst === B.id && m.b.inst === A.id)); if (direct.length !== 1) return false;
     const m = direct[0], fr = m.a.inst === A.id ? A.part.frames.find(f => f.id === m.a.frame) : A.part.frames.find(f => f.id === m.b.frame), w0 = worldFrame(A, fr);
     const n = unit(w0.dir), wa = worldFrame(A, fa), wb = worldFrame(B, fb), along = (p) => (p[0] - w0.pos[0]) * n[0] + (p[1] - w0.pos[1]) * n[1] + (p[2] - w0.pos[2]) * n[2];
-    if (Math.abs(dot(wa.dir, n)) < 0.999 || dot(wa.dir, wb.dir) > -0.999 || Math.abs(along(wa.pos) - along(wb.pos)) > 0.3) return false;      // the holes must also be parallel to the screw and at the same height
+    if (loose ? (Math.abs(dot(wa.dir, n)) < 0.9 || dot(wa.dir, wb.dir) > -0.9) : (Math.abs(dot(wa.dir, n)) < 0.999 || dot(wa.dir, wb.dir) > -0.999 || Math.abs(along(wa.pos) - along(wb.pos)) > 0.3)) return false;      // the holes must also be parallel to the screw and at the same height
     const perp = (p) => { const d = along(p); return [p[0] - w0.pos[0] - n[0] * d, p[1] - w0.pos[1] - n[1] * d, p[2] - w0.pos[2] - n[2] * d]; }, va = perp(wa.pos), vb = perp(wb.pos);
-    if (Math.abs(Math.hypot(...va) - Math.hypot(...vb)) > 0.3) return false;                                                                         // they must sit the same distance from the screw
+    if (!loose && Math.abs(Math.hypot(...va) - Math.hypot(...vb)) > 0.3) return false;                                                                         // they must sit the same distance from the screw
     const cr = [vb[1] * va[2] - vb[2] * va[1], vb[2] * va[0] - vb[0] * va[2], vb[0] * va[1] - vb[1] * va[0]], ang = Math.atan2(cr[0] * n[0] + cr[1] * n[1] + cr[2] * n[2], dot(vb, va)) * 180 / Math.PI;
     const side = this.component(B.id, mates.filter(x => x !== m)); if (side.includes(A.id)) return false;                                         // B's side must not loop back round to A
     const before = side.map(id => { const X = this.get(id); return [X, X.T]; });
     for (const [X] of before) turn(X, n, w0.pos, ang);
     const a2 = worldFrame(A, fa), b2 = worldFrame(B, fb);
-    if (Math.hypot(a2.pos[0] - b2.pos[0], a2.pos[1] - b2.pos[1], a2.pos[2] - b2.pos[2]) < 0.1 && dot(a2.dir, b2.dir) < -0.999) return true;
+    if (Math.hypot(a2.pos[0] - b2.pos[0], a2.pos[1] - b2.pos[1], a2.pos[2] - b2.pos[2]) < (loose ? SPOT_MM : 0.1) && dot(a2.dir, b2.dir) < (loose ? -0.95 : -0.999)) return true;
     for (const [X, T] of before) X.T = T; return false;
   }
   /** Why two holes cannot be joined as they sit, in words. */
@@ -94,12 +96,23 @@ export class Assembly {
       if (this.isMated(A.id, fa.id) || this.isMated(B.id, fb.id)) continue;
       if (fa.diameter && fb.diameter && Math.abs(fa.diameter - fb.diameter) > 1.2) continue;
       const wa = worldFrame(A, fa), wb = worldFrame(B, fb);
-      if (Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]) < 0.3 && dot(wa.dir, wb.dir) < -0.99) { this.mates.push({ a: { inst: A.id, frame: fa.id }, b: { inst: B.id, frame: fb.id }, screw: null }); n++; }
+      const soft = fa.custom || fb.custom;
+      if (Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]) < (soft ? SPOT_MM : 0.3) && dot(wa.dir, wb.dir) < (soft ? -0.95 : -0.99)) { this.mates.push({ a: { inst: A.id, frame: fa.id }, b: { inst: B.id, frame: fb.id }, screw: null }); n++; }
     }
     return n;
   }
   /** mate(), then autoMatch(). */
-  mateAll(aInst, aFrame, bInst, bFrame, opts) { const r = this.mate(aInst, aFrame, bInst, bFrame, opts); if (r.ok) r.extra = this.autoMatch(aInst, bInst); return r; }
+  mateAll(aInst, aFrame, bInst, bFrame, opts) {
+    const r = this.mate(aInst, aFrame, bInst, bFrame, opts); if (!r.ok) return r;
+    r.extra = this.autoMatch(aInst, bInst);
+    const A = this.get(aInst), B = this.get(bInst);                                       // hand-placed spots: swing B about the first screw until a second spot meets, and join it if it lands close enough
+    if (A && B && !A.noSnap && !B.noSnap && (A.part.frames.some(f => f.custom) || B.part.frames.some(f => f.custom)))
+      for (const fa of A.part.frames) for (const fb of B.part.frames) {
+        if (!(fa.custom || fb.custom) || this.isMated(A.id, fa.id) || this.isMated(B.id, fb.id) || (fa.diameter && fb.diameter && Math.abs(fa.diameter - fb.diameter) > 1.2)) continue;
+        if (this.swingToFit(A, fa, B, fb, this.mates, { loose: true })) { this.mates.push({ a: { inst: A.id, frame: fa.id }, b: { inst: B.id, frame: fb.id }, screw: null }); r.extra++; }
+      }
+    return r;
+  }
   /** Every part reachable from `instId` through mates (optionally through a given list of mates instead of the current ones). */
   component(instId, mates = this.mates) {
     const seen = new Set([instId]), stack = [instId];
@@ -134,7 +147,9 @@ export class Assembly {
     const A = this.get(m.a.inst), B = this.get(m.b.inst); if (!A || !B) return { ok: false, notes: ['A part of this mate is gone.'], level: 'bad' };
     const fa = A.part.frames.find(f => f.id === m.a.frame), fb = B.part.frames.find(f => f.id === m.b.frame), notes = []; let level = 'ok';
     const wa = worldFrame(A, fa), wb = worldFrame(B, fb), gap = Math.hypot(wa.pos[0] - wb.pos[0], wa.pos[1] - wb.pos[1], wa.pos[2] - wb.pos[2]), tilt = dot(wa.dir, wb.dir);
-    if (gap > 0.05 || tilt > -0.999) { notes.push(`These frames have come apart (${gap.toFixed(2)} mm off); mate them again.`); level = 'bad'; }
+    const soft = fa.custom || fb.custom;
+    if (soft && gap > 0.05 && gap <= SPOT_MM && tilt < -0.95) { notes.push(`Joined at a hand-placed spot, ${gap.toFixed(1)} mm off. That is fine for glue, tape or a zip tie.`); level = 'warn'; }
+    else if (gap > 0.05 || tilt > -0.999) { notes.push(`These frames have come apart (${gap.toFixed(2)} mm off); mate them again.`); level = 'bad'; }
     const da = fa.diameter, db = fb.diameter, est = [fa, fb].some(f => f.source === 'estimated');
     if (fa.custom || fb.custom) notes.push('Joined at a connection spot, with no screw: hold it with glue, tape, a zip tie or a clip.');
     else if (da && db) {

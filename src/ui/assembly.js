@@ -353,7 +353,7 @@ export function initAssembly({ editor, projects = null }) {
   const joinBtn = mkBtn('Join holes', 'Click a hole on one part, then a hole on another (J)', () => setJoin(!joinMode), 'asmJoin'), xrayBtn = mkBtn('X-ray', 'See through the parts', () => { xray = !xray; xrayBtn.classList.toggle('on', xray); render(); }, 'asmXray');
   const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
     ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
-    el('span', { className: 'asm-tsep' }), spotBtn, joinBtn, xrayBtn, mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
+    el('span', { className: 'asm-tsep' }), spotBtn, joinBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
   const robotDock = el('div', { id: 'robotParts', role: 'region', ariaLabel: '3D parts' }), dockSearch = el('input', { type: 'search', placeholder: 'Search 3D parts', ariaLabel: 'Search 3D parts', className: 'asm-dock-search', id: 'robotPartsSearch', autocomplete: 'off' });
@@ -612,16 +612,28 @@ export function initAssembly({ editor, projects = null }) {
     applyScene(); bsay(`Now ${np.name}.${note}`, !!note);
   }
   function setJoin(on) { joinMode = on; joinFirst = null; if (on) { spotMode = false; spotBtn.classList.remove('on'); } joinBtn.classList.toggle('on', on); render(); }
+  /** Lower the whole model, joined or not, until its lowest point rests on the floor. Nothing moves relative to anything else. */
+  function dropAll() {
+    if (!asm.instances.length || !three) return; const B = new three.THREE.Box3(); for (const i of asm.instances) { i.obj.updateMatrixWorld(true); B.expandByObject(i.obj); }
+    const dz = -B.min.z; if (Math.abs(dz) < 0.01) return bsay('The whole model is already on the floor.');
+    keep(); for (const i of asm.instances) i.T.t[2] += dz; applyScene(); bsay(`Dropped the whole model ${dz > 0 ? 'down' : 'up'} ${Math.abs(dz).toFixed(1)} mm onto the floor.`);
+  }
   function setSpot(on) { spotMode = on; if (on) { joinMode = false; joinFirst = null; joinBtn.classList.remove('on'); } spotBtn.classList.toggle('on', on); if (on) bsay('Click anywhere on a part to add a connection spot there (it faces away from the surface you click). Click a spot to remove it. Then press Join holes and click two spots to fasten the parts.'); render(); }
   /** Add (or take away) a connection spot where the surface was clicked: a joinable point with no hole, so parts can be fastened with glue, tape or a clip. */
   function spotAt(e, t, ndcOf) {
     t.ray.setFromCamera(ndcOf(e), t.camera); const hit = t.ray.intersectObjects(t.sceneRoot.children, true).find(h => h.face); if (!hit) return false;
     let o = hit.object; while (o && !o.userData.inst) o = o.parent; const inst = o && asm.get(o.userData.inst); if (!inst) return false;
     const { THREE } = t, n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize(); if (n.dot(t.ray.ray.direction) > 0) n.negate();
-    const lp = inst.obj.worldToLocal(hit.point.clone()), ln = n.applyQuaternion(inst.obj.quaternion.clone().invert()).normalize();
+    let wp = hit.point.clone(), snappedTo = null;                                              // close to a free hole or spot on another part, facing this surface: sit exactly on it, so the pair lines up
+    for (const other of asm.instances) if (other !== inst) for (const f of other.part.frames) {
+      if (asm.isMated(other.id, f.id)) continue; const w = worldFrame(other, f), d = Math.hypot(w.pos[0] - wp.x, w.pos[1] - wp.y, w.pos[2] - wp.z);
+      if (d <= 6 && n.x * w.dir[0] + n.y * w.dir[1] + n.z * w.dir[2] < -0.6 && (!snappedTo || d < snappedTo.d)) snappedTo = { d, w, part: other.part.name, spot: !!f.custom };
+    }
+    if (snappedTo) { wp = new THREE.Vector3(...snappedTo.w.pos); n.set(-snappedTo.w.dir[0], -snappedTo.w.dir[1], -snappedTo.w.dir[2]); }
+    const lp = inst.obj.worldToLocal(wp.clone()), ln = n.applyQuaternion(inst.obj.quaternion.clone().invert()).normalize();
     keep(); const k = 1 + Math.max(0, ...inst.part.frames.filter(f => f.custom).map(f => Number(String(f.id).replace('spot-', '')) || 0));
     inst.part = { ...inst.part, frames: [...inst.part.frames, { id: `spot-${k}`, pos: [lp.x, lp.y, lp.z], dir: [ln.x, ln.y, ln.z], custom: true }] };
-    selected = inst.id; bsay(`Spot ${k} added to “${inst.part.name}”. Add another, or press Join holes and click two spots.`); render(); return true;
+    selected = inst.id; bsay(`Spot ${k} added to “${inst.part.name}”${snappedTo ? `, lined up exactly with the ${snappedTo.spot ? 'spot' : 'hole'} on “${snappedTo.part}”` : ''}. Add another, or press Join holes and click two spots.`); render(); return true;
   }
   function dropSpot(instId, frameId) {
     const inst = asm.get(instId); if (!inst) return; keep();

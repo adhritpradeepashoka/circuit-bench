@@ -102,3 +102,14 @@ test('connection spots: two parts with no holes join at user-placed spots, facin
   const wa = worldFrame(a, a.part.frames[0]), wb = worldFrame(b, b.part.frames[0]); assert.ok(Math.hypot(...wa.pos.map((v, i) => v - wb.pos[i])) < 1e-6);
   assert.ok(as.snapFor(b.id, { reach: 1e6 }) === null, 'a mated spot is not offered again');
 });
+test('two hand-placed spots a couple of degrees and a millimetre off still join, and both are recognised', () => {
+  const box = id => ({ id, name: id, frames: [], mass: { grams: 1 } }), as = new Assembly(), tilt = d => { const r = d * Math.PI / 180; return [Math.sin(r), 0, -Math.cos(r)]; };
+  const frame = as.add(box('frame')), cam = as.add(box('camera'), [80, 10, 40]);
+  frame.part = { ...frame.part, frames: [{ id: 'spot-1', pos: [0, 0, 5], dir: [0, 0, 1], custom: true }, { id: 'spot-2', pos: [20, 0, 5], dir: [0, 0, 1], custom: true }] };
+  cam.part = { ...cam.part, frames: [{ id: 'spot-1', pos: [0, 0, -3], dir: [0, 0, -1], custom: true }, { id: 'spot-2', pos: [21, 1, -3], dir: tilt(3), custom: true }] };    // 1 mm and 3° out
+  const r = as.mateAll(frame.id, 'spot-1', cam.id, 'spot-1'); assert.ok(r.ok);
+  assert.equal(r.extra, 1, 'the second spot was joined too'); assert.equal(as.mates.length, 2);
+  for (const m of as.mates) assert.ok(as.check(m).ok, as.check(m).notes.join(' '));
+  const far = as.add(box('far'), [0, 0, 100]); far.part = { ...far.part, frames: [{ id: 'spot-1', pos: [0, 0, 0], dir: [0, 0, -1], custom: true }, { id: 'spot-2', pos: [30, 0, 0], dir: [0, 0, -1], custom: true }] };
+  assert.equal(as.mateAll(frame.id, 'spot-2', far.id, 'spot-1').ok, true); assert.equal(as.matesOf(far.id).length, 1, 'a spot 10 mm away is not joined by accident');
+});
