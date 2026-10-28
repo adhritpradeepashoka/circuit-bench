@@ -199,7 +199,7 @@ export function validatePartSpec(raw, { id } = {}) {
     pins, behaviour, breadboard, package: pkg,
     ...(pkg === 'board' ? { board: cleanBoard(raw.board) } : {}),
     ...(pkg === 'art' && art ? { art } : {}),
-    ...(pkg === 'sprite' ? { sprite: { art: SPRITE_ARTS.includes(raw.sprite?.art) ? raw.sprite.art : SPRITE_ARTS[0], w: clampN(raw.sprite?.w, 20, 400), h: clampN(raw.sprite?.h, 20, 400) } } : {}),
+    ...(pkg === 'sprite' ? { sprite: { art: SPRITE_ARTS.includes(raw.sprite?.art) ? raw.sprite.art : SPRITE_ARTS[0], w: clampN(raw.sprite?.w, 20, 400), h: clampN(raw.sprite?.h, 20, 400), ...(raw.sprite?.note ? { note: str(raw.sprite.note, 40) } : {}) } } : {}),
   };
   return { ok: true, spec };
 }
@@ -220,7 +220,7 @@ function cleanBoard(b) {
 export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /** Box size and pin positions (CSS px, local to the part) from a spec: pins sit on a 0.1" grid along their side. */
-export const SPRITE_ARTS = ['bioamp-pill', 'slime-mold'];
+export const SPRITE_ARTS = ['bioamp-pill', 'slime-mold', 'drone-aio', 'drone-motor', 'drone-battery', 'drone-camera'];
 export const BOARD_SCALE = 96 / 25.4;      // an imported board is drawn at true size: 1 mm = 3.78 px, like the Wokwi parts
 export function layoutSpec(spec) {
   if (spec.package === 'board' && spec.board) {

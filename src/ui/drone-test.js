@@ -154,13 +154,15 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
     model.motors.forEach((m, i) => {
       const bar = el('div', { className: 'fly-bar' }, el('i')), slider = el('input', { type: 'range', min: 0, max: 50, step: 1, value: 0, ariaLabel: `Test motor ${i + 1} on its own`, className: 'fly-mtest' }), info = el('span', { className: 'fly-minfo' });
       slider.addEventListener('input', () => { motorTest[i] = Number(slider.value) / 100; }); motorTest[i] = 0;
-      motorBox.append(el('div', { className: 'fly-mrow' }, el('span', { className: 'fly-mname', textContent: `M${i + 1} ${motorName(m, i, model.motors.length)} ${m.spin > 0 ? '↺' : '↻'}`, title: `This prop turns ${m.spin > 0 ? 'counter-clockwise' : 'clockwise'} seen from above` }), bar, info, slider)); rows.push({ bar: bar.firstChild, info, slider });
+      motorBox.append(el('div', { className: 'fly-mrow' }, el('span', { className: 'fly-mname', textContent: `M${(wiring?.present && model.motors.length === 4 ? SLOT_POSITIONS.indexOf(motorName(m, i, 4)) : i) + 1} ${motorName(m, i, model.motors.length)} ${m.spin > 0 ? '↺' : '↻'}`, title: `This prop turns ${m.spin > 0 ? 'counter-clockwise' : 'clockwise'} seen from above` }), bar, info, slider)); rows.push({ bar: bar.firstChild, info, slider });
     });
   }
   function rebuild() {
     const asm = getAsm(), mdl = droneFromAssembly(asm);
     if (!mdl.ok) { model = null; sim = null; fc = null; if (rig) dispose(); empty.hidden = false; empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('h3', { textContent: 'Nothing to fly yet' }), el('p', { textContent: mdl.error }), el('div', { className: 'asm-row' }, (() => { const b = el('button', { type: 'button', className: 'asm-btn primary', id: 'flyBuildExample', textContent: 'Build a 5-inch quad for me' }); b.addEventListener('click', async () => { b.disabled = true; b.textContent = 'Building…'; await buildExample(); await rebuild(); }); return b; })(), (() => { const b = el('button', { type: 'button', className: 'asm-btn', textContent: 'Open Assembly' }); b.addEventListener('click', () => goAssembly()); return b; })()))); hud.hidden = true; return; }
-    empty.hidden = true; hud.hidden = false; model = mdl; sim = new DroneSim(mdl); wiring = getWiring?.() || null; route = null; buildRig(); makeMotorRows();
+    empty.hidden = true; hud.hidden = false; model = mdl; wiring = getWiring?.() || null; route = null;
+    if (wiring?.present) mdl.motors.forEach((m, i) => { if (wiring.reversed[motorName(m, i, mdl.motors.length)]) { m.spin = -m.spin; m.wrongWay = true; } });       // two motor wires swapped: it turns the other way, against its prop
+    sim = new DroneSim(mdl); buildRig(); makeMotorRows();
                                         // with an AIO on the Circuit tab, the wires decide which output drives which motor
     if (wiring?.present) {
       if (mdl.motors.length === 4) { const pos = mdl.motors.map((m, i) => motorName(m, i, 4)); route = pos.map(p => { const s = wiring.slotOf[p]; return s === undefined ? -1 : pos.indexOf(SLOT_POSITIONS[s]); }); }

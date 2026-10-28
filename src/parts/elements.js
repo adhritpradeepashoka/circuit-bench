@@ -6,6 +6,7 @@ import { LOBES, MM_TO_PX } from '../core/slime.js';
 import { ICON_KINDS } from '../core/behaviours-extra.js';
 import { layoutSpec } from '../core/custom-parts.js';
 import { renderArt } from '../core/part-art.js';
+import { droneSprite } from './drone-art.js';
 import { WOKWI_PINS } from '../core/pins.generated.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';
@@ -366,6 +367,7 @@ function artSVG(spec, w, h, pins, st) {
 }
 /** Simple pictures of real modules (a "sprite"): the board, its header pins and connector, with each pin lead ending on its connection point. */
 function spriteSVG(spec, w, h, pins) {
+  if (spec.sprite.art.startsWith('drone-')) return droneSprite(spec.sprite.art, spec, w, h, pins);
   const lbl = pins.map(p => `<text x="${p.x < w / 2 ? p.x + 24 : p.x - 8}" y="${p.y + 2.2}" text-anchor="${p.x < w / 2 ? 'start' : 'end'}" font-size="5.6" font-family="monospace" fill="#fff" stroke="#3a1c6e" stroke-width="1.6" paint-order="stroke">${esc(p.id)}</text>`).join('');
   if (spec.sprite.art === 'bioamp-pill') {
     // the Upside Down Labs BioAmp EXG Pill: a purple board, a 3-pin header out of the left edge and a white 3-pin connector on the right

@@ -150,7 +150,7 @@ export class DroneSim {
       const alpha = clamp((target - this.omega[i]) / lag, -maxAlpha, maxAlpha); this.omega[i] = Math.max(0, this.omega[i] + alpha * dt);
       // air flowing along the shaft (climbing, or falling) takes thrust away: it fades to nothing as the climb speed nears what the prop's pitch can push
       const vax = dot(vb0, m.axis), vpitch = Math.max(1, this.omega[i] / (2 * Math.PI) * m.prop.pitchIn * 0.0254), inflow = clamp(vax / vpitch, 0, 1);
-      const th = thrustAt(m.prop, this.omega[i]) * (1 - inflow), Q = dragTorqueAt(m.prop, this.omega[i]) * (1 - 0.5 * inflow); this.thrust[i] = th;
+      const th = thrustAt(m.prop, this.omega[i]) * (1 - inflow) * (m.wrongWay ? 0.2 : 1), Q = dragTorqueAt(m.prop, this.omega[i]) * (1 - 0.5 * inflow); this.thrust[i] = th;
       const motorAmps = Math.max(0, m.motor.noLoadAmps * (this.omega[i] > 0 ? 1 : 0) + (Q + this.J[i] * alpha) / kt); this.amps[i] = motorAmps; total += thr * motorAmps;
       F = add(F, mul(m.axis, th)); Tq = add(Tq, cross(m.r, mul(m.axis, th))); Tq = add(Tq, mul(m.axis, -m.spin * (Q + this.J[i] * alpha)));
     }
