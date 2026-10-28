@@ -136,3 +136,15 @@ test('a frame (or any part) that is not a generated drone part, such as one you 
   const as = buildQuad({ boards: false }), f = as.instances.find(i => i.part.drone?.kind === 'frame'), { drone, ...rest } = f.part; f.part = { ...rest, id: 'my-frame', name: 'My own frame' };
   const m = droneFromAssembly(as); assert.equal(m.ok, true); assert.equal(m.motors.length, 4); assert.ok(m.massKg > 0.2);
 });
+
+test('the front is where the camera looks: a camera turned 90° still gives a drone that reads the same and flies level', () => {
+  const base = buildQuad(), straight = droneFromAssembly(base);
+  const as = buildQuad(), f = as.instances.find(i => i.part.drone?.kind === 'frame'), c = as.add(part('camera-micro'), [0, 400, 0]);
+  const r = as.mateAll(f.id, 'camera-1-top', c.id, 'mount-1-bottom'); assert.ok(r.ok, r.error);
+  const m = droneFromAssembly(as); assert.ok(m.ok, m.error);
+  assert.ok(Math.hypot(m.lens[0], m.lens[1]) > 0.3, 'the camera has a facing');
+  const ahead = m.lens[0] * Math.cos(m.heading) * 0 + (Math.sin(m.heading) * m.lens[0] + Math.cos(m.heading) * m.lens[1]); assert.ok(ahead > 0.9, 'after turning, the camera looks along +Y');
+  assert.equal(m.motors.length, straight.motors.length);
+  for (const mo of m.motors) assert.ok(Math.abs(mo.axis[2]) > 0.99, 'motors still point up');
+  const sim = new DroneSim(m); assert.ok(sim && m.inertiaInv.length === 3);
+});

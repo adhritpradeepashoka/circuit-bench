@@ -80,7 +80,10 @@ export function droneFromAssembly(asm) {
   const feetW = []; for (const i of mine) for (const f of feetOf(i.part)) feetW.push(mul(place(i.T, f), 1e-3));
   const zmin = Math.min(...feetW.map(p => p[2]), ...live.map(r => r.pos[2] - 0.01));
   // the way the motors push, and which way each prop turns (neighbours opposite: sorted around the middle and alternated)
-  const motors = live.map(r => ({ ...r, r: sub(r.pos, com) }));
+  // The front is where the camera looks (else +Y). Everything is turned about the vertical so the front ends up on +Y, which is what the mixer, the sketch and the view all assume.
+  const camI = kindOf('camera').find(i => inGroup.has(i.id)), lens = camI ? rotate(camI.T.q, [0, 1, 0]) : [0, 1, 0], heading = Math.hypot(lens[0], lens[1]) > 0.3 ? Math.PI / 2 - Math.atan2(lens[1], lens[0]) : 0;
+  const ch = Math.cos(heading), sh = Math.sin(heading), Rz = v => [ch * v[0] - sh * v[1], sh * v[0] + ch * v[1], v[2]];
+  const motors = live.map(r => ({ ...r, pos0: r.pos, axis0: r.axis, r: Rz(sub(r.pos, com)), axis: Rz(r.axis) }));
   const order = motors.map((m, k) => [Math.atan2(m.r[1], m.r[0]), k]).sort((a, b) => a[0] - b[0]);
   order.forEach(([, k], n) => { motors[k].spin = n % 2 ? -1 : 1; });
   const up = [0, 0, 1], avgAxis = motors.reduce((s, m) => add(s, m.axis), [0, 0, 0]).map(v => v / motors.length);
@@ -90,10 +93,11 @@ export function droneFromAssembly(asm) {
   const cfgs = motors.map(m => { const md = m.inst.part.drone, pd = m.prop.part.drone; return { motor: makeMotor({ size: md.size, kv: md.kv, over: md.over }), prop: makeProp({ diameterIn: pd.dia, pitchIn: pd.pitch, blades: pd.blades }), propMassKg: m.prop.part.mass.grams / 1000 }; });
   const board = mine.find(i => i.part.drone?.kind === 'board' && ['esc', 'aio'].includes(i.part.drone.board?.kind)), escAmps = board ? board.part.drone.board.maxAmps : null;
   const span = Math.max(...motors.map(m => Math.hypot(m.r[0], m.r[1]))), area = Math.PI * span * span;
+  const Rm = [[ch, -sh, 0], [sh, ch, 0], [0, 0, 1]], M = [[I[0], I[3], I[4]], [I[3], I[1], I[5]], [I[4], I[5], I[2]]], RM = Rm.map(r => [0, 1, 2].map(c => r[0] * M[0][c] + r[1] * M[1][c] + r[2] * M[2][c])), RMR = RM.map(r => [0, 1, 2].map(c => r[0] * Rm[c][0] + r[1] * Rm[c][1] + r[2] * Rm[c][2])), Ri = heading ? [RMR[0][0], RMR[1][1], RMR[2][2], RMR[0][1], RMR[0][2], RMR[1][2]] : I;
   return {
-    ok: true, notes, massKg: total, com, inertia: I, inertiaInv: invert3(I), battery, escAmps,
-    motors: motors.map((m, k) => ({ id: m.inst.id, name: m.inst.part.name, r: m.r, axis: m.axis, spin: m.spin, ...cfgs[k], propId: m.prop.id })),
-    feet: feetW.map(p => sub(p, com)), zOffset: com[2] - zmin,
+    ok: true, notes, massKg: total, com, heading, lens, inertia: Ri, inertiaInv: invert3(Ri), battery, escAmps,
+    motors: motors.map((m, k) => ({ id: m.inst.id, name: m.inst.part.name, r: m.r, axis: m.axis, pos0: m.pos0, axis0: m.axis0, spin: m.spin, ...cfgs[k], propId: m.prop.id })),
+    feet: feetW.map(p => Rz(sub(p, com))), zOffset: com[2] - zmin,
     dragArea: { side: clamp(0.5 * span * 0.08, 0.001, 0.05), top: clamp(0.25 * area, 0.003, 0.2) },                    // Cd·A estimates
     leftOut: left.map(i => i.id),
   };

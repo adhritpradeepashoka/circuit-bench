@@ -115,27 +115,27 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
   /* ── putting the drone on screen ── */
   function dispose() { if (rig) { T.scene.remove(rig); rig = null; } if (shadow) { T.scene.remove(shadow); shadow = null; } spinners = []; fpvCam = null; }
   function buildRig() {
-    const { THREE } = T; dispose(); rig = new THREE.Group(); inner = new THREE.Group(); rig.add(inner); inner.position.set(...model.com.map(v => -v * 1000));
+    const { THREE } = T; dispose(); rig = new THREE.Group(); inner = new THREE.Group(); rig.add(inner); const hc = Math.cos(model.heading || 0), hs = Math.sin(model.heading || 0), com = model.com; inner.rotation.z = model.heading || 0; inner.position.set(-(hc * com[0] - hs * com[1]) * 1000, -(hs * com[0] + hc * com[1]) * 1000, -com[2] * 1000);
     const asm = getAsm(), mine_ = asm.instances.filter(i => !model.leftOut.includes(i.id));
     const props = new Map(model.motors.map((m, k) => [m.propId, k]));
     for (const inst of mine_) {
       if (!inst.obj) continue; const c = inst.obj.clone(true); c.position.fromArray(inst.T.t); c.quaternion.set(...inst.T.q);
       c.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.emissive?.setHex(0); o.material.transparent = false; o.material.opacity = 1; o.material.depthWrite = true; } });
       if (props.has(inst.id)) {                                                                  // a prop: turns about its motor's shaft
-        const k = props.get(inst.id), m = model.motors[k], pos = m.r.map((v, i) => (v + model.com[i]) * 1000), pivot = new THREE.Group(); pivot.position.fromArray(pos); c.position.sub(pivot.position);
+        const k = props.get(inst.id), m = model.motors[k], pos = m.pos0.map(v => v * 1000), pivot = new THREE.Group(); pivot.position.fromArray(pos); c.position.sub(pivot.position);
         const disc = new THREE.Mesh(new THREE.CircleGeometry(inst.part.drone.R, 40), new THREE.MeshBasicMaterial({ color: 0x2b3a34, transparent: true, opacity: 0, side: THREE.DoubleSide, depthWrite: false }));
-        const axis = new THREE.Vector3(...m.axis), dq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis); disc.quaternion.copy(dq); disc.position.z = 0;
+        const axis = new THREE.Vector3(...m.axis0), dq = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), axis); disc.quaternion.copy(dq); disc.position.z = 0;
         disc.position.copy(axis).multiplyScalar(inst.part.drone.hubH / 2); pivot.add(c, disc); inner.add(pivot); spinners.push({ pivot, disc, axis, k, angle: 0, blades: c }); continue;
       }
       inner.add(c);
     }
-    { const { THREE } = T, front = new THREE.Mesh(new THREE.ConeGeometry(14, 55, 16), new THREE.MeshBasicMaterial({ color: 0xff6a00, depthTest: false })); front.renderOrder = 5; front.position.set(0, 75, 45); rig.add(front); T.front = front; }   // an orange arrow on top, pointing to the front of the drone
+    { const { THREE } = T, ext = Math.max(20, ...model.motors.map(m => Math.hypot(m.r[0], m.r[1]) * 1000)), cr = Math.max(2.5, Math.min(14, ext * 0.07)), front = new THREE.Mesh(new THREE.ConeGeometry(cr, cr * 3.5, 16), new THREE.MeshBasicMaterial({ color: 0xff6a00, depthTest: false })); front.renderOrder = 5; front.position.set(0, ext * 0.55, ext * 0.45); rig.add(front); T.front = front; }   // an orange arrow on top, pointing to the front of the drone
     T.scene.add(rig);
     shadow = new THREE.Mesh(new THREE.CircleGeometry(110, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })); shadow.position.z = 2; T.scene.add(shadow);
     const cam = asm.instances.find(i => i.part.drone?.kind === 'camera' && !model.leftOut.includes(i.id));
-    if (cam) { fpvCam = new THREE.PerspectiveCamera(105, 1, 10, 400000); fpvCam.up.set(0, 0, 1); const sz = cam.part.drone.sizeMm, p = new THREE.Vector3(...cam.T.t).add(new THREE.Vector3(0, sz[1] / 2 + 2, sz[2] * 0.6));
-      fpvCam.position.copy(p).sub(new THREE.Vector3(...model.com.map(v => v * 1000))); const tilt = 25 * Math.PI / 180, f = new THREE.Vector3(0, Math.cos(tilt), Math.sin(tilt)), u = new THREE.Vector3(0, -Math.sin(tilt), Math.cos(tilt)), r = new THREE.Vector3().crossVectors(f, u);
-      fpvCam.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(r, u, f.clone().negate())); inner.add(fpvCam); }
+    if (cam) { fpvCam = new THREE.PerspectiveCamera(105, 1, 10, 400000); fpvCam.up.set(0, 0, 1); const sz = cam.part.drone.sizeMm, l = model.lens, ln = Math.hypot(l[0], l[1]) > 0.3 ? [l[0] / Math.hypot(l[0], l[1]), l[1] / Math.hypot(l[0], l[1])] : [0, 1];
+      const p = new THREE.Vector3(...cam.T.t).add(new THREE.Vector3(ln[0] * (sz[1] / 2 + 2), ln[1] * (sz[1] / 2 + 2), sz[2] * 0.6)), tilt = 25 * Math.PI / 180;
+      fpvCam.position.copy(p); fpvCam.lookAt(p.clone().add(new THREE.Vector3(ln[0] * Math.cos(tilt), ln[1] * Math.cos(tilt), Math.sin(tilt)))); inner.add(fpvCam); }
     camSel.querySelector('option[value=fpv]').disabled = !fpvCam || !!(wiring?.present && !wiring.camera); if (!fpvCam && camSel.value === 'fpv') camSel.value = 'follow'; size();
   }
   function placeCamera() {
