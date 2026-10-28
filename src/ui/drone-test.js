@@ -40,6 +40,8 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
   const armBtn = el('button', { type: 'button', className: 'asm-btn primary fly-arm', id: 'flyArm', textContent: 'Arm  (Space)' });
   const modeSel = el('select', { id: 'flyMode', ariaLabel: 'Flight mode' }, ...MODES.map(([v, t]) => el('option', { value: v, textContent: t })));
   const resetBtn = el('button', { type: 'button', className: 'asm-btn', id: 'flyReset', textContent: 'Reset  (R)' });
+  const flatBtn = el('button', { type: 'button', id: 'flyFlatCam', className: 'proj-act', title: 'Level the FPV picture with the horizon, whatever angle the camera was built at', textContent: 'Make camera flat' });
+  flatBtn.addEventListener('click', () => { fpvFlat = !fpvFlat; try { localStorage.setItem('circuitbench:fpv-flat', fpvFlat ? '1' : '0'); } catch { /* ignore */ } aimFpv(); });
   const camSel = el('select', { id: 'flyCam', ariaLabel: 'Camera' }, el('option', { value: 'follow', textContent: 'Follow the drone' }), el('option', { value: 'fixed', textContent: 'Stay here, watch it' }), el('option', { value: 'fpv', textContent: 'FPV (needs a camera part)' }));
   const speedSel = el('select', { id: 'flySpeed', ariaLabel: 'Speed of time' }, el('option', { value: '1', textContent: 'Real time' }), el('option', { value: '0.5', textContent: 'Half speed' }), el('option', { value: '0.2', textContent: 'Slow motion (0.2×)' }));
   const field = (label, ctl) => el('label', { className: 'asm-field' }, el('span', { textContent: label }), ctl);
@@ -73,7 +75,7 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
     refresh(); return { box, live, refresh, sync };
   })();
   const keysHelp = el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> Space arm · ↑↓ throttle · ←→ turn · W/S forward/back · A/D left/right · Shift = harder · R reset · C camera · M mode. Or drag the two sticks on screen, or plug in a game pad or USB radio' });
-  side.append(el('h4', { textContent: 'Fly' }), armBtn, field('Mode', modeSel), el('div', { className: 'asm-row' }, resetBtn), field('Camera', camSel), field('Time', speedSel), keysHelp,
+  side.append(el('h4', { textContent: 'Fly' }), armBtn, field('Mode', modeSel), el('div', { className: 'asm-row' }, resetBtn), field('Camera', camSel), el('div', { className: 'asm-row' }, flatBtn), field('Time', speedSel), keysHelp,
     padUi.box, el('h4', { textContent: 'This drone' }), summary, notes, el('h4', { textContent: 'Motors' }), motorBox, el('p', { className: 'asm-note', textContent: 'The small sliders spin one motor by itself (a motor test, with the props on).' }),
     el('h4', { textContent: 'Flight controller' }), field('Runs', whichSel), code, el('div', { className: 'asm-row' }, applyBtn, restoreBtn), errBox, logBox,
     el('p', { className: 'asm-note', textContent: 'An estimate from typical part values: an ideal rigid body, no wind, no ground effect or prop wash, and a battery that gives its full rated capacity. Real hover times are usually shorter. Your sketch runs as code in this page, so only run sketches you wrote or have read.' }));
@@ -87,7 +89,7 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
   applyBtn.addEventListener('click', () => reset());
 
   /* ── state ── */
-  let wiring = null, route = null, readySaid = false, T = null, loading = null, model = null, sim = null, fc = null, rig = null, inner = null, spinners = [], shadow = null, fpvCam = null, active = false, raf = 0, last = 0, acc = 0, hudAt = 0, ctrlTarget = null;
+  let wiring = null, route = null, readySaid = false, T = null, loading = null, model = null, sim = null, fc = null, rig = null, inner = null, spinners = [], shadow = null, fpvCam = null, fpvInfo = null, fpvFlat = (() => { try { return localStorage.getItem('circuitbench:fpv-flat') === '1'; } catch { return false; } })(), active = false, raf = 0, last = 0, acc = 0, hudAt = 0, ctrlTarget = null;
   const motorTest = [], rows = [];
   let sayTimer = 0;
   const say = (t, bad = false) => { msg.textContent = t; msg.hidden = !t; msg.classList.toggle('bad', bad); clearTimeout(sayTimer); if (t) sayTimer = setTimeout(() => { msg.hidden = true; }, bad ? 9000 : 5000); };
@@ -114,6 +116,12 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
 
   /* ── putting the drone on screen ── */
   function dispose() { if (rig) { T.scene.remove(rig); rig = null; } if (shadow) { T.scene.remove(shadow); shadow = null; } spinners = []; fpvCam = null; }
+  /** Where the FPV camera looks up or down: as it was built if it was built tilted, else the usual 25° up; "Flat" levels it with the horizon. */
+  function aimFpv() {
+    if (!fpvCam || !fpvInfo) return; const { THREE } = T, { p, ln, built } = fpvInfo, tilt = fpvFlat ? 0 : (Math.abs(built) > 0.03 ? built : 25 * Math.PI / 180);
+    fpvCam.position.copy(p); fpvCam.lookAt(p.clone().add(new THREE.Vector3(ln[0] * Math.cos(tilt), ln[1] * Math.cos(tilt), Math.sin(tilt)))); fpvCam.updateMatrixWorld(true);
+    flatBtn.textContent = fpvFlat ? 'Camera: flat (tap to restore)' : 'Make camera flat'; flatBtn.setAttribute('aria-pressed', String(fpvFlat));
+  }
   function buildRig() {
     const { THREE } = T; dispose(); rig = new THREE.Group(); inner = new THREE.Group(); rig.add(inner); const hc = Math.cos(model.heading || 0), hs = Math.sin(model.heading || 0), com = model.com; inner.rotation.z = model.heading || 0; inner.position.set(-(hc * com[0] - hs * com[1]) * 1000, -(hs * com[0] + hc * com[1]) * 1000, -com[2] * 1000);
     const asm = getAsm(), mine_ = asm.instances.filter(i => !model.leftOut.includes(i.id));
@@ -134,8 +142,8 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
     shadow = new THREE.Mesh(new THREE.CircleGeometry(110, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })); shadow.position.z = 2; T.scene.add(shadow);
     const cam = asm.instances.find(i => i.part.drone?.kind === 'camera' && !model.leftOut.includes(i.id));
     if (cam) { fpvCam = new THREE.PerspectiveCamera(105, 1, 10, 400000); fpvCam.up.set(0, 0, 1); const sz = cam.part.drone.sizeMm, l = model.lens, ln = Math.hypot(l[0], l[1]) > 0.3 ? [l[0] / Math.hypot(l[0], l[1]), l[1] / Math.hypot(l[0], l[1])] : [0, 1];
-      const p = new THREE.Vector3(...cam.T.t).add(new THREE.Vector3(ln[0] * (sz[1] / 2 + 2), ln[1] * (sz[1] / 2 + 2), sz[2] * 0.6)), tilt = 25 * Math.PI / 180;
-      fpvCam.position.copy(p); fpvCam.lookAt(p.clone().add(new THREE.Vector3(ln[0] * Math.cos(tilt), ln[1] * Math.cos(tilt), Math.sin(tilt)))); inner.add(fpvCam); }
+      const p = new THREE.Vector3(...cam.T.t).add(new THREE.Vector3(ln[0] * (sz[1] / 2 + 2), ln[1] * (sz[1] / 2 + 2), sz[2] * 0.6));
+      fpvCam.position.copy(p); fpvInfo = { p, ln, built: Math.asin(Math.max(-1, Math.min(1, l[2]))) }; aimFpv(); inner.add(fpvCam); }
     camSel.querySelector('option[value=fpv]').disabled = !fpvCam || !!(wiring?.present && !wiring.camera); if (!fpvCam && camSel.value === 'fpv') camSel.value = 'follow'; size();
   }
   function placeCamera() {
