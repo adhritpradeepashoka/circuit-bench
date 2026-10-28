@@ -7,6 +7,7 @@
 //
 // Pure (no DOM): the browser registers specs into PART_DEFS; the server validates AI-made ones.
 import { PART_DEFS } from './parts.js';
+import { LOOK_IDS } from './part-looks.js';
 import { LED_COLORS, DEFAULT_LED_COLOR } from './led-colors.js';
 import { SETTINGS } from './controls.js';
 import { validateLogicBehaviour, compileLogic, describeLogic } from './logic.js';
@@ -69,7 +70,7 @@ export const BEHAVIOURS = {
 Object.assign(BEHAVIOURS, EXTRA_BEHAVIOURS);
 
 const clampN = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) ? +Math.min(hi, Math.max(lo, n)).toFixed(2) : lo; };
-const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
+const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max).trim();
 const hexColor = (v, d) => {
   const t = String(v).trim().toLowerCase();
   if (/^#[0-9a-f]{6}$/.test(t)) return t;
@@ -198,6 +199,7 @@ export function validatePartSpec(raw, { id } = {}) {
     color: hexColor(raw.color, '#2b6cb0'), textColor: hexColor(raw.textColor, '#ffffff'),
     pins, behaviour, breadboard, package: pkg,
     ...(pkg === 'board' ? { board: cleanBoard(raw.board) } : {}),
+    ...(pkg === 'module' && LOOK_IDS.has(raw.look) ? { look: raw.look } : {}),
     ...(pkg === 'art' && art ? { art } : {}),
     ...(pkg === 'sprite' ? { sprite: { art: SPRITE_ARTS.includes(raw.sprite?.art) ? raw.sprite.art : SPRITE_ARTS[0], w: clampN(raw.sprite?.w, 20, 400), h: clampN(raw.sprite?.h, 20, 400), ...(raw.sprite?.note ? { note: str(raw.sprite.note, 40) } : {}) } } : {}),
   };

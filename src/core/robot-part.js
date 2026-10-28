@@ -16,7 +16,7 @@ export const SENSOR_KINDS = ['imu', 'encoder', 'ultrasonic', 'contact', 'limit']
 export const THREADS = { M1: [1, 1.2], M1_4: [1.4, 1.6], M1_6: [1.6, 1.8], M2: [2, 2.4], M2_5: [2.5, 2.9], M3: [3, 3.4], M4: [4, 4.5], M5: [5, 5.5], M6: [6, 6.6], M8: [8, 9] };
 
 const MAX = { frames: 200, joints: 40, actuators: 40, sensors: 40, ports: 20, mesh: 25_000_000 };
-const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
+const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max).trim();
 const slug = s => str(s, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 const fin = v => typeof v === 'number' && Number.isFinite(v);
 

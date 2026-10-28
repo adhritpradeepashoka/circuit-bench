@@ -7,6 +7,7 @@ import { BEHAVIOURS, validatePartSpec, describeCustomSpecs } from './custom-part
 
 export const LIMITS = { promptChars: 4_000, codeChars: 20_000 };
 import { ASSEMBLY_OPS } from './assembly-actions.js';
+import { LOOK_IDS } from './part-looks.js';
 export const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire, create_part';
 
 // A part's catalogue note (see describeCatalog) states its electrical behavior, but a model that reads
@@ -319,6 +320,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
   "color": "<#rrggbb body colour that looks like the real part>",
   "textColor": "<#rrggbb, readable on that colour>",
   "package": "art" | "dip" | "dip-wide" | "quad" | "module",   (use "art" unless it is a chip package)
+  "look": optional, ONLY with "package":"module" and every pin "side":"bottom" (leads along the bottom, 0.1" apart): a ready-made picture of a common component, one of ${[...LOOK_IDS].filter(l => l !== 'reg220').join(', ')}. Use it for a plain diode, transistor, regulator, capacitor, inductor, relay, buzzer, fan, switch and the like instead of drawing your own; otherwise leave it out.
   "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
   "art": { "w": ..., "h": ..., "svg": "...", "motion": [...] }   (required for "art"; each pin then has "x" and "y" instead of "side"),
   "breadboard": <"module" only: true if the real part plugs into a breadboard; then every pin must be on "bottom">,

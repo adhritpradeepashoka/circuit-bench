@@ -3,6 +3,7 @@
 // so these files only draw. Each one is a tiny SVG with a few live properties the simulator sets.
 
 import { LOBES, MM_TO_PX } from '../core/slime.js';
+import { lookSVG } from '../core/part-looks.js';
 import { ICON_KINDS } from '../core/behaviours-extra.js';
 import { layoutSpec } from '../core/custom-parts.js';
 import { renderArt } from '../core/part-art.js';
@@ -328,6 +329,10 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   if (spec.package === 'art' && spec.art) return artSVG(spec, w, h, pins, { lit, aux, levels });
   if (spec.package === 'sprite' && spec.sprite) return spriteSVG(spec, w, h, pins);
   if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
+  if (spec.look && lookSVG(spec.look, spec, w, h, pins)) {
+    const dots = pins.map(p => `<rect x="${(p.x - 2.4).toFixed(1)}" y="${(p.y - 2.4).toFixed(1)}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"><title>${esc(p.label || p.id)}</title></rect>`).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${lookSVG(spec.look, spec, w, h, pins)}${dots}</svg>`;
+  }
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
   const kind = spec.behaviour.kind;
   const leads = pins.map(p => {

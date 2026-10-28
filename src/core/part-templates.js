@@ -12,6 +12,19 @@ const chip = (name, label, color, pkg, pins, behaviour, description = '') => ({
   name, label, color, textColor: '#e8e8e8', description, package: pkg, breadboard: true, pins: pins.map(p => (Array.isArray(p) ? { id: p[0], label: p[1] || p[0] } : { id: p, label: p })), behaviour,
 });
 
+/** Which picture each ready-made part gets (see part-looks.js). Parts not listed keep the plain labelled box. */
+const LOOK_OF = {
+  'sw-spst': 'toggle', 'sw-spdt': 'slide', 'sw-reed': 'reed', 'pot-trimmer': 'trimmer', fsr: 'fsr', flex: 'flex', soil: 'soil',
+  'd-1n4007': 'diode', 'd-1n4148': 'diode', 'd-schottky': 'diode', 'd-zener': 'diode',
+  'opamp-lm358': 'chip', 'opamp-rr': 'chip', 'opamp-tl07x': 'chip', 'opamp-op07': 'chip', 'opamp-741': 'chip', 'inamp-ina128': 'chip',
+  'q-2n2222': 'to92', 'q-bc547': 'to92', 'q-2n2907': 'to92', 'q-irlz44n': 'to220', 'q-irf540': 'to220', 'q-irf9540': 'to220',
+  'reg-7805': 'to220', 'reg-1117': 'sot223', 'reg-buck': 'buck', 'relay-5v': 'relay', 'relay-12v': 'relay',
+  'cap-100n': 'capDisc', 'cap-100u': 'capElectro', 'cap-1000u': 'capElectro', 'ind-10mh': 'inductor', solenoid: 'solenoid',
+  'buzzer-active': 'buzzer', 'buzzer-passive': 'buzzer', speaker: 'speaker', fan: 'fan', vibe: 'vibe', pump: 'pump', 'led-bar': 'ledbar', 'servo-sg90': 'servo', stepper: 'stepper',
+  hcsr04: 'hcsr04', ky040: 'encoder', 'ir-dist': 'irdist', sound: 'mic', hall: 'to92', 'signal-source': 'person',
+  'gate-not': 'chip', 'gate-and': 'chip', 'gate-or': 'chip', 'gate-xor': 'chip', 'gate-nand': 'chip', 'gate-nor': 'chip', 'gate-dff': 'chip', 'gate-mux2': 'chip',
+};
+
 export const TEMPLATE_GROUPS = ['Switches & resistors', 'Diodes & transistors', 'Power', 'Capacitors & coils', 'Sound, light & motion', 'Sensors & inputs', 'Chips', 'Drone'];
 
 export const TEMPLATES = [
@@ -115,6 +128,7 @@ export const TEMPLATES = [
   chipGates(),
   chipCounter(),
 ].map(t => ({ ...t }));
+for (const t of TEMPLATES) if (LOOK_OF[t.id] && t.package === 'module') t.look = LOOK_OF[t.id];
 
 function chip74hc595() {
   const pins = ['Q1', 'Q2', 'Q3', 'Q4', 'Q5', 'Q6', 'Q7', 'GND', 'Q7S', 'MR', 'SHCP', 'STCP', 'OE', 'DS', 'Q0', 'VCC'];

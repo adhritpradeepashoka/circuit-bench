@@ -23,7 +23,7 @@ export const NATIVE_PARTS = [
     labels: { CLK: 'CLK (A)', DT: 'DT (B)', SW: 'SW (button)', VCC: 'VCC', GND: 'GND' },
     behaviour: { kind: 'encoder', roles: { a: 'CLK', b: 'DT', common: 'GND', sw: 'SW' } },
     note: 'Wire CLK, DT and SW to digital pins and use INPUT_PULLUP.' },
-  { id: 'buzzer', name: 'Buzzer', tag: 'wokwi-buzzer', category: 'Sound', ...mm(17, 20), insertable: true,
+  { id: 'buzzer', name: 'Buzzer', tag: 'wokwi-buzzer', category: 'Sound', ...mm(19.85, 22.25), insertable: true,
     blurb: 'Beeps when powered, or plays tone()',
     labels: { 1: '− (short leg)', 2: '+ (long leg)' },
     behaviour: { kind: 'buzzer', roles: { a: '2', b: '1' }, mode: 'auto', ohms: 150, vmin: 2 } },

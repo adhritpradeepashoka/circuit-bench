@@ -13,7 +13,7 @@ export const WORKSPACE_VERSION = 1;
 const STORE_KEY = 'circuitbench:workspaces';
 const MAX_PARTS = 40, MAX_STARTER = 60, MAX_FILE = 4_000_000;
 
-const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max);
+const str = (v, max) => String(v ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, max).trim();
 const num = (v, lo, hi, d = 0) => { const n = Number(v); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const slug = s => str(s, 40).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
