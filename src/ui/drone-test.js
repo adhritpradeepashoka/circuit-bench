@@ -105,7 +105,7 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
       }
       inner.add(c);
     }
-    { const { THREE } = T, front = new THREE.Mesh(new THREE.ConeGeometry(14, 55, 16), new THREE.MeshBasicMaterial({ color: 0xff6a00, depthTest: false })); front.renderOrder = 5; front.position.set(0, 75, 45); rig.add(front); }   // an orange arrow on top, pointing to the front of the drone
+    { const { THREE } = T, front = new THREE.Mesh(new THREE.ConeGeometry(14, 55, 16), new THREE.MeshBasicMaterial({ color: 0xff6a00, depthTest: false })); front.renderOrder = 5; front.position.set(0, 75, 45); rig.add(front); T.front = front; }   // an orange arrow on top, pointing to the front of the drone
     T.scene.add(rig);
     shadow = new THREE.Mesh(new THREE.CircleGeometry(110, 32), new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.3, depthWrite: false })); shadow.position.z = 2; T.scene.add(shadow);
     const cam = asm.instances.find(i => i.part.drone?.kind === 'camera' && !model.leftOut.includes(i.id));
@@ -116,8 +116,12 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
   }
   function placeCamera() {
     const { THREE, camera, controls } = T, p = new THREE.Vector3(sim.p[0] * 1000, sim.p[1] * 1000, sim.p[2] * 1000);
-    if (!T.prev) { T.prev = p.clone(); camera.position.set(p.x - 330, p.y - 620, p.z + 300); controls.target.copy(p); }
-    if (camSel.value === 'follow') camera.position.add(p.clone().sub(T.prev));
+    const f = new THREE.Vector3(0, 1, 0).applyQuaternion(rig.quaternion), flat = Math.hypot(f.x, f.y), h = Math.atan2(f.x, f.y);
+    if (!T.prev) { T.prev = p.clone(); T.heading = h; camera.position.set(p.x, p.y - 640, p.z + 300); controls.target.copy(p); }       // starts straight behind the drone, so forward is away from you
+    if (camSel.value === 'follow') {
+      camera.position.add(p.clone().sub(T.prev));
+      if (flat > 0.3) { let d = h - T.heading; d = Math.atan2(Math.sin(d), Math.cos(d)); const step = d * Math.min(1, 0.05 + Math.abs(d)); T.heading += step; const off = camera.position.clone().sub(p).applyAxisAngle(new THREE.Vector3(0, 0, 1), -step); camera.position.copy(p).add(off); }   // swings round with the drone, so the sticks always match the screen
+    }
     controls.target.copy(p); T.prev.copy(p); controls.update();
   }
 
@@ -194,9 +198,11 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
     if (fc.error) { errBox.hidden = false; errBox.textContent = `Your sketch stopped: ${fc.error}`; say('The sketch stopped with an error (shown on the right). Fix it and press Run.', true); }
   }
   function visuals(dt) {
+    const front = T.front;
     const { THREE } = T, s = sim; rig.position.set(s.p[0] * 1000, s.p[1] * 1000, s.p[2] * 1000); rig.quaternion.set(...s.q);
     for (const sp of spinners) { const w = s.omega[sp.k], dir = model.motors[sp.k].spin; sp.angle += dir * Math.min(w * dt, 0.9); sp.pivot.setRotationFromAxisAngle(sp.axis, sp.angle); const blur = clamp(w / 1200, 0, 1); sp.disc.material.opacity = 0.28 * blur; sp.blades.traverse(o => { if (o.isMesh) { o.material.transparent = blur > 0.05; o.material.opacity = 1 - 0.65 * blur; } }); }
     const alt = Math.max(0, s.altitude); shadow.position.set(s.p[0] * 1000, s.p[1] * 1000, 2); const sc = 1 + alt * 0.25; shadow.scale.setScalar(sc); shadow.material.opacity = 0.35 / (1 + alt * 0.5);
+    if (front) front.visible = !(camSel.value === 'fpv' && fpvCam);
     if (camSel.value === 'fpv' && fpvCam) { rig.updateMatrixWorld(true); } else placeCamera();
   }
   function paintHud(now) {
