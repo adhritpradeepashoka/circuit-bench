@@ -118,3 +118,16 @@ test('a motor screwed on by one hole swings round that screw, and the second hol
     const far = as.mate(f.id, 'bl-1-top', mo.id, 'mount-3'); assert.ok(!far.ok && /swing|apart/.test(far.error), 'a hole on the far arm cannot be reached by swinging');
   }
 });
+
+test('a tiny whoop stays steady when you push forward at high throttle (the current limit must not turn its corrections upside down)', () => {
+  const m = droneFromAssembly(buildQuad({ frame: 'frame-quad-65-t6.6-16', motor: 'motor-0802-22000', prop: 'prop-1.6x1.2x3-b1', battery: 'battery-1s-450-60', boards: false })); assert.ok(m.ok, m.error);
+  for (const thr of [0.6, 0.8, 1]) {
+    const sim = new DroneSim(m), fc = new SketchController(STARTER_SKETCH, m); fly(sim, fc, 1, RC({ armed: false })); fly(sim, fc, 1.5, RC({ throttle: thr }));
+    let worst = 0; for (let i = 0; i < 3000; i++) { sim.step(fc.tick(sim.sense(), RC({ throttle: thr, pitch: 0.3 }), sim.t)); if (i > 800) worst = Math.max(worst, sim.state.tilt); }
+    assert.ok(worst < 30, `throttle ${thr}: it tilted ${worst.toFixed(0)}° with the stick at 13°`);
+  }
+});
+test('one current limit for all four speed controllers, so a limit never steers the drone', () => {
+  const m = droneFromAssembly(buildQuad()), sim = new DroneSim(m); sim.escs[0].limit = 0.5; sim.step([1000, 1000, 1000, 1000]);
+  assert.ok(sim.escs.every(e => Math.abs(e.limit - sim.escs[0].limit) < 0.05), sim.escs.map(e => e.limit).join());
+});

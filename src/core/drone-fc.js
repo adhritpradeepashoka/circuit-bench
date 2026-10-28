@@ -86,8 +86,8 @@ function loop() {
   wantX = constrain(wantX, -RATE_MAX, RATE_MAX);  wantY = constrain(wantY, -RATE_MAX, RATE_MAX);
 
   // 4. Throttle. In hold-height mode the stick sets the climb speed (centre = hold still).
-  // Raw throttle goes through a curve, so the middle of the stick is the throttle that hovers (like a real radio's throttle curve) and the top is about twice that.
-  const hv = t.hover, top = Math.min(1, hv * 2.2);
+  // Raw throttle goes through a curve, so the middle of the stick is the throttle that hovers (like a real radio's throttle curve) and the top is about twice that (never above 90 %, so a small drone keeps some room to steer at full stick).
+  const hv = t.hover, top = Math.min(0.9, hv * 2.2);
   let thr = r.throttle < 0.5 ? r.throttle * 2 * hv : hv + (r.throttle - 0.5) * 2 * (top - hv);
   if (r.mode === 'althold') {
     const alt = altitude();

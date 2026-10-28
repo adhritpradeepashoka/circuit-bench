@@ -110,8 +110,9 @@ export class Esc {
     const low = !(us > 1050);
     if (!this.armed) { this.lowFor = low ? this.lowFor + dt : 0; if (this.lowFor >= 0.5) { this.armed = true; this.status = 'armed'; } this.output = 0; return 0; }
     // the limits come in gently (a real ESC does it in a few ms)
-    const wantLimit = motorAmps > this.maxAmps ? clamp(this.limit * (this.maxAmps / motorAmps), 0.2, 1) : 1, cutoff = cv < 3.3 ? clamp((cv - 3.0) / 0.3, 0, 1) : 1;
-    this.limit += (Math.min(wantLimit, cutoff) - this.limit) * Math.min(1, dt * 100);
+    // A real ESC lets a motor run over its rating for a moment (burst) and then backs off slowly. A limit that reacts faster than the flight controller does would cut the very motor the controller is pushing harder, and turn its corrections upside down.
+    const wantLimit = motorAmps > this.maxAmps * 1.25 ? clamp(this.limit * (this.maxAmps * 1.25 / motorAmps), 0.2, 1) : 1, cutoff = cv < 3.3 ? clamp((cv - 3.0) / 0.3, 0, 1) : 1;
+    this.limit += (Math.min(wantLimit, cutoff) - this.limit) * Math.min(1, dt * (wantLimit < this.limit ? 8 : 20));
     this.status = this.limit < 0.98 ? (cutoff < 1 ? 'battery nearly flat: cutting power' : 'current limit') : 'armed';
     this.output = low ? 0 : clamp((us - 1050) / 950, 0, 1) * this.limit; return this.output;
   }
@@ -142,9 +143,10 @@ export class DroneSim {
   step(us, dt = DT) {
     const mo = this.model, N = mo.motors.length; let F = [0, 0, 0], Tq = [0, 0, 0], total = this.opts.avionicsAmps;
     this.updatePack(); const perCell = this.volts / mo.battery.cells, vb0 = rotInv(this.q, this.v);
+    { const common = Math.min(...this.escs.map(e => e.limit)); for (const e of this.escs) e.limit = common; }      // one current limit for the whole board: backing one motor off alone would fight the flight controller
     for (let i = 0; i < N; i++) {
       const m = mo.motors[i], thr = this.escs[i].update(us[i] ?? 1000, dt, { motorAmps: this.amps[i], cellVolts: perCell }); this.throttle[i] = thr;
-      const kt = 1 / (m.motor.kv * RPM), target = thr > 0 ? steadyOmega(m.motor, m.prop, thr * this.volts) : 0, lagUp = this.tau[i], lag = target >= this.omega[i] ? lagUp : lagUp * 1.5, maxAlpha = kt * m.motor.maxAmps / this.J[i];
+      const kt = 1 / (m.motor.kv * RPM), target = thr > 0 ? steadyOmega(m.motor, m.prop, thr * this.volts) : 0, lagUp = this.tau[i], lag = target >= this.omega[i] ? lagUp : lagUp * 1.5, maxAlpha = kt * m.motor.maxAmps * 2 / this.J[i];
       const alpha = clamp((target - this.omega[i]) / lag, -maxAlpha, maxAlpha); this.omega[i] = Math.max(0, this.omega[i] + alpha * dt);
       // air flowing along the shaft (climbing, or falling) takes thrust away: it fades to nothing as the climb speed nears what the prop's pitch can push
       const vax = dot(vb0, m.axis), vpitch = Math.max(1, this.omega[i] / (2 * Math.PI) * m.prop.pitchIn * 0.0254), inflow = clamp(vax / vpitch, 0, 1);
