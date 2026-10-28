@@ -349,10 +349,9 @@ export function initAssembly({ editor, projects = null }) {
   const findPart = id => everyPart().find(p => p.id === id) || dronePart(id);
   // the floating bar over the 3D view
   const mkBtn = (label, title, fn, id) => { const b = el('button', { type: 'button', className: 'asm-tool', textContent: label, title, ariaLabel: title, id }); b.addEventListener('click', fn); return b; };
-  const undoBtn = mkBtn('↶', 'Undo (Ctrl+Z)', () => undo(), 'asmUndo'), redoBtn = mkBtn('↷', 'Redo (Ctrl+Y)', () => redo(), 'asmRedo');
   const joinBtn = mkBtn('Join holes', 'Click a hole on one part, then a hole on another (J)', () => setJoin(!joinMode), 'asmJoin'), xrayBtn = mkBtn('X-ray', 'See through the parts', () => { xray = !xray; xrayBtn.classList.toggle('on', xray); render(); }, 'asmXray');
   const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
-    undoBtn, redoBtn, el('span', { className: 'asm-tsep' }), ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
+    ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
     el('span', { className: 'asm-tsep' }), joinBtn, xrayBtn, mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
@@ -440,7 +439,18 @@ export function initAssembly({ editor, projects = null }) {
   // — history, saving
   let batch = false;
   const keep = () => { if (batch) return; history.push(asm.snapshot()); if (history.length > 60) history.shift(); future = []; refreshTools(); };
-  const refreshTools = () => { undoBtn.disabled = !history.length; redoBtn.disabled = !future.length; };
+  // The top bar is the one place for undo, redo and delete. In Circuit it drives the circuit (editor.js keeps it current);
+  // in Assembly it drives the 3D scene; the tools that make no sense in the current tab are greyed out.
+  const $t = id => document.getElementById(id);
+  const refreshTools = () => syncTop();
+  function syncTop() {
+    if (view === 'circuit') { editor.afterStructureChange?.(); for (const id of ['selectTool', 'wireTool', 'rotateTool', 'deleteTool', 'zoomOut', 'zoomFit', 'zoomIn']) { const b = $t(id); if (b) b.disabled = false; } return; }
+    const build = view === 'assembly' && mode === 'build', set = (id, off, why) => { const b = $t(id); if (!b) return; b.disabled = off; if (!b.dataset.t) b.dataset.t = b.title; b.title = off && why ? `${b.dataset.t} (${why})` : b.dataset.t; };
+    const none = view === 'test' ? 'not used in the Test tab' : 'circuit tool';
+    set('selectTool', true, 'circuit tool'); set('wireTool', true, 'circuit tool'); set('rotateTool', true, 'circuit tool'); set('zoomOut', true, 'use the mouse wheel in 3D'); set('zoomIn', true, 'use the mouse wheel in 3D'); set('zoomFit', true, 'use Fit in the 3D view');
+    set('undoTool', !build || !history.length, build ? 'nothing to undo' : none); set('redoTool', !build || !future.length, build ? 'nothing to redo' : none);
+    set('deleteTool', !build || !selected, build ? 'select a part first' : none);
+  }
   function applyScene() {
     const t = three; if (!t) return;
     for (const c of [...t.sceneRoot.children]) if (!asm.instances.some(i => i.obj === c)) t.sceneRoot.remove(c);
@@ -565,6 +575,7 @@ export function initAssembly({ editor, projects = null }) {
     }
   }
   function render() {
+    if (view !== 'circuit') syncTop();
     const t = three; if (!t) return;
     for (const inst of asm.instances) {
       inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true);
@@ -736,7 +747,7 @@ export function initAssembly({ editor, projects = null }) {
     joinMode = false; joinBtn.classList.remove('on'); render();
   }
   async function setMode(m) {
-    mode = m; for (const [k, b] of Object.entries(modeBtn)) { b.classList.toggle('on', k === m); b.setAttribute('aria-pressed', String(k === m)); }
+    mode = m; syncTop(); for (const [k, b] of Object.entries(modeBtn)) { b.classList.toggle('on', k === m); b.setAttribute('aria-pressed', String(k === m)); }
     partBox.hidden = m !== 'part'; buildBox.hidden = m !== 'build';
     const t = await load3d();
     t.root.visible = t.gizmos.visible = m === 'part'; t.sceneRoot.visible = t.sceneGizmos.visible = m === 'build'; toolbarEl.hidden = m !== 'build'; helpEl.hidden = m !== 'build';
@@ -759,7 +770,7 @@ export function initAssembly({ editor, projects = null }) {
     if (v !== 'test') droneTest?.leave();
     if (v === 'test') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare: async () => { await load3d(); await loadExamples(); await restoreSaved(); }, buildExample: buildExampleQuad, goAssembly: () => show('assembly') }); await droneTest.enter(); }
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
-    editor.emit?.('robot-view', v);
+    editor.emit?.('robot-view', v); syncTop();
   }
   for (const [id, b] of Object.entries(tabBtn)) b.addEventListener('click', () => show(id));
   const sync = () => {
@@ -769,6 +780,12 @@ export function initAssembly({ editor, projects = null }) {
     if (on && !tabBtn.circuit.classList.contains('on') && !tabBtn.assembly.classList.contains('on') && !tabBtn.test.classList.contains('on')) tabBtn.circuit.classList.add('on');
   };
   editor.on('catalog', sync); sync();
+  // the top bar's undo / redo / delete act on the 3D scene while Assembly is showing (captured before the circuit handlers see the click)
+  document.querySelector('.stage .toolbar')?.addEventListener('click', e => {
+    if (view === 'circuit') return; const b = e.target.closest?.('button'); if (!b) return;
+    const act = { undoTool: undo, redoTool: redo, deleteTool: () => selected && removeInst(selected) }[b.id]; if (!act) return;   // (the tab buttons share this bar)
+    e.stopImmediatePropagation(); e.preventDefault(); if (!b.disabled && view === 'assembly' && mode === 'build') act();
+  }, true);
   /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */
   const ai = {
     active: () => view === 'assembly',

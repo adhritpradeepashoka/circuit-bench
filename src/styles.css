@@ -1033,3 +1033,7 @@ body:not(.robot-asm) #robotParts { display: none; }
 .fly-log { margin: 0; padding: 6px 8px; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace; background: #20302a; color: #cde9d9; border-radius: 6px; max-height: 120px; overflow: auto; white-space: pre-wrap; }
 .fly-log[hidden], #flyErr[hidden] { display: none; }
 @media (max-width: 760px) { .fly-stick { width: 104px; height: 104px; } .fly-hud { font-size: 11px; } }
+/* the circuit-only status text and zoom figure mean nothing over the 3D views */
+.robot-asm .toolbar .status { visibility: hidden; }
+.robot-asm .toolbar .zoom-readout:disabled { opacity: .35; cursor: default; }
+.tool.active:disabled { background: none; box-shadow: none; }          /* a greyed-out tool should not also look pressed */
