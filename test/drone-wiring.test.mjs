@@ -14,7 +14,7 @@ const bench = ({ map = GOOD, orders = {}, drop = [], cam = true } = {}) => ({
 });
 
 test('the drone parts are real sprites with a pin on every pad and wire tip', () => {
-  const ts = TEMPLATES.filter(t => t.id.startsWith('drone-')); assert.equal(ts.length, 4);
+  const ts = TEMPLATES.filter(t => t.id.startsWith('drone-')); assert.equal(ts.length, 9);
   for (const t of ts) { const { id, group, ...raw } = t; const v = validatePartSpec({ ...raw, id: `custom-${id}` }); assert.ok(v.ok, `${id}: ${v.errors}`); assert.equal(v.spec.package, 'sprite'); const l = layoutSpec(v.spec); assert.ok(l.pins.every(p => p.x >= 0 && p.x <= l.w && p.y >= 0 && p.y <= l.h), id); }
   const aio = TEMPLATES.find(t => t.id === 'drone-aio'); assert.equal(aio.pins.length, 2 + 12 + 3);
 });

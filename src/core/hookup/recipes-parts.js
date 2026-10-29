@@ -196,9 +196,9 @@ const slime = phase(OTHER)((c, { type }) => {
 });
 
 const drone = phase(OTHER)((c, { type }) => {
-  c.say('Drone parts are wired to each other, not to an Arduino: battery to the AIO, each motor to a motor pad (M1–M4), the camera to CAM. Then the Test tab flies what you wired.');
+  c.say('Drone parts are wired to each other, not to an Arduino: battery to the AIO (or, on a big drone, to the ESC with a capacitor across the battery pads and the flight controller M1–M4 pads joined to the ESC S1–S4 pads), each motor to a motor pad (M1–M4), the camera to CAM. Then the Test tab flies what you wired.');
   c.mem.informational = true;
 });
 
-export const PARTS_BY_TYPE = { ...Object.fromEntries(['aio', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
+export const PARTS_BY_TYPE = { ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
 export const PARTS_BY_KIND = { diode, npn: transistor, pnp: transistor, nmos: transistor, pmos: transistor, regulator, capacitor, inductor, opamp, inamp: bioAmp, 'signal-source': bioAmp, logic: logicChip };

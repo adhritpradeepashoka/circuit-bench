@@ -11,7 +11,7 @@ function pad(p, { r = 5.4, label = p.id, dx = 0, dy = -8, anchor = 'middle', siz
     + `<text x="${p.x + dx}" y="${p.y + dy}" text-anchor="${anchor}" font-size="${size}" font-family="sans-serif" font-weight="700" fill="#f2f2f2">${esc(label)}</text>`;
 }
 
-function aio(spec, w, h, pins) {
+function aio(spec, w, h, pins, { fcOnly = false } = {}) {
   const by = Object.fromEntries(pins.map(p => [p.id, p])), name = esc(spec.label || 'AIO');
   const motorLabel = { 1: 'M1', 2: 'M2', 3: 'M3', 4: 'M4' };
   const groups = [1, 2, 3, 4].map(k => {
@@ -33,7 +33,7 @@ function aio(spec, w, h, pins) {
   const led = `<circle cx="${cx + 52}" cy="${cy - 8}" r="2.2" fill="#3dd16a"/><circle cx="${cx + 52}" cy="${cy + 2}" r="2.2" fill="#ff9d2e"/>`;
   return svg(w, h, `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="9" fill="${spec.color}" stroke="#05080c" stroke-width="1.4"/><rect x="5" y="5" width="${w - 10}" height="${h - 10}" rx="7" fill="none" stroke="#ffffff" stroke-opacity=".08"/>
     ${holes}<path d="M${cx} 22 l-6 10 h12 z" fill="#f2f2f2" opacity=".9"/><text x="${cx}" y="42" text-anchor="middle" font-size="5.2" font-family="sans-serif" font-weight="700" fill="#f2f2f2">FRONT</text>
-    ${mcu}${gyro}${caps}${big}${coil}${led}${usb}${groups}${bat}${cam}
+    ${mcu}${gyro}${caps}${fcOnly ? '' : big + coil}${led}${usb}${groups}${bat}${cam}
     <text x="${cx}" y="${cy + 34}" text-anchor="middle" font-size="6.4" font-family="sans-serif" font-weight="800" fill="#f2f2f2">${name}</text>
     <text x="${cx}" y="${cy + 41}" text-anchor="middle" font-size="4.4" font-family="sans-serif" fill="#cfd8e3">${esc(spec.sprite.note || 'FC + 4-in-1 ESC')}</text>`);
 }
@@ -67,7 +67,55 @@ function camera(spec, w, h, pins) {
     <text x="${cx}" y="${cy + S - 1.5}" text-anchor="middle" font-size="5" font-family="sans-serif" font-weight="700" fill="#c8ced6">${esc(spec.sprite.note || 'FPV')}</text>`);
 }
 
+const inject = (svgText, extra) => svgText.replace(/<\/svg>$/, `${extra}</svg>`);
+const by = pins => Object.fromEntries(pins.map(p => [p.id, p]));
+const small = (p, label, o = {}) => (p ? pad(p, { r: 4.6, label, dy: 12.5, size: 5.2, ...o }) : '');
+
+/** A separate flight controller (the "FC" of a stack): processor, IMU, USB, M1–M4 signal pads, 5V / G / CAM / VTX and the receiver UART. */
+function fcBoard(spec, w, h, pins) {
+  const P = by(pins), side = { r: 4.6, dx: 9, dy: 2, anchor: 'start', size: 5.6 }, right = { r: 4.6, dx: -9, dy: 2, anchor: 'end', size: 5.6 };
+  const extra = ['M1', 'M2', 'M3', 'M4'].map(id => small(P[id], id, { dy: -8 })).join('')
+    + [['VTX', 'VTX'], ['5V', '5V'], ['G', 'GND'], ['CAM', 'CAM']].map(([id, l]) => (P[id] ? pad(P[id], { ...side, label: l }) : '')).join('')
+    + [['RX1', 'RX1'], ['TX1', 'TX1']].map(([id, l]) => (P[id] ? pad(P[id], { ...right, label: l }) : '')).join('');
+  return inject(aio({ ...spec, sprite: { ...spec.sprite, note: spec.sprite.note || 'flight controller' } }, w, h, pins.filter(p => !['5V', 'G', 'CAM'].includes(p.id)), { fcOnly: true }), extra);
+}
+/** The 4-in-1 ESC of a stack: battery pads, four motor outputs, S1–S4 signal pads (to the FC's M1–M4), 5V out and G. */
+function escBoard(spec, w, h, pins) {
+  const P = by(pins);
+  const extra = [1, 2, 3, 4].map(k => small(P[`S${k}`], `S${k}`, { dy: -8 })).join('') + [['5V', '5V'], ['G', 'GND']].map(([id, l]) => (P[id] ? pad(P[id], { r: 4.6, label: l, dx: 9, dy: 2, anchor: 'start', size: 5.6 }) : '')).join('');
+  return inject(aio({ ...spec, sprite: { ...spec.sprite, note: spec.sprite.note || '4-in-1 ESC' } }, w, h, pins.filter(p => !['5V', 'G'].includes(p.id)), {}), extra);
+}
+/** A low-ESR electrolytic capacitor with its two legs: the long leg is +, the stripe marks −. It goes across the battery pads. */
+function capacitor(spec, w, h, pins) {
+  const P = by(pins), cx = 44, cy = h / 2, R = 30, leg = (p, c) => (p ? `<path d="M${cx + R - 4} ${p.y} L ${p.x - 6} ${p.y}" stroke="${c}" stroke-width="2.4" stroke-linecap="round"/><rect x="${p.x - 7}" y="${p.y - 2.6}" width="8" height="5.2" rx="1.2" fill="#cfd3d8" stroke="#8b9096" stroke-width=".6"><title>${esc(p.label || p.id)}</title></rect>` : '');
+  return svg(w, h, `${leg(P['+'], '#d6322b')}${leg(P['-'], '#9aa1a9')}<circle cx="${cx}" cy="${cy}" r="${R}" fill="${spec.color}" stroke="#05080c" stroke-width="1.4"/><circle cx="${cx}" cy="${cy}" r="${R - 5}" fill="none" stroke="#ffffff" stroke-opacity=".18"/>
+    <clipPath id="capc"><circle cx="${cx}" cy="${cy}" r="${R - 0.7}"/></clipPath><rect x="${cx + R - 17}" y="${cy - R}" width="14" height="${2 * R}" fill="#d8dde3" opacity=".9" clip-path="url(#capc)"/><text x="${cx + R - 10}" y="${cy + 4}" text-anchor="middle" font-size="13" font-weight="800" font-family="sans-serif" fill="#10161a">−</text>
+    <text x="${cx - 8}" y="${cy - 4}" text-anchor="middle" font-size="7.5" font-weight="800" font-family="sans-serif" fill="#f2f2f2">1000µF</text><text x="${cx - 8}" y="${cy + 8}" text-anchor="middle" font-size="6.5" font-weight="700" font-family="sans-serif" fill="#cfd8e3">35V</text>
+    <text x="${cx - 8}" y="${cy + 19}" text-anchor="middle" font-size="5" font-family="sans-serif" fill="#cfd8e3">low ESR</text>`);
+}
+/** A small radio receiver (ELRS / Crossfire style) with its antenna wire and four pads: 5V, G, TX, RX. */
+function receiver(spec, w, h, pins) {
+  const P = by(pins), x0 = 12, bw = w - 60, ys = pins.map(p => p.y);
+  return svg(w, h, `<path d="M${x0 + 4} ${h / 2} C 2 ${h / 2 - 20}, 0 ${h / 2 - 30}, 6 4" fill="none" stroke="#1b1b1f" stroke-width="2.4" stroke-linecap="round"/><rect x="${x0}" y="${Math.min(...ys) - 8}" width="${bw}" height="${Math.max(...ys) - Math.min(...ys) + 16}" rx="5" fill="${spec.color}" stroke="#05080c" stroke-width="1.4"/>
+    <rect x="${x0 + 14}" y="${h / 2 - 12}" width="22" height="24" rx="2" fill="#1c1c20" stroke="#000"/><text x="${x0 + 25}" y="${h / 2 + 3}" text-anchor="middle" font-size="5" font-family="monospace" fill="#8d8d99">RX</text>
+    <circle cx="${x0 + 52}" cy="${h / 2 - 8}" r="2.4" fill="#3dd16a"/><text x="${x0 + bw / 2}" y="${Math.max(...ys) + 4}" font-size="6" font-weight="800" font-family="sans-serif" fill="#ffffff" text-anchor="middle">${esc(spec.sprite.note || 'receiver')}</text>
+    ${['5V', 'G', 'TX', 'RX'].map(id => (P[id] ? `<path d="M${x0 + bw} ${P[id].y} L ${P[id].x - 6} ${P[id].y}" stroke="${{ '5V': '#d6322b', G: '#1b1b1f', TX: '#e5c52b', RX: '#2b9bd6' }[id]}" stroke-width="2.4"/><rect x="${P[id].x - 7}" y="${P[id].y - 2.6}" width="8" height="5.2" rx="1.2" fill="#cfd3d8" stroke="#8b9096" stroke-width=".6"><title>${esc(P[id].label || id)}</title></rect><text x="${x0 + bw - 3}" y="${P[id].y + 2}" text-anchor="end" font-size="5.4" font-weight="700" font-family="sans-serif" fill="#f2f2f2">${id === 'G' ? 'GND' : id}</text>` : '')).join('')}`);
+}
+/** A 5.8 GHz video transmitter: a shielded can with a heat-sink and an antenna; pigtail VIN, G, VID. */
+function vtx(spec, w, h, pins) {
+  const P = by(pins), x0 = 10, bw = w - 62, ys = pins.map(p => p.y);
+  return svg(w, h, `<path d="M${x0 + bw / 2} 8 L ${x0 + bw / 2} 0" stroke="#c9ccd1" stroke-width="3" stroke-linecap="round"/><rect x="${x0}" y="8" width="${bw}" height="${h - 16}" rx="5" fill="${spec.color}" stroke="#05080c" stroke-width="1.4"/>
+    <rect x="${x0 + 8}" y="16" width="${bw - 16}" height="${h - 32}" rx="3" fill="#c9ccd1" stroke="#8b9096"/>${[0, 1, 2, 3, 4].map(i => `<path d="M${x0 + 12} ${22 + i * 9} h${bw - 24}" stroke="#8b9096" stroke-width="1"/>`).join('')}
+    <text x="${x0 + bw / 2}" y="${h / 2 + 3}" text-anchor="middle" font-size="9" font-weight="800" font-family="sans-serif" fill="#10161a">VTX</text><text x="${x0 + bw / 2}" y="${h - 20}" text-anchor="middle" font-size="5.4" font-family="sans-serif" fill="#2a2e33">${esc(spec.sprite.note || '5.8 GHz')}</text>
+    ${['VIN', 'G', 'VID'].map(id => (P[id] ? `<path d="M${x0 + bw} ${P[id].y} L ${P[id].x - 6} ${P[id].y}" stroke="${{ VIN: '#d6322b', G: '#1b1b1f', VID: '#e5c52b' }[id]}" stroke-width="2.4"/><rect x="${P[id].x - 7}" y="${P[id].y - 2.6}" width="8" height="5.2" rx="1.2" fill="#cfd3d8" stroke="#8b9096" stroke-width=".6"><title>${esc(P[id].label || id)}</title></rect>` : '')).join('')}`);
+}
+
 export function droneSprite(art, spec, w, h, pins) {
+  if (art === 'drone-fc') return fcBoard(spec, w, h, pins);
+  if (art === 'drone-esc') return escBoard(spec, w, h, pins);
+  if (art === 'drone-cap') return capacitor(spec, w, h, pins);
+  if (art === 'drone-rx') return receiver(spec, w, h, pins);
+  if (art === 'drone-vtx') return vtx(spec, w, h, pins);
   if (art === 'drone-aio') return aio(spec, w, h, pins);
   if (art === 'drone-motor') return motor(spec, w, h, pins);
   if (art === 'drone-battery') return battery(spec, w, h, pins);
