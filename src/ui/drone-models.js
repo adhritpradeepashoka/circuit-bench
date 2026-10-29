@@ -3,6 +3,8 @@
 // green circuit boards …); those meshes are flagged `userData.fixed` so the Assembly view's per-instance tint leaves them alone.
 export const DRONE_COLOURS = { carbon: 0x24282c, motorBase: 0x2b2f33, bell: 0x2f8fa8, steel: 0xdfe3e6, prop: 0x58b4e8, hub: 0x20262b, lipo: 0x2f5fc9, label: 0xf2f4f6, xt60: 0xf2c200, fc: 0x1f7a44, esc: 0x262c33, chip: 0x111417, camBody: 0x15181b, glass: 0x0e1c28, lens: 0xb8c0c6, brass: 0xc9a24a, usb: 0xc8ced3 };
 
+/** How far a real FPV camera is tilted up by default (the usual freestyle/race angle). The Test tab's FPV view starts from the same angle. */
+export const CAMERA_TILT_DEG = 25;
 export function buildDroneMesh(THREE, part) {
   const d = part.drone, g = new THREE.Group(), C = DRONE_COLOURS;
   const add = (geo, x = 0, y = 0, z = 0, color = C.carbon, o = {}) => {
@@ -58,9 +60,16 @@ export function buildDroneMesh(THREE, part) {
     add(new THREE.BoxGeometry(8, 6, 3), 0, side / 2 - 2, 1.6 + 1.5, C.usb, { metal: 0.8, rough: 0.3 });                                                  // USB port
     if (d.board.kind !== 'fc') { add(new THREE.BoxGeometry(side * 0.7, 4, 3), 0, -side / 2 + 4, 1.6 + 1.5, C.chip); const cap = new THREE.CylinderGeometry(3.4, 3.4, 8, 20); cap.rotateX(Math.PI / 2); add(cap, side * 0.3, 0, 1.6 + 4, 0x2a2e33, { metal: 0.5 }); }   // MOSFET row and a big capacitor
   } else if (d.kind === 'camera') {
-    const [l, w, h] = d.sizeMm; add(new THREE.BoxGeometry(l, w, h * 0.7), 0, 0, h * 0.35, C.camBody);                                               // the body
-    add(new THREE.CylinderGeometry(l * 0.34, l * 0.34, w * 0.6, 28), 0, w * 0.4, h * 0.5, C.lens, { metal: 0.8, rough: 0.3 });                           // the lens barrel, pointing forward (+Y)
-    const glass = new THREE.CircleGeometry(l * 0.26, 28); glass.rotateX(-Math.PI / 2); add(glass, 0, w * 0.7 + 0.1, h * 0.5, C.glass, { metal: 0.2, rough: 0.1 });
+    // An FPV camera as it is really flown: sitting on a small wedge, tilted up 25° so the lens looks a little above the horizon, lens forward (+Y).
+    // The mount holes stay flat on the frame (z = 0), so saved scenes and joints are unchanged; only the body leans. The Test tab's FPV view uses the same 25°.
+    const [l, w, h] = d.sizeMm, th = CAMERA_TILT_DEG * Math.PI / 180, piv = -w / 2;       // the body turns about its back-bottom edge
+    const lean = (geo, x, y, z) => { geo.translate(x, y - piv, z); geo.rotateX(th); return geo; };
+    add(lean(new THREE.BoxGeometry(l, w, h * 0.7), 0, 0, h * 0.35 + 0.1), 0, piv, 0, C.camBody);                                                       // the body
+    add(lean(new THREE.CylinderGeometry(l * 0.34, l * 0.34, w * 0.6, 28), 0, w * 0.4, h * 0.5), 0, piv, 0, C.lens, { metal: 0.8, rough: 0.3 });        // the lens barrel
+    const glass = new THREE.CircleGeometry(l * 0.26, 28); glass.rotateX(-Math.PI / 2); add(lean(glass, 0, w * 0.7 + 0.1, h * 0.5), 0, piv, 0, C.glass, { metal: 0.2, rough: 0.1 });
+    const wedge = new THREE.Shape(); wedge.moveTo(0, 0); wedge.lineTo(w, 0); wedge.lineTo(w, w * Math.tan(th)); wedge.lineTo(0, 0);               // the wedge it sits on (side view: y along, z up)
+    const wg = new THREE.ExtrudeGeometry(wedge, { depth: l * 0.8, bevelEnabled: false }); wg.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1)); wg.translate(-l * 0.4, 0, 0);
+    add(wg, 0, piv, 0, C.carbon);
   } else if (d.kind === 'standoff') { const s = new THREE.Shape(); s.absarc(0, 0, d.r, 0, Math.PI * 2, false); const h = new THREE.Path(); h.absarc(0, 0, d.hd / 2, 0, Math.PI * 2, true); s.holes.push(h); plate(s, d.h, 0, C.brass, { metal: 0.8, rough: 0.3 }); }
   return g;
 }

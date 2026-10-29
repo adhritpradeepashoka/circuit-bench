@@ -4,6 +4,7 @@
 import { droneFromAssembly, DroneSim, DT } from '../core/drone-sim.js';
 import { SLOT_POSITIONS } from '../core/drone-wiring.js';
 import { SketchController, STARTER_SKETCH } from '../core/drone-fc.js';
+import { CAMERA_TILT_DEG } from './drone-models.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
 const clamp = (v, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, v));
@@ -116,9 +117,9 @@ export function initDroneTest({ host, getAsm, getWiring, prepare, buildExample, 
 
   /* ── putting the drone on screen ── */
   function dispose() { if (rig) { T.scene.remove(rig); rig = null; } if (shadow) { T.scene.remove(shadow); shadow = null; } spinners = []; fpvCam = null; }
-  /** Where the FPV camera looks up or down: as it was built if it was built tilted, else the usual 25° up; "Flat" levels it with the horizon. */
+  /** Where the FPV camera looks up or down: as it wthe camera's own 25° lean (what the 3D model shows) plus any extra tilt you built in; "Flat" levels it with the horizon. */
   function aimFpv() {
-    if (!fpvCam || !fpvInfo) return; const { THREE } = T, { p, ln, built } = fpvInfo, tilt = fpvFlat ? 0 : (Math.abs(built) > 0.03 ? built : 25 * Math.PI / 180);
+    if (!fpvCam || !fpvInfo) return; const { THREE } = T, { p, ln, built } = fpvInfo, tilt = fpvFlat ? 0 : CAMERA_TILT_DEG * Math.PI / 180 + built;      // the camera's own 25° lean, plus any extra tilt you built in
     fpvCam.position.copy(p); fpvCam.lookAt(p.clone().add(new THREE.Vector3(ln[0] * Math.cos(tilt), ln[1] * Math.cos(tilt), Math.sin(tilt)))); fpvCam.updateMatrixWorld(true);
     flatBtn.textContent = fpvFlat ? 'Camera: flat (tap to restore)' : 'Make camera flat'; flatBtn.setAttribute('aria-pressed', String(fpvFlat));
   }
