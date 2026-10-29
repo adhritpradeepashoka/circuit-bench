@@ -868,6 +868,15 @@ export function initAssembly({ editor, projects = null }) {
     active: () => view === 'assembly',
     async describe() { await loadExamples(); const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId); const presets = DRONE_PRESETS.map(([name, id]) => { const p = dronePart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
       d.parts += `\n${presets.join('\n')}\n${DRONE_ID_HELP}`; return d; },
+    /** What the instant 3D assistant needs: placed parts (with their kind, hole ids and frame size), the joints, and the parts list. */
+    async snapshot() {
+      await loadExamples();
+      return {
+        instances: asm.instances.map(i => ({ id: i.id, part: i.part.id, name: i.part.name, kind: i.part.drone?.kind || null, frames: i.part.frames.map(f => f.id), wheelbase: i.part.drone?.wheelbase })),
+        mates: asm.mates.map(m => ({ a: { inst: m.a.inst, frame: m.a.frame }, b: { inst: m.b.inst, frame: m.b.frame } })),
+        catalog: everyPart().map(p => ({ id: p.id, name: p.name, category: p.category })),
+      };
+    },
     async run(ops) {
       const t = await load3d(); attach(t); await loadExamples(); const before = asm.snapshot(), ctx = { anchorId, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
       batch = true; let out; try { out = await runAssemblyOps(asm, ops, ctx); } finally { batch = false; }

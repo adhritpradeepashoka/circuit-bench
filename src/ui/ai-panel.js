@@ -7,6 +7,7 @@
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
 import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
+import { quickAssembly } from '../core/quick-assembly.js';
 import { recipeEdit } from '../core/recipes.js';
 import { eligibleForLearning, prepareLearning, templatizeInstruction } from '../core/learned.js';
 import { learnedRecipes, addLearned, learningOn, setLearning } from '../core/learned-store.js';
@@ -362,6 +363,14 @@ export function initAiPanel(editor, code, sim = null) {
         if (u) quick = u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation } : u;
         tinyMs = Date.now() - t0; if (quick) quick.viaModel = true;
       } catch { /* the model is optional: no file, still loading, or an old browser — carry on */ }
+    }
+    if (in3d && !quick) {              // plain 3D requests ("put motors on", "props on the motors") are answered instantly by rules: no model, no key
+      let q3 = null; try { q3 = quickAssembly(text, await asmApi.snapshot()); } catch { /* fall through to the AI */ }
+      if (q3) {
+        messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
+        const ops = q3.actions.slice(0, 60), m3 = { id: ++seq, role: 'assistant', text: q3.explanation, summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
+        if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); saveChat(); render(); return;
+      }
     }
     if (!quick && tinyOn() && in3d) {
       messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
