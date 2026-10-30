@@ -424,7 +424,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
       try { return await compile(fs, { signal, fqbn: fqbn || boardOf() || undefined }); }
       catch (err) { return { ok: false, unreachable: true, diagnostics: [], output: String(err?.message || err), error: String(err?.message || err) }; }
     },
-    compile: build, compileAll, setBoards, showBoard, onBoardView: fn => listeners.board.push(fn), open: () => setOpen(true), goToLine,
+    compile: build, compileAll, setBoards, showBoard, onBoardView: fn => listeners.board.push(fn), open: () => setOpen(true), close: () => setOpen(false), goToLine,
     /** Tell the dock which board the sketch is for: fn() → fqbn. */
     setBoard(fn) { boardOf = fn; },
     onChange: fn => listeners.change.push(fn),

@@ -271,6 +271,8 @@ export function initTour({ editor, sim, code, projects }) {
     end(true);
     sim?.stop?.();
     if (projects) await projects.create({ name: 'First circuit: Blink' });
+    code?.close?.();                                                  // the code panel covers half the bench: the guide needs the whole circuit in view
+    await new Promise(r => requestAnimationFrame(() => r())); editor.fit();
     start(guide(), { guided: true });
   }
 
