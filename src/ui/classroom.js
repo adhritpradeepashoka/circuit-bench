@@ -68,7 +68,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
     kindBody.replaceChildren(el('h1', 'start-h', 'Welcome to CircuitBench'), el('p', 'start-sub', 'An electronics lab in your browser. Build real circuits, snap together blocks or write code, and watch it run.'));
     const opts = el('div', 'kind-opts');
     const opt = (title, note, fn) => { const b = el('button', 'kind-opt'); b.type = 'button'; b.append(el('b', '', title), el('span', '', note)); b.addEventListener('click', fn); return b; };
-    opts.append(opt('Build on my own', 'No account needed. Start building straight away.', enter));
+    opts.append(opt('Start building', 'No account needed. We\'ll guide you through your first circuit.', enter));
     if (account?.enabled !== false) {
       const need = who => () => { lset(INTENT, who); status('Sign in with Google (top right) to continue.'); const h = $('startAccount'); h.classList.add('nudge'); setTimeout(() => h.classList.remove('nudge'), 1800); };
       opts.append(opt('I’m a teacher', 'Sign in to make classes and follow your students’ progress.', need('teacher')), opt('I’m a student', 'Sign in, then enter the class code your teacher gave you.', need('student')));

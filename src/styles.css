@@ -482,6 +482,8 @@ button { cursor: pointer; }
 .tour-skip { border: 0; background: none; color: #7b8983; padding: 0 4px !important; font-weight: 600 !important; }
 .tour-skip:hover { color: var(--text); text-decoration: underline; }
 .tour-back { border: 1px solid var(--line); background: var(--surface); color: #44524c; }
+.tour-assist { border: 1px solid var(--blue); background: transparent; color: var(--blue); }
+.tour-assist:hover { background: rgba(26, 115, 232, .08); }
 .tour-next { border: 0; background: var(--blue); color: var(--on-blue); }
 .tour-next:hover { background: #1554d1; }
 @media (prefers-reduced-motion: reduce) { .tour-rings i, .tour-wait i { animation: none; } .tour-card, .tour-dim path { transition: none; } }

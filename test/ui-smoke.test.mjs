@@ -1346,23 +1346,36 @@ test('ui: no tool switching — in Select mode a pin starts a wire, a part body 
   assert.equal(editor.state.wires.length, 1, 'no stray wire from the board drag');
 });
 
-test('ui: first-visit tour — "Welcome to CircuitBench!", one popup per button/area (every target exists), then what you need for a first project; shown once', async () => {
+test('ui: first visit — one short card that goes straight to building ("Explore on my own" is the way out); the long tour of every button is under Settings; shown once', async () => {
   const { w, editor, code, sim } = boot();
   const doc = w.document;
   const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
   const tour = w.__lab.initTour({ editor, sim, code, projects });
   tour.maybeAutoStart();
-  assert.equal(tour.active, true, 'first visit → the tour opens by itself');
+  assert.equal(tour.active, true, 'first visit → a card opens by itself');
+  assert.equal(doc.getElementById('tourTitle').textContent, "Let's light up your first LED");
+  assert.equal(doc.getElementById('tourNext').textContent, 'Build my first circuit');
+  assert.equal(doc.getElementById('tourSkip').textContent, 'Explore on my own');
+  doc.getElementById('tourSkip').click();
+  assert.equal(tour.active, false, 'exploring on your own just closes it');
+  tour.maybeAutoStart();
+  assert.equal(tour.active, false, 'not shown again once seen');
+  assert.equal(doc.getElementById('helpBtn'), null, 'the ? button is gone; Settings replays the tour');
+
+  tour.start();                                              // the full tour, from Settings
+  assert.equal(tour.active, true, 'Settings brings it back');
   assert.equal(doc.getElementById('tourTitle').textContent, 'Welcome to CircuitBench!');
   const seen = [];
   while (tour.step && tour.index < 40) {
     const s = tour.step;
     seen.push(s.title);
     for (const t of (Array.isArray(s.spots) ? s.spots : [])) assert.ok(doc.querySelector(t), `"${s.title}" points at ${t}, which exists`);
+    assert.ok(!s.when, `"${s.title}": the intro tour never makes you click something to go on`);
     if (/first project/.test(s.title)) break;
     doc.getElementById('tourNext').click();
   }
-  for (const t of ['Your workbench', 'Parts', 'Search parts', 'Rotate & delete', 'Undo & redo', 'Zoom', 'Code', 'Ask AI', 'Your project', 'Community — click it', 'The full blog — click it']) assert.ok(seen.includes(t), `covers ${t}`);
+  assert.ok(seen.length <= 15, `the tour is short (${seen.length} cards)`);
+  for (const t of ['Your workbench', 'Parts', 'Rotate & delete', 'Code', 'Ask AI', 'Your project', 'Community']) assert.ok(seen.includes(t), `covers ${t}`);
   assert.ok(seen.some(t => /^Select/.test(t)) && seen.some(t => /^Run/.test(t)) && seen.some(t => /^Wire-only/.test(t)));
   assert.match(doc.getElementById('tourBody').textContent, /1 LED.*1 resistor \(220 Ω\).*2 wires/s);
   doc.getElementById('tourSkip').click();                  // "I'll explore on my own"
@@ -1372,12 +1385,25 @@ test('ui: first-visit tour — "Welcome to CircuitBench!", one popup per button/
   assert.equal(doc.getElementById('tourNext').textContent, 'Start creating');
   doc.getElementById('tourNext').click();
   assert.equal(tour.active, false);
-  tour.maybeAutoStart();
-  assert.equal(tour.active, false, 'not shown again once seen');
-  assert.equal(doc.getElementById('helpBtn'), null, 'the ? button is gone; Settings replays the tour');
-  tour.start();
-  assert.equal(tour.active, true, 'Settings brings it back');
-  tour.end();
+});
+
+test('ui: "Do this for me" — every guided step can be done by the guide, and the guide moves on by itself, through to Run', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
+  const tour = w.__lab.initTour({ editor, sim, code, projects });
+  const tick = () => new Promise(r => setTimeout(r, 380));
+  await tour.startGuide();
+  for (const title of ['Add an LED', 'Plug the LED into the breadboard', 'Add a resistor', 'Connect the resistor to the LED\'s + leg', 'Wire pin 13 to the resistor', 'Wire the LED\'s − leg to GND']) {
+    assert.equal(doc.getElementById('tourTitle').textContent, title);
+    assert.equal(doc.getElementById('tourAssist').hidden, false, `"${title}" offers Do this for me`);
+    doc.getElementById('tourAssist').click(); await tick();
+    assert.notEqual(doc.getElementById('tourTitle').textContent, title, `"${title}" was done and the guide moved on`);
+  }
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Press Run');
+  const c = editor.getCircuit(), led = editor.state.parts.find(p => p.type === 'led'), res = editor.state.parts.find(p => p.type === 'resistor');
+  assert.ok(led && res && c.uno.gnd.has(c.netOf(led.id, 'C')), 'the LED − leg really is on GND');
+  assert.equal(c.netOf('uno-1', '13'), c.netOf(res.id, '1') === c.netOf(led.id, 'A') ? c.netOf(res.id, '2') : c.netOf(res.id, '1'), 'pin 13 → resistor → LED +');
 });
 
 test('ui: "Build it with me" — points at each part, hole and pin in order, and advances only when the circuit is really wired that way, through to a running blink', async () => {
