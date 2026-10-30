@@ -37,7 +37,7 @@ export function initBlocks({ editor, code }) {
     if (next === 'blocks') {
       const el = dock.style.getPropertyValue('--code-h'); savedHeight = el || null;
       const cur = parseInt(el, 10) || 260; if (cur < 400) dock.style.setProperty('--code-h', `${Math.min(440, Math.max(300, window.innerHeight - 260))}px`);
-      code.open();
+      if (!q || !dock.classList.contains('collapsed')) code.open();          // opening a project (quiet) must not pop the code panel over the circuit; a click on Blocks does
       try { await ensure(); } catch (err) { console.warn('[circuitbench] blocks failed to load', err); mode = 'code'; paint(); code.setBlocks({ program: code.blocks?.program || null, mode: 'code' }); editor.status('Blocks could not load — you can still type code'); return; }
       refreshBench(true); Blockly.svgResize(ws); regenerate(true);
     } else if (savedHeight !== null) { dock.style.setProperty('--code-h', savedHeight); }

@@ -1394,6 +1394,7 @@ test('ui: "Do this for me" — every guided step can be done by the guide, and t
   const tour = w.__lab.initTour({ editor, sim, code, projects });
   const tick = () => new Promise(r => setTimeout(r, 380));
   await tour.startGuide();
+  assert.ok(doc.getElementById('codeDock').classList.contains('collapsed'), 'starting the guide must not pop the code panel over the circuit');
   for (const title of ['Add an LED', 'Plug the LED into the breadboard', 'Add a resistor', 'Connect the resistor to the LED\'s + leg', 'Wire pin 13 to the resistor', 'Wire the LED\'s − leg to GND']) {
     assert.equal(doc.getElementById('tourTitle').textContent, title);
     assert.equal(doc.getElementById('tourAssist').hidden, false, `"${title}" offers Do this for me`);
