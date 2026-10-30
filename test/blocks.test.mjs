@@ -135,3 +135,13 @@ test('starter: a button and a light make a working program with no warnings', ()
   const blink = starterProgram(bench([P('uno', 'arduino-uno'), P('l', 'led')], [W('uno.13', 'l.A')]));
   assert.match(generateSketch(blink, bench([P('uno', 'arduino-uno'), P('l', 'led')], [W('uno.13', 'l.A')])).code, /delay/);
 });
+
+test('an empty block workspace never wipes a sketch the blocks did not write (the starter Blink, typed code), but can still clear its own', async () => {
+  const { emptyMayReplace, generateSketch, GENERATED_HEADER } = await import('../src/core/blocks.js');
+  const { DEFAULT_SKETCH } = await import('../src/sim/examples.js');
+  assert.equal(emptyMayReplace(DEFAULT_SKETCH, true), false, 'starter Blink survives opening the blocks');
+  assert.equal(emptyMayReplace('void setup(){}\nvoid loop(){ /* mine */ }', true), false, 'typed code survives');
+  assert.equal(emptyMayReplace(`${GENERATED_HEADER} — x\nvoid loop(){}`, true), true, 'code the blocks wrote is cleared with them');
+  assert.equal(emptyMayReplace('', true), true); assert.equal(emptyMayReplace(`${GENERATED_HEADER}`, false), false, 'only on a forced refresh');
+  assert.ok(generateSketch({ blocks: { languageVersion: 0, blocks: [] }, variables: [] }, { parts: [], wires: [] }).code.startsWith(GENERATED_HEADER), 'the generator writes the header the guard looks for');
+});

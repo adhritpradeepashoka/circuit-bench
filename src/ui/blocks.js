@@ -4,7 +4,7 @@
 // The blocks write sketch.ino for you: every change regenerates the main file, so "Verify" and "Run" work exactly as they do for
 // typed code, and a child can flip to Code to see (and later edit) what their blocks made.
 import { describeBench, deviceOptions, pinLabel } from '../core/bench-devices.js';
-import { BLOCKS, generateSketch } from '../core/blocks.js';
+import { BLOCKS, generateSketch, emptyMayReplace } from '../core/blocks.js';
 import { buildToolbox, starterProgram } from '../core/blocks-toolbox.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 
@@ -149,7 +149,7 @@ export function initBlocks({ editor, code }) {
     else if (!msg.hidden) say('');
     if (force || res.code !== lastCode) {
       lastCode = res.code;
-      if (res.empty && !force) return;
+      if (res.empty && !emptyMayReplace(code.source, force)) return;       // an empty workspace never wipes a sketch the blocks did not write
       if (code.source !== res.code) code.source = res.code;
     }
   }

@@ -195,6 +195,10 @@ const RESERVED = new Set(['int', 'float', 'void', 'if', 'else', 'for', 'while', 
  * @param {object} bench   describeBench(...) result
  * @returns {{ code: string, warnings: {block: string|null, text: string}[], empty: boolean }}
  */
+/** An empty block workspace stands for "no program yet". It may replace code the blocks wrote themselves (Clear), but never a sketch they did not write: the starter Blink, or code typed in Code mode. */
+export const GENERATED_HEADER = '// Made with blocks';
+export const emptyMayReplace = (source, force) => !!force && (!String(source || '').trim() || String(source).startsWith(GENERATED_HEADER));
+
 export function generateSketch(program, bench) {
   const devices = new Map((bench?.devices || []).map(d => [d.id, d]));
   const varNames = new Map(), varUsed = new Set(), globals = [], includes = new Set(), helpers = new Map(), pins = new Map(), initLines = [], setupLines = [], busLines = [], warnings = [];
@@ -261,7 +265,7 @@ export function generateSketch(program, bench) {
     else { const prev = currentBlock; currentBlock = t.id || null; warn('This block is on its own, so it never runs. Put it inside "forever" or "when the program starts".'); currentBlock = prev; }
   }
 
-  const lines = ['// Made with blocks — change the blocks and this code updates.'];
+  const lines = [GENERATED_HEADER + ' — change the blocks and this code updates.'];
   for (const h of [...includes].sort()) lines.push(`#include <${h}>`);
   if (includes.size) lines.push('');
   for (const g of globals) lines.push(g);
