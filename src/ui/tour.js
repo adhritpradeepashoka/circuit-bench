@@ -82,14 +82,15 @@ export function initTour({ editor, sim, code, projects }) {
     const cw = card.offsetWidth || 340, ch = card.offsetHeight || 200, gap = 14, a = spots[0];
     let left = (W - cw) / 2, top = (H - ch) / 2, side = 'center';
     if (a && !s.center) {
+      // beside the first spot if that leaves every highlighted thing visible, else wherever the card covers the least: the thing you have to drag must never be under the card
+      const clampX = x => Math.max(8, Math.min(x, W - cw - 8)), clampY = y => Math.max(8, Math.min(y, H - ch - 8));
       const tries = [
-        ['bottom', a.x + a.w / 2 - cw / 2, a.y + a.h + gap, a.y + a.h + gap + ch < H - 8],
-        ['top', a.x + a.w / 2 - cw / 2, a.y - gap - ch, a.y - gap - ch > 8],
-        ['left', a.x - gap - cw, a.y + a.h / 2 - ch / 2, a.x - gap - cw > 8],
-        ['right', a.x + a.w + gap, a.y + a.h / 2 - ch / 2, a.x + a.w + gap + cw < W - 8],
-      ];
-      const pick = tries.find(t => t[3]) || tries[0];
-      [side, left, top] = pick;
+        ['bottom', a.x + a.w / 2 - cw / 2, a.y + a.h + gap], ['top', a.x + a.w / 2 - cw / 2, a.y - gap - ch],
+        ['left', a.x - gap - cw, a.y + a.h / 2 - ch / 2], ['right', a.x + a.w + gap, a.y + a.h / 2 - ch / 2],
+        ['corner', 12, H - ch - 12], ['corner', W - cw - 12, H - ch - 12], ['corner', 12, 12], ['corner', W - cw - 12, 12], ['corner', (W - cw) / 2, H - ch - 12], ['corner', (W - cw) / 2, 12],
+      ].map(([side, x, y], k) => { x = clampX(x); y = clampY(y); const hit = spots.reduce((sum, r) => sum + Math.max(0, Math.min(x + cw, r.x + r.w) - Math.max(x, r.x)) * Math.max(0, Math.min(y + ch, r.y + r.h) - Math.max(y, r.y)), 0); return { side, x, y, cost: hit + k * 0.01 }; });
+      const pick = tries.reduce((best, t) => (t.cost < best.cost ? t : best), tries[0]);
+      [side, left, top] = [pick.side, pick.x, pick.y];
     }
     card.style.left = `${Math.max(8, Math.min(left, W - cw - 8))}px`;
     card.style.top = `${Math.max(8, Math.min(top, H - ch - 8))}px`;
@@ -127,7 +128,7 @@ export function initTour({ editor, sim, code, projects }) {
     steps = list; ctx = opts; i = 0; blogClicked = false;
     root.hidden = false; document.body.classList.add('touring'); cancelAnimationFrame(raf); loop();
     clearInterval(poll);
-    poll = setInterval(() => { const s = steps[i]; if (s?.when?.()) go(i + 1); }, 300);
+    poll = setInterval(() => { const s = steps[i]; if (s?.when?.()) { try { s.after?.(); } catch { /* cosmetic */ } go(i + 1); } }, 300);
     render();
   }
   function end(finished = false) {
@@ -215,6 +216,8 @@ export function initTour({ editor, sim, code, projects }) {
     const row = ['A', 'B', 'C', 'D', 'E'].find(r => !taken.has(`${b.id}|${r}${col}`)); return row ? `${row}${col}` : null;
   };
   const wireUp = (a, b) => { editor.draft = { a }; editor.finishWire(b); };
+  /** Add a part in clear space just below the breadboard, so it never lands half-seated on some random holes, then bring the whole bench into view. */
+  const addClear = (type, dx) => { const b = bb(); if (!b) return editor.addPart(type); editor.addPart(type, { x: b.x + 70 + dx, y: b.y + PART_DEFS.breadboard.h + 55 }); editor.fit(); };
   const assistSeatLed = () => {
     const l = led(), b = bb(); if (!l || !b) return;
     const a = pinWorld(l, 'A'), h = pinWorld(b, 'E10'); l.x += h.x - a.x; l.y += h.y - a.y; settle(l);
@@ -237,15 +240,15 @@ export function initTour({ editor, sim, code, projects }) {
   const guide = () => [
     { label: 'Step 1 of 7', title: 'Add an LED', interactive: true, noBack: true, before: showCard('led'), spots: () => [card$('led')()],
       body: `<p>Press <b>Add</b> on the LED (or drag it onto the bench).</p><p class="tour-why">An LED lights when current flows into its <b>+ leg</b> (anode, the longer one) and out of its <b>− leg</b> (cathode).</p>`,
-      assist: () => editor.addPart('led'), when: () => !!led() },
+      assist: () => addClear('led', 0), when: () => !!led() },
     { label: 'Step 2 of 7', title: 'Plug the LED into the breadboard', interactive: true, noBack: true, before: () => editor.fit(),
       spots: () => [worldRect([...holes(10, 'E'), ...holes(11, 'E')], 9), led() && worldRect([pinWorld(led(), 'A'), pinWorld(led(), 'C')], 12)],
       body: `<p>Drag the LED by its round top and drop it so its two legs click into <b>row E, holes 10 and 11</b> (highlighted). Any two neighbouring holes in rows A to E work too.</p><p class="tour-why">Each column of 5 holes (A to E) is joined by a metal strip inside the breadboard, so anything in the same column is connected.</p>`,
       assist: assistSeatLed, when: ledSeated },
     { label: 'Step 3 of 7', title: 'Add a resistor', interactive: true, noBack: true, before: showCard('resistor'), spots: () => [card$('resistor')()],
       body: `<p>Press <b>Add</b> on the Resistor. It's already 220 Ω (right-click it later to see the colour bands).</p><p class="tour-why">Without it, too much current would flow and burn out the LED, and maybe the Arduino pin.</p>`,
-      assist: () => editor.addPart('resistor'), when: () => !!res() },
-    { label: 'Step 4 of 7', title: 'Connect the resistor to the LED\'s + leg', interactive: true, noBack: true,
+      assist: () => addClear('resistor', 150), after: () => { const r = res(), b = bb(); if (r && b) { r.rot = 0; r.x = b.x + 220; r.y = b.y + PART_DEFS.breadboard.h + 45; editor.syncParts(); editor.markDirty(); editor.commit(); editor.fit(); } }, when: () => !!res() },
+    { label: 'Step 4 of 7', title: 'Connect the resistor to the LED\'s + leg', interactive: true, noBack: true, before: () => editor.fit(),
       spots: () => { const a = seatedCol(led(), 'A'); return [a && worldRect(holes(a.col), 8), res() && worldRect([pinWorld(res(), '1'), pinWorld(res(), '2')], 10)]; },
       body: () => { const a = seatedCol(led(), 'A'); return `<p>Drag the resistor by its middle so <b>one end goes into column ${a ? a.col : 'of the LED\'s + leg'}</b> (highlighted, the same column as the LED's + leg, any row A to D) and the other end into an <b>empty column</b>.</p><p class="tour-why">Now current can go resistor → LED.</p>`; },
       assist: assistResistor, when: resPlaced },
@@ -276,10 +279,19 @@ export function initTour({ editor, sim, code, projects }) {
     start(guide(), { guided: true });
   }
 
-  /** What a brand-new visitor sees: one short card, then straight into building. The long tour of every button stays under the ? button. */
-  const firstRun = () => [{ center: true, title: 'Let\'s light up your first LED', noBack: true,
-    body: `<p>CircuitBench is an electronics lab in your browser: real Arduino circuits, nothing can break.</p><p>In about <b>2 minutes</b> you'll build a blinking LED. I'll point at every part and hole, and if a step is fiddly, press <b>Do this for me</b>.</p>`,
-    nextLabel: 'Build my first circuit', onNext: () => startGuide(), skipLabel: 'Explore on my own', onSkip: () => end(false) }];
+  /** What a brand-new visitor sees: a short orientation (what this is, the bench, the parts, Run and Code), then straight into building. Nothing here makes you click anything; the long tour of every button stays under Settings. */
+  const firstRun = () => [
+    { center: true, title: 'Welcome to CircuitBench', noBack: true, skipLabel: 'Skip the intro', onSkip: () => startGuide(),
+      body: `<p>An electronics lab in your browser. You build real Arduino circuits on a breadboard, write the code (or snap blocks together), and run it on a simulated Arduino. LEDs light up, sensors respond, and you can't break anything.</p><p>A 1-minute look around, then we build your first circuit together.</p>`, nextLabel: 'Show me' },
+    { spots: ['#canvas'], before: () => editor.fit(), title: 'This is your workbench', skipLabel: 'Skip the intro', onSkip: () => startGuide(),
+      body: `<p>The blue board is an <b>Arduino Uno</b>, the "brain". The white board is a <b>breadboard</b>: you plug parts into its holes, no soldering.</p><p>Drag empty space to move around, scroll or pinch to zoom.</p>` },
+    { spots: ['#partsPanel'], before: () => panes.open('parts'), title: 'Parts live here', skipLabel: 'Skip the intro', onSkip: () => startGuide(),
+      body: `<p>Every component you can use: LEDs, resistors, buttons, sensors, displays. Press <b>Add</b>, or drag one onto the bench.</p>` },
+    { spots: ['#runBtn', '#codeToggle'], title: 'Run it, change the code', skipLabel: 'Skip the intro', onSkip: () => startGuide(),
+      body: `<p><b>Run</b> starts your circuit on the simulated Arduino. <b>Code</b> opens the program it runs, as blocks or as real Arduino code.</p>` },
+    { center: true, title: 'Now, your first circuit', skipLabel: 'Explore on my own', onSkip: () => end(false),
+      body: `<p>You'll make an LED blink in about 2 minutes. I'll point at every part and hole, and if a step is fiddly, press <b>Do this for me</b>.</p>`, nextLabel: 'Build my first circuit', onNext: () => startGuide() },
+  ];
   const tourSteps = () => welcome().filter(s => !s.skip?.());
   const firstVisit = () => { try { return !localStorage.getItem(SEEN_KEY); } catch { return false; } };
 

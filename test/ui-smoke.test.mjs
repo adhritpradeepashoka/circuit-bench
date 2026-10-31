@@ -1353,7 +1353,16 @@ test('ui: first visit — one short card that goes straight to building ("Explor
   const tour = w.__lab.initTour({ editor, sim, code, projects });
   tour.maybeAutoStart();
   assert.equal(tour.active, true, 'first visit → a card opens by itself');
-  assert.equal(doc.getElementById('tourTitle').textContent, "Let's light up your first LED");
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Welcome to CircuitBench');
+  assert.equal(doc.getElementById('tourSkip').textContent, 'Skip the intro');
+  const intro = [];
+  while (tour.step && !/first circuit/.test(tour.step.title) && intro.length < 10) {                // a short orientation: no forced clicks, every highlighted thing exists
+    for (const t of (Array.isArray(tour.step.spots) ? tour.step.spots : [])) assert.ok(doc.querySelector(t), `"${tour.step.title}" points at ${t}`);
+    assert.ok(!tour.step.when, 'the intro never waits for a click');
+    intro.push(tour.step.title); doc.getElementById('tourNext').click();
+  }
+  assert.deepEqual(intro, ['Welcome to CircuitBench', 'This is your workbench', 'Parts live here', 'Run it, change the code'], 'what it is, the bench, the parts, Run and Code');
+  assert.equal(doc.getElementById('tourTitle').textContent, 'Now, your first circuit');
   assert.equal(doc.getElementById('tourNext').textContent, 'Build my first circuit');
   assert.equal(doc.getElementById('tourSkip').textContent, 'Explore on my own');
   doc.getElementById('tourSkip').click();
