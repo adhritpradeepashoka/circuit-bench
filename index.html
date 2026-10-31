@@ -234,6 +234,10 @@
           <a id="pcGetKey" href="#" target="_blank" rel="noopener" hidden>Get a key ↗</a>
         </div>
         <div class="pc-ai-status" id="pcAiStatus" aria-live="polite"></div>
+        <div class="pc-fix" id="pcFix" hidden>
+          <input id="pcFixText" type="text" maxlength="400" placeholder="Something off? Say what: “the OUT pins are on the other side”, “it is bigger”, “wrong colour”…" autocomplete="off" aria-label="What is wrong with the drawing">
+          <button type="button" id="pcFixGo">Fix it</button>
+        </div>
       </div>
       <div class="pc-grid">
         <div class="pc-form">
@@ -255,6 +259,7 @@
         </div>
         <div class="pc-side">
           <div class="pc-preview" id="pcPreview"></div>
+          <figure class="pc-photo" id="pcPhoto" hidden><img id="pcPhotoImg" alt="Photo of the real part" referrerpolicy="no-referrer" loading="lazy"><figcaption id="pcPhotoCap"></figcaption></figure>
           <ul class="pc-errors" id="pcErrors"></ul>
         </div>
       </div>

@@ -268,8 +268,24 @@ export function parseReply(text) {
 }
 
 
+/** The first, search-grounded question: which real part is this, how big is it, what does it look like, and where is its photo? Reply is small JSON. */
+export function buildPhotoLookupPrompt(description) {
+  return `A student wants to add this part to an electronics simulator: ${String(description).slice(0, 600)}
+
+Search the web for the real part (manufacturer page, datasheet, Adafruit, SparkFun, Pololu, Seeed, DigiKey, Mouser, Wikimedia). Reply with ONE fenced \`\`\`json block and nothing else:
+{
+  "name": "<the exact part name>",
+  "sizeMm": { "w": <width mm>, "h": <height mm>, "source": "<page you read it on>" },
+  "pins": ["<every pin name in the datasheet order, as printed>"],
+  "imageUrls": ["<up to 4 DIRECT links to a clear top-down or front photo of the part: the address must end in .jpg, .jpeg, .png or .webp and be copied from a page you actually found; never invent one>"],
+  "pageUrls": ["<up to 3 product pages that show the part>"],
+  "notes": "<one or two lines: what it is, the supply voltage, anything unusual about its pins>"
+}
+Leave a field out rather than guess it.`;
+}
+
 /** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
-export function buildPartPrompt(description, problems = null) {
+export function buildPartPrompt(description, problems = null, { facts = null, photo = null, refine = null, workspace = '' } = {}) {
   const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}${b.params ? ` Numbers to set in the behaviour object: ${b.params.map(p => (p.options ? `"${p.key}" (${p.options.map(([v]) => `"${v}"`).join(' | ')}, default "${p.def}")` : `"${p.key}" (${p.label}${p.unit ? `, ${p.unit}` : ''}; ${p.min}–${p.max}, default ${p.def})`)).join('; ')}.` : ''}`).join('\n');
   return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data.
 
@@ -318,6 +334,7 @@ Every part that is not a chip package (dip, dip-wide, quad) is a DRAWN part: pac
 Draw the part from what you know of the real thing — do not reuse a stock drawing. Each pin's "x","y" sits on the end of its lead; moving pieces are separate <g id> groups named in "motion"; spinning pieces are drawn symmetric about the "pivot". A standalone speed controller (ESC) or motor driver is a small case with its battery/power leads, its signal lead and its three motor leads — give it those pins; use a behaviour from the list only if it really matches what the part does, otherwise "none" with the missing behaviour described in "note".
 A DC-motor driver / H-bridge (DRV8833, TB6612FNG, L9110S, L293D, L298N, DRV8871, MX1508…) uses the behaviour "hbridge": roles vs (motor supply pin), gnd, in1 + in2 + out1 + out2 for channel A, and in3 + in4 + out3 + out4 for channel B if it has one. If the chip has a separate speed / PWM / enable pin per channel give it as en1 / en2, and a sleep or standby pin as sleep (set "sleepPullup": 1 if the usual breakout pulls it high, 0 if it must be driven, as on a TB6612 STBY). Use the datasheet pin names for the pins, put power and inputs on the left and the motor outputs on the right, and draw it as the breakout board with the chip and printed pin names.
 
+${photo ? `\nA PHOTO OF THE REAL PART IS ATTACHED. Draw the part FROM THE PHOTO: copy its real shape, its colours (read them off the picture), where the chip, connectors, header and holes are, and the printing on it. Place EVERY pin exactly where its pad or lead appears in the photo (a pin dot goes on the centre of the pad). Keep the photo's proportions; scale it to the real size below. If the photo is at an angle or shows only part of the board, use it for the look and the datasheet for the rest. Name the pins as the silkscreen / datasheet does.\n` : ''}${facts && typeof facts === 'object' ? `\nWhat the web lookup found (trust it over memory; the datasheet pin names win):\n${JSON.stringify({ name: facts.name, sizeMm: facts.sizeMm, pins: facts.pins, notes: facts.notes }).slice(0, 2500)}\n` : ''}${workspace === 'robotics' ? `\nTHIS PART IS FOR THE ROBOTICS WORKSPACE. Add a "robot" object so the whole app recognises it: { "category": "Motors" | "Sensors" | "Drone" | "Power" | "Controllers" | "Mechanics", "kind": "servo" | "dc-motor" | "stepper" | "linear" | "driver" | "sensor" | "controller" | "battery" | "structure", "massGrams": <real mass>, "sizeMm": [length, width, height], "supplyVolts": [min, max], "priceInr": <typical price in Indian rupees, or 0 if unknown>, "source": "datasheet" | "estimated" }. Mass, size and voltage come from the datasheet; say "estimated" only when you could not find them.\n` : ''}${refine ? `\nTHE STUDENT IS CORRECTING AN EARLIER VERSION. Here is the part you made before (JSON):\n${String(refine.spec || '').slice(0, 12000)}\nTheir correction: ${String(refine.instruction || '').slice(0, 600)}\nReturn the COMPLETE corrected part in the same format, changing only what they asked about (and anything that must follow from it, such as pin positions).\n` : ''}
 Student's description: ${String(description).slice(0, 1500)}
 ${problems ? `\nYour previous answer was rejected by the simulator for these reasons — fix them and reply again:\n${problems.map(p => `- ${p}`).join('\n')}\n` : ''}
 Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
@@ -330,6 +347,7 @@ Reply with EXACTLY ONE fenced \`\`\`json block and nothing else after it:
   "package": "art" | "dip" | "dip-wide" | "quad" | "module",   (use "art" unless it is a chip package)
   "look": optional, ONLY with "package":"module" and every pin "side":"bottom" (leads along the bottom, 0.1" apart): a ready-made picture of a common component, one of ${[...LOOK_IDS].filter(l => l !== 'reg220').join(', ')}. Use it for a plain diode, transistor, regulator, capacitor, inductor, relay, buzzer, fan, switch and the like instead of drawing your own; otherwise leave it out.
   "pins": [ { "id": "<pin name exactly as the datasheet prints it: letters, digits, + - _ . — max 12>", "label": "<what the pin is for>", "side": "left" | "right" | "top" | "bottom" } ],
+  "robot": optional, ONLY for robotics parts as described above,
   "sizeMm": { "w": <real width of the part in mm>, "h": <real height in mm>, "source": "<where you found it>" },   (required for "art")
   "art": { "w": ..., "h": ..., "svg": "...", "motion": [...] }   (required for "art"; each pin then has "x" and "y" instead of "side"),
   "breadboard": <"module" only: true if the real part plugs into a breadboard; then every pin must be on "bottom">,

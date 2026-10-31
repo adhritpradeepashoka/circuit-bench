@@ -77,6 +77,26 @@ const hexColor = (v, d) => {
   return /^#[0-9a-f]{3}$/.test(t) ? `#${t[1]}${t[1]}${t[2]}${t[2]}${t[3]}${t[3]}` : d;      // #abc → #aabbcc
 };
 
+export const ROBOT_CATEGORIES = ['Motors', 'Sensors', 'Drone', 'Power', 'Controllers', 'Mechanics'];
+export const ROBOT_KINDS = ['servo', 'dc-motor', 'stepper', 'linear', 'driver', 'sensor', 'controller', 'battery', 'structure'];
+/** What the robotics workspace needs to know about a real part: where it sits in the menu, what role it plays, how heavy and big it is, what it runs on, what it costs. */
+function cleanRobot(r) {
+  if (!r || typeof r !== 'object') return null;
+  const n = (v, lo, hi) => (Number.isFinite(Number(v)) && v !== '' && v !== null ? Math.min(hi, Math.max(lo, +Number(v).toPrecision(5))) : null);
+  const size = Array.isArray(r.sizeMm) ? r.sizeMm.slice(0, 3).map(v => n(v, 0.1, 2000)) : [];
+  const volts = Array.isArray(r.supplyVolts) ? r.supplyVolts.slice(0, 2).map(v => n(v, 0, 1000)) : [];
+  const out = {
+    category: ROBOT_CATEGORIES.includes(r.category) ? r.category : 'Mechanics',
+    kind: ROBOT_KINDS.includes(r.kind) ? r.kind : 'structure',
+    source: ['datasheet', 'measured', 'estimated'].includes(r.source) ? r.source : 'estimated',
+  };
+  const mass = n(r.massGrams, 0.01, 50000); if (mass != null) out.massGrams = mass;
+  if (size.length === 3 && size.every(v => v != null)) out.sizeMm = size;
+  if (volts.length && volts.every(v => v != null)) out.supplyVolts = volts.length === 1 ? [volts[0], volts[0]] : volts;
+  const price = n(r.priceInr, 0, 10000000); if (price) out.priceInr = Math.round(price);
+  return out;
+}
+
 /**
  * Checks and normalises a spec. Unknown fields are dropped; anything that would make an unusable part is an error.
  * @returns {{ok: true, spec: object} | {ok: false, errors: string[]}}
@@ -216,6 +236,7 @@ export function validatePartSpec(raw, { id, strict = false } = {}) {
     ...(pkg === 'board' ? { board: cleanBoard(raw.board) } : {}),
     ...(pkg === 'module' && LOOK_IDS.has(raw.look) ? { look: raw.look } : {}),
     ...(pkg === 'art' && art ? { art } : {}),
+    ...(cleanRobot(raw.robot) ? { robot: cleanRobot(raw.robot) } : {}),
     ...(pkg === 'sprite' ? { sprite: { art: SPRITE_ARTS.includes(raw.sprite?.art) ? raw.sprite.art : SPRITE_ARTS[0], w: clampN(raw.sprite?.w, 20, 400), h: clampN(raw.sprite?.h, 20, 400), ...(raw.sprite?.note ? { note: str(raw.sprite.note, 40) } : {}) } } : {}),
   };
   return { ok: true, spec };
@@ -321,10 +342,10 @@ export function partDefFromSpec(spec) {
     ...Object.keys(B.optionalLists || {}).filter(l => spec.behaviour[l]?.length).map(l => `${B.optionalLists[l]}: ${spec.behaviour[l].join(', ')}`)].join('; ');
   const paramText = (B.params || []).map(p => `${p.label} ${spec.behaviour[p.key]}${p.unit ? ` ${p.unit}` : ''}`).join(', ');
   return {
-    type: spec.id, name: spec.name, category: BUILTIN_CATEGORY.get(spec.id) || 'My parts', tag: 'cb-custom-part', custom: true, spec, ...(BUILTIN_CATEGORY.has(spec.id) ? { builtin: true } : {}),
+    type: spec.id, name: spec.name, category: BUILTIN_CATEGORY.get(spec.id) || spec.robot?.category || 'My parts', tag: 'cb-custom-part', custom: true, spec, ...(BUILTIN_CATEGORY.has(spec.id) ? { builtin: true } : {}),
     w, h, pins, groups: [], insertable: spec.breadboard, layer: 2, ...(props ? { props } : {}), ...(logic ? { logic } : {}),
     interactive: k === 'button' || k === 'digital-sensor' || !!B.toggle || k === 'encoder' || k === 'keypad' || k === 'switch-bank' || k === 'joystick',
-    aiNote: `Student-made part. ${B.note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${paramText ? ` Settings: ${paramText}.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
+    aiNote: `Student-made part. ${spec.robot ? `Robot part: ${spec.robot.kind}${spec.robot.massGrams ? `, ${spec.robot.massGrams} g` : ''}${spec.robot.sizeMm ? `, ${spec.robot.sizeMm.join('×')} mm` : ''}${spec.robot.supplyVolts ? `, ${spec.robot.supplyVolts[0]}–${spec.robot.supplyVolts[1]} V` : ''}. ` : ''}${B.note}${roleText ? ` (${roleText})` : ''}${k === 'resistor' ? ` Resistance ${spec.behaviour.ohms} Ω.` : ''}${paramText ? ` Settings: ${paramText}.` : ''}${k === 'logic' ? ` ${describeLogic(spec.behaviour)}` : ''}${spec.description ? ` Description: ${spec.description}` : ''}`,
   };
 }
 

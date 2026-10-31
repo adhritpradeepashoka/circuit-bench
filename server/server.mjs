@@ -198,7 +198,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
         if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
         let raw = '';
-        for await (const chunk of req) { raw += chunk; if (raw.length > 20_000) { req.destroy(); return; } }
+        for await (const chunk of req) { raw += chunk; if (raw.length > 60_000) { req.destroy(); return; } }
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
         await gate(req, 'ai', 'the AI helper');
         const result = await ai.createPart(await applyHosted(req, body));

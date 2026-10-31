@@ -30,6 +30,7 @@ const blank = () => ({
   behaviour: { kind: 'analog-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'OUT' } },
 });
 
+import { activeWorkspace } from '../core/workspaces.js';
 export function initPartCreator(editor, { createPart = defaultCreatePart } = {}) {
   const $ = id => document.getElementById(id);
   const modal = $('partModal'), pinsEl = $('pcPins'), rolesEl = $('pcRoles'), kindSel = $('pcKind');
@@ -265,11 +266,12 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     $('pcDelete').hidden = !editing;
     $('pcAiStatus').textContent = ''; $('pcAiStatus').className = 'pc-ai-status';
     paintForm();
+    lastPhoto = null; $('pcPhoto').hidden = true; $('pcFix').hidden = true;
     modal.hidden = false;
     if (!editing && prefill?.name) {
       const n = String(prefill.name).slice(0, 40);
       draft.name = n; draft.label = n.slice(0, 16); $('pcName').value = n;
-      $('pcDescribe').value = `${n}. Look up its datasheet and pinout.`;
+      $('pcDescribe').value = `${n}. Look up its datasheet, pinout and photo.`;
       preview();
     }
     (editing ? $('pcName') : $('pcDescribe')).focus();
@@ -314,7 +316,8 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   provKey.addEventListener('input', () => { const v = provKey.value.trim(); if (/^[\w.-]{20,}$/.test(v)) { setStoredKey(v); paintProvider(); $('pcAiStatus').textContent = `${PROVIDER_INFO[getStoredProvider()].label} key saved — only in this browser.`; $('pcAiStatus').className = 'pc-ai-status'; } });
   paintProvider();
 
-  async function askAi() {
+  let lastPhoto = null;
+  async function askAi(opts = {}) {
     const description = $('pcDescribe').value.trim();
     const status = $('pcAiStatus');
     if (!description) { status.textContent = 'Describe the part first — what it is and which pins it has.'; status.className = 'pc-ai-status bad'; return; }
@@ -322,13 +325,17 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     setStoredModel(provModel.value.trim());
     $('pcAiGo').disabled = true; status.className = 'pc-ai-status'; status.textContent = `Designing your part with ${PROVIDER_INFO[getStoredProvider()].label}…`;
     let res;
-    try { res = await createPart({ description, signal: aiBusy.signal }); } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
+    const refine = opts.refine ? { spec: JSON.stringify(opts.refine.spec), instruction: opts.refine.instruction } : null;
+    try { res = await createPart({ description, workspace: activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal }); } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
     finally { $('pcAiGo').disabled = false; }
     if (!res?.ok && res?.needsKey) { paintProvider(); provKey.focus(); res = { ...res, error: `Paste your ${PROVIDER_INFO[getStoredProvider()].label} key above (or pick a provider that has one), then try again.` }; }
     if (!res?.ok) { status.textContent = res?.error || 'The AI could not make that part.'; status.className = 'pc-ai-status bad'; return; }
     const keepId = draft.id;
     draft = { ...clone(res.spec), id: editing || keepId };
     paintForm();
+    lastPhoto = res.photo || null;
+    $('pcPhoto').hidden = !lastPhoto; $('pcFix').hidden = false; $('pcFixText').value = '';
+    if (lastPhoto) { $('pcPhotoImg').src = lastPhoto.url; $('pcPhotoCap').textContent = lastPhoto.grounded ? 'The real part: the drawing was traced from this photo. Compare them.' : 'The real part (the AI could not look at it, so check the drawing against it).'; }
     status.replaceChildren(el('span', { textContent: `Here it is — check the pins, then save.${res.meta ? ` (${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s)` : ''}${res.note ? ` Note: ${res.note}` : ''}` }));
     if (res.sources?.length) {
       const list = el('span', { className: 'pc-sources' });
@@ -391,7 +398,10 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     paintPins(); paintRoles(); preview();
     pinsEl.lastElementChild?.querySelector('input')?.select();
   });
-  $('pcAiGo').addEventListener('click', askAi);
+  $('pcAiGo').addEventListener('click', () => askAi());
+  const fix = () => { const t = $('pcFixText').value.trim(); if (t) askAi({ refine: { spec: draft, instruction: t }, photoUrl: lastPhoto?.url || '' }); };
+  $('pcFixGo').addEventListener('click', fix);
+  $('pcFixText').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); fix(); } });
   $('pcDescribe').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); askAi(); } });
   $('pcSave').addEventListener('click', save);
   $('pcCancel').addEventListener('click', close);

@@ -72,19 +72,22 @@ test('custom parts travel inside the project file and come back in a fresh catal
 
 test('AI part creation: the reply must pass the validator; one repair round with the reasons; never code', async () => {
   const replies = [
+    '```json\n' + JSON.stringify({ name: 'KY-038', sizeMm: { w: 34, h: 16 }, imageUrls: ['https://example.com/ky038.jpg'] }) + '\n```',      // the photo lookup
     '```json\n' + JSON.stringify({ ...sound, behaviour: { kind: 'analog-sensor', roles: { vcc: 'VCC', gnd: 'GND', out: 'NOPE' } } }) + '\n```',
     '```json\n' + JSON.stringify({ ...sound, note: 'DO is not simulated' }) + '\n```',
   ];
   const prompts = [];
   const bodies = [];
   const fetchImpl = async (_u, o) => { const b = JSON.parse(o.body); bodies.push(b); prompts.push(b.contents[0].parts[0].text); const text = replies.shift(); return { ok: true, status: 200, json: async () => ({ candidates: [{ content: { parts: [{ text }] }, groundingMetadata: { groundingChunks: [{ web: { title: 'KY-038 datasheet', uri: 'https://example.com/ky038' } }] } }] }) }; };
-  const ai = createAiService({ fetchImpl });
+  const ai = createAiService({ fetchImpl, photoFetch: async () => ({ type: 'image/jpeg', bytes: new Uint8Array(5000), url: 'https://example.com/ky038.jpg' }) });
   const r = await ai.createPart({ description: 'KY-038 sound sensor', userKey: 'k' });
   assert.equal(r.ok, true); assert.equal(r.spec.name, 'Sound sensor'); assert.equal(r.note, 'DO is not simulated');
-  assert.equal(prompts.length, 2);
+  assert.equal(prompts.length, 3, 'photo lookup, first try, repair');
   assert.deepEqual(bodies[0].tools, [{ google_search: {} }], 'the part lookup asks the model to search the web');
+  assert.ok(bodies[1].contents[0].parts[1].inlineData?.data, 'the real photo goes to the model with the drawing request');
+  assert.equal(r.photo.url, 'https://example.com/ky038.jpg'); assert.equal(r.photo.grounded, true);
   assert.deepEqual(r.sources, [{ title: 'KY-038 datasheet', url: 'https://example.com/ky038' }]);
-  assert.match(prompts[1], /previous answer was rejected[\s\S]*Signal out: pick which pin/);
+  assert.match(prompts[2], /previous answer was rejected[\s\S]*Signal out: pick which pin/);
   assert.match(buildPartPrompt('x'), /look it up on the web/);
   assert.match(buildPartPrompt('x'), /no statements, no loops, no assignment/);
   await assert.rejects(ai.createPart({ description: '', userKey: 'k' }), /Describe the part/);
