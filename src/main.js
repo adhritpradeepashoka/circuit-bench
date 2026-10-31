@@ -130,6 +130,7 @@ $('selectTool').onclick = () => editor.setTool('select');
 $('wireTool').onclick = () => editor.setTool('wire');
 $('rotateTool').onclick = () => editor.rotateSelected();
 $('deleteTool').onclick = () => editor.deleteSelected();
+$('dupTool').onclick = () => { if (editor.copySelection(true)) editor.paste(); };
 $('undoTool').onclick = () => editor.undo();
 $('redoTool').onclick = () => editor.redo();
 $('zoomIn').onclick = () => editor.zoomBy(1.25);

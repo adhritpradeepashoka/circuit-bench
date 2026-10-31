@@ -19,6 +19,7 @@ export function quickDrone(instruction, circuit = { parts: [], wires: [] }) {
   const wantsBuild = WORDS.test(t) && VERBS.test(t);
   const wantsWire = /\b(wire|connect|solder|hook)\b/.test(t) && /\bmotors?\b/.test(t) && haveBoard;
   if (!wantsBuild && !wantsWire) return null;
+  if (/\b(brushed|coreless|esp ?32|c3|mosfet)\b/.test(t) && !haveBoard && wantsBuild) return brushedDrone(parts);
   const stack = has('drone-esc').length || has('drone-fc').length ? !has('drone-aio').length : /\b(stack|[5-9] ?(?:inch|in|")|1\d ?inch|large|big|long.?range|freestyle|race|racing|capacitor|elrs|receiver|vtx)\b/.test(t) && !/\b(aio|whoop)\b/.test(t);
 
   const actions = [], id = {};
@@ -65,4 +66,24 @@ export function quickDrone(instruction, circuit = { parts: [], wires: [] }) {
       ? `Here is a 5-inch style stack, wired the way a real one is: battery and the capacitor across the ESC's BAT+ and BAT−, the ESC's 5V and ground to the flight controller, S1–S4 to the flight controller's M1–M4, each motor's three wires to one ESC output (M1 back right, M2 front right, M3 back left, M4 front left), the camera, receiver and video transmitter to the flight controller. Next: build the frame in the Assembly tab, then fly it in Test.`
       : `Here is a small drone on one AIO board: battery to BAT+ / BAT−, each motor's three wires (A, B, C in order) to one motor output (M1 back right, M2 front right, M3 back left, M4 front left), and the camera to 5V, G and CAM. Next: build the frame in the Assembly tab, then fly it in Test. Say "make it a 5 inch stack" for a bigger build with a separate flight controller and ESC.`,
   };
+}
+
+/** A coreless brushed micro drone: an ESP32-C3 board, four AO3400 MOSFETs each switching one motor (a Schottky diode across it, a 100 kΩ pull-down on its gate),
+ *  a 1S LiPo, and an MPU-6050 on I2C. Motor spins follow Betaflight's props-in layout (M1 CCW, M2 CW, M3 CW, M4 CCW). */
+function brushedDrone(parts) {
+  if (parts.some(p => /^custom-bmotor-/.test(p.type))) return { actions: [], code: null, explanation: 'There are already coreless motors on the bench. Say "remove all" parts you do not want first, or wire the ones that are there.' };
+  const bx = parts.length ? Math.round(Math.max(...parts.map(p => (p.x || 0) + 220)) / 10) * 10 + 40 : 40;
+  const actions = [], add = (id, type, x, y, props) => actions.push({ op: 'add_part', id, type, x: bx + x, y, ...(props ? { props } : {}) });
+  const wire = (a, pa, b, pb) => actions.push({ op: 'add_wire', from: { part: a, pin: pa }, to: { part: b, pin: pb } });
+  const spin = ['ccw', 'cw', 'cw', 'ccw'], gpio = ['GPIO0', 'GPIO1', 'GPIO3', 'GPIO4'];
+  add('battery', 'battery', 560, 40, { volts: 3.7 }); add('esp32', 'custom-esp32-c3-mini', 0, 470); add('mpu', 'mpu6050', 280, 470);
+  for (let k = 0; k < 4; k++) {
+    const m = `motor${k + 1}`, d = `diode${k + 1}`, q = `fet${k + 1}`, r = `pull${k + 1}`, x = k * 130;
+    add(m, `custom-bmotor-${spin[k]}`, x, 40); add(d, 'custom-d-schottky', x, 150); add(q, 'custom-q-ao3400', x, 250); add(r, 'resistor', x, 370, { ohms: 100000 });
+    wire('esp32', gpio[k], q, 'G'); wire(r, '1', q, 'G'); wire(r, '2', 'battery', '-'); wire(q, 'S', 'battery', '-');
+    wire(m, '-', q, 'D'); wire(m, '+', 'battery', '+'); wire(d, 'K', 'battery', '+'); wire(d, 'A', q, 'D');
+  }
+  wire('battery', '+', 'esp32', '5V'); wire('battery', '-', 'esp32', 'GND');
+  wire('esp32', '3V3', 'mpu', 'VCC'); wire('esp32', 'GND', 'mpu', 'GND'); wire('esp32', 'GPIO8', 'mpu', 'SDA'); wire('esp32', 'GPIO9', 'mpu', 'SCL');
+  return { actions, code: null, explanation: 'Here is a coreless brushed micro drone: an ESP32-C3 board (GPIO0, 1, 3 and 4 drive the four motors), one AO3400 MOSFET per motor with a 100 kΩ pull-down on its gate and a Schottky diode across the motor, a 1S LiPo (3.7 V) feeding the board\'s 5V pin and every motor, and an MPU-6050 on GPIO8 / GPIO9. Motors M1 and M4 are counter-clockwise, M2 and M3 clockwise, so the spins cancel. CircuitBench does not run ESP32 code yet, so this is for wiring and parts planning; build the 65 mm whoop frame in the Assembly tab.' };
 }

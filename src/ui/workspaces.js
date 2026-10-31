@@ -105,7 +105,7 @@ export function initWorkspaces({ editor, code, projects }) {
   // Robotics, no drone on the bench yet: one tap builds and wires a whole drone circuit (the same builder the chat uses, no AI needed)
   const dronePrompt = el('div', 'drone-start'); dronePrompt.hidden = true;
   dronePrompt.append(el('b', '', 'Building a drone?'), el('span', '', 'Place and wire the parts for me:'));
-  for (const [label, ask] of [['Small drone (AIO)', 'build a drone circuit'], ['5-inch drone (stack)', 'build a 5 inch drone']]) {
+  for (const [label, ask] of [['Small drone (AIO)', 'build a drone circuit'], ['5-inch drone (stack)', 'build a 5 inch drone'], ['Coreless brushed (ESP32-C3)', 'build a coreless brushed drone with an esp32']]) {
     const b = el('button', '', label); b.type = 'button';
     b.addEventListener('click', () => {
       const q = quickDrone(ask, editor.exportProject()); if (!q?.actions.length) return;

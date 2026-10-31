@@ -41,3 +41,14 @@ test('diagnosis questions and unrelated asks are left to the model', () => {
   assert.equal(quickDrone('why does my drone motor spin the wrong way'), null);
   assert.equal(quickDrone('add a red led'), null);
 });
+
+test('"build a coreless brushed drone with an esp32" wires four MOSFET channels, an MPU-6050 and a 1S battery to real pins', async () => {
+  const { PART_DEFS } = await import('../src/core/parts.js'), { registerCustomPart, validatePartSpec } = await import('../src/core/custom-parts.js');
+  for (const tp of TEMPLATES) { const v = validatePartSpec(tp, { id: `custom-${tp.id}` }); if (v.ok) registerCustomPart(v.spec); }
+  const q = quickDrone('build me a coreless brushed drone with an esp32 c3'); assert.ok(q);
+  const parts = new Map(); for (const a of q.actions.filter(a => a.op === 'add_part')) { assert.ok(PART_DEFS[a.type], a.type); parts.set(a.id, a.type); }
+  assert.equal([...parts.values()].filter(t => /bmotor/.test(t)).length, 4);
+  const pinOk = (id, pin) => PART_DEFS[parts.get(id)].pinById.has(pin);
+  const wires = q.actions.filter(a => a.op === 'add_wire'); assert.equal(wires.length, 4 * 8 + 6);
+  for (const w of wires) { assert.ok(parts.has(w.from.part) && parts.has(w.to.part)); assert.ok(pinOk(w.from.part, w.from.pin), `${w.from.part}.${w.from.pin}`); assert.ok(pinOk(w.to.part, w.to.pin), `${w.to.part}.${w.to.pin}`); }
+});

@@ -354,7 +354,7 @@ export class Editor {
         if (m && m._len !== size.w) layoutResistor(m, size.w);
       }
       el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${p.rot}deg)`;
-      el.classList.toggle('selected', this.sel?.kind === 'part' && this.sel.id === p.id);
+      el.classList.toggle('selected', (this.sel?.kind === 'part' && this.sel.id === p.id) || !!this.multi?.has(p.id));
     }
   }
   /** The "Build your first circuit" card is only for brand-new projects, not older ones that happen to be empty. */
@@ -433,6 +433,13 @@ export class Editor {
     this.status(`${PART_DEFS[part.type].name} rotated ${part.rot}° — ${this.describePlacement(part)}`);
   }
   deleteSelected() {
+    if (this.multi?.size) {
+      const ids = this.multi, n = ids.size;
+      this.state.parts = this.state.parts.filter(p => !ids.has(p.id));
+      this.state.wires = this.state.wires.filter(w => !ids.has(w.a.part) && !ids.has(w.b.part));
+      this.sel = null; this.multi = null; this.syncParts(); this.markDirty(); this.commit();
+      this.status(`${n} parts deleted`); return;
+    }
     const wire = this.selectedWire();
     if (wire) {
       this.state.wires = this.state.wires.filter(w => w !== wire); this.sel = null;
@@ -445,8 +452,47 @@ export class Editor {
     this.sel = null; this.syncParts(); this.markDirty(); this.commit();
     this.status(`${PART_DEFS[part.type].name} deleted`);
   }
+  /* ── copy / paste / duplicate ────────────────────────
+     Ctrl+C copies the selected part (or every part picked with Shift-click or Ctrl+A) with the wires that run between them; Ctrl+V pastes a
+     copy a little to the side; Ctrl+D does both at once. The clipboard lives in the page, so it also carries a copy into another project. */
+  selectAll() {
+    this.sel = null; this.multi = new Set(this.state.parts.map(p => p.id));
+    this.updateTransforms(); this.renderOverlay(); this.emit('select', null);
+    this.status(`${this.multi.size} parts selected. Ctrl+C copies them, Delete removes them.`);
+  }
+  toggleMulti(id) {
+    const set = new Set(this.multi || (this.sel?.kind === 'part' ? [this.sel.id] : []));
+    set.has(id) ? set.delete(id) : set.add(id);
+    this.sel = null; this.multi = set.size ? set : null;
+    this.updateTransforms(); this.renderOverlay(); this.emit('select', null);
+    this.status(set.size ? `${set.size} part${set.size > 1 ? 's' : ''} selected: Ctrl+C copies, Delete removes` : 'Nothing selected');
+  }
+  copySelection(quiet = false) {
+    const ids = this.multi?.size ? this.multi : this.sel?.kind === 'part' ? new Set([this.sel.id]) : null;
+    if (!ids) { this.status('Select a part first (Shift-click picks several, Ctrl+A picks all)'); return false; }
+    const parts = this.state.parts.filter(p => ids.has(p.id)).map(p => JSON.parse(JSON.stringify(p)));
+    const wires = this.state.wires.filter(w => ids.has(w.a.part) && ids.has(w.b.part)).map(w => JSON.parse(JSON.stringify(w)));
+    this.clip = { parts, wires, n: 0 };
+    if (!quiet) this.status(`Copied ${parts.length} part${parts.length > 1 ? 's' : ''}${wires.length ? ` and ${wires.length} wire${wires.length > 1 ? 's' : ''}` : ''}. Ctrl+V pastes.`);
+    return true;
+  }
+  paste() {
+    const c = this.clip; if (!c?.parts.length) { this.status('Nothing copied yet: select a part and press Ctrl+C'); return; }
+    c.n++; const d = 30 * c.n, map = new Map(), made = [];
+    for (const src of c.parts) {
+      if (!PART_DEFS[src.type]) continue;
+      const np = { ...JSON.parse(JSON.stringify(src)), id: uid(String(src.type).replace(/^custom-/, '').slice(0, 6)), x: src.x + d, y: src.y + d };
+      map.set(src.id, np.id); made.push(np); this.state.parts.push(np);
+    }
+    if (made.length === 1 && PART_DEFS[made[0].type].insertable) { applySnap(made[0], findSnap(this.state.parts, made[0])); raiseInStrips(this.state.parts, made[0]); }
+    for (const w of c.wires) if (map.has(w.a.part) && map.has(w.b.part)) this.state.wires.push({ ...JSON.parse(JSON.stringify(w)), id: uid('w'), a: { ...w.a, part: map.get(w.a.part) }, b: { ...w.b, part: map.get(w.b.part) } });
+    this.syncParts();
+    if (made.length === 1) this.sel = { kind: 'part', id: made[0].id }; else { this.sel = null; this.multi = new Set(made.map(p => p.id)); }
+    this.updateTransforms(); this.markDirty(); this.commit(); this.renderOverlay(); this.emit('select', this.sel);
+    this.status(`Pasted ${made.length} part${made.length > 1 ? 's' : ''}`);
+  }
   select(sel) {
-    this.sel = sel;
+    this.sel = sel; this.multi = null;
     this.updateTransforms(); this.renderOverlay(); this.emit('select', sel); this.emit('workspace');
   }
   setTool(tool) {
@@ -620,6 +666,7 @@ export class Editor {
     if (pin && !((pin.type === 'pushbutton' || PART_DEFS[pin.type]?.spec?.behaviour.kind === 'button') && this.running)) { this.beginWire(e, pin); return; }
     if (wireEl) { e.preventDefault(); this.select({ kind: 'wire', id: wireEl.dataset.wire }); return; }
     const partEl = e.target.closest?.('.part');
+    if (partEl && e.shiftKey) { e.preventDefault(); this.toggleMulti(partEl.dataset.id); return; }
     if (partEl) { this.beginPartDrag(e, partEl.dataset.id); return; }
     this.select(null); this.beginPan(e);
   }
@@ -881,6 +928,11 @@ export class Editor {
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? this.redo() : this.undo(); }
     else if (mod && k === 'y') { e.preventDefault(); this.redo(); }
     else if (mod && k === 'enter') { e.preventDefault(); this.emit('toggle-run'); }
+    else if (mod && k === 'c') { e.preventDefault(); this.copySelection(); }
+    else if (mod && k === 'x') { e.preventDefault(); if (this.copySelection(true)) this.deleteSelected(); }
+    else if (mod && k === 'v') { e.preventDefault(); this.paste(); }
+    else if (mod && k === 'd') { e.preventDefault(); if (this.copySelection(true)) this.paste(); }
+    else if (mod && k === 'a') { e.preventDefault(); this.selectAll(); }
     else if (mod) return;
     else if (k === 'delete' || k === 'backspace') { e.preventDefault(); this.deleteSelected(); }
     else if (k === 'r') this.rotateSelected();

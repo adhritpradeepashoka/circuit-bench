@@ -200,5 +200,15 @@ const drone = phase(OTHER)((c, { type }) => {
   c.mem.informational = true;
 });
 
-export const PARTS_BY_TYPE = { ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
+const esp32 = phase(OTHER)(c => {
+  c.say('The ESP32-C3 board runs on 3.3 V and is wired on its own, not to an Arduino. For a coreless brushed drone: GPIO0, 1, 3 and 4 each go to the gate of one logic-level MOSFET (with a 100 kΩ pull-down to ground), the motors sit between battery + and the MOSFET drains, and an MPU-6050 goes to 3V3, GND, GPIO8 (SDA) and GPIO9 (SCL). CircuitBench does not run ESP32 code yet; this is for wiring and planning.');
+  c.mem.informational = true;
+});
+
+const bmotor = phase(OTHER)(c => {
+  c.say('A coreless brushed motor takes about 1 A from a 1S LiPo, far more than an Arduino pin or its 5 V pin can give, so it is not wired to an Arduino. Switch each one with a logic-level MOSFET (AO3400) from a microcontroller pin, motor between battery + and the drain, a Schottky diode across the motor.');
+  c.mem.informational = true;
+});
+
+export const PARTS_BY_TYPE = { 'custom-bmotor-cw': bmotor, 'custom-bmotor-ccw': bmotor, 'custom-esp32-c3-mini': esp32, ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
 export const PARTS_BY_KIND = { diode, npn: transistor, pnp: transistor, nmos: transistor, pmos: transistor, regulator, capacitor, inductor, opamp, inamp: bioAmp, 'signal-source': bioAmp, logic: logicChip };

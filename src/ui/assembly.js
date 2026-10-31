@@ -5,6 +5,7 @@ import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
 import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
+import { quickAssembly } from '../core/quick-assembly.js';
 import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
@@ -433,10 +434,24 @@ export function initAssembly({ editor, projects = null }) {
     for (const p of everyPart().filter(p => !q || `${p.name} ${p.category || ''}`.toLowerCase().includes(q))) {
       if (p.category !== group) { group = p.category; cards.append(el('div', { className: 'group-title asm-group', textContent: group || 'Parts' })); }
       const img = thumbs.get(p.id) ? el('img', { src: thumbs.get(p.id), alt: '', draggable: false }) : el('div', { className: 'asm-thumb-empty' });
-      const c = el('button', { type: 'button', className: 'asm-card', draggable: true, title: p.id === 'motor-2207-1900' ? 'One motor for every size: add it, then pick its size (0802, 1404, 2207 …) and Kv in the panel' : `${p.name} · ${p.frames.length} holes` }, img, el('span', { textContent: p.id === 'motor-2207-1900' ? 'Drone motor' : p.name.replace(/^Kame32 /, '') }));
-      c.dataset.part = p.id; c.addEventListener('click', () => addToScene(p)); c.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', `circuitbench-part:${p.id}`); e.dataTransfer.effectAllowed = 'copy'; });
+      const c = el('button', { type: 'button', className: 'asm-card', draggable: true, title: p.id === 'motor-2207-1900' ? 'Adds a motor sized for your frame and fits it onto the next free arm. You can change its size and Kv in the panel' : `${p.name} · ${p.frames.length} holes` }, img, el('span', { textContent: p.id === 'motor-2207-1900' ? 'Drone motor' : p.name.replace(/^Kame32 /, '') }));
+      c.dataset.part = p.id; c.addEventListener('click', () => addCard(p)); c.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', `circuitbench-part:${p.id}`); e.dataTransfer.effectAllowed = 'copy'; });
       cards.append(c);
     }
+  }
+
+  /** Clicking a drone motor or prop card does what a person means: with a frame in the scene the motor is sized for that frame and fitted onto the next free arm
+   *  (a prop onto the next bare motor), instead of dropping a loose 2207 beside it. With nothing to fit it to, it is simply added. */
+  async function addCard(p) {
+    const k = p.drone?.kind;
+    if ((k === 'motor' || k === 'prop') && asm.instances.length) {
+      try {
+        const q = quickAssembly(k === 'motor' ? 'put 1 motor on the frame' : 'put 1 prop on a motor', await ai.snapshot());
+        if (q && !q.actions.length && asm.instances.some(i => i.part.drone?.kind === 'frame') && k === 'motor') { bsay(q.explanation); return; }        // every arm already has its motor: say so instead of dropping a loose one
+        if (q?.actions.length) { await ai.run(q.actions); bsay(k === 'motor' ? 'Motor sized for this frame and fitted onto the next free arm.' : 'Prop fitted onto a motor.'); return; }
+      } catch { /* fall back to adding it loose */ }
+    }
+    return addToScene(p);
   }
 
   // — history, saving
@@ -447,12 +462,12 @@ export function initAssembly({ editor, projects = null }) {
   const $t = id => document.getElementById(id);
   const refreshTools = () => syncTop();
   function syncTop() {
-    if (view === 'circuit') { editor.afterStructureChange?.(); for (const id of ['selectTool', 'wireTool', 'rotateTool', 'deleteTool', 'zoomOut', 'zoomFit', 'zoomIn']) { const b = $t(id); if (b) b.disabled = false; } return; }
+    if (view === 'circuit') { editor.afterStructureChange?.(); for (const id of ['selectTool', 'wireTool', 'rotateTool', 'deleteTool', 'dupTool', 'zoomOut', 'zoomFit', 'zoomIn']) { const b = $t(id); if (b) b.disabled = false; } return; }
     const build = view === 'assembly' && mode === 'build', set = (id, off, why) => { const b = $t(id); if (!b) return; b.disabled = off; if (!b.dataset.t) b.dataset.t = b.title; b.title = off && why ? `${b.dataset.t} (${why})` : b.dataset.t; };
     const none = view === 'test' ? 'not used in the Test tab' : 'circuit tool';
     set('selectTool', true, 'circuit tool'); set('wireTool', true, 'circuit tool'); set('rotateTool', true, 'circuit tool'); set('zoomOut', true, 'use the mouse wheel in 3D'); set('zoomIn', true, 'use the mouse wheel in 3D'); set('zoomFit', true, 'use Fit in the 3D view');
     set('undoTool', !build || !history.length, build ? 'nothing to undo' : none); set('redoTool', !build || !future.length, build ? 'nothing to redo' : none);
-    set('deleteTool', !build || !selected, build ? 'select a part first' : none);
+    set('deleteTool', !build || !selected, build ? 'select a part first' : none); set('dupTool', !build || !selected, build ? 'select a part first' : none);
   }
   function applyScene() {
     const t = three; if (!t) return;
@@ -533,6 +548,12 @@ export function initAssembly({ editor, projects = null }) {
   const select = id => { selected = id; render(); };
   const centreOf = inst => { const b = new three.THREE.Box3().setFromObject(inst.obj), c = b.getCenter(new three.THREE.Vector3()); return [c.x, c.y, c.z]; };
   const detach = inst => { const n = asm.mates.length; asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); if (asm.mates.length < n) bsay('Unjoined from the parts it was attached to, so it can move freely. Ctrl+Z undoes this.'); };
+
+  // — copy, paste and duplicate: a copy is a new instance of the same part, placed beside the others and not yet joined to anything
+  let partClip = null;
+  function copyInst(id) { const i = asm.get(id); if (!i) return; partClip = i.part; bsay(`Copied “${i.part.name}”. Ctrl+V pastes it.`); }
+  async function pasteInst() { if (!partClip) return bsay('Nothing copied yet: select a part and press Ctrl+C.', true); await addToScene(partClip); }
+  async function dupInst(id) { const i = asm.get(id); if (!i) return; await addToScene(i.part); bsay(`Duplicated “${i.part.name}”: the copy is beside the others, not joined to anything yet.`); }
 
   // — the camera
   function fitScene() {
@@ -799,6 +820,9 @@ export function initAssembly({ editor, projects = null }) {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && k === 'z') { e.preventDefault(); undo(); }
       else if ((e.ctrlKey || e.metaKey) && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); redo(); }
       else if ((e.key === 'Delete' || e.key === 'Backspace') && selected) { e.preventDefault(); removeInst(selected); }
+      else if ((e.ctrlKey || e.metaKey) && k === 'c' && selected) { e.preventDefault(); copyInst(selected); }
+      else if ((e.ctrlKey || e.metaKey) && k === 'v') { e.preventDefault(); pasteInst(); }
+      else if ((e.ctrlKey || e.metaKey) && k === 'd' && selected) { e.preventDefault(); dupInst(selected); }
       else if (k === 'j') setJoin(!joinMode);
       else if (e.key === 'Escape') { if (spotMode) setSpot(false); else if (joinMode) setJoin(false); else if (selected) select(null); }
       else if (k === 'f') fitScene();
@@ -860,7 +884,7 @@ export function initAssembly({ editor, projects = null }) {
   // the top bar's undo / redo / delete act on the 3D scene while Assembly is showing (captured before the circuit handlers see the click)
   document.querySelector('.stage .toolbar')?.addEventListener('click', e => {
     if (view === 'circuit') return; const b = e.target.closest?.('button'); if (!b) return;
-    const act = { undoTool: undo, redoTool: redo, deleteTool: () => selected && removeInst(selected) }[b.id]; if (!act) return;   // (the tab buttons share this bar)
+    const act = { undoTool: undo, redoTool: redo, deleteTool: () => selected && removeInst(selected), dupTool: () => selected && dupInst?.(selected) }[b.id]; if (!act) return;   // (the tab buttons share this bar)
     e.stopImmediatePropagation(); e.preventDefault(); if (!b.disabled && view === 'assembly' && mode === 'build') act();
   }, true);
   /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */

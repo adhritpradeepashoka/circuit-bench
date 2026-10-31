@@ -337,7 +337,7 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   const kind = spec.behaviour.kind;
   const leads = pins.map(p => {
     const end = { left: [inset, p.y], right: [w - inset, p.y], top: [p.x, inset], bottom: [p.x, h - inset] }[p.side];
-    return `<line x1="${p.x}" y1="${p.y}" x2="${end[0]}" y2="${end[1]}" stroke="#9aa3ab" stroke-width="2.2"/><rect x="${p.x - 2.4}" y="${p.y - 2.4}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"/>`;
+    return `<line x1="${p.x}" y1="${p.y}" x2="${end[0]}" y2="${end[1]}" stroke="#9aa3ab" stroke-width="2.2"/><rect x="${(p.x - 2.4).toFixed(1)}" y="${(p.y - 2.4).toFixed(1)}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"/>`;
   }).join('');
   // A rotated label grows upward from its anchor, so a top-edge pin anchors a band's height below the body
   // edge — otherwise long names ran up out of the chip. Quad packages print smaller: four sides of names.
