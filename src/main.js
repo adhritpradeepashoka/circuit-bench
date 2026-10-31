@@ -165,4 +165,5 @@ $('importPcbFile').onchange = async e => { const file = e.target.files[0]; e.tar
 $('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
 $('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 
-window.__vlab = { editor, sim, code, projects, workspaces, tour, account, assembly };   // handy in the browser console
+window.__vlab = { editor, sim, code, projects, workspaces, tour, account, assembly };
+if (/[?&]diag=1/.test(location.search)) import('./ui/diag.js').then(m => m.startDiag(editor));   // handy in the browser console
