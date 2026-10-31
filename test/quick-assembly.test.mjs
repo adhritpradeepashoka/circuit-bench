@@ -46,3 +46,12 @@ test('size parsing', () => {
   assert.equal(parsePropId('prop 5 x 4.3 x 3'), 'prop-5x4.3x3-b5'); assert.equal(parsePropId('3x3x3 props'), 'prop-3x3x3-b2'); assert.equal(parsePropId('props'), null);
   assert.equal(parseMotorId('put 2207 1900kv motors on'), 'motor-2207-1900'); assert.equal(parseMotorId('motor-0802-19000'), 'motor-0802-19000'); assert.equal(parseMotorId('motors'), null);
 });
+
+test('coreless brushed motors exist as parts, fit the whoop frame and are understood by name', () => {
+  for (const id of ['motor-8520-12000', 'motor-0716-10000', 'motor-0720-11000', 'motor-0615-9000']) {
+    const p = part(id); assert.match(p.name, /Coreless/); assert.equal(p.drone.motor.brushed, true);
+    assert.ok(p.drone.motor.massGrams < 6, 'a coreless motor weighs a few grams');
+  }
+  assert.equal(parseMotorId('add 4 coreless motors'), 'motor-8520-12000');
+  assert.equal(parseMotorId('716 motors'), 'motor-0716-10000');
+});

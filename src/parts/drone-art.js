@@ -144,6 +144,46 @@ function mosfet(spec, w, h, pins) {
     <text x="${w / 2}" y="${h / 2 - 2}" text-anchor="middle" font-size="7.4" font-family="monospace" font-weight="700" fill="#e8eef3">AO3400</text><text x="${w / 2}" y="${h / 2 + 6}" text-anchor="middle" font-size="4.4" font-family="sans-serif" fill="#9aa4ad">N-MOSFET</text>`);
 }
 
+/** A small motor-driver breakout (DRV8833, TB6612FNG, L9110S): a coloured board, the driver chip in the middle with its name, header pads down both edges
+ *  — inputs and power on the left, motor outputs on the right — each named in silkscreen. */
+function driver(spec, w, h, pins) {
+  const left = pins.filter(p => p.x < w / 2), right = pins.filter(p => p.x >= w / 2);
+  const pad = (p, side) => `<circle cx="${p.x}" cy="${p.y}" r="3.3" fill="${GOLD}" stroke="${GOLD_D}" stroke-width=".5"><title>${esc(p.label || p.id)}</title></circle><circle cx="${p.x}" cy="${p.y}" r="1.3" fill="#0d1215"/>`
+    + `<text x="${side ? p.x - 6 : p.x + 6}" y="${p.y + 2}" text-anchor="${side ? 'end' : 'start'}" font-size="5.2" font-family="sans-serif" font-weight="700" fill="#f2f2f2">${esc(String(p.id).replace(/_/g, ' '))}</text>`;
+  const cy = h / 2, note = spec.sprite.note || '';
+  return svg(w, h, `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="${spec.color}" stroke="#05080c" stroke-width="1.2"/><rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="3" fill="none" stroke="#ffffff" stroke-opacity=".15"/>
+    <rect x="${w / 2 - 15}" y="${cy - 17}" width="30" height="34" rx="2" fill="#16181c" stroke="#000" stroke-width=".8"/><circle cx="${w / 2 - 10}" cy="${cy - 12}" r="1.5" fill="#555a62"/>
+    <text x="${w / 2}" y="${cy + 1}" text-anchor="middle" font-size="6.2" font-family="monospace" font-weight="700" fill="#cfd3d8">${esc(spec.label)}</text><text x="${w / 2}" y="${cy + 9}" text-anchor="middle" font-size="4.4" font-family="sans-serif" fill="#8d96a0">${esc(note)}</text>
+    <rect x="${w / 2 - 12}" y="${h - 14}" width="24" height="8" rx="1.5" fill="#d9dde2" stroke="#8b9096" stroke-width=".6"/><text x="${w / 2}" y="${h - 8}" text-anchor="middle" font-size="4.6" font-family="sans-serif" font-weight="700" fill="#22262b">MOTOR</text>
+    ${left.map(p => pad(p, false)).join('')}${right.map(p => pad(p, true)).join('')}`);
+}
+
+/** A development board (Arduino or ESP): a coloured PCB, a USB connector at one end, the main chip, a pair of LEDs and every header pin as a gold pad
+ *  with its name in silkscreen. Two rows of pins along the top and bottom (USB on the left) or down the left and right (USB at the top). */
+function devboard(spec, w, h, pins) {
+  const bare = spec.sprite.art === 'drone-devboard-bare';       // a bare module or a board without a USB socket
+  const horiz = new Set(pins.map(p => p.y)).size <= 2;
+  const name = id => String(id).replace(/\.\d+$/, '');
+  const pad = p => {
+    const side = horiz ? (p.y < h / 2 ? 'top' : 'bottom') : (p.x < w / 2 ? 'left' : 'right');
+    const pos = { top: [p.x, p.y + 5.4], bottom: [p.x, p.y - 5.4], left: [p.x + 5.4, p.y + 1.5], right: [p.x - 5.4, p.y + 1.5] }[side];
+    const anchor = { top: 'end', bottom: 'start', left: 'start', right: 'end' }[side];
+    return `<circle cx="${p.x}" cy="${p.y}" r="3" fill="${GOLD}" stroke="${GOLD_D}" stroke-width=".5"><title>${esc(p.label || p.id)}</title></circle><circle cx="${p.x}" cy="${p.y}" r="1.2" fill="#0d1215"/>`
+      + `<text x="${pos[0].toFixed(1)}" y="${pos[1].toFixed(1)}" text-anchor="${anchor}" font-size="4.3" font-family="sans-serif" font-weight="700" fill="#f2f2f2"${horiz ? ` transform="rotate(-90 ${pos[0].toFixed(1)} ${pos[1].toFixed(1)})"` : ''}>${esc(name(p.id))}</text>`;
+  };
+  const cw = horiz ? 30 : Math.min(26, w - 64), ch = horiz ? 15 : 26;
+  const narrow = horiz && w < 120, cx = horiz ? (narrow ? w / 2 : w / 2 + 14) - cw / 2 : w / 2 - cw / 2, cy = horiz ? h / 2 - ch / 2 : h / 2 + 6 - ch / 2;
+  const usb = bare ? '' : horiz ? `<rect x="0.6" y="${h / 2 - 9}" width="13" height="18" rx="2" fill="${SILVER}" stroke="${SILVER_D}"/><rect x="2.4" y="${h / 2 - 5.5}" width="9" height="11" rx="2" fill="#25282d"/>`
+    : `<rect x="${w / 2 - 9}" y="0.6" width="18" height="13" rx="2" fill="${SILVER}" stroke="${SILVER_D}"/><rect x="${w / 2 - 5.5}" y="2.4" width="11" height="9" rx="2" fill="#25282d"/>`;
+  const leds = bare ? '' : horiz ? `<circle cx="20" cy="${h / 2 - 5}" r="1.5" fill="#2d8bff"/><circle cx="20" cy="${h / 2 + 5}" r="1.5" fill="#e0342b"/>` : `<circle cx="${w / 2 - 5}" cy="20" r="1.5" fill="#2d8bff"/><circle cx="${w / 2 + 5}" cy="20" r="1.5" fill="#e0342b"/>`;
+  const short = String(spec.sprite.note || spec.label).slice(0, 12);
+  return svg(w, h, `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="${spec.color}" stroke="#05080c" stroke-width="1.2"/><rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="3" fill="none" stroke="#ffffff" stroke-opacity=".14"/>${usb}${leds}
+    <rect x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="1.8" fill="#16181c" stroke="#000" stroke-width=".8"/><circle cx="${(cx + 3.4).toFixed(1)}" cy="${(cy + 3.4).toFixed(1)}" r="1.1" fill="#555a62"/>
+    <text x="${(cx + cw / 2).toFixed(1)}" y="${(cy + ch / 2 + 1.8).toFixed(1)}" text-anchor="middle" font-size="${Math.min(5.4, Math.max(3.4, (cw - 4) / Math.max(3, short.length) * 1.5)).toFixed(1)}" font-family="monospace" font-weight="700" fill="#cfd3d8">${esc(short)}</text>
+    ${narrow ? '' : `<text x="${horiz ? (bare ? 18 : 34) : w / 2}" y="${horiz ? h / 2 + 2 : h / 2 + 6 + ch / 2 + 8}" text-anchor="${horiz ? 'start' : 'middle'}" font-size="${horiz ? 6 : 5}" font-family="sans-serif" font-weight="800" fill="#f2f2f2">${esc(spec.label)}</text>`}
+    ${pins.map(pad).join('')}`);
+}
+
 export function droneSprite(art, spec, w, h, pins) {
   if (art === 'drone-fc') return fcBoard(spec, w, h, pins);
   if (art === 'drone-esc') return escBoard(spec, w, h, pins);
@@ -154,6 +194,8 @@ export function droneSprite(art, spec, w, h, pins) {
   if (art === 'drone-bmotor-cw') return bmotor(spec, w, h, pins, false);
   if (art === 'drone-bmotor-ccw') return bmotor(spec, w, h, pins, true);
   if (art === 'drone-mosfet') return mosfet(spec, w, h, pins);
+  if (art === 'drone-driver') return driver(spec, w, h, pins);
+  if (art === 'drone-devboard' || art === 'drone-devboard-bare') return devboard(spec, w, h, pins);
   if (art === 'drone-aio') return aio(spec, w, h, pins);
   if (art === 'drone-motor') return motor(spec, w, h, pins);
   if (art === 'drone-battery') return battery(spec, w, h, pins);

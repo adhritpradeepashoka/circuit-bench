@@ -4,6 +4,8 @@
 //
 // pins: [id, label?]; DIP/quad templates list pins in datasheet order, pin 1 first (no sides — the package places them).
 
+import { BOARD_TEMPLATES } from './board-templates.js';
+
 const mod = (name, label, color, pins, behaviour, extra = {}) => ({
   name, label, color, textColor: extra.textColor || '#ffffff', description: extra.description || '', package: 'module', breadboard: extra.breadboard !== false,
   pins: pins.map(p => (Array.isArray(p) ? { id: p[0], label: p[1] || p[0] } : { id: p, label: p })), behaviour,
@@ -25,7 +27,7 @@ const LOOK_OF = {
   'gate-not': 'chip', 'gate-and': 'chip', 'gate-or': 'chip', 'gate-xor': 'chip', 'gate-nand': 'chip', 'gate-nor': 'chip', 'gate-dff': 'chip', 'gate-mux2': 'chip',
 };
 
-export const TEMPLATE_GROUPS = ['Switches & resistors', 'Diodes & transistors', 'Power', 'Capacitors & coils', 'Sound, light & motion', 'Sensors & inputs', 'Chips', 'Drone'];
+export const TEMPLATE_GROUPS = ['Switches & resistors', 'Diodes & transistors', 'Power', 'Capacitors & coils', 'Sound, light & motion', 'Sensors & inputs', 'Chips', 'Drone', 'Dev boards'];
 
 export const TEMPLATES = [
   // ── Switches & resistors
@@ -53,6 +55,18 @@ export const TEMPLATES = [
     description: 'The 22 × 18 mm ESP32-C3 board with Wi-Fi and Bluetooth, 3.3 V logic. Wiring and parts planning only: CircuitBench does not run ESP32 code yet. For a brushed drone use GPIO0, 1, 3 and 4 for the motors (they are not boot-strap pins) and GPIO8 / GPIO9 for an MPU-6050. A 1S LiPo can go straight to 5V.',
     pins: [{ id: '5V', label: '5V in / USB', x: 12.0, y: 5.2 }, { id: 'GND', label: 'Ground', x: 21.6, y: 5.2 }, { id: '3V3', label: '3.3 V out', x: 31.2, y: 5.2 }, { id: 'GPIO4', label: 'GPIO4 (A4)', x: 40.8, y: 5.2 }, { id: 'GPIO3', label: 'GPIO3 (A3)', x: 50.4, y: 5.2 }, { id: 'GPIO2', label: 'GPIO2 (A2, boot strap)', x: 60.0, y: 5.2 }, { id: 'GPIO1', label: 'GPIO1 (A1)', x: 69.6, y: 5.2 }, { id: 'GPIO0', label: 'GPIO0 (A0)', x: 79.2, y: 5.2 }, { id: 'GPIO5', label: 'GPIO5 (A5)', x: 12.0, y: 62.8 }, { id: 'GPIO6', label: 'GPIO6', x: 21.6, y: 62.8 }, { id: 'GPIO7', label: 'GPIO7', x: 31.2, y: 62.8 }, { id: 'GPIO8', label: 'GPIO8 (SDA, blue LED)', x: 40.8, y: 62.8 }, { id: 'GPIO9', label: 'GPIO9 (SCL, BOOT button)', x: 50.4, y: 62.8 }, { id: 'GPIO10', label: 'GPIO10', x: 60.0, y: 62.8 }, { id: 'GPIO20', label: 'GPIO20 (RX)', x: 69.6, y: 62.8 }, { id: 'GPIO21', label: 'GPIO21 (TX)', x: 79.2, y: 62.8 }],
     sprite: { art: 'drone-esp32', w: 88, h: 68, note: 'SuperMini' }, behaviour: { kind: 'none' } },
+  { group: 4, id: 'drv8833', name: 'Motor driver DRV8833 (dual H-bridge, 2.7-10.8 V, 1.5 A per channel)', label: 'DRV8833', color: '#b3202a', textColor: '#ffffff', package: 'sprite', breadboard: false,
+    description: 'Texas Instruments dual H-bridge breakout, the usual driver for small brushed motors and a coreless drone. Power the motors from VM (2.7 to 10.8 V, a 1S LiPo works), logic is 3.3 V friendly. Motor A on AOUT1 / AOUT2 (driven by AIN1 / AIN2), motor B on BOUT1 / BOUT2. Put PWM on one input and keep the other low or high to set speed and direction. nSLEEP is pulled high on the breakout, so you can leave it open; pull it low to sleep.',
+    pins: [{ id: 'VM', label: 'Motor supply VM (2.7-10.8 V)', x: 6, y: 16 }, { id: 'GND', label: 'Ground', x: 6, y: 30 }, { id: 'nSLEEP', label: 'nSLEEP (high = awake)', x: 6, y: 44 }, { id: 'AIN1', label: 'AIN1', x: 6, y: 58 }, { id: 'AIN2', label: 'AIN2', x: 6, y: 72 }, { id: 'BIN1', label: 'BIN1', x: 6, y: 86 }, { id: 'BIN2', label: 'BIN2', x: 6, y: 100 }, { id: 'AOUT1', label: 'AOUT1 (motor A)', x: 98, y: 30 }, { id: 'AOUT2', label: 'AOUT2 (motor A)', x: 98, y: 44 }, { id: 'BOUT1', label: 'BOUT1 (motor B)', x: 98, y: 72 }, { id: 'BOUT2', label: 'BOUT2 (motor B)', x: 98, y: 86 }],
+    sprite: { art: 'drone-driver', w: 104, h: 116, note: '2 x 1.5 A' }, behaviour: { kind: 'hbridge', roles: { vs: 'VM', gnd: 'GND', sleep: 'nSLEEP', in1: 'AIN1', in2: 'AIN2', out1: 'AOUT1', out2: 'AOUT2', in3: 'BIN1', in4: 'BIN2', out3: 'BOUT1', out4: 'BOUT2' }, sleepPullup: 1 } },
+  { group: 4, id: 'tb6612', name: 'Motor driver TB6612FNG (dual H-bridge, 15 V, 1.2 A per channel)', label: 'TB6612', color: '#1b4a8c', textColor: '#ffffff', package: 'sprite', breadboard: false,
+    description: 'Toshiba dual H-bridge breakout, cooler and more efficient than an L298N. VM takes the motor battery (4.5 to 13.5 V), VCC the 3.3 or 5 V logic. STBY must be HIGH or nothing moves (tie it to VCC). Motor A on AO1 / AO2: AIN1 / AIN2 pick the direction and PWMA sets the speed. Motor B on BO1 / BO2 with BIN1 / BIN2 / PWMB.',
+    pins: [{ id: 'VM', label: 'Motor supply VM (4.5-13.5 V)', x: 6, y: 16 }, { id: 'VCC', label: 'Logic supply VCC (3.3 or 5 V)', x: 6, y: 30 }, { id: 'GND', label: 'Ground', x: 6, y: 44 }, { id: 'STBY', label: 'STBY (must be HIGH)', x: 6, y: 58 }, { id: 'PWMA', label: 'PWMA (speed, motor A)', x: 6, y: 72 }, { id: 'AIN1', label: 'AIN1', x: 6, y: 86 }, { id: 'AIN2', label: 'AIN2', x: 6, y: 100 }, { id: 'BIN1', label: 'BIN1', x: 6, y: 114 }, { id: 'BIN2', label: 'BIN2', x: 6, y: 128 }, { id: 'PWMB', label: 'PWMB (speed, motor B)', x: 6, y: 142 }, { id: 'AO1', label: 'AO1 (motor A)', x: 98, y: 30 }, { id: 'AO2', label: 'AO2 (motor A)', x: 98, y: 44 }, { id: 'BO1', label: 'BO1 (motor B)', x: 98, y: 86 }, { id: 'BO2', label: 'BO2 (motor B)', x: 98, y: 100 }],
+    sprite: { art: 'drone-driver', w: 104, h: 158, note: '2 x 1.2 A' }, behaviour: { kind: 'hbridge', roles: { vs: 'VM', gnd: 'GND', sleep: 'STBY', en1: 'PWMA', en2: 'PWMB', in1: 'AIN1', in2: 'AIN2', out1: 'AO1', out2: 'AO2', in3: 'BIN1', in4: 'BIN2', out3: 'BO1', out4: 'BO2' }, sleepPullup: 0 } },
+  { group: 4, id: 'l9110s', name: 'Motor driver L9110S (dual H-bridge, 2.5-12 V, 0.8 A per channel)', label: 'L9110S', color: '#2a7a3b', textColor: '#ffffff', package: 'sprite', breadboard: false,
+    description: 'The small two-channel H-bridge board that is cheap and common for little robots and toy motors. VCC is the motor supply (2.5 to 12 V), and the inputs are 3.3 V / 5 V friendly. Motor A on A_OA / A_OB, driven by A_IA / A_IB; motor B on B_OA / B_OB with B_IA / B_IB. One input PWM, the other LOW, for speed.',
+    pins: [{ id: 'VCC', label: 'Motor supply VCC (2.5-12 V)', x: 6, y: 16 }, { id: 'GND', label: 'Ground', x: 6, y: 30 }, { id: 'A_IA', label: 'A_IA', x: 6, y: 44 }, { id: 'A_IB', label: 'A_IB', x: 6, y: 58 }, { id: 'B_IA', label: 'B_IA', x: 6, y: 72 }, { id: 'B_IB', label: 'B_IB', x: 6, y: 86 }, { id: 'A_OA', label: 'A_OA (motor A)', x: 90, y: 22 }, { id: 'A_OB', label: 'A_OB (motor A)', x: 90, y: 36 }, { id: 'B_OA', label: 'B_OA (motor B)', x: 90, y: 56 }, { id: 'B_OB', label: 'B_OB (motor B)', x: 90, y: 70 }],
+    sprite: { art: 'drone-driver', w: 96, h: 102, note: '2 x 0.8 A' }, behaviour: { kind: 'hbridge', roles: { vs: 'VCC', gnd: 'GND', in1: 'A_IA', in2: 'A_IB', out1: 'A_OA', out2: 'A_OB', in3: 'B_IA', in4: 'B_IB', out3: 'B_OA', out4: 'B_OB' } } },
   { group: 7, id: 'bmotor-cw', name: 'Coreless motor 8520, clockwise (red + blue wires)', label: 'MOTOR CW', color: '#2f5fa6', textColor: '#ffffff', package: 'sprite', breadboard: false,
     description: 'A 7-8.5 mm coreless brushed motor for a tiny drone (about 2.5 Ω). Red and blue wires spin the prop clockwise when red is +; use two of these and two counter-clockwise ones. Drive each through a logic-level MOSFET, with a Schottky diode across it.',
     pins: [{ id: '+', label: 'Red wire', x: 6, y: 20 }, { id: '-', label: 'Blue wire', x: 6, y: 40 }],
@@ -164,6 +178,7 @@ export const TEMPLATES = [
   { group: 6, id: 'gate-nor', ...mod('NOR gate', 'NOR', '#1f2933', [['A', 'Input A'], ['B', 'Input B'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: '!(A || B)' } }, { description: 'One NOR gate (like a 74HC02) — Y follows the inputs. Power it with 2–6 V; HIGH is above half the supply.' }) },
   { group: 6, id: 'gate-dff', ...mod('D flip-flop', 'D-FF', '#1f2933', [['D', 'Data in'], ['CLK', 'Clock'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Q', 'Output'], ['QN', 'Output (inverted)']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: { st: 0 }, rules: [{ when: 'rising(CLK)', set: { st: 'D' } }], outputs: { Q: 'st', QN: '!st' } }, { description: 'Remembers D on each rising edge of CLK. Q holds it until the next edge; QN is the opposite.' }) },
   { group: 6, id: 'gate-mux2', ...mod('2-to-1 multiplexer', 'MUX2', '#1f2933', [['A', 'Input 0'], ['B', 'Input 1'], ['S', 'Select'], ['VCC', 'Power (2–6 V)'], ['GND', 'Ground'], ['Y', 'Output']], { kind: 'logic', roles: { vcc: 'VCC', gnd: 'GND' }, vars: {}, rules: [], outputs: { Y: 'S ? B : A' } }, { description: 'Y copies input A while S is LOW and input B while S is HIGH.' }) },
+  ...BOARD_TEMPLATES,
   chip74hc595(),
   chipGates(),
   chipCounter(),
@@ -202,7 +217,8 @@ function chipCounter() {
 
 /** Common parts that ship in the default catalogue (sidebar) instead of the Part Creator's template list: template id → sidebar category. */
 export const POPULAR = {
-  'drone-aio': 'Drone', 'drone-motor': 'Drone', 'drone-battery': 'Drone', 'drone-camera': 'Drone', 'drone-fc': 'Drone', 'drone-esc': 'Drone', 'drone-cap': 'Drone', 'drone-rx': 'Drone', 'drone-vtx': 'Drone', 'esp32-c3-mini': 'Drone', 'bmotor-cw': 'Drone', 'bmotor-ccw': 'Drone', 'q-ao3400': 'Semiconductors', 'd-schottky': 'Semiconductors',
+  ...Object.fromEntries(BOARD_TEMPLATES.map(t => [t.id, 'Boards'])),
+  'drone-aio': 'Drone', 'drone-motor': 'Drone', 'drone-battery': 'Drone', 'drone-camera': 'Drone', 'drone-fc': 'Drone', 'drone-esc': 'Drone', 'drone-cap': 'Drone', 'drone-rx': 'Drone', 'drone-vtx': 'Drone', 'esp32-c3-mini': 'Boards', 'bmotor-cw': 'Drone', 'bmotor-ccw': 'Drone', 'q-ao3400': 'Semiconductors', drv8833: 'Motors', tb6612: 'Motors', l9110s: 'Motors', 'd-schottky': 'Semiconductors',
   'stepper': 'Motors', 'fan': 'Motors',
   'hall': 'Sensors',
   'd-1n4007': 'Semiconductors', 'd-zener': 'Semiconductors', 'q-2n2222': 'Semiconductors', 'q-2n2907': 'Semiconductors', 'q-irlz44n': 'Semiconductors', 'opamp-lm358': 'Semiconductors', 'opamp-rr': 'Semiconductors', 'opamp-tl07x': 'Semiconductors', 'opamp-op07': 'Semiconductors', 'opamp-741': 'Semiconductors', 'inamp-ina128': 'Semiconductors', 'bioamp-exg-pill': 'Biosignal', 'signal-source': 'Biosignal', 'slime-mold': 'Biosignal',

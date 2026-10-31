@@ -81,7 +81,7 @@ const hexColor = (v, d) => {
  * Checks and normalises a spec. Unknown fields are dropped; anything that would make an unusable part is an error.
  * @returns {{ok: true, spec: object} | {ok: false, errors: string[]}}
  */
-export function validatePartSpec(raw, { id } = {}) {
+export function validatePartSpec(raw, { id, strict = false } = {}) {
   const errors = [];
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['A part must be an object.'] };
   const name = str(raw.name, 40);
@@ -177,6 +177,21 @@ export function validatePartSpec(raw, { id } = {}) {
     if (a.ok) {
       art = a.art;
       for (const p of pins) if (p.x > art.w || p.y > art.h) errors.push(`Pin ${p.id} is outside the picture (${art.w}×${art.h}) — put each pin where its lead ends.`);
+      const shapes = (art.svg.match(/<(path|rect|circle|ellipse|line|polyline|polygon)\b/g) || []).length;
+      if (strict && shapes < 6) errors.push(`The drawing has only ${shapes} shape${shapes === 1 ? '' : 's'}: draw the real part with its details (body, connectors, chip, markings, leads), not a plain box.`);
+      for (let i = 0; i < pins.length; i++) for (let j = i + 1; strict && j < pins.length; j++) if (Math.hypot(pins[i].x - pins[j].x, pins[i].y - pins[j].y) < 5) errors.push(`Pins ${pins[i].id} and ${pins[j].id} are almost on top of each other in the picture: place each where its own lead ends.`);
+      // real size: the picture must be to scale (1 mm = 3.78 px, so a 2.54 mm header pitch is 9.6 px). Slightly off → scaled to fit; wrong proportions → the AI redraws.
+      const sz = raw.sizeMm && typeof raw.sizeMm === 'object' ? { w: clampN(raw.sizeMm.w, 0, 600), h: clampN(raw.sizeMm.h, 0, 600) } : null;
+      if (strict && sz && sz.w >= 1 && sz.h >= 1) {
+        const px = [sz.w * 3.7795, sz.h * 3.7795], kx = px[0] / art.w, ky = px[1] / art.h;
+        if (Math.abs(kx / ky - 1) > 0.3) errors.push(`The picture is ${art.w}×${art.h} px but the real part is ${sz.w}×${sz.h} mm, which is ${Math.round(px[0])}×${Math.round(px[1])} px at 1 mm = 3.78 px: redraw it with the real proportions.`);
+        else if (Math.abs((kx + ky) / 2 - 1) > 0.15) {
+          const k = (kx + ky) / 2, W = Math.min(400, Math.max(20, Math.round(art.w * k))), H = Math.min(400, Math.max(20, Math.round(art.h * k)));
+          art = { ...art, w: W, h: H, svg: `<g transform="scale(${k.toFixed(4)})">${art.svg}</g>` };
+          for (const p of pins) { p.x = +(p.x * k).toFixed(1); p.y = +(p.y * k).toFixed(1); }
+        }
+        art.sizeMm = { w: +sz.w.toFixed(1), h: +sz.h.toFixed(1) };
+      }
     } else errors.push(...a.errors);
   }
   // A through-hole chip always straddles the trench; a surface-mount one can never plug in at all.
@@ -222,7 +237,7 @@ function cleanBoard(b) {
 export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /** Box size and pin positions (CSS px, local to the part) from a spec: pins sit on a 0.1" grid along their side. */
-export const SPRITE_ARTS = ['bioamp-pill', 'slime-mold', 'drone-aio', 'drone-motor', 'drone-battery', 'drone-camera', 'drone-fc', 'drone-esc', 'drone-cap', 'drone-rx', 'drone-vtx', 'drone-esp32', 'drone-bmotor-cw', 'drone-bmotor-ccw', 'drone-mosfet'];
+export const SPRITE_ARTS = ['bioamp-pill', 'slime-mold', 'drone-aio', 'drone-motor', 'drone-battery', 'drone-camera', 'drone-fc', 'drone-esc', 'drone-cap', 'drone-rx', 'drone-vtx', 'drone-esp32', 'drone-bmotor-cw', 'drone-bmotor-ccw', 'drone-driver', 'drone-devboard', 'drone-devboard-bare', 'drone-mosfet'];
 export const BOARD_SCALE = 96 / 25.4;      // an imported board is drawn at true size: 1 mm = 3.78 px, like the Wokwi parts
 export function layoutSpec(spec) {
   if (spec.package === 'board' && spec.board) {

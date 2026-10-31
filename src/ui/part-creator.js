@@ -42,7 +42,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   const KIND_GROUPS = [
     ['Basics', ['none', 'resistor', 'variable-resistor', 'led', 'led-array', 'switch', 'button']],
     ['Diodes, transistors & power', ['diode', 'npn', 'pnp', 'nmos', 'pmos', 'regulator', 'opamp', 'inamp', 'relay', 'capacitor', 'inductor']],
-    ['Sound, motors & motion', ['buzzer', 'motor', 'servo', 'stepper', 'bldc', 'bldc-esc']],
+    ['Sound, motors & motion', ['buzzer', 'motor', 'hbridge', 'servo', 'stepper', 'bldc', 'bldc-esc']],
     ['Sensors & inputs', ['analog-sensor', 'digital-sensor', 'ultrasonic', 'encoder', 'signal-source']],
     ['Chips', ['mux', 'logic']],
   ];

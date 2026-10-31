@@ -333,6 +333,7 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
     const dots = pins.map(p => `<rect x="${(p.x - 2.4).toFixed(1)}" y="${(p.y - 2.4).toFixed(1)}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"><title>${esc(p.label || p.id)}</title></rect>`).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${lookSVG(spec.look, spec, w, h, pins)}${dots}</svg>`;
   }
+  if (spec.package === 'module' && !spec.look && !LIVE_ICON_KINDS.has(spec.behaviour.kind)) return moduleBoardSVG(spec, w, h, pins);
   const inset = 9, bw = w - inset * 2, bh = h - inset * 2;
   const kind = spec.behaviour.kind;
   const leads = pins.map(p => {
@@ -364,6 +365,23 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
     <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
       stroke="${spec.color}" stroke-width="${quad ? 2.2 : 0}" paint-order="stroke">${esc(spec.label)}</text>
   </svg>`;
+}
+const LIVE_ICON_KINDS = new Set([...ICON_KINDS].filter(k => k !== 'hbridge').concat(['led', 'button', 'digital-sensor']));
+/** Any breakout board without a ready-made picture, drawn like the real thing: a coloured PCB, gold pads where the pins are, the pin names in silkscreen along the
+ *  edges, and the main chip in the middle carrying the part's label. The fallback for every module the AI or a student defines without its own drawing. */
+function moduleBoardSVG(spec, w, h, pins) {
+  const size = 5.4, ink = spec.textColor || '#ffffff';
+  const pads = pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="2.9" fill="#d9b44a" stroke="#8a6d1d" stroke-width=".6"><title>${esc(p.label || p.id)}</title></circle><circle cx="${p.x}" cy="${p.y}" r="1.1" fill="#0d1215"/>`).join('');
+  const names = pins.map(p => {
+    const pos = { left: [p.x + 6, p.y + size * 0.36, 'start'], right: [p.x - 6, p.y + size * 0.36, 'end'], top: [p.x, p.y + 6, 'end'], bottom: [p.x, p.y - 6, 'start'] }[p.side];
+    if (!pos) return '';
+    const vertical = p.side === 'top' || p.side === 'bottom';
+    return `<text x="${pos[0]}" y="${pos[1]}" text-anchor="${pos[2]}" font-size="${size}" font-family="sans-serif" font-weight="700" fill="${ink}" opacity=".9"${vertical ? ` transform="rotate(-90 ${pos[0]} ${pos[1]})"` : ''}>${esc(p.id)}</text>`;
+  }).join('');
+  const cw = Math.min(34, Math.max(20, w * 0.34)), ch = Math.min(30, Math.max(16, h * 0.34)), cx = w / 2 - cw / 2, cy = h / 2 - ch / 2;
+  const chip = w >= 56 && h >= 40 ? `<rect x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#16181c" stroke="#000" stroke-width=".8"/><circle cx="${(cx + 3.6).toFixed(1)}" cy="${(cy + 3.6).toFixed(1)}" r="1.3" fill="#555a62"/>
+    <text x="${w / 2}" y="${(h / 2 + 2.4).toFixed(1)}" text-anchor="middle" font-size="${Math.min(8, Math.max(4.6, (cw - 4) / Math.max(4, String(spec.label).length) * 1.45)).toFixed(1)}" font-family="monospace" font-weight="700" fill="#cfd3d8">${esc(spec.label)}</text>` : `<text x="${w / 2}" y="${(h / 2 + 3).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="sans-serif" font-weight="800" fill="${ink}">${esc(spec.label)}</text>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="${spec.color}" stroke="#05080c" stroke-width="1.2"/><rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="3" fill="none" stroke="#ffffff" stroke-opacity=".15"/>${chip}${names}${pads}</svg>`;
 }
 /** A part drawn by the AI (or the student) as SVG: its picture, with the moving pieces driven by the live simulation, and a lead dot on every pin. */
 function artSVG(spec, w, h, pins, st) {

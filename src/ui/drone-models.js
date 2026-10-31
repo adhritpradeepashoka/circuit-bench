@@ -29,9 +29,9 @@ export function buildDroneMesh(THREE, part) {
       const rim = new THREE.Path(); rim.absarc(x, y, hd / 2, 0, Math.PI * 2, true); lugShape.holes.push(rim); plate(lugShape, d.baseT, 0, C.motorBase, { metal: 0.4 });
     }
     cyl(d.bellR * 0.85, Math.max(1, d.baseT * 0.5), d.baseT, 0xb87333, 36, { metal: 0.6, rough: 0.4 });                                           // the copper windings (stator)
-    for (const dx of [-1.2, 0, 1.2]) { const w = new THREE.CylinderGeometry(0.45, 0.45, d.baseR * 1.6, 8); w.rotateZ(Math.PI / 2); add(w, -d.baseR * 0.9, dx, d.baseT * 0.5, [0xc23b2f, 0x1c1c1c, 0xd9a400][dx < 0 ? 0 : dx > 0 ? 2 : 1]); }
+    for (const dx of d.motor.brushed ? [-0.7, 0.7] : [-1.2, 0, 1.2]) { const w = new THREE.CylinderGeometry(d.motor.brushed ? 0.3 : 0.45, d.motor.brushed ? 0.3 : 0.45, d.baseR * 1.6, 8); w.rotateZ(Math.PI / 2); add(w, -d.baseR * 0.9, dx, d.baseT * 0.5, d.motor.brushed ? (dx < 0 ? 0xc23b2f : 0x2b7bd6) : [0xc23b2f, 0x1c1c1c, 0xd9a400][dx < 0 ? 0 : dx > 0 ? 2 : 1]); }
     const bellH = d.root - d.baseT; cyl(d.bellR * 0.97, 1.2, d.baseT, C.motorBase, 48, { metal: 0.4 });                                   // a dark ring at the foot
-    cyl(d.bellR, bellH - 1.2 - 0.8, d.baseT + 1.2, C.bell, 48, { metal: 0.7, rough: 0.35 }); cyl(d.bellR * 0.78, 0.8, d.root - 0.8, C.motorBase, 48, { metal: 0.4 }, d.bellR * 0.9);    // the anodised bell, and its cap
+    cyl(d.bellR, bellH - 1.2 - 0.8, d.baseT + 1.2, d.motor.brushed ? 0xc9ccd1 : C.bell, 48, { metal: d.motor.brushed ? 0.9 : 0.7, rough: 0.35 }); cyl(d.bellR * 0.78, 0.8, d.root - 0.8, C.motorBase, 48, { metal: 0.4 }, d.bellR * 0.9);    // the anodised bell, and its cap
     cyl(d.motor.shaftMm / 2, d.shaftLen, d.root, C.steel, 24, { metal: 0.9, rough: 0.25 });
   } else if (d.kind === 'prop') {
     const s = new THREE.Shape(); s.absarc(0, 0, d.hubR, 0, Math.PI * 2, false); const h = new THREE.Path(); h.absarc(0, 0, d.bore / 2, 0, Math.PI * 2, true); s.holes.push(h); plate(s, d.hubH, 0, C.hub);

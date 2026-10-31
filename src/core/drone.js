@@ -5,6 +5,11 @@ const RHO = 1.225, G = 9.80665, IN = 0.0254, RPM = Math.PI / 30;
 
 /** Standard stator sizes named the way the hobby does: the first two digits are the stator diameter and the last two its height, in mm (2207 = 22 × 7). */
 const CORE = {
+  // Coreless BRUSHED motors (the tiny silver cans of a toothpick or brushed-whoop drone): 1S only, no ESC, two wires, pressed into a motor cup (drawn as the 3-prong clip of a 65/75 mm whoop frame).
+  '0615': { stator: [6, 15], body: { dia: 6, h: 15, shaftLen: 5 }, mass: 2.2, kvRef: 9000, rRef: 4.0, i0Ref: 0.18, maxA: 1.5, shaft: 0.8, mount: { pattern: [6.6, 6.6], screw: 'M1_4', kind: 'tri', note: 'press-fit coreless motor, 6 x 15 mm' }, cells: [1, 1], brushed: true, estimated: true },
+  '0716': { stator: [7, 16], body: { dia: 7, h: 16, shaftLen: 5.5 }, mass: 3.2, kvRef: 10000, rRef: 3.2, i0Ref: 0.2, maxA: 2, shaft: 0.8, mount: { pattern: [6.6, 6.6], screw: 'M1_4', kind: 'tri', note: 'press-fit coreless motor, 7 x 16 mm' }, cells: [1, 1], brushed: true, estimated: true },
+  '0720': { stator: [7, 20], body: { dia: 7, h: 20, shaftLen: 5.5 }, mass: 4.2, kvRef: 11000, rRef: 2.8, i0Ref: 0.22, maxA: 2.5, shaft: 0.8, mount: { pattern: [6.6, 6.6], screw: 'M1_4', kind: 'tri', note: 'press-fit coreless motor, 7 x 20 mm' }, cells: [1, 1], brushed: true, estimated: true },
+  '8520': { stator: [8.5, 20], body: { dia: 8.5, h: 20, shaftLen: 6 }, mass: 5.6, kvRef: 12000, rRef: 2.5, i0Ref: 0.25, maxA: 3, shaft: 1.0, mount: { pattern: [6.6, 6.6], screw: 'M1_4', kind: 'tri', note: 'press-fit coreless motor, 8.5 x 20 mm' }, cells: [1, 1], brushed: true, estimated: true },
   '0802': { stator: [8, 2], body: { dia: 11, h: 7.8, shaftLen: 5 }, mass: 1.85, kvRef: 22000, rRef: 0.9, i0Ref: 0.35, maxA: 4, shaft: 1.0, mount: { pattern: [6.6, 6.6], screw: 'M1_4', kind: 'tri', note: 'BetaFPV 0802SE and HGLRC Aeolus: 10.5–11.2 mm across, 1.8–1.9 g, 1 mm shaft, three M1.4 holes on a 6.6 mm circle; other brands differ' }, cells: [1, 1], estimated: true },
   '1103': { stator: [11, 3], mass: 4.5, kvRef: 8000, rRef: 0.2, i0Ref: 0.5, maxA: 8, shaft: 1.5, mount: { pattern: [9, 9], screw: 'M2' }, cells: [2, 3], estimated: false },
   '1404': { stator: [14, 4], mass: 9.5, kvRef: 4600, rRef: 0.12, i0Ref: 0.6, maxA: 14, shaft: 2.0, mount: { pattern: [9, 9], screw: 'M2' }, cells: [3, 4], estimated: true },
@@ -14,7 +19,7 @@ const CORE = {
   '2806': { stator: [28, 6], mass: 52, kvRef: 1300, rRef: 0.06, i0Ref: 1.0, maxA: 40, shaft: 5.0, mount: { pattern: [19, 19], screw: 'M3' }, cells: [4, 6], estimated: false },
 };
 /** Every other size is derived from its stator volume with the scaling real motors follow (mass, current, winding), and is marked estimated. */
-export const MOTOR_NAMES = ['0603', '0702', '0703', '0802', '0803', '0804', '0903', '1002', '1102', '1103', '1104', '1105', '1106', '1202', '1204', '1303', '1306', '1404', '1407', '1408', '1507', '1606', '1704', '1806', '1808', '2004', '2005', '2006', '2204', '2205', '2206', '2207', '2208', '2304', '2305', '2306', '2307', '2308', '2506', '2507', '2806', '2807', '2808', '3004', '3110', '3508'];
+export const MOTOR_NAMES = ['0615', '0716', '0720', '8520', '0603', '0702', '0703', '0802', '0803', '0804', '0903', '1002', '1102', '1103', '1104', '1105', '1106', '1202', '1204', '1303', '1306', '1404', '1407', '1408', '1507', '1606', '1704', '1806', '1808', '2004', '2005', '2006', '2204', '2205', '2206', '2207', '2208', '2304', '2305', '2306', '2307', '2308', '2506', '2507', '2806', '2807', '2808', '3004', '3110', '3508'];
 function derive(name) {
   const d = Number(name.slice(0, 2)), h = Number(name.slice(2)), vol = d * d * h, ratio = vol / 3388;
   const cells = d <= 8 ? [1, 1] : d <= 12 ? [2, 3] : d <= 15 ? [3, 4] : d <= 19 ? [3, 4] : d <= 23 ? [4, 6] : d <= 28 ? [4, 6] : [6, 6], c = d <= 8 ? 1 : d <= 12 ? 2 : d <= 15 ? 3 : d <= 23 ? 4 : 6;
@@ -27,7 +32,7 @@ export const MOTOR_SIZES = Object.fromEntries(MOTOR_NAMES.map(n => [n, CORE[n] |
 export function makeMotor({ size = '2207', kv, over = {} } = {}) {
   const s = MOTOR_SIZES[size]; if (!s) throw new Error(`Unknown motor size ${size}.`);
   kv = Number.isFinite(kv) ? kv : s.kvRef; const k = kv / s.kvRef;
-  const m = { size, kv, resistance: s.rRef * k * k, noLoadAmps: s.i0Ref * k, massGrams: s.mass, body: s.body, maxAmps: s.maxA, mount: s.mount, shaftMm: s.shaft, stator: s.stator, source: 'estimated (typical for this size)' };
+  const m = { size, kv, resistance: s.rRef * k * k, noLoadAmps: s.i0Ref * k, massGrams: s.mass, body: s.body, maxAmps: s.maxA, mount: s.mount, shaftMm: s.shaft, stator: s.stator, source: 'estimated (typical for this size)', brushed: !!s.brushed };
   for (const key of ['kv', 'resistance', 'noLoadAmps', 'massGrams', 'maxAmps']) if (Number.isFinite(over[key]) && over[key] > 0) { m[key] = over[key]; m.source = 'entered by you'; }
   return m;
 }

@@ -246,6 +246,11 @@ export function compile(state) {
       } else if (kind === 'motor') {
         const bh = PART_DEFS[part.type].spec.behaviour;
         elements.push({ kind: 'LOAD', partId: part.id, a: r('a'), b: r('b'), ohms: bh.ohms, heavy: true });
+      } else if (kind === 'hbridge') {
+        const bh = PART_DEFS[part.type].spec.behaviour, o = role => (roles[role] ? netOf(part.id, roles[role]) : null), lone = role => roles[role] && nets[o(role)].keys.length === 1;
+        const chan = (i1, i2, o1, o2, en) => (roles[i1] && roles[o1] ? { in1: o(i1), in2: o(i2), en: !roles[en] || lone(en) ? null : o(en), out1: o(o1), out2: o(o2) } : null);
+        const ch = [chan('in1', 'in2', 'out1', 'out2', 'en1'), chan('in3', 'in4', 'out3', 'out4', 'en2')].filter(Boolean);
+        elements.push({ kind: 'DRV', partId: part.id, vs: o('vs'), gnd: o('gnd'), ch, minSupply: 2.7, drop: 0.3, ...(roles.sleep ? (lone('sleep') ? { off: !bh.sleepPullup } : { stby: o('sleep') }) : {}) });
       } else if (kind === 'led-array') {
         const bh = PART_DEFS[part.type].spec.behaviour, cat = bh.common !== 'anode', pairs = bh.cathodes?.length === bh.segments.length && bh.cathodes.length > 0;
         const com = pairs ? null : r('common');

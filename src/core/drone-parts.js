@@ -38,7 +38,7 @@ export function makeDronePart(id) {
     const mo = makeMotor({ size: d.size, kv: d.kv, over: d.over }), [sd, sh] = mo.stator, [a, b] = mo.mount.pattern, mk = mo.mount.kind || 'cross', hd = clear(mo.mount.screw);
     const bellR = mo.body ? mo.body.dia / 2 : sd / 2 + (sd < 12 ? 1.1 : 2.2), baseT = Math.max(1.2, sd / 9), bellH = mo.body ? mo.body.h : sh + 3.5, shaftLen = mo.body ? mo.body.shaftLen : 3 + mo.shaftMm * 1.4, root = baseT + bellH, hx = (mk === 'tri' ? a / 2 : Math.hypot(a, b) / 2) + hd;
     const baseR = Math.max(bellR, hx + 0.8);
-    return { ...base, name: `Motor ${d.size} ${Math.round(d.kv)}Kv`, mass: { grams: mo.massGrams, source: d.over.massGrams ? 'datasheet' : 'estimated' }, dims: { size: [2 * baseR, 2 * baseR, root + shaftLen], source: 'estimated' }, drone: { ...d, motor: mo, bellR, baseR, baseT, root, shaftLen, mountKind: mk },
+    return { ...base, name: mo.brushed ? `Coreless motor ${d.size} (brushed)` : `Motor ${d.size} ${Math.round(d.kv)}Kv`, mass: { grams: mo.massGrams, source: d.over.massGrams ? 'datasheet' : 'estimated' }, dims: { size: [2 * baseR, 2 * baseR, root + shaftLen], source: 'estimated' }, drone: { ...d, motor: mo, bellR, baseR, baseT, root, shaftLen, mountKind: mk },
       frames: [...mountPoints(mk, a, b).map(([x, y], k) => hole(`mount-${k + 1}`, [x, y, 0], DOWN, hd)), { id: 'shaft', kind: 'shaft', pos: [0, 0, root], dir: UP, diameter: mo.shaftMm, source: 'estimated' }] };
   }
   if (d.kind === 'prop') {
@@ -81,7 +81,7 @@ export function makeDronePart(id) {
 /** Parts offered ready-made in the list (the builder makes the rest). */
 export const DRONE_PRESETS = [
   ['Tiny whoop 75 mm (3-prong 0802 motors)', 'frame-quad-75-t6.6-16'], ['Whoop frame 65 mm', 'frame-quad-65-9-16'], ['3 inch frame 142 mm', 'frame-quad-142-12-20'], ['5 inch frame 220 mm', 'frame-quad-220-16-30.5'], ['7 inch frame 300 mm', 'frame-quad-300-16-30.5'],
-  ['Drone motor (choose its size after adding)', 'motor-2207-1900'],
+  ['Drone motor (choose its size after adding)', 'motor-2207-1900'], ['Coreless motor 8520 (brushed, 1S)', 'motor-8520-12000'], ['Coreless motor 0716 (brushed, 1S)', 'motor-0716-10000'], ['Coreless motor 0720 (brushed, 1S)', 'motor-0720-11000'], ['Coreless motor 0615 (brushed, 1S)', 'motor-0615-9000'],
   ['Prop 5×4.3×3', 'prop-5x4.3x3-b5'], ['Prop 3×3×3', 'prop-3x3x3-b2'], ['Flight controller 30.5', 'board-fc-30.5'], ['4-in-1 ESC 30.5', 'board-esc-30.5'], ['AIO 25.5', 'board-aio-25.5'], ['iFlight BLITZ F411 1S AIO', 'board-aio-iflight-blitz-f411-1s'], ['Happymodel X12 AIO', 'board-aio-happymodel-x12'], ['HGLRC Zeus13 AIO', 'board-aio-hglrc-zeus13'], ['iFlight Beast F7 AIO', 'board-aio-iflight-beast-f7'], ['Whoop AIO 16', 'board-aio-16'],
   ['Battery 4S 1500 mAh', 'battery-4s-1500-75'], ['Battery 6S 1300 mAh', 'battery-6s-1300-100'], ['Battery 1S 450 mAh', 'battery-1s-450-60'], ['Camera micro', 'camera-micro'], ['Camera nano', 'camera-nano'], ['Standoff M3 × 6', 'standoff-m3-6'], ['Standoff M2 × 6', 'standoff-m2-6'],
 ];

@@ -53,7 +53,7 @@ test('any spec that passes validation lays out sanely, draws without NaN and reg
 test('hostile text in names, labels and pins is escaped in the picture and never becomes markup', () => {
   for (const bad of NASTY) {
     const v = validatePartSpec({ name: `A${bad}`, label: bad || 'x', pins: [{ id: 'A', label: bad }, { id: 'B' }], behaviour: { kind: 'resistor', roles: { a: 'A', b: 'B' }, ohms: 100 }, package: 'module', color: '#336699' });
-    if (!v.ok) continue; const svg = customPartSVG(v.spec); assert.ok(!/<script|<img|onerror/i.test(svg), `markup leaked for ${JSON.stringify(bad).slice(0, 30)}`);
+    if (!v.ok) continue; const svg = customPartSVG(v.spec); assert.ok(!/<script|<img|<[^>]*onerror/i.test(svg), `markup leaked for ${JSON.stringify(bad).slice(0, 30)}`);
   }
 });
 
@@ -115,4 +115,10 @@ test('the AI part maker: garbage, cut-off and hostile replies end in a clean ref
   const good = { name: 'Fuzz diode', color: '#223344', package: 'module', look: 'diode', pins: [{ id: 'A' }, { id: 'K' }], behaviour: { kind: 'diode', roles: { anode: 'A', cathode: 'K' }, vf: 0.7 } };
   const ai = createAiService({ fetchImpl: text('```json\n' + JSON.stringify(good) + '\n```') }), r = await ai.createPart({ description: 'a diode', userKey: 'k' });
   assert.equal(r.ok, true); assert.equal(r.spec.look, 'diode', 'the AI can pick a picture for its part'); assert.ok(customPartSVG(r.spec).includes('<svg'));
+});
+
+test('motor drivers are drawn as real boards (chip + silkscreen), and any module without its own picture gets a board too', () => {
+  for (const id of ['drv8833', 'tb6612', 'l9110s']) { const svg = customPartSVG(validatePartSpec({ ...TEMPLATES.find(t => t.id === id), id: `custom-${id}` }).spec); assert.match(svg, /MOTOR|<circle/); assert.ok(svg.includes(id === 'drv8833' ? 'AOUT1' : 'A_OA' ) || svg.includes('AO1')); }
+  const v = validatePartSpec({ name: 'Mystery breakout', label: 'XYZ123', color: '#2255aa', pins: [{ id: 'VCC', side: 'left' }, { id: 'GND', side: 'left' }, { id: 'OUT', side: 'right' }], package: 'module', behaviour: { kind: 'none' } });
+  assert.ok(v.ok); const svg = customPartSVG(v.spec); assert.match(svg, /XYZ123/); assert.match(svg, /fill="#d9b44a"/); assert.match(svg, />VCC</);
 });

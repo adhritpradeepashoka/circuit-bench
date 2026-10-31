@@ -7,6 +7,7 @@ import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { fromProjectFile } from '../core/project.js';
 import { PACKS, packTypes, isInstalled, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
+import { isMcuBoard } from '../core/boards.js';
 import { getWorkspace } from '../core/workspaces.js';
 import { EXAMPLES } from '../sim/examples.js';
 
@@ -178,7 +179,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   const fillBoards = () => {
     const keep = boardSel.value;
     for (const o of [...boardSel.options]) if (!baseBoards.includes(o.value)) o.remove();
-    for (const pack of PACKS) if (isInstalled(pack.id)) for (const t of packTypes(pack)) { const o = document.createElement('option'); o.value = t; o.textContent = PART_DEFS[t].name; boardSel.append(o); }
+    for (const pack of PACKS) if (isInstalled(pack.id)) for (const t of packTypes(pack).filter(isMcuBoard)) { const o = document.createElement('option'); o.value = t; o.textContent = PART_DEFS[t].name; boardSel.append(o); }
     boardSel.value = [...boardSel.options].some(o => o.value === keep) ? keep : baseBoards[0];
   };
   fillBoards(); onPacksChange(fillBoards);

@@ -2,7 +2,7 @@
 // in a workspace gives it that workspace's starting board; the parts menu then leads with its sections.
 import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace, listWorkspaces, saveWorkspace, removeWorkspace, parseWorkspaceFile, workspaceFromProject, workspaceFile } from '../core/workspaces.js';
 import { specsUsed } from '../core/custom-parts.js';
-import { PACKS, packTypes, isInstalled, installPack, removePack, onPacksChange } from '../core/packs.js';
+import { PACKS, packTypes, isInstalled, installPack, removePack, dependentsOf, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
 import { quickDrone } from '../core/quick-drone.js';
 import { applyCircuitActions } from '../core/ai-actions.js';
@@ -78,7 +78,7 @@ export function initWorkspaces({ editor, code, projects }) {
       const acts = el('div', 'proj-acts'), b = btn(on ? 'Remove' : 'Add pack', () => {
         if (on) {
           if (editor.state.parts.some(p => packTypes(pack).includes(p.type))) { editor.status(`${pack.name} is used on this bench — take those parts off first.`); packNote(`${pack.name} is used on this bench — take those parts off first.`); return; }
-          removePack(pack.id);
+          if (!removePack(pack.id)) { const m = `${pack.name} is needed by ${dependentsOf(pack.id).map(d => d.name).join(', ')} — remove that first.`; editor.status(m); packNote(m); }
         } else installPack(pack.id);
       }, on ? `Remove ${pack.name} from your parts menu` : `Add ${pack.name} to your parts menu`);
       b.classList.add('pack-btn'); b.dataset.pack = pack.id; b.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);

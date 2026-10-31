@@ -61,12 +61,15 @@ export function initSidebar(editor) {
     host.append(more);
   }
 
+  // "drv 8833", "DRV-8833" and "drv8833" all find the same part: compare with spaces and dashes taken out, and every word of the search must appear
+  const squash = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const matches = (text, q) => { const t = text.toLowerCase(), c = squash(text); return t.includes(q) || c.includes(squash(q)) || q.split(/\s+/).filter(Boolean).every(w => t.includes(w) || c.includes(squash(w))); };
   function renderCatalog() {
     const host = $('catalog');
     host.innerHTML = '';
     const q = query.trim().toLowerCase();
     const blurb = d => BLURB[d.type] || (d.custom ? d.spec.description || BEHAVIOURS[d.spec.behaviour.kind].label : '');
-    const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type)).filter(d => !q || `${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`.toLowerCase().includes(q));
+    const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type)).filter(d => !q || matches(`${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`, q));
     const showCreate = !q || 'my parts create make new custom part creator'.includes(q) || items.some(d => d.custom && !d.builtin);
     const first = menuFirst();
     const cats = [...new Set(items.map(d => d.category))].sort((a, b) => (first.includes(a) ? first.indexOf(a) : 99) - (first.includes(b) ? first.indexOf(b) : 99));      // the active workspace's sections lead the menu

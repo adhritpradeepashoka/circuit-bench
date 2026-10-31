@@ -112,3 +112,35 @@ test('DC motor straight on an Arduino pin is flagged (and overloads the pin)', (
   const r = solveDrive(c, { pins: new Map([['9', 'H']]), pressed: new Set(), duty: new Map() });
   assert.ok(r.warnings.some(w => /D9 is sourcing/.test(w.text)));
 });
+
+// ── motor-driver parts (DRV8833, TB6612FNG, L9110S) made from the ready-made templates: the generic "hbridge" behaviour ──
+import { TEMPLATES } from '../src/core/part-templates.js';
+import { validatePartSpec, registerCustomPart } from '../src/core/custom-parts.js';
+for (const id of ['drv8833', 'tb6612', 'l9110s']) {
+  const v = validatePartSpec({ ...TEMPLATES.find(t => t.id === id), id: `custom-${id}` });
+  assert.ok(v.ok, `${id}: ${v.errors}`); registerCustomPart(v.spec);
+}
+const rig = (id, pins, extra = []) => ({
+  parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0, rot: 0 }, { id: 'drv', type: `custom-${id}`, x: 400, y: 0, rot: 0 }, { id: 'mot', type: 'dc-motor', x: 700, y: 0, rot: 0 }, { id: 'bat', type: 'battery', x: 400, y: 300, rot: 0, volts: 4 }],
+  wires: [wire('w1', 'uno-1', '8', 'drv', pins.in1), wire('w2', 'uno-1', '9', 'drv', pins.in2), wire('w3', 'drv', pins.o1, 'mot', '1'), wire('w4', 'drv', pins.o2, 'mot', '2'),
+    wire('w5', 'bat', '+', 'drv', pins.vs), wire('w6', 'bat', '-', 'drv', 'GND'), wire('w7', 'drv', 'GND', 'uno-1', 'GND.1'), ...extra],
+});
+test('DRV8833: inputs set direction, supply from a 1S battery, nSLEEP left open counts as awake, pulled low it sleeps', () => {
+  const P = { in1: 'AIN1', in2: 'AIN2', o1: 'AOUT1', o2: 'AOUT2', vs: 'VM' };
+  const run = (c, pins) => solveDrive(c, { pins: new Map(Object.entries(pins)), pressed: new Set(), duty: new Map() });
+  let c = compile(rig('drv8833', P));
+  assert.ok(run(c, { 8: 'H', 9: 'L' }).motorVolts.get('mot') > 2.8, 'forward');
+  assert.ok(run(c, { 8: 'L', 9: 'H' }).motorVolts.get('mot') < -2.8, 'reverse');
+  assert.ok(Math.abs(run(c, { 8: 'H', 9: 'H' }).motorVolts.get('mot')) < 0.01, 'brake');
+  c = compile(rig('drv8833', P, [wire('w8', 'drv', 'nSLEEP', 'uno-1', 'GND.1')]));
+  assert.ok(Math.abs(run(c, { 8: 'H', 9: 'L' }).motorVolts.get('mot')) < 0.01, 'asleep');
+});
+test('TB6612: STBY must be driven high, and PWMA low stops the motor', () => {
+  const P = { in1: 'AIN1', in2: 'AIN2', o1: 'AO1', o2: 'AO2', vs: 'VM' };
+  const run = (c, pins) => solveDrive(c, { pins: new Map(Object.entries(pins)), pressed: new Set(), duty: new Map() });
+  const base = rig('tb6612', P);
+  const up = [wire('v1', 'uno-1', '5V', 'drv', 'STBY'), wire('v2', 'uno-1', '5V', 'drv', 'PWMA'), wire('v3', 'uno-1', '5V', 'drv', 'VCC')];
+  assert.ok(Math.abs(run(compile(base), { 8: 'H', 9: 'L' }).motorVolts.get('mot')) < 0.01, 'STBY open → standby');
+  assert.ok(run(compile(rig('tb6612', P, up)), { 8: 'H', 9: 'L' }).motorVolts.get('mot') > 2, 'running');
+  assert.ok(Math.abs(run(compile(rig('tb6612', P, [up[0], wire('v4', 'uno-1', 'GND.1', 'drv', 'PWMA')])), { 8: 'H', 9: 'L' }).motorVolts.get('mot')) < 0.01, 'PWMA low');
+});

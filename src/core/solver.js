@@ -107,7 +107,7 @@ export function solve(circuit, drive) {
     else if (e.kind === 'BIO') { use(e.pos); use(e.neg); use(e.ref); }
     else if (e.kind === 'SLIME') { use(e.ref); for (const t of e.taps) use(t.net); }
     else if (e.kind === 'OA') { for (const k of [e.p, e.n, e.out, e.vcc, e.vee, e.bias?.net]) if (k != null) use(k); }
-    else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
+    else if (e.kind === 'DRV') { use(e.vs); use(e.gnd); if (e.stby != null) use(e.stby); for (const c of e.ch) { use(c.in1); use(c.in2); use(c.out1); use(c.out2); if (c.en != null) use(c.en); } }
     else { use(e.a); use(e.b ?? e.k); }
   });
   const n = idx.size;
@@ -173,7 +173,7 @@ export function solve(circuit, drive) {
       } else if (e.kind === 'DRV') {
         const st = drvState[drvKey(e)];
         if (!st.powered) continue;
-        const v = Math.max(0, x[idx.get(e.vs)] - x[idx.get(e.gnd)] - DRV_DROP);
+        const v = Math.max(0, x[idx.get(e.vs)] - x[idx.get(e.gnd)] - (e.drop ?? DRV_DROP));
         e.ch.forEach((c, k) => {
           const s = st.ch[k];
           if (!s.en) return;                                   // disabled: outputs float (the motor coasts)
@@ -337,7 +337,7 @@ export function solve(circuit, drive) {
     }
     for (const d of drvs) {
       const st = drvState[drvKey(d)], g = x[idx.get(d.gnd)];
-      const p = x[idx.get(d.vs)] - g >= DRV_MIN_SUPPLY;
+      const p = x[idx.get(d.vs)] - g >= (d.minSupply ?? DRV_MIN_SUPPLY) && !d.off && (d.stby == null || x[idx.get(d.stby)] - g > LOGIC_HIGH);
       if (p !== st.powered) { st.powered = p; changed = true; }
       d.ch.forEach((c, k) => {
         const s = st.ch[k], high = n => x[idx.get(n)] - g > LOGIC_HIGH;
@@ -395,7 +395,7 @@ export function solve(circuit, drive) {
   }));
   for (const d of drvs) {
     const st = drvState[drvKey(d)];
-    if (!st.powered && d.ch.some((c, k) => st.ch[k].a || st.ch[k].b)) warnings.push({ partId: d.partId, text: 'The L298N has no motor power: connect its 12V terminal to a battery (or VIN) and its GND to the Arduino GND' });
+    if (!st.powered && d.ch.some((c, k) => st.ch[k].a || st.ch[k].b)) warnings.push({ partId: d.partId, text: 'The motor driver has no motor power (or is asleep): connect its supply pin to a battery (or VIN) and its GND to the Arduino GND' });
   }
   // ── the component-library parts ──
   const V = net => x[idx.get(net)];

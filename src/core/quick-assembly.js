@@ -7,7 +7,7 @@
 const TIPS = ['fr', 'fl', 'bl', 'br'];
 const WORDS = { one: 1, two: 2, three: 3, four: 4, five: 5, six: 6 };
 // a sensible motor for a frame of this size (the student can change it in the part's panel afterwards)
-const motorFor = wheelbase => (wheelbase < 100 ? 'motor-0802-19000' : wheelbase < 180 ? 'motor-1404-3800' : wheelbase < 260 ? 'motor-2207-1900' : 'motor-2806-1300');
+const motorFor = (wheelbase, coreless = false) => coreless && wheelbase < 100 ? 'motor-8520-12000' :  (wheelbase < 100 ? 'motor-0802-19000' : wheelbase < 180 ? 'motor-1404-3800' : wheelbase < 260 ? 'motor-2207-1900' : 'motor-2806-1300');
 const bore = dia => (dia <= 1.8 ? 1 : dia <= 2.6 ? 1.5 : dia <= 3.2 ? 2 : dia <= 4.2 ? 3 : 5);
 const propFor = wheelbase => (wheelbase < 100 ? 'prop-1.2x1.2x3-b1' : wheelbase < 180 ? 'prop-3x3x3-b2' : wheelbase < 260 ? 'prop-5x4.3x3-b5' : 'prop-7x4x3-b5');
 
@@ -27,6 +27,9 @@ export function parsePropId(text) {
 /** "2207 1900kv motors", "motor-2207-1900" → an id, or null */
 export function parseMotorId(text) {
   let m = /motor-(\d{4})-(\d{3,6})/.exec(text); if (m) return `motor-${m[1]}-${m[2]}`;
+  m = /\b(8520|0?716|0?720|0?615)\b/.exec(text);          // coreless brushed motors have no Kv in their name
+  if (m) { const n = m[1].padStart(4, '0'); return `motor-${n}-${{ '8520': 12000, '0716': 10000, '0720': 11000, '0615': 9000 }[n]}`; }
+  if (/\b(coreless|brushed)\b/.test(text)) return 'motor-8520-12000';
   m = /\b(\d{4})\b[^\d]{0,6}(\d{3,6})\s*kv\b/.exec(text) || /\b(\d{4})\s*(?:motors?)?\b[^\d]{0,4}(\d{3,6})\s*kv/.exec(text);
   return m ? `motor-${m[1]}-${m[2]}` : null;
 }

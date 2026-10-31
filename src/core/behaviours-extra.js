@@ -257,6 +257,14 @@ export const EXTRA_BEHAVIOURS = {
     ],
     note: 'Like a hobby motor + ESC. The ESC must be armed first: send the zero-throttle pulse (Servo.writeMicroseconds(1000)) for about a second. After that the motor speed is throttle × Kv × the battery voltage. It needs at least 5 V on power in.',
   },
+  hbridge: {
+    label: 'Motor driver (H-bridge: IN pins set what the OUT pins do)',
+    ...roles({ vs: 'Motor supply (VM / VCC)', gnd: 'Ground (GND)', in1: 'Input 1 (channel A, IN1)', in2: 'Input 2 (channel A, IN2)', out1: 'Output 1 (channel A, to the motor)', out2: 'Output 2 (channel A, to the motor)' },
+      { in3: 'Input 3 (channel B, optional)', in4: 'Input 4 (channel B, optional)', out3: 'Output 3 (channel B, optional)', out4: 'Output 4 (channel B, optional)',
+        en1: 'Enable / PWM A (optional)', en2: 'Enable / PWM B (optional)', sleep: 'Sleep / standby (optional)' }),
+    params: [{ key: 'sleepPullup', label: 'Sleep pin pulled high on the board (1 = yes)', unit: '', min: 0, max: 1, step: 1, def: 1 }],
+    note: 'A dual H-bridge. For each channel: IN1 high + IN2 low drives the motor one way, IN1 low + IN2 high the other way, both the same stops it. Put analogWrite (PWM) on one input, or on the enable pin, to set the speed. A pin left empty on an enable / sleep line counts as high only if the real board pulls it up. Needs at least 2.7 V on the motor supply.',
+  },
   stepper: {
     label: 'Stepper motor (counts the coil pattern the sketch sends)',
     ...roles({ vcc: 'Power (VCC)', gnd: 'Ground (GND)' }),

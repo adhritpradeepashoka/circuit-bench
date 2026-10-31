@@ -3,13 +3,36 @@
 // A pack is "installed" per browser; any project that already uses something from a pack switches that pack on by itself, so a saved
 // or handed-in project never opens with missing parts. Pure apart from localStorage (every access is guarded). DOM-free.
 import { PART_DEFS } from './parts.js';
+import { BOARD_PACK_IDS } from './board-templates.js';
+
+const custom = ids => ids.map(id => `custom-${id}`);
 
 export const PACKS = [
   {
     id: 'arduino-boards',
-    name: 'More Arduino boards',
+    name: 'Arduino boards (regular)',
     blurb: 'Arduino Nano, Arduino Mega 2560 and Arduino Uno R4.',
     types: ['arduino-nano', 'arduino-mega', 'arduino-uno-r4'],
+  },
+  {
+    id: 'arduino-expanded',
+    name: 'Arduino boards (expanded)',
+    blurb: 'The wider Arduino family for wiring and planning: Pro Mini, Pro Micro, Leonardo, Zero, Uno WiFi, Nano Every, Nano 33 IoT and BLE, Nano ESP32, Nano RP2040 Connect. Includes the regular pack.',
+    requires: ['arduino-boards'],
+    types: custom(BOARD_PACK_IDS.arduinoExpanded),
+  },
+  {
+    id: 'esp-normal',
+    name: 'ESP boards (normal)',
+    blurb: 'The three most common ESP boards: ESP32 DevKit, ESP32-C3 Super Mini and ESP8266 NodeMCU.',
+    types: custom(['esp32-devkit', 'esp32-c3-mini', 'esp8266-nodemcu']),
+  },
+  {
+    id: 'esp-expanded',
+    name: 'ESP boards (expanded)',
+    blurb: 'Many more: ESP32-DevKitC, ESP32-S3 DevKitC-1, ESP32-CAM, Wemos D1 Mini, ESP-01, ESP-12F, Seeed XIAO ESP32-C3 and ESP32-S3. Includes the normal pack.',
+    requires: ['esp-normal'],
+    types: custom(BOARD_PACK_IDS.espExpanded),
   },
 ];
 
@@ -36,8 +59,15 @@ export const packTypes = pack => pack.types.filter(t => PART_DEFS[t]);
 /** Is this part usable right now? Everything outside a pack always is. */
 export function partAvailable(type) { const p = packOf(type); return !p || isInstalled(p.id); }
 
-export function installPack(id) { if (!PACKS.some(p => p.id === id) || isInstalled(id)) return false; write([...read(), id]); return true; }
-export function removePack(id) { if (!isInstalled(id)) return false; write(read().filter(x => x !== id)); return true; }
+/** Packs that need this one (the expanded packs include their regular pack). */
+export const dependentsOf = id => PACKS.filter(p => (p.requires || []).includes(id) && isInstalled(p.id));
+export function installPack(id) {
+  const pack = PACKS.find(p => p.id === id);
+  if (!pack || isInstalled(id)) return false;
+  write([...new Set([...read(), ...(pack.requires || []), id])]);      // the expanded pack brings its regular pack along
+  return true;
+}
+export function removePack(id) { if (!isInstalled(id) || dependentsOf(id).length) return false; write(read().filter(x => x !== id)); return true; }
 
 /** Switch on the packs a set of parts needs (a project that was opened, a part the planner just added). → ids newly switched on. */
 export function ensurePacksFor(types) {

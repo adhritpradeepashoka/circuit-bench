@@ -1,3 +1,4 @@
+import { BOARD_TEMPLATES } from '../board-templates.js';
 // Recipes for the building blocks: battery, resistor, diodes, transistors, regulator, capacitor, inductor, op-amps, logic chips,
 // the biosignal amplifiers — the parts whose "circuit" is a small experiment that prints what it measures.
 import { PART_DEFS } from '../parts.js';
@@ -210,5 +211,15 @@ const bmotor = phase(OTHER)(c => {
   c.mem.informational = true;
 });
 
-export const PARTS_BY_TYPE = { 'custom-bmotor-cw': bmotor, 'custom-bmotor-ccw': bmotor, 'custom-esp32-c3-mini': esp32, ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
+const hbridge = phase(OTHER)(c => {
+  c.say('A motor driver sits between the Arduino and the motor: the motor battery goes to its supply pin (VM / VCC) and its GND joins the Arduino GND, each motor goes across one pair of outputs, and the Arduino drives the input pins (PWM on one input of a pair sets the speed, the other input sets the direction). On a TB6612 also tie STBY to 5V. The motor never connects to an Arduino pin.');
+  c.mem.informational = true;
+});
+
+const devboard = phase(OTHER)(c => {
+  c.say('This development board is wired on its own, to its sensors, drivers and power, not to an Arduino. It is drawn and checked for wiring, but CircuitBench does not run its code yet. Mind its logic voltage: ESP and 3.3 V boards must not see 5 V on a pin.');
+  c.mem.informational = true;
+});
+
+export const PARTS_BY_TYPE = { ...Object.fromEntries(BOARD_TEMPLATES.map(t => [`custom-${t.id}`, devboard])), 'custom-drv8833': hbridge, 'custom-tb6612': hbridge, 'custom-l9110s': hbridge, 'custom-bmotor-cw': bmotor, 'custom-bmotor-ccw': bmotor, 'custom-esp32-c3-mini': esp32, ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
 export const PARTS_BY_KIND = { diode, npn: transistor, pnp: transistor, nmos: transistor, pmos: transistor, regulator, capacitor, inductor, opamp, inamp: bioAmp, 'signal-source': bioAmp, logic: logicChip };

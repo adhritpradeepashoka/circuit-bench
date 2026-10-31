@@ -173,8 +173,8 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
   async function createPart({ description, userKey, provider = 'gemini', model }) {
     if (!description || !String(description).trim()) throw new RequestError('Describe the part you want to make.');
     const p = needKey(userKey, provider);
-    let problems = null;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let problems = null, fallback = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
       const { text, sources, searched, meta } = await ask(p, userKey, buildPartPrompt(description, problems), { search: true, model, maxTokens: 8000 });
       const json = extractJsonText(text);
       const raw = json ? tryParseJson(json) : null;
@@ -183,10 +183,13 @@ export function createAiService({ fetchImpl = globalThis.fetch, now = () => Date
         problems = [t ? `The reply was not a complete JSON object (${t.length} characters, ending “…${t.slice(-50).replace(/\s+/g, ' ')}”) — it may have been cut off: keep the drawing short (under 40 shapes) and reply with the JSON only.` : 'The reply was empty.'];
         continue;
       }
-      const v = validatePartSpec(raw);
+      const v = validatePartSpec(raw, { strict: true });
       if (v.ok) return { ok: true, spec: v.spec, note: String(raw.note || '').slice(0, 300), sources, searched, meta };
       problems = v.errors;
+      const loose = validatePartSpec(raw);                       // usable even if not to scale / not detailed enough: keep the latest as a fallback
+      if (loose.ok) fallback = { ok: true, spec: loose.spec, note: `${String(raw.note || '').slice(0, 200)} (Drawn approximately: ${problems.join(' ').slice(0, 120)})`.trim(), sources, searched, meta };
     }
+    if (fallback) return fallback;
     throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')} Try describing it differently, or build it in the Part Creator.`, 502);
   }
 
