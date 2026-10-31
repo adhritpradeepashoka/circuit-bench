@@ -493,6 +493,7 @@ export class Editor {
   /* ── pointer input ──────────────────────────────────── */
   bind() {
     const c = this.canvas;
+    this.bindPinch(c);
     c.addEventListener('pointerdown', e => this.onPointerDown(e));
     c.addEventListener('pointermove', e => this.onHover(e));
     c.addEventListener('pointerleave', () => this.clearHover());
@@ -539,6 +540,42 @@ export class Editor {
     });
     document.addEventListener('pointerdown', e => { if (!kindMenu.hidden && !e.target.closest('.we-kind')) setMenu(false); }, true);
     $('wireDelete').addEventListener('click', () => this.deleteSelected());
+  }
+
+  // Two fingers on the bench: pinch to zoom, drag both to pan. The first finger may already have started dragging a
+  // part or a wire; that is cancelled (a pointercancel) before the pinch takes over, and the pinch swallows all
+  // pointer events on the window until every finger is up so nothing else reacts to them.
+  bindPinch(c) {
+    const touches = new Map();
+    let last = null;
+    const mid = () => { const [a, b] = [...touches.values()]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
+    c.addEventListener('pointerdown', e => {
+      if (e.pointerType !== 'touch') return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (touches.size === 2) {
+        e.stopImmediatePropagation(); e.preventDefault();
+        if (this.gesture) window.dispatchEvent(new PointerEvent('pointercancel', { pointerId: [...touches.keys()][0], pointerType: 'touch' }));
+        this.pinching = true; this.hideTip(); last = mid();
+      } else if (touches.size > 2) { e.stopImmediatePropagation(); }
+    }, true);
+    window.addEventListener('pointermove', e => {
+      if (e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
+      touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (!this.pinching) return;
+      e.stopImmediatePropagation();
+      if (touches.size < 2 || !last) return;
+      const m = mid(), r = c.getBoundingClientRect();
+      this.view.x += m.x - last.x; this.view.y += m.y - last.y;
+      this.zoomAt(m.d / last.d, m.x - r.left, m.y - r.top);       // zoomAt redraws
+      last = m;
+    }, true);
+    const end = e => {
+      if (!e.isTrusted || e.pointerType !== 'touch' || !touches.has(e.pointerId)) return;
+      touches.delete(e.pointerId);
+      if (this.pinching) { e.stopImmediatePropagation(); if (touches.size < 2) last = null; if (!touches.size) this.pinching = false; }
+    };
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
   }
 
   track(move, up) {

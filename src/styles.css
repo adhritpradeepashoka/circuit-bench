@@ -18,7 +18,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
-.app { height: 100vh; display: grid; grid-template-rows: 52px minmax(0, 1fr); }
+.app { height: 100vh; height: 100dvh; display: grid; grid-template-rows: 52px minmax(0, 1fr); }
 
 /* ── top bar ─────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--ink); color: var(--ink-text); position: relative; z-index: 60; }
@@ -1045,3 +1045,49 @@ body:not(.robot-asm) #robotParts { display: none; }
 
 .set-check { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
 .set-check input { margin-top: 3px; }
+
+
+/* ── phones, tablets and small laptops ──────────────────
+   Nothing here may widen the page: the top bar scrolls sideways instead, the side column becomes a bottom
+   sheet, and menus are fixed so the scrolling bar cannot clip them. */
+@media (max-width: 1180px) {
+  .topbar { gap: 8px; padding: 0 10px; }
+  .brand { min-width: 0; }
+  .top-search { max-width: 200px; }
+  .run { padding: 0 13px 0 11px; }
+}
+@media (max-width: 900px) {
+  .topbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .topbar::-webkit-scrollbar { display: none; }
+  .topbar > *, .topbar .project-menu { flex: none; }
+  .brand-name { display: none; }
+  .project-btn { max-width: 120px; font-size: 12.5px; margin: 0; }
+  .top-search { display: none; }
+  .project-menu { margin-left: 0; }
+  .menu { position: fixed; top: 54px; right: 8px; max-width: calc(100vw - 16px); }
+  .tool { width: 40px; height: 34px; }
+  .toolbar { height: 44px; overflow-x: auto; scrollbar-width: none; }
+  .toolbar > * { flex: none; }
+  .toolbar .status, .proj-pill { display: none; }
+  .sim-row { flex-wrap: wrap; gap: 8px 12px; }
+  .sim-readout { padding-left: 0; border-left: 0; }
+  .hint-card { display: none; }
+}
+@media (max-width: 820px) {
+  .main, .main.ai-open, .main.parts-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; transition: none; }
+  .side { border-left: 0; border-top: 1px solid var(--line); height: 40dvh; min-height: 0; }
+  .main.parts-collapsed .side { height: auto; }
+  .main.parts-collapsed .side-rail { flex-direction: row; justify-content: center; padding: 6px 8px; }
+  .parts-collapsed .rail-btn { writing-mode: horizontal-tb; padding: 8px 14px; }
+  .main:has(.code-dock:not(.collapsed)) .side { display: none; }
+  .code-dock { --code-h: 44dvh; }
+  .add, .pane-btn, .pane-x { min-height: 34px; }
+  .pane-x { min-width: 34px; }
+  .modal { padding: 4vh 8px 8px; }
+  .modal-card { max-height: 90dvh; }
+  .tour-card { max-width: calc(100vw - 20px); }
+}
+@media (pointer: coarse) {
+  .tool, .rail-btn, .add { min-height: 36px; }
+  .run, .project-menu > button, .top-btn, #aiBtn, .code-toggle { min-height: 38px; }
+}
