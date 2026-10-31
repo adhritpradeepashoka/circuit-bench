@@ -1091,3 +1091,9 @@ body:not(.robot-asm) #robotParts { display: none; }
   .tool, .rail-btn, .add { min-height: 36px; }
   .run, .project-menu > button, .top-btn, #aiBtn, .code-toggle { min-height: 38px; }
 }
+
+.drone-start { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); z-index: 60; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 10px; max-width: calc(100% - 24px); padding: 10px 14px; background: var(--surface); border: 1px solid #c4d0ca; border-radius: 12px; box-shadow: 0 8px 24px rgba(20, 35, 28, .16); font-size: 13px; }
+.drone-start[hidden] { display: none; }
+.drone-start span { color: var(--muted); }
+.drone-start button { height: 34px; padding: 0 14px; border: 1px solid #c5d5f5; border-radius: 8px; background: var(--blue-soft); color: var(--blue); font-weight: 650; }
+.drone-start button:hover { background: #d9e6ff; }

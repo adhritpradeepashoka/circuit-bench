@@ -694,12 +694,42 @@ export class Editor {
       this.updateTransforms(); this.markDirty(); this.renderOverlay();
     }, () => {
       lift(false); this.snapMarks = [];
-      if (moved) { this.markDirty(); this.commit(); this.status(`${def.name} placed — ${this.describePlacement(part)}`); }
+      if (moved && this.solderMotorIfDropped(part)) { /* it wired itself to an AIO output and said so */ }
+      else if (moved) { this.markDirty(); this.commit(); this.status(`${def.name} placed — ${this.describePlacement(part)}`); }
       else if (part.type === 'slide-switch') this.toggleSwitch(part);
       else if (custom === 'switch') this.toggleCustomSwitch(part);
       else if (part.type === 'pir-sensor') { this.renderOverlay(); this.status('PIR selected — press Run, then click the sensor to trigger motion'); }
       else { this.renderOverlay(); this.status(`${def.name} selected`); }
     });
+  }
+  /** A drone motor dropped on (or next to) one of an AIO's / ESC's motor outputs is soldered to it: three wires, A, B, C to the three pads in order.
+   *  People naturally try to "plug the motor into the slot"; this is that, with the real wires shown. */
+  solderMotorIfDropped(part) {
+    if (!/^custom-drone-motor/.test(part.type)) return false;
+    const pinsOf = p => allPinsWorld(p), mine = pinsOf(part);
+    const used = new Set(); for (const w of this.state.wires) { used.add(`${w.a.part}:${w.a.pin}`); used.add(`${w.b.part}:${w.b.pin}`); }
+    if (['A', 'B', 'C'].some(l => used.has(`${part.id}:${l}`))) return false;
+    const c = ps => ({ x: ps.reduce((t, q) => t + q.x, 0) / ps.length, y: ps.reduce((t, q) => t + q.y, 0) / ps.length });
+    const me = c(mine.filter(q => ['A', 'B', 'C'].includes(q.pin.id)));
+    let best = null;
+    for (const board of this.state.parts) {
+      if (board === part || !/^custom-drone-(aio|esc)/.test(board.type)) continue;
+      const pins = pinsOf(board);
+      for (const o of [1, 2, 3, 4]) {
+        const pads = ['A', 'B', 'C'].map(l => pins.find(q => q.pin.id === `M${o}${l}`));
+        if (pads.some(q => !q) || pads.some(q => used.has(`${board.id}:${q.pin.id}`))) continue;
+        const d = Math.hypot(c(pads).x - me.x, c(pads).y - me.y);
+        if (d < 90 && (!best || d < best.d)) best = { d, board, o, pads };
+      }
+    }
+    if (!best) return false;
+    for (const [i, l] of ['A', 'B', 'C'].entries()) {
+      const a = { part: part.id, pin: l }, b = { part: best.board.id, pin: `M${best.o}${l}` };
+      this.state.wires.push({ id: uid('w'), a, b, style: 'straight', color: this.autoColor(a, b), width: 3, bend: 0.5, sag: null, kind: DEFAULT_WIRE_KIND });
+    }
+    this.markDirty(); this.commit(); this.renderOverlay();
+    this.status(`Motor soldered to M${best.o} (${['', 'back right', 'front right', 'back left', 'front left'][best.o]}): A, B, C to the three pads in order`);
+    return true;
   }
   /** Drag one lead of a flexible part (resistor): it snaps to the nearest free hole; the other lead stays exactly where it is. */
   beginFlexEnd(end, e) {
@@ -845,6 +875,7 @@ export class Editor {
 
   /* keyboard */
   onKey(e) {
+    if (document.body.classList.contains('robot-asm')) return;       // the Assembly and Test tabs have their own keys: Delete / Ctrl+Z there must never touch the circuit underneath
     if (e.target.matches?.('input:not([type=color]):not([type=checkbox]):not([type=range]), select, textarea, [contenteditable]')) return;   // a colour picker or tick box is not typing
     const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? this.redo() : this.undo(); }

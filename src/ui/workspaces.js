@@ -4,6 +4,9 @@ import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace, listWorkspaces
 import { specsUsed } from '../core/custom-parts.js';
 import { PACKS, packTypes, isInstalled, installPack, removePack, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
+import { quickDrone } from '../core/quick-drone.js';
+import { applyCircuitActions } from '../core/ai-actions.js';
+import { FORMAT, VERSION } from '../core/project.js';
 
 function showHint() {
   const h = activeWorkspace().hint || BUILTIN_WORKSPACES[0].hint, card = document.getElementById('hintCard');
@@ -99,6 +102,23 @@ export function initWorkspaces({ editor, code, projects }) {
   function open(tab = 'workspaces') { modal.hidden = false; showTab(tab); (modal.querySelector('.ws-tabs [aria-selected="true"]') || $('workspacesClose')).focus(); }
   function close() { modal.hidden = true; }
   $('workspacesBtn').addEventListener('click', () => open());
+  // Robotics, no drone on the bench yet: one tap builds and wires a whole drone circuit (the same builder the chat uses, no AI needed)
+  const dronePrompt = el('div', 'drone-start'); dronePrompt.hidden = true;
+  dronePrompt.append(el('b', '', 'Building a drone?'), el('span', '', 'Place and wire the parts for me:'));
+  for (const [label, ask] of [['Small drone (AIO)', 'build a drone circuit'], ['5-inch drone (stack)', 'build a 5 inch drone']]) {
+    const b = el('button', '', label); b.type = 'button';
+    b.addEventListener('click', () => {
+      const q = quickDrone(ask, editor.exportProject()); if (!q?.actions.length) return;
+      const r = applyCircuitActions(editor.exportProject(), q.actions);
+      editor.importProject({ format: FORMAT, version: VERSION, parts: r.parts, wires: r.wires });
+      editor.status('Drone parts placed and wired. Next: build the frame in the Assembly tab.');
+    });
+    dronePrompt.append(b);
+  }
+  $('canvas')?.append(dronePrompt);
+  const syncDronePrompt = () => { dronePrompt.hidden = activeWorkspace().id !== 'robotics' || editor.state.parts.some(p => /^custom-drone-(aio|esc|fc|motor)/.test(p.type)); };
+  editor.on('workspace', syncDronePrompt); projects.onSwitch(() => setTimeout(syncDronePrompt, 0)); syncDronePrompt();
+
   $('workspacesClose').addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
