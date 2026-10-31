@@ -116,7 +116,7 @@ export function initWorkspaces({ editor, code, projects }) {
     dronePrompt.append(b);
   }
   $('canvas')?.append(dronePrompt);
-  const syncDronePrompt = () => { dronePrompt.hidden = activeWorkspace().id !== 'robotics' || editor.state.parts.some(p => /^custom-drone-(aio|esc|fc|motor)/.test(p.type)); };
+  const syncDronePrompt = () => { dronePrompt.hidden = activeWorkspace().id !== 'robotics' || editor.state.parts.some(p => /^custom-(drone-(aio|esc|fc|motor)|bmotor-|esp32-c3)/.test(p.type)); };
   editor.on('workspace', syncDronePrompt); projects.onSwitch(() => setTimeout(syncDronePrompt, 0)); syncDronePrompt();
 
   $('workspacesClose').addEventListener('click', close);

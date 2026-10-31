@@ -222,7 +222,7 @@ function cleanBoard(b) {
 export const newCustomId = () => `custom-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 
 /** Box size and pin positions (CSS px, local to the part) from a spec: pins sit on a 0.1" grid along their side. */
-export const SPRITE_ARTS = ['bioamp-pill', 'slime-mold', 'drone-aio', 'drone-motor', 'drone-battery', 'drone-camera', 'drone-fc', 'drone-esc', 'drone-cap', 'drone-rx', 'drone-vtx'];
+export const SPRITE_ARTS = ['bioamp-pill', 'slime-mold', 'drone-aio', 'drone-motor', 'drone-battery', 'drone-camera', 'drone-fc', 'drone-esc', 'drone-cap', 'drone-rx', 'drone-vtx', 'drone-esp32', 'drone-bmotor-cw', 'drone-bmotor-ccw', 'drone-mosfet'];
 export const BOARD_SCALE = 96 / 25.4;      // an imported board is drawn at true size: 1 mm = 3.78 px, like the Wokwi parts
 export function layoutSpec(spec) {
   if (spec.package === 'board' && spec.board) {

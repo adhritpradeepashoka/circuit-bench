@@ -76,9 +76,9 @@ function brushedDrone(parts) {
   const actions = [], add = (id, type, x, y, props) => actions.push({ op: 'add_part', id, type, x: bx + x, y, ...(props ? { props } : {}) });
   const wire = (a, pa, b, pb) => actions.push({ op: 'add_wire', from: { part: a, pin: pa }, to: { part: b, pin: pb } });
   const spin = ['ccw', 'cw', 'cw', 'ccw'], gpio = ['GPIO0', 'GPIO1', 'GPIO3', 'GPIO4'];
-  add('battery', 'battery', 560, 40, { volts: 3.7 }); add('esp32', 'custom-esp32-c3-mini', 0, 470); add('mpu', 'mpu6050', 280, 470);
+  add('battery', 'battery', 650, 40, { volts: 3.7 }); add('esp32', 'custom-esp32-c3-mini', 0, 470); add('mpu', 'mpu6050', 280, 470);
   for (let k = 0; k < 4; k++) {
-    const m = `motor${k + 1}`, d = `diode${k + 1}`, q = `fet${k + 1}`, r = `pull${k + 1}`, x = k * 130;
+    const m = `motor${k + 1}`, d = `diode${k + 1}`, q = `fet${k + 1}`, r = `pull${k + 1}`, x = k * 150;
     add(m, `custom-bmotor-${spin[k]}`, x, 40); add(d, 'custom-d-schottky', x, 150); add(q, 'custom-q-ao3400', x, 250); add(r, 'resistor', x, 370, { ohms: 100000 });
     wire('esp32', gpio[k], q, 'G'); wire(r, '1', q, 'G'); wire(r, '2', 'battery', '-'); wire(q, 'S', 'battery', '-');
     wire(m, '-', q, 'D'); wire(m, '+', 'battery', '+'); wire(d, 'K', 'battery', '+'); wire(d, 'A', q, 'D');

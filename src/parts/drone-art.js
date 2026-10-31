@@ -110,12 +110,50 @@ function vtx(spec, w, h, pins) {
     ${['VIN', 'G', 'VID'].map(id => (P[id] ? `<path d="M${x0 + bw} ${P[id].y} L ${P[id].x - 6} ${P[id].y}" stroke="${{ VIN: '#d6322b', G: '#1b1b1f', VID: '#e5c52b' }[id]}" stroke-width="2.4"/><rect x="${P[id].x - 7}" y="${P[id].y - 2.6}" width="8" height="5.2" rx="1.2" fill="#cfd3d8" stroke="#8b9096" stroke-width=".6"><title>${esc(P[id].label || id)}</title></rect>` : '')).join('')}`);
 }
 
+/** The ESP32-C3 Super Mini: a black board 22 × 18 mm with a USB-C socket, the ESP32-C3 chip, a printed antenna, RESET / BOOT buttons and two LEDs;
+ *  two rows of eight header pins on the 2.54 mm grid, each named in silkscreen. USB end on the left. */
+function esp32(spec, w, h, pins) {
+  const top = pins.filter(p => p.y < h / 2), bot = pins.filter(p => p.y >= h / 2);
+  const name = id => String(id).replace('GPIO', '');
+  const holes = (list, above) => list.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.3" fill="${GOLD}" stroke="${GOLD_D}" stroke-width=".5"><title>${esc(p.label || p.id)}</title></circle><circle cx="${p.x}" cy="${p.y}" r="1.35" fill="#0d1215"/>`
+    + `<text x="${p.x}" y="${(above ? p.y - 5.2 : p.y + 8.4).toFixed(1)}" text-anchor="middle" font-size="4.4" font-family="sans-serif" font-weight="700" fill="#f2f2f2">${esc(name(p.id))}</text>`).join('');
+  const meander = `<path d="M70 41 h12 v-5 h-9 v-5 h9 v-5 h-9 v-5 h9" fill="none" stroke="${GOLD}" stroke-width="1.5" stroke-linejoin="round"/>`;
+  return svg(w, h, `<rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="${spec.color}" stroke="#05080c" stroke-width="1.2"/><rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="3" fill="none" stroke="#ffffff" stroke-opacity=".12"/>
+    <rect x="0.8" y="22" width="14" height="24" rx="2.4" fill="${SILVER}" stroke="${SILVER_D}"/><rect x="3" y="26" width="10" height="16" rx="3" fill="#25282d"/><rect x="5.2" y="32" width="6" height="4" rx="1" fill="#6b717a"/>
+    <rect x="18" y="22" width="6.4" height="6.4" rx="1" fill="#d5d9de" stroke="#7a8087" stroke-width=".6"><title>RESET button</title></rect><rect x="18" y="39.6" width="6.4" height="6.4" rx="1" fill="#d5d9de" stroke="#7a8087" stroke-width=".6"><title>BOOT button (GPIO9)</title></rect>
+    <rect x="35" y="25" width="19" height="19" rx="1.6" fill="#16181c" stroke="#000" stroke-width=".8"/><circle cx="38.4" cy="28.4" r="1" fill="#555a62"/>
+    <text x="44.5" y="33.6" text-anchor="middle" font-size="4" font-family="monospace" font-weight="700" fill="#cfd3d8">ESP32</text><text x="44.5" y="38.8" text-anchor="middle" font-size="4" font-family="monospace" font-weight="700" fill="#cfd3d8">-C3</text>
+    <circle cx="29.5" cy="31" r="1.6" fill="#2d8bff"/><circle cx="29.5" cy="37" r="1.6" fill="#e0342b"/>${meander}
+    <text x="${w / 2 + 8}" y="${h / 2 + 15}" text-anchor="middle" font-size="4.6" font-family="sans-serif" font-weight="800" fill="#f2f2f2">SuperMini</text>
+    ${holes(top, false)}${holes(bot, true)}`);
+}
+/** A coreless brushed motor (8520 / 716 style): a silver can with a small pinion gear on the shaft and two thin wires, red + blue (clockwise) or black + white (counter-clockwise). */
+function bmotor(spec, w, h, pins, ccw) {
+  const P = by(pins), cols = ccw ? ['#1b1b1f', '#f2f2f2'] : ['#d6322b', '#2b7bd6'], ids = ['+', '-'];
+  const wires = ids.map((id, i) => (P[id] ? `<path d="M40 ${h / 2 - 7 + i * 14} C 26 ${h / 2 - 7 + i * 14}, 20 ${P[id].y}, ${P[id].x + 5} ${P[id].y}" fill="none" stroke="${cols[i]}" stroke-width="2.3" stroke-linecap="round"${ccw && i ? ' stroke-opacity=".95"' : ''}/><rect x="${P[id].x - 4}" y="${P[id].y - 2.2}" width="8" height="4.4" rx="1.2" fill="#cfd3d8" stroke="#8b9096" stroke-width=".6"><title>${esc(P[id].label || id)}</title></rect>` : '')).join('');
+  return svg(w, h, `<path d="${ccw ? 'M92 12 a8 8 0 0 0 -16 0' : 'M72 12 a8 8 0 0 1 16 0'}" fill="none" stroke="${spec.color}" stroke-width="2.2"/><path d="${ccw ? 'M72 11 h8 l-4 6 z' : 'M84 11 h8 l-4 6 z'}" fill="${spec.color}"/>${wires}<rect x="38" y="${h / 2 - 17}" width="74" height="34" rx="4" fill="#c9ccd1" stroke="#7d838a" stroke-width="1.2"/><rect x="38" y="${h / 2 - 17}" width="10" height="34" rx="4" fill="#3a3d42"/><rect x="100" y="${h / 2 - 17}" width="12" height="34" rx="4" fill="#9ea4ab"/>
+    <path d="M52 ${h / 2 - 15} h42" stroke="#ffffff" stroke-opacity=".55" stroke-width="2"/><rect x="112" y="${h / 2 - 3}" width="9" height="6" fill="#8b9096"/><rect x="119" y="${h / 2 - 7}" width="9" height="14" rx="1.6" fill="#c9985a" stroke="#7a5a2c" stroke-width=".8"/>
+    ${Array.from({ length: 4 }, (_, i) => `<path d="M${121 + i * 1.8} ${h / 2 - 7} v14" stroke="#7a5a2c" stroke-width=".5"/>`).join('')}
+    <text x="76" y="${h / 2 + 2}" text-anchor="middle" font-size="9" font-family="sans-serif" font-weight="800" fill="#22262b">8520</text><text x="76" y="${h / 2 + 11}" text-anchor="middle" font-size="5.2" font-family="sans-serif" font-weight="700" fill="#3b4148">coreless · ${ccw ? 'CCW' : 'CW'}</text>fill="${spec.color}"/>`);
+}
+/** An AO3400 N-MOSFET in its tiny SOT-23 package, drawn large: gate and source legs below, drain on top. */
+function mosfet(spec, w, h, pins) {
+  const P = by(pins), leg = (p, label, top) => (p ? `<rect x="${p.x - 3}" y="${top ? p.y : h / 2 + 6}" width="6" height="${top ? 16 : p.y - h / 2 - 4}" fill="#cfd3d8" stroke="#8b9096" stroke-width=".6"><title>${esc(p.label || p.id)}</title></rect>`
+    + `<text x="${top ? p.x + 7 : p.x}" y="${top ? p.y + 6 : p.y + 8}" text-anchor="${top ? 'start' : 'middle'}" font-size="6" font-family="sans-serif" font-weight="800" fill="#e8eef3">${label}</text>` : '');
+  return svg(w, h, `${leg(P.D, 'D', true)}${leg(P.G, 'G', false)}${leg(P.S, 'S', false)}<rect x="8" y="${h / 2 - 14}" width="${w - 16}" height="24" rx="3" fill="#1b1b1f" stroke="#000" stroke-width="1"/><circle cx="14" cy="${h / 2 + 4}" r="1.3" fill="#444a52"/>
+    <text x="${w / 2}" y="${h / 2 - 2}" text-anchor="middle" font-size="7.4" font-family="monospace" font-weight="700" fill="#e8eef3">AO3400</text><text x="${w / 2}" y="${h / 2 + 6}" text-anchor="middle" font-size="4.4" font-family="sans-serif" fill="#9aa4ad">N-MOSFET</text>`);
+}
+
 export function droneSprite(art, spec, w, h, pins) {
   if (art === 'drone-fc') return fcBoard(spec, w, h, pins);
   if (art === 'drone-esc') return escBoard(spec, w, h, pins);
   if (art === 'drone-cap') return capacitor(spec, w, h, pins);
   if (art === 'drone-rx') return receiver(spec, w, h, pins);
   if (art === 'drone-vtx') return vtx(spec, w, h, pins);
+  if (art === 'drone-esp32') return esp32(spec, w, h, pins);
+  if (art === 'drone-bmotor-cw') return bmotor(spec, w, h, pins, false);
+  if (art === 'drone-bmotor-ccw') return bmotor(spec, w, h, pins, true);
+  if (art === 'drone-mosfet') return mosfet(spec, w, h, pins);
   if (art === 'drone-aio') return aio(spec, w, h, pins);
   if (art === 'drone-motor') return motor(spec, w, h, pins);
   if (art === 'drone-battery') return battery(spec, w, h, pins);
