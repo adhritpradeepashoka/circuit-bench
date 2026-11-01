@@ -5,6 +5,7 @@
 // running sim, Serial Monitor output) — see gatherContext below and describeContext in
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
+import { getRobotType } from '../core/robot-context.js';
 import { loadTiny, understand } from '../sim/tiny-model.mjs';
 import { quickEdit } from '../core/quick-edits.js';
 import { quickAssembly } from '../core/quick-assembly.js';
@@ -392,7 +393,7 @@ export function initAiPanel(editor, code, sim = null) {
     busy = true; sendBtn.disabled = true; saveChat(); render();
     try {
       const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
-      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().id, ...(in3d ? { assembly: await asmApi.describe() } : {}) };
+      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().id, robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {

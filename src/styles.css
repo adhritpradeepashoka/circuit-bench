@@ -1104,3 +1104,17 @@ body:not(.robot-asm) #robotParts { display: none; }
 .pc-photo figcaption { font-size: 12px; color: var(--muted, #5b6770); text-align: center; }
 .pc-fix { display: flex; gap: 8px; margin-top: 8px; }
 .pc-fix input { flex: 1; min-width: 0; }
+
+/* — robot type picker: a card in the middle of the screen when a robotics project starts — */
+.rt-modal { position: fixed; inset: 0; z-index: 600; display: grid; place-items: center; background: rgba(20, 28, 24, .45); padding: 16px; }
+.rt-modal[hidden] { display: none; }
+.rt-card { background: #fff; border-radius: 16px; padding: 24px 24px 16px; width: min(640px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+.rt-card h2 { margin: 0 0 4px; font-size: 22px; } .rt-sub { margin: 0 0 16px; color: #556; font-size: 14px; }
+.rt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.rt-choice { display: grid; gap: 4px; justify-items: start; text-align: left; padding: 14px; border: 2px solid #d5e0da; border-radius: 12px; background: #f7faf8; cursor: pointer; font: inherit; }
+.rt-choice:hover, .rt-choice:focus-visible, .rt-choice.on { border-color: #2e7d5b; background: #eaf5ef; outline: none; }
+.rt-choice b { font-size: 16px; } .rt-choice span:not(.rt-icon) { font-size: 12.5px; color: #556; } .rt-icon { font-size: 30px; line-height: 1; }
+.rt-later { margin-top: 12px; }
+.robot-focus { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 6px 4px 8px; font-size: 12.5px; }
+.robot-focus > span { flex: 1 1 100%; }
+.robot-focus { grid-column: 1 / -1; }

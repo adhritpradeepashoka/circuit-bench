@@ -8,6 +8,7 @@ import { BEHAVIOURS, validatePartSpec, describeCustomSpecs } from './custom-part
 export const LIMITS = { promptChars: 4_000, codeChars: 20_000 };
 import { ASSEMBLY_OPS } from './assembly-actions.js';
 import { LOOK_IDS } from './part-looks.js';
+import { circuitPartsFor, robotTypeNotes, ROBOTICS_STARTERS } from './robot-types.js';
 export const ACTION_OPS = 'add_part, move_part, rotate_part, set_prop, remove_part, add_wire, remove_wire, create_part';
 
 // A part's catalogue note (see describeCatalog) states its electrical behavior, but a model that reads
@@ -124,8 +125,8 @@ export function describeHistory(history) {
 }
 
 /** Part types worth listing for a small model: everything already on the board, the basics, and anything the request names. */
-export function relevantTypes(instruction, circuit) {
-  const set = new Set(['arduino-uno', 'breadboard', 'led', 'resistor', 'pushbutton']);
+export function relevantTypes(instruction, circuit, extra = []) {
+  const set = new Set(['arduino-uno', 'breadboard', 'led', 'resistor', 'pushbutton', ...extra]);
   for (const p of circuit?.parts ?? []) set.add(p.type);
   const words = String(instruction || '').toLowerCase().match(/[a-z0-9]{3,}/g) || [];
   for (const def of Object.values(PART_DEFS)) {
@@ -143,8 +144,8 @@ export const ROBOTICS_NOTES = `This student is in CircuitBench's ROBOTICS worksp
 - Robots with servos and wheels: the joints in the Assembly are what the Test tab moves (a hinge becomes a servo; a round, thin part spinning about a hinge becomes a wheel). Real servos and motors still have to be powered and driven by some controller in the circuit if the student wants a faithful build, so suggest one in "explanation" rather than silently adding it.
 - If something the student asks for belongs in another tab, say which tab in "explanation" instead of faking it here.`;
 
-export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null, workspace = null }) {
-  if (assembly) return buildAssemblyPrompt({ instruction, assembly, history, workspace });
+export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null, workspace = null, robotType = null }) {
+  if (assembly) return buildAssemblyPrompt({ instruction, assembly, history, workspace, robotType });
   const past = describeHistory(history);
   const historyBlock = past
     ? `\n\nConversation so far (oldest first). The circuit and sketch above are the CURRENT state: edits marked "applied" are already in them; edits marked "not applied" were never made, so don't assume them. Use this to resolve follow-ups like "now make it faster" or "undo that":\n${past}`
@@ -166,7 +167,9 @@ export function buildPrompt({ instruction, circuit, code, context, history, comp
 
   const board = BOARD_SPECS[parts.find(p => BOARD_SPECS[p.type])?.type] || BOARD_SPECS[DEFAULT_BOARD];
   const boardCount = parts.filter(p => BOARD_SPECS[p.type]).length;
-  const robotBlock = workspace === 'robotics' ? `\n\n${ROBOTICS_NOTES}\n` : '';
+  const typeNotes = workspace === 'robotics' ? robotTypeNotes(robotType) : '', robotBlock = workspace === 'robotics' ? `\n\n${ROBOTICS_NOTES}\n${typeNotes ? `\n${typeNotes}\n` : ''}` : '';
+  // The short prompt (free hosted AI, on-device model) lists only the parts it might need. In the robotics workspace that has to include the parts for this kind of robot, or it has never heard of a servo or a motor driver.
+  const robotParts = workspace === 'robotics' ? [...(circuitPartsFor(robotType, t => !!PART_DEFS[t]) || ROBOTICS_STARTERS.filter(t => PART_DEFS[t]))] : [];
   return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli) firmware inside a browser simulator called CircuitBench, for a student.${robotBlock}
 
 The circuit's board is the ${board.name} (${board.chipName || (board.chip === 'atmega2560' ? 'ATmega2560' : 'ATmega328P')}); the sketch is compiled for it. ${board.aiNote ? board.aiNote : `Its I²C pins are SDA = ${/^\d+$/.test(board.i2c.sda) ? `D${board.i2c.sda}` : board.i2c.sda} and SCL = ${/^\d+$/.test(board.i2c.scl) ? `D${board.i2c.scl}` : board.i2c.scl}${board.chip === 'atmega2560' ? '; PWM (analogWrite) works on D2–D13 and D44–D46; analog inputs are A0–A15' : '; PWM (analogWrite) works on D3, D5, D6, D9, D10, D11'}${board.pins.A6 && !board.pins.A6.port ? '; A6 and A7 are analog-input only (analogRead, never digitalRead/digitalWrite)' : ''}`}. ${boardCount > 1 ? `There are ${boardCount} boards on this bench and every board has its own sketch; the sketch you write is the one on screen. They talk through serial: TX of one board wired to RX of the other (plus a shared GND), both with the same Serial.begin() rate${board.uarts?.length > 1 ? `; extra hardware serial ports: ${board.uarts.slice(1).map(u => `${u.name} (TX D${u.tx}, RX D${u.rx})`).join(', ')}` : ''}.` : `Don't add a second board unless the student asks for one — if they do, each board gets its own sketch and they talk by wiring TX of one to RX of the other (plus a shared GND) with the same Serial.begin() rate.`}
@@ -174,7 +177,7 @@ The circuit's board is the ${board.name} (${board.chipName || (board.chip === 'a
 You directly control the circuit, not just the firmware. Placing a part, moving it, wiring two pins together, or removing something is not a physical act you are being asked to describe or hand off — it is a data edit you make yourself by emitting the matching action(s) below, and the simulator applies it immediately. When the instruction asks for a circuit change (add/move/rotate/wire/remove), you MUST do it via "actions" — never reply that this "can't be done by you", that it requires "physically" connecting something, or tell the student to do it themselves; any of those means you are refusing a request you are fully able to carry out. Only decline a circuit change (actions: [], explained why) when it is genuinely impossible with the real catalogue below — an unknown part, a pin that doesn't exist, or a truly ambiguous target with no reasonable reading — never because wiring "sounds physical".
 
 Parts you can place, and their real pin/property names (use these exact ids — nothing else exists). Where a part lists an electrical note after " — ", that note states its real analog behavior and OVERRIDES whatever direction you'd normally assume (e.g. most temperature/light sensors you've seen read HIGHER for MORE of the quantity — these may not; read each note literally and write comparisons that match it, not the usual assumption):
-${describeCatalog(compact ? relevantTypes(instruction, circuit) : null)}${customBlock}${recipeBlock}
+${describeCatalog(compact ? relevantTypes(instruction, circuit, robotParts) : null)}${customBlock}${recipeBlock}
 
 Current circuit (parts with their id/type/position, and wires as {from:{part,pin}, to:{part,pin}}):
 ${circuitText}
@@ -367,11 +370,12 @@ PACKAGE — get this right or the part will be the wrong shape and unusable:
 export const ASSEMBLY_ROBOT_NOTES = `What the Test tab does with this scene, so build for it: it reads the joined parts as a robot and simulates it.
 - A drone needs a frame, motors on the frame's motor mounts, a prop on each motor (join the motor's "shaft" to the prop's "bore-bottom"), and a battery joined to the frame. Its front is where the camera points (else +Y). Keep the motors pointing up (+Z).
 - Any other robot: the main body is the part that is held still (or the biggest joined group); every hinge becomes a servo (set its limits with set_joint min/max, the default is -90 to 90), and a thin round part turning about a hinge becomes a wheel. Its forward is +Y. Legs, arms and wheels should hang from the body with one hinge each; two screws make it rigid, which is not a joint.
+- Arms, rovers and walkers are built from the kit parts in the list (servo-*, link-*, plate-*, wheel-*, gearmotor-*, caster-ball, holder-*). Recipes: an ARM is a base plate, a servo fixed to it with two screws (the servo's ear holes onto plate holes, rigid), a link joined to that servo's "horn-screw" with ONE screw (a hinge: the link swings), the next servo fixed to the link's end, and so on. A ROVER is a plate with two gearmotors fixed under or on it (two screws each: "mount-1-bottom" and "mount-2-bottom" onto plate holes), a wheel on each motor shaft (the wheel's "bore-in" joined to the motor's "shaft-left" or "shaft-right", ONE screw so it spins) and a ball caster at the other end. A WALKER is a body plate with servos fixed to it and links hanging from the servo horns, two or three joints per leg.
 - Parts that are not joined to the main body are left out of the test. Everything should rest at or above the floor (z = 0).`;
 
-export function buildAssemblyPrompt({ instruction, assembly, history, workspace = null }) {
-  const past = describeHistory(history);
-  return `You are editing a LIVE 3D robot assembly inside a browser tool called CircuitBench, for a student. Parts are rigid 3D models with marked holes. Parts are joined by putting one hole on another hole (a screw goes through): a part joined by ONE screw is a hinge that swings about that screw; parts joined at two or more separate holes are rigid. You change the scene yourself by emitting edits as data; you never tell the student to do it by hand. You can only use the parts listed below. You cannot create new parts or change a model's shape.${workspace === 'robotics' ? `\n\n${ASSEMBLY_ROBOT_NOTES}` : ''}
+export function buildAssemblyPrompt({ instruction, assembly, history, workspace = null, robotType = null }) {
+  const past = describeHistory(history), typeNotes = workspace === 'robotics' ? robotTypeNotes(robotType) : '';
+  return `You are editing a LIVE 3D robot assembly inside a browser tool called CircuitBench, for a student. Parts are rigid 3D models with marked holes. Parts are joined by putting one hole on another hole (a screw goes through): a part joined by ONE screw is a hinge that swings about that screw; parts joined at two or more separate holes are rigid. You change the scene yourself by emitting edits as data; you never tell the student to do it by hand. You can only use the parts listed below. You cannot create new parts or change a model's shape.${workspace === 'robotics' ? `\n\n${ASSEMBLY_ROBOT_NOTES}${typeNotes ? `\n${typeNotes}` : ''}` : ''}
 
 Units: millimetres and degrees. +Z is up, the floor is z = 0. Each part has its own space; a hole's position and direction are given in that space.
 

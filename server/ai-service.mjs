@@ -20,6 +20,7 @@
 import { RequestError } from './compile-service.mjs';
 import { validatePartSpec } from '../src/core/custom-parts.js';
 import { findPhoto } from './part-photo.mjs';
+import { cleanRobotType } from '../src/core/robot-types.js';
 import { LIMITS, buildPrompt, parseReply, matchJsonFence, extractJsonText, tryParseJson, describeContext, describeHistory, buildPartPrompt, buildPhotoLookupPrompt } from '../src/core/ai-prompt.js';
 export { describeContext, describeHistory, buildPartPrompt };
 
@@ -218,16 +219,16 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
 
   /** The 3D scene text from the browser: three bounded strings, nothing else. */
   const cleanAssembly = a => (a && typeof a === 'object' ? { parts: String(a.parts || '').slice(0, 20000), instances: String(a.instances || '').slice(0, 6000), joints: String(a.joints || '').slice(0, 6000) } : null);
-  async function generateCode({ instruction, circuit, code, context, history, assembly, workspace, userKey, provider = 'gemini', model }) {
+  async function generateCode({ instruction, circuit, code, context, history, assembly, workspace, robotType, userKey, provider = 'gemini', model }) {
     if (!instruction || !String(instruction).trim()) throw new RequestError('Describe what you want the sketch to do.');
     const p = needKey(userKey, provider);
     // Free tiers cap tokens per minute (Groq: 8,000 on gpt-oss-120b), and the full part catalogue alone is ~9k tokens —
     // so those providers get the compact prompt, and any provider that says the request is too big gets one compact retry.
     let asked;
-    try { asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, assembly: cleanAssembly(assembly), workspace: workspace === 'robotics' ? 'robotics' : null, compact: !!p.compact }), { model }); }
+    try { asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, assembly: cleanAssembly(assembly), workspace: workspace === 'robotics' ? 'robotics' : null, robotType: cleanRobotType(robotType), compact: !!p.compact }), { model }); }
     catch (err) {
       if (p.compact || !/too large|tokens per minute|\bTPM\b|context (length|window)|maximum context|reduce (your|the) (message|prompt)/i.test(String(err?.message))) throw err;
-      asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, assembly: cleanAssembly(assembly), workspace: workspace === 'robotics' ? 'robotics' : null, compact: true }), { model });
+      asked = await ask(p, userKey, buildPrompt({ instruction, circuit, code, context, history, assembly: cleanAssembly(assembly), workspace: workspace === 'robotics' ? 'robotics' : null, robotType: cleanRobotType(robotType), compact: true }), { model });
     }
     const { text, meta } = asked;
     const result = parseReply(text);

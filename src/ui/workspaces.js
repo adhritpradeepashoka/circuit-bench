@@ -1,5 +1,6 @@
 // The Workspaces dialog: built-in workspaces, your own (saved from a project) and imported ones. Starting a project
 // in a workspace gives it that workspace's starting board; the parts menu then leads with its sections.
+import { getRobotType, onRobotType } from '../core/robot-context.js';
 import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace, listWorkspaces, saveWorkspace, removeWorkspace, parseWorkspaceFile, workspaceFromProject, workspaceFile } from '../core/workspaces.js';
 import { specsUsed } from '../core/custom-parts.js';
 import { PACKS, packTypes, isInstalled, installPack, removePack, dependentsOf, onPacksChange } from '../core/packs.js';
@@ -116,8 +117,8 @@ export function initWorkspaces({ editor, code, projects }) {
     dronePrompt.append(b);
   }
   $('canvas')?.append(dronePrompt);
-  const syncDronePrompt = () => { dronePrompt.hidden = activeWorkspace().id !== 'robotics' || editor.state.parts.some(p => /^custom-(drone-(aio|esc|fc|motor)|bmotor-|esp32-c3)/.test(p.type)); };
-  editor.on('workspace', syncDronePrompt); projects.onSwitch(() => setTimeout(syncDronePrompt, 0)); syncDronePrompt();
+  const syncDronePrompt = () => { dronePrompt.hidden = activeWorkspace().id !== 'robotics' || (!!getRobotType() && getRobotType() !== 'drone') || editor.state.parts.some(p => /^custom-(drone-(aio|esc|fc|motor)|bmotor-|esp32-c3)/.test(p.type)); };
+  onRobotType(() => syncDronePrompt()); editor.on('workspace', syncDronePrompt); projects.onSwitch(() => setTimeout(syncDronePrompt, 0)); syncDronePrompt();
 
   $('workspacesClose').addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });

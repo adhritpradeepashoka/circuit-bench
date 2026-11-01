@@ -4,7 +4,9 @@ import { formatOhms } from '../core/resistance.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { sidePanes } from './side-panes.js';
 import { customTypes, builtinTypes, BEHAVIOURS } from '../core/custom-parts.js';
-import { menuFirst } from '../core/workspaces.js';
+import { menuFirst, activeWorkspace } from '../core/workspaces.js';
+import { getRobotType, showingAll, setShowAll, onRobotType } from '../core/robot-context.js';
+import { robotType, circuitPartsFor } from '../core/robot-types.js';
 import { partAvailable, onPacksChange } from '../core/packs.js';
 
 const $ = id => document.getElementById(id);
@@ -70,10 +72,22 @@ export function initSidebar(editor) {
     const q = query.trim().toLowerCase();
     const blurb = d => BLURB[d.type] || (d.custom ? d.spec.description || BEHAVIOURS[d.spec.behaviour.kind].label : '');
     const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type)).filter(d => !q || matches(`${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`, q));
+    // A robotics project that knows what it is building leads with the parts for that robot (everything else is one click away, and search always looks through everything)
+    const rt = activeWorkspace().robotics && !q ? robotType(getRobotType()) : null, focus = rt && !showingAll() ? circuitPartsFor(rt.id, t => !!PART_DEFS[t]) : null;
+    if (focus) { const order = t => { const i = focus.indexOf(t); return i < 0 ? 999 : i; }; items.splice(0, items.length, ...items.filter(d => focus.includes(d.type) || (d.custom && !d.builtin)).sort((a, b) => order(a.type) - order(b.type))); }
     const showCreate = !q || 'my parts create make new custom part creator'.includes(q) || items.some(d => d.custom && !d.builtin);
     const first = menuFirst();
-    const cats = [...new Set(items.map(d => d.category))].sort((a, b) => (first.includes(a) ? first.indexOf(a) : 99) - (first.includes(b) ? first.indexOf(b) : 99));      // the active workspace's sections lead the menu
+    const cats = focus ? [...new Set(items.map(d => d.category))] : [...new Set(items.map(d => d.category))].sort((a, b) => (first.includes(a) ? first.indexOf(a) : 99) - (first.includes(b) ? first.indexOf(b) : 99));      // the active workspace's sections lead the menu
     if (showCreate && !cats.includes('My parts')) cats.push('My parts');
+    if (rt) {
+      const bar = document.createElement('div'); bar.className = 'robot-focus';
+      const lab = document.createElement('span'); lab.innerHTML = '<b></b>'; lab.querySelector('b').textContent = `${rt.icon} ${rt.name}`; lab.append(document.createTextNode(focus ? ' — showing the parts for it' : ' — showing every part'));
+      const sw = document.createElement('button'); sw.type = 'button'; sw.className = 'link-btn'; sw.textContent = focus ? 'Show all parts' : 'Only my robot\'s parts'; sw.addEventListener('click', () => setShowAll(!!focus));
+      const ch = document.createElement('button'); ch.type = 'button'; ch.className = 'link-btn'; ch.textContent = 'Change robot'; ch.addEventListener('click', () => editor.emit('pick-robot-type'));
+      bar.append(lab, sw, ch); host.append(bar);
+    } else if (activeWorkspace().robotics && !q && !getRobotType()) {
+      const bar = document.createElement('div'); bar.className = 'robot-focus'; const ch = document.createElement('button'); ch.type = 'button'; ch.className = 'link-btn'; ch.textContent = 'What are you building? Pick a robot type'; ch.addEventListener('click', () => editor.emit('pick-robot-type')); bar.append(ch); host.append(bar);
+    }
     for (const cat of cats) {
       const h = document.createElement('div');
       h.className = 'group-title'; h.textContent = cat;
@@ -161,6 +175,7 @@ export function initSidebar(editor) {
   editor.on('workspace', renderWorkspace);
   editor.on('catalog', renderCatalog);
   onPacksChange(() => renderCatalog());
+  onRobotType(() => renderCatalog());
   editor.on('select', renderWorkspace);
   renderCatalog(); renderWorkspace();
   return { setCollapsed };

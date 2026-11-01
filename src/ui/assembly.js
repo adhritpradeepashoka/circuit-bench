@@ -9,6 +9,10 @@ import { quickAssembly } from '../core/quick-assembly.js';
 import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
+import { buildKitMesh } from './kit-models.js';
+import { makeKitPart, KIT_PRESETS, KIT_ID_HELP } from '../core/robot-kit.js';
+import { getRobotType, showingAll, setShowAll, onRobotType } from '../core/robot-context.js';
+import { robotType, parts3dFor, testFor } from '../core/robot-types.js';
 import { initRobotTest } from './robot-test.js';
 import { initDroneTest } from './drone-test.js';
 import { droneWiring } from '../core/drone-wiring.js';
@@ -301,14 +305,8 @@ export function initAssembly({ editor, projects = null }) {
     const v = draft.validate(); if (!v.ok) return say(`Cannot export yet: ${v.errors.slice(0, 3).join(' ')}`, true);
     const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(v.part, null, 1)], { type: 'application/json' })), download: `${v.part.id}.circuitbench-part.json` }); a.click(); URL.revokeObjectURL(a.href);
   });
-  let examples = [];                                  // ready-made parts shipped with the app (public/robot-parts)
-  const EX_DIR = '/robot-parts/kame32/';
-  async function loadExamples() {
-    if (examples.length) return;
-    try { const r = await fetch(`${EX_DIR}index.json`); if (!r.ok) return; const j = await r.json(); examples = (j.parts || []).map(p => validateRobotPart(p)).filter(x => x.ok).map(x => ({ ...x.part, example: true })); } catch { /* offline: the examples just don't show */ }
-  }
   async function openPart(part) {
-    let buf = part.example ? await fetch(EX_DIR + part.model.file).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : await getMesh(`${part.id}/${part.model.file}`);
+    let buf = await getMesh(`${part.id}/${part.model.file}`);
     if (!buf) return say('The model file for this part is not stored in this browser (re-import it, then save again).', true);
     const t = await load3d();
     const obj = await parseModel(t.THREE, { name: part.model.file }, buf);
@@ -319,10 +317,6 @@ export function initAssembly({ editor, projects = null }) {
   function renderLibrary() {
     const list = libraryParts(); libEl.replaceChildren();
     if (!list.length) libEl.append(el('p', { className: 'asm-note', textContent: 'Parts you save appear here.' }));
-    if (examples.length) {
-      libEl.append(el('p', { className: 'asm-note', textContent: 'Examples: the Kame32 SG90 quadruped leg (GPL-3.0, by Javier Isabel). Open one, then click its holes to mark them.' }));
-      for (const p of examples) { const open = el('button', { type: 'button', className: 'asm-lib-open', textContent: p.name, title: `${p.dims?.size?.map(v => +v.toFixed(1)).join(' × ')} mm` }); open.addEventListener('click', () => openPart(p)); libEl.append(el('div', { className: 'asm-lib-row' }, open, el('span', { className: 'asm-badge', textContent: 'example' }))); }
-    }
     for (const p of list) {
       const open = el('button', { type: 'button', className: 'asm-lib-open', textContent: p.name, title: `${p.frames.length} frames · ${p.mass.grams} g` });
       open.addEventListener('click', () => openPart(p));
@@ -347,9 +341,9 @@ export function initAssembly({ editor, projects = null }) {
     legacyBox, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, droneEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const dyn = new Map();                                                   // drone parts, made from their ids on demand
-  const dronePart = id => { if (dyn.has(id)) return dyn.get(id); const raw = makeDronePart(id), v = raw && validateRobotPart(raw); if (!v?.ok) return null; const p = { ...v.part, drone: raw.drone, generated: true }; dyn.set(id, p); return p; };
-  const everyPart = () => [...examples, ...libraryParts().map(p => ({ ...p, example: false })), ...DRONE_PRESETS.map(([, id]) => dronePart(id)).filter(Boolean)];
-  const findPart = id => everyPart().find(p => p.id === id) || dronePart(id);
+  const genPart = id => { if (dyn.has(id)) return dyn.get(id); const raw = makeDronePart(id) || makeKitPart(id), v = raw && validateRobotPart(raw); if (!v?.ok) return null; const p = { ...v.part, drone: raw.drone, kit: raw.kit, generated: true }; dyn.set(id, p); return p; };
+  const everyPart = () => [...libraryParts(), ...DRONE_PRESETS.map(([, id]) => genPart(id)).filter(Boolean), ...KIT_PRESETS.map(([, id]) => genPart(id)).filter(Boolean)];
+  const findPart = id => everyPart().find(p => p.id === id) || genPart(id);
   // the floating bar over the 3D view
   const mkBtn = (label, title, fn, id) => { const b = el('button', { type: 'button', className: 'asm-tool', textContent: label, title, ariaLabel: title, id }); b.addEventListener('click', fn); return b; };
   const spotBtn = mkBtn('Add spots', 'Mark connection spots on a part\'s surface, where there is no hole. Click a part to add one, click a spot to remove it. Then use Join holes to fasten two spots together.', () => setSpot(!spotMode), 'asmSpot');
@@ -393,16 +387,16 @@ export function initAssembly({ editor, projects = null }) {
       const sc = bSel(['M2', 'M3', 'M1_6'], 'M3'), h = bNum(6, { step: 1, min: 2, max: 40 }); bBody.append(bField('Screw', sc, 'asmBSS'), bField('Height, mm', h, 'asmBSH')); make = () => `standoff-${sc.value.toLowerCase()}-${Number(h.value)}`;
     }
     const go = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Add to the scene', id: 'asmBAdd' });
-    go.addEventListener('click', async () => { const id = make(), p = dronePart(id); if (!p) { bMsg.textContent = 'Those numbers do not make a part.'; return; } bMsg.textContent = ''; await addToScene(p); });
+    go.addEventListener('click', async () => { const id = make(), p = genPart(id); if (!p) { bMsg.textContent = 'Those numbers do not make a part.'; return; } bMsg.textContent = ''; await addToScene(p); });
     bBody.append(go, bMsg);
   }
   dKind.addEventListener('change', paintBuilder); paintBuilder();
   stage.append(toolbarEl, helpEl);
 
-  async function meshOf(part) { return part.example ? fetch(EX_DIR + part.model.file).then(r => r.ok ? r.arrayBuffer() : null).catch(() => null) : getMesh(`${part.id}/${part.model.file}`); }
+  async function meshOf(part) { return getMesh(`${part.id}/${part.model.file}`); }
   /** A part's mesh in the space its holes were marked in: mm, Z up, centred in X/Y, resting on z = 0. */
   async function partObject(t, part) {          // (drone parts are drawn from their numbers instead of loaded)
-    if (!objCache.has(part.id) && part.generated) { const holder = new t.THREE.Group(); holder.add(buildDroneMesh(t.THREE, part)); objCache.set(part.id, holder); }
+    if (!objCache.has(part.id) && part.generated) { const holder = new t.THREE.Group(); holder.add(part.kit ? buildKitMesh(t.THREE, part) : buildDroneMesh(t.THREE, part)); objCache.set(part.id, holder); }
     if (!objCache.has(part.id)) {
       const buf = await meshOf(part); if (!buf) throw new Error(`The model for “${part.name}” could not be loaded.`);
       const raw = await parseModel(t.THREE, { name: part.model.file }, buf), g = new t.THREE.Group(); g.add(raw);
@@ -431,10 +425,20 @@ export function initAssembly({ editor, projects = null }) {
   }
   function renderCards() {
     cards.replaceChildren(); const q = dockSearch.value.trim().toLowerCase(); let group = null;
-    for (const p of everyPart().filter(p => !q || `${p.name} ${p.category || ''}`.toLowerCase().includes(q))) {
+    // a robot that knows what it is leads with the 3D parts for it; everything else is one click away, and search always looks through all of them
+    const rt = !q ? robotType(getRobotType()) : null, want = rt && !showingAll() ? parts3dFor(rt.id) : null;
+    if (rt) {
+      const bar = el('div', { className: 'robot-focus' }, el('span', {}, el('b', { textContent: `${rt.icon} ${rt.name}` }), document.createTextNode(want ? ' — showing the parts for it' : ' — showing every part')));
+      const sw = el('button', { type: 'button', className: 'link-btn', textContent: want ? 'Show all parts' : 'Only my robot\'s parts' }); sw.addEventListener('click', () => setShowAll(!!want));
+      const ch = el('button', { type: 'button', className: 'link-btn', textContent: 'Change robot' }); ch.addEventListener('click', () => editor.emit('pick-robot-type'));
+      bar.append(sw, ch); cards.append(bar);
+    }
+    let list = everyPart().filter(p => !q || `${p.name} ${p.category || ''} ${p.id}`.toLowerCase().includes(q));
+    if (want) { const at = p => { const i = want.indexOf(p.id); return i < 0 ? (p.generated ? 999 : -1) : i; }; list = list.filter(p => at(p) !== 999).sort((a, b) => at(a) - at(b)); const seen = [...new Set(list.map(p => p.category))]; list.sort((a, b) => seen.indexOf(a.category) - seen.indexOf(b.category)); }      // (the person's own saved parts stay at the top)
+    for (const p of list) {
       if (p.category !== group) { group = p.category; cards.append(el('div', { className: 'group-title asm-group', textContent: group || 'Parts' })); }
       const img = thumbs.get(p.id) ? el('img', { src: thumbs.get(p.id), alt: '', draggable: false }) : el('div', { className: 'asm-thumb-empty' });
-      const c = el('button', { type: 'button', className: 'asm-card', draggable: true, title: p.id === 'motor-2207-1900' ? 'Adds a motor sized for your frame and fits it onto the next free arm. You can change its size and Kv in the panel' : `${p.name} · ${p.frames.length} holes` }, img, el('span', { textContent: p.id === 'motor-2207-1900' ? 'Drone motor' : p.name.replace(/^Kame32 /, '') }));
+      const c = el('button', { type: 'button', className: 'asm-card', draggable: true, title: p.id === 'motor-2207-1900' ? 'Adds a motor sized for your frame and fits it onto the next free arm. You can change its size and Kv in the panel' : `${p.name} · ${p.frames.length} holes` }, img, el('span', { textContent: p.id === 'motor-2207-1900' ? 'Drone motor' : p.name }));
       c.dataset.part = p.id; c.addEventListener('click', () => addCard(p)); c.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', `circuitbench-part:${p.id}`); e.dataTransfer.effectAllowed = 'copy'; });
       cards.append(c);
     }
@@ -525,10 +529,10 @@ export function initAssembly({ editor, projects = null }) {
   }
   /** A ready 5-inch quad (frame, four motors with props, a battery under it, an ESC and flight-controller board, an FPV camera), joined the way a person would join it, as one undo step. */
   async function buildExampleQuad() {
-    const t = await load3d(); await loadExamples(); keep(); batch = true;
+    const t = await load3d(); keep(); batch = true;
     try {
       for (const i of asm.instances) t.sceneRoot.remove(i.obj); asm.instances = []; asm.mates = []; selected = null;
-      const add = (id, at = [0, 0]) => addToScene(dronePart(id), at), fail = (r, what) => { if (!r.ok) throw new Error(`${what}: ${r.error}`); };
+      const add = (id, at = [0, 0]) => addToScene(genPart(id), at), fail = (r, what) => { if (!r.ok) throw new Error(`${what}: ${r.error}`); };
       const frame = await add('frame-quad-220-16-30.5'); let k = 0;
       for (const n of ['fr', 'fl', 'bl', 'br']) {
         const m = await add('motor-2207-1900', [300 + 70 * k, 0]); fail(asm.mateAll(frame.id, `${n}-1-top`, m.id, 'mount-1'), 'motor');
@@ -620,7 +624,7 @@ export function initAssembly({ editor, projects = null }) {
     return el('div', { className: 'asm-row wrap' }, el('label', { className: 'asm-field' }, el('span', { textContent: 'Motor size' }), size), el('label', { className: 'asm-field' }, el('span', { textContent: 'Kv' }), kv));
   }
   async function swapMotor(inst, size, kv) {
-    const t = await load3d(), np = dronePart(motorId({ size, kv })), old = parseDroneId(inst.part.id); if (!np) return bsay('That motor size is not available.', true);
+    const t = await load3d(), np = genPart(motorId({ size, kv })), old = parseDroneId(inst.part.id); if (!np) return bsay('That motor size is not available.', true);
     keep(); const keepSpots = inst.part.frames.filter(f => f.custom);
     const links = asm.matesOf(inst.id).map(m => (m.a.inst === inst.id ? { mine: m.a.frame, other: m.b.inst, of: m.b.frame, isA: true } : { mine: m.b.frame, other: m.a.inst, of: m.a.frame, isA: false }));
     const resized = old.size !== size; if (resized) asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id);
@@ -701,7 +705,7 @@ export function initAssembly({ editor, projects = null }) {
       scr.addEventListener('change', () => { m.screw = scr.value || null; render(); });
       const un = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Unjoin (the parts stay where they are)', ariaLabel: 'Unjoin' });
       un.addEventListener('click', () => { keep(); asm.mates.splice(i, 1); render(); });
-      const nm = x => x.part.name.replace(/^Kame32 /, '');
+      const nm = x => x.part.name;
       const hinge = buildRig(asm).joints.some(j => j.mate === m), fx = el('select', { ariaLabel: 'Joint type', className: 'asm-mini-sel' }, el('option', { value: 'hinge', textContent: 'Hinge', selected: !m.fixed }), el('option', { value: 'fixed', textContent: 'Fixed', selected: !!m.fixed }));
       fx.addEventListener('change', () => { keep(); m.fixed = fx.value === 'fixed'; if (m.fixed && m.angle) { setAngle(asm, anchorId, m, 0); } render(); });
       const jbox = el('div', { className: 'asm-joint' }, el('span', { className: 'asm-lbl', textContent: 'Joint' }), fx);
@@ -841,7 +845,7 @@ export function initAssembly({ editor, projects = null }) {
     partBox.hidden = m !== 'part'; buildBox.hidden = m !== 'build';
     const t = await load3d();
     t.root.visible = t.gizmos.visible = m === 'part'; t.sceneRoot.visible = t.sceneGizmos.visible = m === 'build'; toolbarEl.hidden = m !== 'build'; helpEl.hidden = m !== 'build';
-    if (m === 'build') { attach(t); await loadExamples(); renderCards(); makeThumbs(); await restoreSaved(); hint.hidden = true; render(); if (asm.instances.length) fitScene(); }
+    if (m === 'build') { attach(t); renderCards(); makeThumbs(); await restoreSaved(); hint.hidden = true; render(); if (asm.instances.length) fitScene(); }
     else { hint.textContent = 'Import a 3D model of a part (STL, OBJ or glTF) to start marking where it connects.'; hint.hidden = t.hasModel(); t.drawGizmos(); t.draw(); }
   }
   for (const [k, b] of Object.entries(modeBtn)) b.addEventListener('click', () => setMode(k));
@@ -853,7 +857,12 @@ export function initAssembly({ editor, projects = null }) {
   // ── tabs ──────────────────────────────────────────────────────
   let view = 'circuit', droneTest = null, robotTest = null, testChoice = null;
   /** A drone has motors (and props); anything else that is built is tested as a robot with physics. The person can switch either way. */
-  const autoKind = () => (asm.instances.some(i => i.part.drone?.kind === 'motor') || !asm.instances.length ? 'fly' : 'robot');
+  const autoKind = () => {
+    if (asm.instances.some(i => i.part.drone?.kind === 'motor')) return 'fly';
+    const want = testFor(getRobotType());                       // the robot type chosen at the start decides what an empty or ambiguous scene opens in: an arm in the robot (MuJoCo) test, a drone in the drone test
+    if (!asm.instances.length) return want === 'robot' ? 'robot' : 'fly';
+    return 'robot';
+  };
   /** Every vertex of a part in the world (mm, flat x,y,z), for the physics shape. */
   function hullPoints(inst) {
     const out = [], t = three; if (!t || !inst.obj) return out; inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); const v = new t.THREE.Vector3();
@@ -864,13 +873,13 @@ export function initAssembly({ editor, projects = null }) {
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
     document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
-    let kind = 'fly'; if (v === 'test') { await load3d(); await loadExamples(); await restoreSaved(); kind = testChoice || autoKind(); }
+    let kind = 'fly'; if (v === 'test') { await load3d(); await restoreSaved(); kind = testChoice || autoKind(); }
     pane.hidden = v !== 'assembly'; testPane.hidden = !(v === 'test' && kind === 'fly'); robotPane.hidden = !(v === 'test' && kind === 'robot'); document.body.classList.toggle('robot-asm', v !== 'circuit');
     if (!(v === 'test' && kind === 'fly')) droneTest?.leave(); if (!(v === 'test' && kind === 'robot')) robotTest?.leave();
-    const switchTo = k => { testChoice = k; show('test'); }, prepare = async () => { await load3d(); await loadExamples(); await restoreSaved(); };
+    const switchTo = k => { testChoice = k; show('test'); }, prepare = async () => { await load3d(); await restoreSaved(); };
     if (v === 'test' && kind === 'fly') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare, buildExample: buildExampleQuad, goAssembly: () => show('assembly'), switchTo }); await droneTest.enter(); }
     if (v === 'test' && kind === 'robot') { robotTest ||= initRobotTest({ host: robotPane, getAsm: () => asm, getAnchor: () => anchorId, getHull: hullPoints, prepare, goAssembly: () => show('assembly'), switchTo }); await robotTest.enter(); }
-    if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); loadExamples().then(renderLibrary); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
+    if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v); syncTop();
   }
   for (const [id, b] of Object.entries(tabBtn)) b.addEventListener('click', () => show(id));
@@ -890,11 +899,12 @@ export function initAssembly({ editor, projects = null }) {
   /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */
   const ai = {
     active: () => view === 'assembly',
-    async describe() { await loadExamples(); const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId); const presets = DRONE_PRESETS.map(([name, id]) => { const p = dronePart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
-      d.parts += `\n${presets.join('\n')}\n${DRONE_ID_HELP}`; return d; },
+    async describe() { const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId); const presets = DRONE_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
+      const kit = KIT_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (${p.category}), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).slice(0, 14).join(', ')}${p.frames.length > 14 ? ', …' : ''}` : null; }).filter(Boolean);
+      d.parts += `\n${presets.join('\n')}\n${kit.join('\n')}\n${DRONE_ID_HELP}\n${KIT_ID_HELP}`; return d; },
     /** What the instant 3D assistant needs: placed parts (with their kind, hole ids and frame size), the joints, and the parts list. */
     async snapshot() {
-      await loadExamples();
+      
       return {
         instances: asm.instances.map(i => ({ id: i.id, part: i.part.id, name: i.part.name, kind: i.part.drone?.kind || null, frames: i.part.frames.map(f => f.id), wheelbase: i.part.drone?.wheelbase })),
         mates: asm.mates.map(m => ({ a: { inst: m.a.inst, frame: m.a.frame }, b: { inst: m.b.inst, frame: m.b.frame } })),
@@ -902,12 +912,15 @@ export function initAssembly({ editor, projects = null }) {
       };
     },
     async run(ops) {
-      const t = await load3d(); attach(t); await loadExamples(); const before = asm.snapshot(), ctx = { anchorId, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
+      const t = await load3d(); attach(t); const before = asm.snapshot(), ctx = { anchorId, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
       batch = true; let out; try { out = await runAssemblyOps(asm, ops, ctx); } finally { batch = false; }
       anchorId = ctx.anchorId; if (out.done) { history.push(before); if (history.length > 60) history.shift(); future = []; }
       applyScene(); if (out.done) fitScene(); return out;
     },
   };
   projects?.onSwitch(p => { switchScene(p.id); });
-  return { ai, show, sync, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
+  /** The robot type changed: lists and the Test tab's default follow it. */
+  function typeChanged() { testChoice = null; bld.hidden = !!getRobotType() && getRobotType() !== 'drone'; renderCards(); if (view === 'test') show('test'); }
+  onRobotType(typeChanged); typeChanged();
+  return { ai, show, sync, onRobotType: typeChanged, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
 }

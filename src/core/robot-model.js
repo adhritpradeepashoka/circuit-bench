@@ -80,7 +80,7 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes =
     const inertia = inertiaOf(insts.map((i, k) => [mt[k] || MIN_MASS, sub(cs[k], c), extentsMm(i).map(v => v * MM)]));
     const pts = []; for (const i of insts) { const raw = hullOf?.(i); const w = raw && raw.length >= 12 ? samplePoints(raw) : boxPoints(i); for (const p of w) { const q = mul(p, MM); pts.push(q); allPts.push(q); } }
     const heaviest = insts.slice().sort((a, b2) => mass(b2.id) - mass(a.id))[0];
-    index.set(b, bodies.length); bodies.push({ key: b, name: heaviest.part.name.replace(/^Kame32 /, ''), members: ids, mass: total, origin: c, inertia, points: pts, parent: null, joint: null });
+    index.set(b, bodies.length); bodies.push({ key: b, name: heaviest.part.name, members: ids, mass: total, origin: c, inertia, points: pts, parent: null, joint: null });
   }
   const joints = [];
   for (const body of bodies.slice(1)) {

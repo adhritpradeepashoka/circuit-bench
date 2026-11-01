@@ -8,6 +8,8 @@ import { fromProjectFile } from '../core/project.js';
 import { PACKS, packTypes, isInstalled, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
 import { isMcuBoard } from '../core/boards.js';
+import { setRobotType } from '../core/robot-context.js';
+import { cleanRobotType } from '../core/robot-types.js';
 import { getWorkspace } from '../core/workspaces.js';
 import { EXAMPLES } from '../sim/examples.js';
 
@@ -80,7 +82,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
       editor.openProject(p.data, { board: p.board });
       if (!code.importState(p.data || {})) code.importState({ sketch: DEFAULT_SKETCH });
     } finally { suspended = false; }
-    current = p; setCurrentId(p.id); paintName(); announce();
+    current = p; setRobotType(cleanRobotType(p.robotType)); setCurrentId(p.id); paintName(); announce();
   }
 
   // Another tab saved the project this tab has open. If we have nothing unsaved, follow it (both tabs then
@@ -96,7 +98,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   async function create({ name, workspace = DEFAULT_WORKSPACE, data = null, board } = {}) {
     await saveNow();
     const taken = (await store.list()).map(m => m.name);
-    const ws = getWorkspace(workspace);
+    const ws = getWorkspace(workspace), fresh = !data;
     if (!data && ws.starter?.project) data = JSON.parse(JSON.stringify(ws.starter.project));      // a workspace saved from a whole project starts as that project
     const p = newProject({ name: uniqueName(cleanName(name), taken), workspace, data });
     if (!data) { p.data = null; if (board) p.board = board; }
@@ -108,6 +110,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
       const ex = EXAMPLES[ws.starter?.sketch]; if (ex) code.importState({ sketch: ex.code });
       await saveNow();      // persist the fresh default circuit + sketch
     }
+    if (ws.robotics && fresh) editor.emit?.('robotics-created');      // a new robot starts by asking what it is
     return current;
   }
 
@@ -215,6 +218,8 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   })();
 
   return {
+    /** Which kind of robot the open project is (arm, rover …), or null. Saved with the project. */
+    async setRobotType(id) { if (!current) return; current = { ...current, robotType: cleanRobotType(id) }; setRobotType(current.robotType); await saveNow(); },
     ready, open, create, duplicate, remove, rename, saveNow, openModal, close,
     get current() { return current; },
     /** Called with the project whenever a different one is on screen (also once at start). */

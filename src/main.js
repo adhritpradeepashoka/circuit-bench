@@ -15,6 +15,7 @@ import { initPartCreator } from './ui/part-creator.js';
 import './parts/elements.js';
 import { initAiPanel } from './ui/ai-panel.js';
 import { initProjects } from './ui/projects.js';
+import { initRobotType } from './ui/robot-type.js';
 import { createLocalStore } from './core/projects.js';
 import { createSyncedStore } from './core/cloud-sync.js';
 import { getToken, authed } from './sim/session.mjs';
@@ -89,6 +90,7 @@ const projects = initProjects({ editor, code, sim, store: syncedStore });
 const workspaces = initWorkspaces({ editor, code, projects });
 initVisualizer({ editor });
 const assembly = initAssembly({ editor, projects });
+const robotPicker = initRobotType({ editor, projects, onChosen: () => assembly.onRobotType?.() });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
 initFeatures({ blocks });
@@ -166,5 +168,5 @@ $('importPcbFile').onchange = async e => { const file = e.target.files[0]; e.tar
 $('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
 $('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 
-window.__vlab = { editor, sim, code, projects, workspaces, tour, account, assembly };
+window.__vlab = { robotPicker, editor, sim, code, projects, workspaces, tour, account, assembly };
 if (/[?&]diag=1/.test(location.search)) import('./ui/diag.js').then(m => m.startDiag(editor));   // handy in the browser console
