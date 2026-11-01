@@ -73,7 +73,7 @@ button { cursor: pointer; }
 .canvas.pan-ready { cursor: grab; }
 .canvas.wire-mode { cursor: crosshair; }
 .world { position: absolute; left: 0; top: 0; width: 0; height: 0; transform-origin: 0 0; }
-.overlay { position: absolute; left: 0; top: 0; overflow: visible; pointer-events: none; z-index: 30; }
+.overlay { position: absolute; left: 0; top: 0; width: 100%; height: 100%; overflow: hidden; pointer-events: none; z-index: 30; }
 
 .part { position: absolute; left: 0; top: 0; z-index: var(--z, 5); transform-origin: 50% 50%; user-select: none; -webkit-user-select: none; cursor: grab; }
 .part .model { position: absolute; left: 0; top: 0; pointer-events: none; }

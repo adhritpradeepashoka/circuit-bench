@@ -176,12 +176,19 @@ export class Editor {
   applyView() {
     const { x, y, z } = this.view;
     this.world.style.transform = `translate(${x}px, ${y}px) scale(${z})`;
+    this.fitOverlay();
     const s = this.canvas.style;
     s.setProperty('--gx', `${x}px`); s.setProperty('--gy', `${y}px`);
     s.setProperty('--gmajor', `${96 * z}px`);
     s.setProperty('--gminor', z * 9.6 >= 5 ? `${9.6 * z}px` : '0px');
     $('zoomFit').textContent = `${Math.round(z * 100)}%`;
     this.positionWireEditor();
+  }
+  /** The wire layer shows exactly the visible part of the world: its viewBox is that rectangle, so zoom and pan are done by the SVG itself at the real pixel size. */
+  fitOverlay() {
+    const { x, y, z } = this.view, cw = this.canvas.clientWidth, ch = this.canvas.clientHeight;
+    if (cw > 0 && ch > 0 && z > 0) this.overlay.setAttribute('viewBox', `${-x / z} ${-y / z} ${cw / z} ${ch / z}`);
+    else this.overlay.removeAttribute('viewBox');
   }
   zoomAt(f, cx, cy) {
     const z0 = this.view.z, z1 = clamp(z0 * f, MIN_Z, MAX_Z);
@@ -567,7 +574,8 @@ export class Editor {
     });
     window.addEventListener('keydown', e => this.onKey(e));
     window.addEventListener('keyup', e => { if (e.key === ' ') { this.spaceDown = false; c.classList.remove('pan-ready'); } });
-    window.addEventListener('resize', () => this.positionWireEditor());
+    window.addEventListener('resize', () => { this.positionWireEditor(); this.fitOverlay(); });
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.fitOverlay()).observe(this.canvas);
 
     $('wireStyle').addEventListener('change', e => this.editWire(w => { w.style = e.target.value; }, true));
     $('wireColor').addEventListener('input', e => this.editWire(w => { w.color = e.target.value; }, false));

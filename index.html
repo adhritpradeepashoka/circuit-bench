@@ -63,8 +63,10 @@
       <div class="canvas" id="canvas">
         <div class="world" id="world">
           <div id="partsLayer"></div>
-          <svg id="overlay" class="overlay" width="1" height="1"></svg>
         </div>
+        <!-- the wires: NOT inside the scaled world. It is a screen-sized SVG whose viewBox is the visible part of the world, so the browser itself does the zoom and pan
+             (re-drawn at the real pixel size every time) instead of stretching a layer: on a Chromebook with a fractional screen scale the stretched layer drifted away from the parts. -->
+        <svg id="overlay" class="overlay" preserveAspectRatio="none"></svg>
         <div class="wire-editor" id="wireEditor" hidden>
           <span class="we-title">Wire</span>
           <div class="we-kind"><button type="button" id="wireKindBtn" class="we-kind-btn" aria-haspopup="menu" aria-expanded="false" aria-controls="wireKindMenu"><span class="wk-ico" id="wireKindIco"></span><span id="wireKindName">Normal</span><svg viewBox="0 0 10 10" width="8" height="8" aria-hidden="true"><path d="m2 3.5 3 3 3-3" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button>

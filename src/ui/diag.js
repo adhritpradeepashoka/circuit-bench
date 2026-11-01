@@ -2,7 +2,7 @@
 // *thinks* the pin is (computed from the model and the view, with no CSS transform involved), so a screenshot
 // shows whether the drawn parts line up, and it measures real page elements against the model and reports
 // the numbers (with the display settings) so a layout bug on one particular device can be pinned down.
-import { allPinsWorld, partBounds } from '../core/geometry.js';
+import { allPinsWorld, partBounds, pinWorld } from '../core/geometry.js';
 
 export function startDiag(editor) {
   const box = document.createElement('div');
@@ -40,6 +40,24 @@ export function startDiag(editor) {
     const pr = document.createElement('div'); pr.style.cssText = 'position:absolute;left:100px;top:100px;width:100px;height:100px;visibility:hidden';
     editor.world.appendChild(pr); const b = pr.getBoundingClientRect(); pr.remove();
     L.push(`probe expected ${f(r.left + 100 * z + x)},${f(r.top + 100 * z + y)} ${f(100 * z)}px   actual ${f(b.left)},${f(b.top)} ${f(b.width)}px   off ${f(b.left - (r.left + 100 * z + x))},${f(b.top - (r.top + 100 * z + y))}`);
+    // the wire layer: a probe rectangle drawn in it, and the real start / end of up to eight wires against where the model says their pins are
+    const NS = 'http://www.w3.org/2000/svg', pv = document.createElementNS(NS, 'rect');
+    pv.setAttribute('x', 100); pv.setAttribute('y', 100); pv.setAttribute('width', 100); pv.setAttribute('height', 100); pv.setAttribute('visibility', 'hidden');
+    editor.overlay.appendChild(pv); const ob = pv.getBoundingClientRect(); pv.remove();
+    L.push(`NET LAYER viewBox ${editor.overlay.getAttribute('viewBox')}  probe expected ${f(r.left + 100 * z + x)},${f(r.top + 100 * z + y)} ${f(100 * z)}px   actual ${f(ob.left)},${f(ob.top)} ${f(ob.width)}px   off ${f(ob.left - (r.left + 100 * z + x))},${f(ob.top - (r.top + 100 * z + y))}`);
+    let worst = 0, shown = 0;
+    for (const w of editor.state.wires) {
+      const path = editor.overlay.querySelector(`.wire-hit[data-wire="${w.id}"]`), A = editor.state.parts.find(p => p.id === w.a.part), B = editor.state.parts.find(p => p.id === w.b.part);
+      if (!path || !A || !B || !path.getScreenCTM) continue;
+      const len = path.getTotalLength(), m = path.getScreenCTM();
+      for (const [at, part, pin] of [[0, A, w.a.pin], [len, B, w.b.pin]]) {
+        const q = path.getPointAtLength(at), sx = q.x * m.a + q.y * m.c + m.e, sy = q.x * m.b + q.y * m.d + m.f, pw = pinWorld(part, pin);
+        const ex = r.left + pw.x * z + x, ey = r.top + pw.y * z + y, d = Math.hypot(sx - ex, sy - ey);
+        worst = Math.max(worst, d);
+        if (shown++ < 8) L.push(`wire ${w.id} ${part.type}.${pin}: drawn at ${f(sx)},${f(sy)} expected ${f(ex)},${f(ey)} off ${f(sx - ex)},${f(sy - ey)}`);
+      }
+    }
+    L.push(`wire ends worst offset ${f(worst)} px over ${editor.state.wires.length} wires`);
     for (const part of editor.state.parts) {
       const el = editor.els.get(part.id); if (!el) continue;
       const bb = partBounds(part), er = el.getBoundingClientRect(), m = el.querySelector('.model, svg, img')?.getBoundingClientRect();
