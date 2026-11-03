@@ -1118,3 +1118,5 @@ body:not(.robot-asm) #robotParts { display: none; }
 .robot-focus { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 6px 4px 8px; font-size: 12.5px; }
 .robot-focus > span { flex: 1 1 100%; }
 .robot-focus { grid-column: 1 / -1; }
+/* the circuit's own layers (parts, wires, wire editor) belong to the Circuit tab only: the wire layer sits above the 3D panes, so it must be switched off, not just covered */
+.robot-asm #overlay, .robot-asm #world, .robot-asm #wireEditor { display: none !important; }
