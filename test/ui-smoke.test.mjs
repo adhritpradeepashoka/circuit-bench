@@ -1141,8 +1141,12 @@ test('ui: My projects — first run adopts your existing work, new projects star
   assert.equal(doc.getElementById('projectName').textContent, 'My first project');
   assert.equal(projects.current.workspace, 'arduino-uno');
 
-  doc.getElementById('projectBtn').click();
-  assert.equal(doc.getElementById('projectsModal').hidden, false);
+  doc.getElementById('projectBtn').click(); await flush(); await flush();
+  assert.equal(doc.querySelector('.proj-switch').hidden, false, 'the project button opens the quick switcher');
+  assert.ok(doc.querySelector('.proj-switch .ps-new') && doc.querySelector('.proj-switch li.current'), 'with a New project button and the open project marked');
+  doc.querySelector('.proj-switch .ps-foot button:last-child').click();
+  assert.equal(doc.getElementById('projectsModal').hidden, false, '"Manage…" opens the full dialog');
+  assert.equal(doc.querySelector('.proj-switch').hidden, true);
   w.__lab.initWorkspaces({ editor, code, projects }); doc.getElementById('projectsClose').click(); doc.getElementById('workspacesBtn').click(); doc.getElementById('wsTabPacks').click();
   const boardOpts = () => [...doc.querySelectorAll('#projNewBoard option')].map(o => o.value);
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico'], 'only the two built-in boards without a pack');
@@ -1150,7 +1154,7 @@ test('ui: My projects — first run adopts your existing work, new projects star
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4'], 'the picker follows the pack');
   doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]').click();
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico']);
-  doc.getElementById('workspacesClose').click(); doc.getElementById('projectBtn').click();
+  doc.getElementById('workspacesClose').click(); doc.getElementById('openProjects').click();
   doc.getElementById('projNewName').value = 'Traffic light';
   doc.getElementById('projNewForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
   await flush(); await flush();

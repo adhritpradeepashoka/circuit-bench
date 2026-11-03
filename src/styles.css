@@ -26,9 +26,9 @@ button { cursor: pointer; }
 .brand-mark { width: 28px; height: 28px; }
 .brand-name { font-weight: 700; font-size: 14px; letter-spacing: .01em; line-height: 1.1; }
 .brand-text { min-width: 0; }
-.project-btn { display: flex; align-items: center; gap: 4px; max-width: 180px; margin: 1px 0 0 -4px; padding: 1px 4px; border: 0; border-radius: 5px; background: none; color: var(--ink-muted); font-size: 11.5px; }
+.project-btn { display: flex; align-items: center; gap: 7px; max-width: 240px; min-width: 0; padding: 7px 11px; border: 1px solid #3a464c; border-radius: 9px; background: #232b30; color: var(--ink-text); font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .project-btn span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.project-btn:hover { background: #2a3439; color: var(--ink-text); }
+.project-btn:hover, .project-btn[aria-expanded="true"] { background: #2e393f; border-color: #55646b; }
 .run { height: 34px; display: inline-flex; align-items: center; gap: 8px; padding: 0 16px 0 13px; border: 0; border-radius: 8px; background: var(--green); color: var(--on-blue); font-weight: 700; transition: background .12s; }
 .run:hover { background: #24ad60; }
 .run.running { background: var(--red); }
@@ -1061,7 +1061,7 @@ body:not(.robot-asm) #robotParts { display: none; }
   .topbar::-webkit-scrollbar { display: none; }
   .topbar > *, .topbar .project-menu { flex: none; }
   .brand-name { display: none; }
-  .project-btn { max-width: 120px; font-size: 12.5px; margin: 0; }
+  .project-btn { max-width: 130px; font-size: 12.5px; padding: 6px 8px; }
   .top-search { display: none; }
   .project-menu { margin-left: 0; }
   .menu { position: fixed; top: 54px; right: 8px; max-width: calc(100vw - 16px); }
@@ -1120,3 +1120,16 @@ body:not(.robot-asm) #robotParts { display: none; }
 .robot-focus { grid-column: 1 / -1; }
 /* the circuit's own layers (parts, wires, wire editor) belong to the Circuit tab only: the wire layer sits above the 3D panes, so it must be switched off, not just covered */
 .robot-asm #overlay, .robot-asm #world, .robot-asm #wireEditor { display: none !important; }
+
+/* — quick project switcher under the project button — */
+.proj-switch { position: fixed; z-index: 450; width: min(340px, calc(100vw - 16px)); max-height: min(70vh, 480px); display: flex; flex-direction: column; background: #fff; color: #1d2a24; border-radius: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.3); overflow: hidden; }
+.proj-switch[hidden] { display: none; }
+.proj-switch ul { list-style: none; margin: 0; padding: 6px; overflow: auto; }
+.proj-switch li button { width: 100%; display: grid; gap: 1px; text-align: left; padding: 9px 10px; border: 0; border-radius: 8px; background: none; cursor: pointer; font: inherit; color: inherit; }
+.proj-switch li button:hover, .proj-switch li button:focus-visible { background: #eaf1ed; outline: none; }
+.proj-switch li.current button { background: #dcefe5; }
+.proj-switch li b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.proj-switch li span { font-size: 11.5px; color: #5a6b63; }
+.proj-switch .ps-foot { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #e3ebe6; }
+.proj-switch .ps-foot button { flex: 1; padding: 8px; border: 1px solid #cfdcd5; border-radius: 8px; background: #f6faf8; cursor: pointer; font: inherit; font-size: 13px; }
+.proj-switch .ps-foot .ps-new { background: #2e7d5b; border-color: #2e7d5b; color: #fff; font-weight: 600; }

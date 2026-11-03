@@ -192,7 +192,30 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     (focusNew ? nameInput : $('projectsClose')).focus();
   }
   function close() { modal.hidden = true; }
-  $('projectBtn').addEventListener('click', () => openModal());
+  // The quick switcher: a list under the project button, one click to change project (the full dialog stays for rename, copy and delete)
+  const pop = el('div', 'proj-switch'); pop.hidden = true; pop.setAttribute('role', 'menu'); document.body.append(pop);
+  const pbtn = $('projectBtn');
+  async function renderSwitch() {
+    const items = await store.list(), ul = el('ul');
+    for (const m of items) {
+      const li = el('li', m.id === current?.id ? 'current' : ''), b = el('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
+      b.append(el('b', '', m.name), el('span', '', `${WORKSPACES[m.workspace]?.name || m.workspace} · edited ${ago(m.updatedAt)}${m.id === current?.id ? ' · open now' : ''}`));
+      b.addEventListener('click', () => { closeSwitch(); open(m.id); }); li.append(b); ul.append(li);
+    }
+    const foot = el('div', 'ps-foot'), nw = el('button', 'ps-new', '+ New project'), all = el('button', '', 'Manage…');
+    nw.type = all.type = 'button'; nw.addEventListener('click', () => { closeSwitch(); openModal({ focusNew: true }); }); all.addEventListener('click', () => { closeSwitch(); openModal(); });
+    foot.append(nw, all); pop.replaceChildren(ul, foot);
+    ul.querySelector('.current button')?.scrollIntoView?.({ block: 'nearest' });
+  }
+  function closeSwitch() { pop.hidden = true; pbtn.setAttribute('aria-expanded', 'false'); }
+  async function openSwitch() {
+    await saveNow(); await renderSwitch(); const r = pbtn.getBoundingClientRect();
+    pop.hidden = false; pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`; pop.style.top = `${r.bottom + 6}px`;
+    pbtn.setAttribute('aria-expanded', 'true'); (pop.querySelector('.current button') || pop.querySelector('button'))?.focus();
+  }
+  pbtn.addEventListener('click', () => (pop.hidden ? openSwitch() : closeSwitch()));
+  document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target) && !pbtn.contains(e.target)) closeSwitch(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { closeSwitch(); pbtn.focus(); } });
   $('projectsClose').addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
