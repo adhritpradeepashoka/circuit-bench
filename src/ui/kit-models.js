@@ -25,10 +25,13 @@ export function buildKitMesh(THREE, part) {
     cyl(1.0, 0.1, s.H - 0.1, C.black, 6, {}, 0, -s.L / 2 + 3);
     box(3.5, 1.2, 4, 0, -s.L / 2 - 0.6, s.H * 0.2, C.black); for (const [k, c] of [0x7a4a1a, C.red, 0xe8a200].entries()) box(0.8, 5, 0.8, (k - 1) * 1.1, -s.L / 2 - 3, s.H * 0.2 + 1.5, c);   // the three-wire lead
   } else if (d.kind === 'link') {
-    const s = rrect(d.len, d.w, d.w / 2 - 0.1); plate(holes(s, d.pts.map(x => [x, 0]), d.hd / 2), d.t, 0, C.alu, { metal: 0.4, rough: 0.45 });
+    const s = rrect(d.len, d.w, d.w / 2 - 0.1); plate(holes(s, [...d.pts, ...(d.pairs || [])].map(x => [x, 0]), d.hd / 2), d.t, 0, C.alu, { metal: 0.4, rough: 0.45 });
   } else if (d.kind === 'plate') {
     const pts = []; for (let i = 0; i <= d.nx; i++) for (let j = 0; j <= d.ny; j++) pts.push([-d.nx * d.pitch / 2 + i * d.pitch, -d.ny * d.pitch / 2 + j * d.pitch]);
-    plate(holes(rrect(d.w, d.l, 4), pts, d.hd / 2), d.t, 0, C.plate, { metal: 0.3 });
+    const sh = holes(rrect(d.w, d.l, 4), [...pts, ...(d.servoHoles || [])], d.hd / 2);
+    if (d.opening) { const o = new THREE.Path(), [ow, ol] = d.opening; o.moveTo(-ow / 2, -ol / 2); o.lineTo(ow / 2, -ol / 2); o.lineTo(ow / 2, ol / 2); o.lineTo(-ow / 2, ol / 2); o.closePath(); sh.holes.push(o); }
+    plate(sh, d.t, d.feet, C.plate, { metal: 0.3 });
+    if (d.feet) for (const [sx, sy] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) cyl(4.5, d.feet, 0, C.holder, 20, { metal: 0.3 }, sx * (d.w / 2 - 7), sy * (d.l / 2 - 7));
   } else if (d.kind === 'wheel') {
     const R = d.dia / 2, tireT = Math.max(2.5, R * 0.14);
     const tire = new THREE.Shape(); tire.absarc(0, 0, R, 0, Math.PI * 2, false); const inner = new THREE.Path(); inner.absarc(0, 0, R - tireT, 0, Math.PI * 2, true); tire.holes.push(inner); plate(tire, d.wd, 0, C.tire, { rough: 0.9 });

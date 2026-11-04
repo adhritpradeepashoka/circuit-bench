@@ -46,7 +46,22 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
       o.textContent = w.available ? w.name : `${w.name} — coming soon`; return o;
     }));
     wsSelect.value = WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE;
+    paintTiles();
   };
+  const WS_ICON = { 'arduino-uno': '💡', robotics: '🤖', biosignal: '🧠', pcb: '🟩', cad: '📐' };
+  const wsIcon = id => WS_ICON[id] || '🧪';
+  function paintTiles() {
+    const host = $('projTiles'); if (!host) return;
+    host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available).map(([id, w]) => {
+      const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${wsSelect.value === id ? ' on' : ''}`; t.dataset.ws = id; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(wsSelect.value === id));
+      const i = document.createElement('i'); i.textContent = wsIcon(id); i.setAttribute('aria-hidden', 'true');
+      const b = document.createElement('b'); b.textContent = w.name; const s = document.createElement('span'); s.textContent = w.blurb;
+      t.append(i, b, s); t.addEventListener('click', () => { wsSelect.value = id; paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
+    }));
+    $('projNewBoard').hidden = wsSelect.value === 'robotics';
+  }
+  let projQuery = '';
+  $('projSearch').addEventListener('input', e => { projQuery = e.target.value.trim().toLowerCase(); renderList(); });
   fillWorkspaces();
 
   function paintName() { $('projectName').textContent = current?.name || 'Untitled project'; document.title = current ? `${current.name} — CircuitBench` : 'CircuitBench'; }
@@ -143,7 +158,9 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   /* ── the dialog ──────────────────────── */
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   async function renderList() {
-    const items = await store.list();
+    const all = await store.list(), items = projQuery ? all.filter(m => `${m.name} ${WORKSPACES[m.workspace]?.name || m.workspace}`.toLowerCase().includes(projQuery)) : all;
+    $('projCount').textContent = all.length ? `(${all.length})` : '';
+    const empty = $('projEmpty'); empty.hidden = !!items.length; empty.textContent = all.length ? `Nothing matches “${projQuery}”.` : 'No projects yet. Pick a kind above to start your first one.';
     listEl.replaceChildren(...items.map(m => {
       const li = el('li', `proj-row${m.id === current?.id ? ' current' : ''}`); li.dataset.id = m.id;
       const main = el('div', 'proj-main');
@@ -157,12 +174,15 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
         const openBtn = el('button', 'proj-open', m.name); openBtn.type = 'button'; openBtn.dataset.act = 'open';
         main.append(openBtn);
       }
-      main.append(el('span', 'proj-meta', `${WORKSPACES[m.workspace]?.name || m.workspace} · edited ${ago(m.updatedAt)}${m.id === current?.id ? ' · open now' : ''}`));
+      main.append(el('span', 'proj-meta', `Edited ${ago(m.updatedAt)}`));
+      const chip = el('span', 'proj-chip'); chip.append(el('i', '', wsIcon(m.workspace)), document.createTextNode(WORKSPACES[m.workspace]?.name || m.workspace)); if (m.id === current?.id) chip.append(el('em', '', 'open now'));
+      li.append(chip);
       const acts = el('div', 'proj-acts');
       const b = (act, label, title) => { const x = el('button', `proj-act ${act}`, label); x.type = 'button'; x.dataset.act = act; x.title = title; return x; };
       acts.append(b('rename', 'Rename', 'Rename this project'), b('duplicate', 'Duplicate', 'Make a copy'),
         confirmDelete === m.id ? b('delete-yes', 'Delete for good?', 'This cannot be undone') : b('delete', 'Delete', 'Delete this project'));
       li.append(main, acts);
+      li.style.setProperty('--tint', `hsl(${[...(m.workspace || '')].reduce((a, c) => a + c.charCodeAt(0) * 7, 40) % 360} 55% 50%)`);
       return li;
     }));
   }
@@ -188,8 +208,8 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   fillBoards(); onPacksChange(fillBoards);
 
   function openModal({ focusNew = false } = {}) {
-    fillWorkspaces(); modal.hidden = false; confirmDelete = null; renaming = null; renderList();
-    (focusNew ? nameInput : $('projectsClose')).focus();
+    fillWorkspaces(); modal.hidden = false; confirmDelete = null; renaming = null; projQuery = ''; $('projSearch').value = ''; renderList();
+    (focusNew ? nameInput : $('projSearch')).focus();
   }
   function close() { modal.hidden = true; }
   // The quick switcher: a list under the project button, one click to change project (the full dialog stays for rename, copy and delete)

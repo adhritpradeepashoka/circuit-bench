@@ -1148,3 +1148,33 @@ body:not(.robot-asm) #robotParts { display: none; }
 .kind-ico { font-style: normal; font-size: 28px; line-height: 1; margin-bottom: 6px; }
 @media (max-width: 760px) { .start-hero { grid-template-columns: 1fr; padding: 22px; } .start-hero-art { display: none; } .start-hero .start-h { font-size: 26px; } }
 @media (prefers-reduced-motion: reduce) { .sflow, .sglow { animation: none; } }
+
+/* — My projects: a gallery, not a list — */
+.modal-card.proj-card { width: min(940px, 100%); max-height: 88vh; }
+.proj-card .modal-head { gap: 14px; padding: 16px 18px 12px 22px; } .proj-card .modal-head h2 { font-size: 22px; letter-spacing: -.01em; margin-right: auto; }
+.proj-search { display: flex; align-items: center; gap: 8px; width: min(300px, 46%); padding: 0 12px; height: 36px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper); color: var(--muted); }
+.proj-search input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font: inherit; font-size: 14px; color: var(--text); }
+.proj-scroll { overflow-y: auto; padding: 0 22px 8px; }
+.proj-card h3 { margin: 18px 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); } .proj-card h3 span { font-weight: 500; }
+.proj-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; }
+.proj-tile { display: grid; gap: 3px; justify-items: start; text-align: left; padding: 16px; border: 2px solid var(--line); border-radius: 14px; background: var(--paper); cursor: pointer; font: inherit; color: inherit; transition: transform .15s, border-color .15s, box-shadow .15s; }
+.proj-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(20, 40, 30, .1); }
+.proj-tile.on { border-color: var(--blue); background: var(--blue-soft); }
+.proj-tile i { font-style: normal; font-size: 28px; line-height: 1; margin-bottom: 4px; } .proj-tile b { font-size: 15px; } .proj-tile span { font-size: 12.5px; color: var(--muted); }
+.proj-card .proj-new { padding: 12px 0 4px; border: 0; }
+.proj-card .proj-new input, .proj-card .proj-new select { height: 40px; border-radius: 10px; font-size: 14px; } .proj-card .proj-new button { height: 40px; padding: 0 20px; border-radius: 10px; font-size: 14px; }
+.proj-card .proj-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; padding: 0 0 12px; overflow: visible; }
+.proj-card .proj-row { position: relative; display: flex; flex-direction: column; align-items: stretch; gap: 8px; padding: 14px 14px 12px; border: 1px solid var(--line); border-top: 4px solid var(--tint, var(--blue)); border-radius: 14px; background: var(--surface); transition: box-shadow .15s, transform .15s; }
+.proj-card .proj-row:hover { box-shadow: 0 10px 26px rgba(20, 40, 30, .12); transform: translateY(-2px); background: var(--surface); }
+.proj-card .proj-row.current { background: var(--blue-soft); border-color: var(--blue); border-top-color: var(--blue); }
+.proj-card .proj-open { font-size: 16px; padding: 2px 0; } .proj-card .proj-row .proj-main { order: 1; } .proj-card .proj-chip { order: 0; }
+.proj-chip { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--tint, var(--blue)) 14%, transparent); font-size: 12px; font-weight: 600; }
+.proj-chip i { font-style: normal; } .proj-chip em { font-style: normal; font-weight: 700; color: var(--blue); margin-left: 4px; }
+.proj-card .proj-acts { order: 2; opacity: .35; transition: opacity .15s; } .proj-card .proj-row:hover .proj-acts, .proj-card .proj-row:focus-within .proj-acts, .proj-card .proj-row.current .proj-acts { opacity: 1; }
+.proj-empty { margin: 4px 0 16px; padding: 28px; text-align: center; border: 2px dashed var(--line); border-radius: 14px; color: var(--muted); }
+@media (max-width: 600px) { .proj-card .modal-head { flex-wrap: wrap; } .proj-search { width: 100%; order: 3; } }
+
+.topbar button, .topbar .project-menu > button { white-space: nowrap; }
+
+.hc-flow { stroke-dasharray: 7 9; animation: sflow .9s linear infinite; }
+.start-hero { grid-template-columns: 1.1fr 1fr; } .start-hero-art { min-width: 0; } .start-hero-art .hc { margin: -8px 0; }

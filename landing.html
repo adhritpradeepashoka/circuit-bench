@@ -75,10 +75,10 @@ h2 { margin: 8px 0 12px; font-size: clamp(28px, 3.6vw, 42px); line-height: 1.1; 
 .types b { display: block; color: #fff; font-size: 15px; }
 .list { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 10px; }
 .list li { display: flex; gap: 10px; color: #cfdad4; } .list li::before { content: "✓"; color: var(--green); font-weight: 800; }
-.arm .a1 { animation: sw1 4s ease-in-out infinite; transform-origin: 150px 250px; }
-.arm .a2 { animation: sw2 4s ease-in-out infinite; transform-origin: 150px 150px; }
-.arm .a3 { animation: sw3 4s ease-in-out infinite; transform-origin: 150px 70px; }
-@keyframes sw1 { 50% { transform: rotate(-16deg); } } @keyframes sw2 { 50% { transform: rotate(30deg); } } @keyframes sw3 { 50% { transform: rotate(-34deg); } }
+.timelapse { margin: 0; border-radius: 16px; overflow: hidden; background: #0b1114; border: 1px solid rgba(255,255,255,.12); box-shadow: 0 24px 60px rgba(0,0,0,.45); }
+.tl-bar { display: flex; align-items: center; gap: 6px; padding: 9px 12px; background: #1a252a; color: #9fb0aa; font-size: 12px; }
+.tl-bar i { width: 10px; height: 10px; border-radius: 50%; background: #3a4a50; } .tl-bar span { margin-left: 8px; }
+.timelapse video { display: block; width: 100%; height: auto; } .timelapse figcaption { padding: 10px 14px; font-size: 13px; color: #9fb0aa; }
 /* steps */
 .steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
 @media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
@@ -94,6 +94,7 @@ footer { background: #0b1013; color: #8a9a93; padding: 34px 0; font-size: 14px; 
 footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; } footer a { text-decoration: none; } footer a:hover { color: #fff; } footer .sp { margin-left: auto; }
 .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s, transform .7s; } .reveal.in { opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } html { scroll-behavior: auto; } }
+.hc-host { padding: 12px 8px 4px; } .hc-flow { stroke-dasharray: 7 9; animation: flow .9s linear infinite; }
 </style>
 </head>
 <body>
@@ -114,19 +115,7 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
   </div>
   <div class="board" aria-hidden="true">
     <div class="bar"><i style="background:#ff6b5b"></i><i style="background:#ffb84a"></i><i style="background:#2fd17f"></i><span style="margin-left:8px">blink.circuitbench</span></div>
-    <svg viewBox="0 0 520 340">
-      <defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff6b5b" stop-opacity=".9"/><stop offset="1" stop-color="#ff6b5b" stop-opacity="0"/></radialGradient></defs>
-      <rect x="30" y="40" width="150" height="250" rx="10" fill="#1d6fa5"/><rect x="48" y="56" width="52" height="40" rx="4" fill="#9aa5ab"/><text x="105" y="190" fill="#fff" font-size="26" font-weight="800" text-anchor="middle" transform="rotate(-90 105 190)">UNO</text>
-      <g fill="#111"><rect x="150" y="80" width="26" height="12"/><rect x="150" y="110" width="26" height="12"/><rect x="150" y="140" width="26" height="12"/></g>
-      <path class="flow" d="M176 86 H300 V150" fill="none" stroke="#ffb84a" stroke-width="4" stroke-linecap="round"/>
-      <rect x="270" y="150" width="60" height="22" rx="4" fill="#d9b779"/><rect x="282" y="150" width="6" height="22" fill="#c0392b"/><rect x="294" y="150" width="6" height="22" fill="#8e44ad"/><rect x="306" y="150" width="6" height="22" fill="#e9c46a"/>
-      <path class="flow" d="M300 172 V228" fill="none" stroke="#ffb84a" stroke-width="4" stroke-linecap="round"/>
-      <circle class="led-glow" cx="300" cy="252" r="46" fill="url(#g)"/><path d="M284 270 V246 a16 16 0 0 1 32 0 V270 z" fill="#ff5a4b"/><rect x="280" y="268" width="40" height="6" fill="#e04a3c"/>
-      <path class="flow" d="M300 276 V310 H176 V116" fill="none" stroke="#2fd17f" stroke-width="4" stroke-linecap="round" style="animation-direction:normal"/>
-      <g fill="#fff"><circle cx="176" cy="86" r="5"/><circle cx="176" cy="116" r="5"/></g>
-      <text x="360" y="162" fill="#9fb0a8" font-size="13" font-family="ui-monospace,monospace">220 Ω</text><text x="352" y="258" fill="#9fb0a8" font-size="13" font-family="ui-monospace,monospace">LED · 12 mA</text>
-      <rect x="360" y="40" width="130" height="64" rx="8" fill="#0b1013" stroke="#26343a"/><text x="372" y="62" fill="#2fd17f" font-size="12" font-family="ui-monospace,monospace">digitalWrite(13,</text><text x="372" y="80" fill="#2fd17f" font-size="12" font-family="ui-monospace,monospace">  HIGH);</text><text x="372" y="96" fill="#9fb0a8" font-size="12" font-family="ui-monospace,monospace">delay(500);</text>
-    </svg>
+    <div id="heroCircuit" class="hc-host"></div>
   </div>
 </div></header>
 
@@ -153,12 +142,9 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
     <ul class="list reveal"><li>Wire the electronics, then bolt the 3D parts together at their screw holes</li><li>Hinges become servos and wheels automatically</li><li>Test it with real physics: drive it, fly it, move each joint</li></ul>
     <p style="margin-top:28px"><a class="btn go" href="/app">Try the robotics workspace →</a></p>
   </div>
-  <svg class="arm reveal" viewBox="0 0 320 320" aria-hidden="true" style="width:100%;height:auto;max-width:480px;margin:auto;display:block">
-    <rect x="30" y="288" width="260" height="14" rx="6" fill="#26343a"/><rect x="104" y="258" width="92" height="30" rx="6" fill="#3b5c8f"/>
-    <g class="a1"><rect x="138" y="150" width="24" height="108" rx="8" fill="#9db0bc"/><circle cx="150" cy="250" r="14" fill="#2fd17f"/>
-      <g class="a2"><rect x="138" y="64" width="24" height="96" rx="8" fill="#c5d2da"/><circle cx="150" cy="150" r="13" fill="#ffb84a"/>
-        <g class="a3"><rect x="140" y="20" width="20" height="60" rx="8" fill="#9db0bc"/><circle cx="150" cy="70" r="11" fill="#ff6b5b"/><path d="M142 22 l-8 -14 M158 22 l8 -14" stroke="#e9efec" stroke-width="5" stroke-linecap="round"/></g></g></g>
-  </svg>
+  <figure class="timelapse reveal"><div class="tl-bar"><i></i><i></i><i></i><span>CircuitBench · Assembly</span></div>
+    <video autoplay muted loop playsinline preload="metadata" poster="/arm-poster.jpg" aria-label="Timelapse: a robot arm built from servos and links in the Assembly view"><source src="/arm-timelapse.webm" type="video/webm"><source src="/arm-timelapse.mp4" type="video/mp4"></video>
+    <figcaption>A 3-joint arm, built in the browser from real servo, link and plate parts (sped up).</figcaption></figure>
 </div></section>
 
 <section><div class="wrap">
@@ -182,5 +168,7 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .12 }) : null;
 document.querySelectorAll('.reveal').forEach(el => io ? io.observe(el) : el.classList.add('in'));
 </script>
+<script type="module" src="/src/landing.js"></script>
+<script>try{if(matchMedia('(prefers-reduced-motion: reduce)').matches)document.querySelectorAll('.timelapse video').forEach(v=>{v.removeAttribute('autoplay');v.pause()})}catch(e){}</script>
 </body>
 </html>

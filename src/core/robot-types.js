@@ -6,7 +6,7 @@ import { KIT_PRESETS } from './robot-kit.js';
 export const ROBOT_TYPES = [
   { id: 'arm', name: 'Robot arm', blurb: 'Servo joints that reach out and pick things up', icon: '🦾', test: 'robot',
     circuit: ['arduino-uno', 'arduino-nano', 'esp32-devkit', 'servo', 'potentiometer', 'slide-pot', 'joystick', 'pushbutton', 'slide-switch', 'led', 'battery', 'mpu6050', 'stepper', 'tb6612', 'hc-sr04', 'buzzer'],
-    parts3d: ['servo-sg90', 'servo-mg90s', 'servo-mg996r', 'servo-ds3218', 'link-40', 'link-60', 'link-80', 'link-120', 'link-160', 'plate-100x80', 'plate-150x100'],
+    parts3d: ['servo-sg90', 'servo-mg90s', 'servo-mg996r', 'servo-ds3218', 'link-40', 'link-60', 'link-80', 'link-120', 'link-160', 'plate-100x50-f18', 'plate-100x80', 'plate-150x100'],
     notes: 'This is a ROBOT ARM: a base plate, hobby servos as the joints and links between them (servo horn → link → next servo). Each joint is one servo on its own PWM pin, powered from a separate 5 V supply (a servo stall pulls 0.5 A or more, so never from the board\'s 5 V pin), with the grounds joined. Use servo-sg90 for small arms, servo-mg996r for the shoulder. Suggest potentiometers or a serial command for control, and keep each servo\'s angle inside its limits.' },
   { id: 'rover', name: 'Car / rover', blurb: 'Wheels, motors and a driver — drives around', icon: '🚗', test: 'robot',
     circuit: ['arduino-uno', 'arduino-nano', 'esp32-devkit', 'raspberry-pi-pico', 'l298n', 'tb6612', 'drv8833', 'l9110s', 'dc-motor', 'hc-sr04', 'ky-040', 'mpu6050', 'servo', 'battery', 'pushbutton', 'led', 'buzzer'],

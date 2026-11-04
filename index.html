@@ -276,18 +276,29 @@
   </div>
 </div>
 <div class="modal" id="projectsModal" role="dialog" aria-modal="true" aria-labelledby="projectsTitle" hidden>
-  <div class="modal-card">
-    <div class="modal-head"><h2 id="projectsTitle">My projects</h2><button type="button" class="pane-x" id="projectsClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
-    <form class="proj-new" id="projNewForm">
-      <input id="projNewName" placeholder="New project name" autocomplete="off" maxlength="80" aria-label="New project name">
-      <select id="projNewWorkspace" aria-label="Workspace"></select>
-      <select id="projNewBoard" aria-label="Board" title="Which Arduino the new project starts with">
-        <option value="arduino-uno">Arduino Uno</option><option value="raspberry-pi-pico">Raspberry Pi Pico</option>
-      </select>
-      <button type="submit" id="projNewCreate">Create</button>
-    </form>
-    <ul class="proj-list" id="projList"></ul>
-    <p class="proj-note" id="projNote">Projects are saved in this browser automatically.</p>
+  <div class="modal-card proj-card">
+    <div class="modal-head"><h2 id="projectsTitle">My projects</h2>
+      <label class="proj-search"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><circle cx="7" cy="7" r="4.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m10.6 10.6 3.4 3.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><input id="projSearch" type="search" placeholder="Search your projects" autocomplete="off" aria-label="Search your projects"></label>
+      <button type="button" class="pane-x" id="projectsClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></button></div>
+    <div class="proj-scroll">
+      <section class="proj-start" aria-labelledby="projStartTitle">
+        <h3 id="projStartTitle">Start something new</h3>
+        <div class="proj-tiles" id="projTiles" role="radiogroup" aria-label="What kind of project"></div>
+        <form class="proj-new" id="projNewForm">
+          <input id="projNewName" placeholder="Name it (optional)" autocomplete="off" maxlength="80" aria-label="New project name">
+          <select id="projNewWorkspace" aria-label="Workspace" hidden></select>
+          <select id="projNewBoard" aria-label="Board" title="Which Arduino the new project starts with">
+            <option value="arduino-uno">Arduino Uno</option><option value="raspberry-pi-pico">Raspberry Pi Pico</option>
+          </select>
+          <button type="submit" id="projNewCreate">Create project</button>
+        </form>
+      </section>
+      <section aria-labelledby="projYoursTitle"><h3 id="projYoursTitle">Your projects <span id="projCount"></span></h3>
+        <ul class="proj-list" id="projList"></ul>
+        <p class="proj-empty" id="projEmpty" hidden></p>
+      </section>
+    </div>
+    <p class="proj-note" id="projNote">Projects are saved in this browser automatically. Sign in to keep them on every device.</p>
   </div>
 </div>
 <div class="modal" id="workspacesModal" role="dialog" aria-modal="true" aria-labelledby="workspacesTitle" hidden>
