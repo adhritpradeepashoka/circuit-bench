@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CircuitBench — build circuits and robots in your browser</title>
+<meta name="description" content="A free electronics and robotics lab in your browser. Wire real circuits, run real Arduino code, build a robot from parts and test it with physics. No install.">
+<meta property="og:title" content="CircuitBench — build circuits and robots in your browser">
+<meta property="og:description" content="Wire circuits, run real firmware, build a robot in 3D and test it, all in the browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314191c'/%3E%3Crect x='7' y='9' width='3.5' height='14' fill='%23c9853c'/%3E%3Crect x='14.2' y='9' width='3.5' height='14' fill='%23d64b3d'/%3E%3Crect x='21.5' y='9' width='3.5' height='14' fill='%23e9c46a'/%3E%3C/svg%3E">
+<style>
+:root { --ink:#0f1518; --ink2:#182126; --text:#e9efec; --muted:#9fb0a8; --paper:#f6f8f5; --body:#26322d; --soft:#5d6c65; --green:#2fd17f; --blue:#4c8dff; --amber:#ffb84a; --red:#ff6b5b; --card:#fff; --line:#dfe7e2; --font: "Inter","Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif; }
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; font-family: var(--font); color: var(--body); background: var(--paper); line-height: 1.55; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.wrap { width: min(1120px, 100% - 40px); margin: 0 auto; }
+/* nav */
+nav { position: sticky; top: 0; z-index: 20; background: rgba(15,21,24,.88); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,.07); }
+nav .wrap { display: flex; align-items: center; gap: 22px; height: 62px; }
+.logo { display: flex; align-items: center; gap: 10px; color: #fff; font-weight: 800; font-size: 18px; text-decoration: none; margin-right: auto; letter-spacing: -.01em; }
+nav a.l { color: var(--muted); text-decoration: none; font-size: 14.5px; font-weight: 500; }
+nav a.l:hover { color: #fff; }
+.btn { display: inline-flex; align-items: center; gap: 8px; padding: 11px 20px; border-radius: 11px; font-weight: 700; font-size: 15px; text-decoration: none; border: 2px solid transparent; transition: transform .15s, box-shadow .15s, background .15s; cursor: pointer; }
+.btn:hover { transform: translateY(-2px); }
+.btn.go { background: var(--green); color: #07140d; box-shadow: 0 6px 22px rgba(47,209,127,.35); }
+.btn.go:hover { box-shadow: 0 10px 28px rgba(47,209,127,.5); }
+.btn.ghost { color: #fff; border-color: rgba(255,255,255,.3); }
+.btn.ghost:hover { border-color: #fff; background: rgba(255,255,255,.07); }
+.btn.dark { background: var(--ink); color: #fff; }
+nav .btn { padding: 8px 16px; font-size: 14px; }
+@media (max-width: 760px) { nav a.l { display: none; } }
+/* hero */
+.hero { position: relative; overflow: hidden; background: radial-gradient(1100px 520px at 78% 8%, #1d3b34 0%, transparent 62%), radial-gradient(800px 500px at 0% 100%, #2a2147 0%, transparent 60%), var(--ink); color: var(--text); padding: 76px 0 96px; }
+.hero::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: 38px 38px; mask-image: radial-gradient(ellipse at 60% 40%, #000 0%, transparent 72%); -webkit-mask-image: radial-gradient(ellipse at 60% 40%, #000 0%, transparent 72%); }
+.hero .wrap { position: relative; display: grid; grid-template-columns: 1.02fr 1fr; gap: 44px; align-items: center; }
+.tag { display: inline-flex; gap: 8px; align-items: center; padding: 6px 13px; border-radius: 999px; background: rgba(47,209,127,.12); border: 1px solid rgba(47,209,127,.35); color: #8ef0bb; font-size: 13px; font-weight: 600; }
+.tag i { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 1.6s infinite; }
+h1 { margin: 18px 0 14px; font-size: clamp(36px, 5.4vw, 62px); line-height: 1.04; letter-spacing: -.03em; color: #fff; }
+h1 em { font-style: normal; background: linear-gradient(95deg, #2fd17f, #4c8dff 55%, #ffb84a); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lede { font-size: 19px; color: #b9c7c0; max-width: 520px; margin: 0 0 28px; }
+.cta { display: flex; gap: 12px; flex-wrap: wrap; }
+.fine { margin-top: 16px; font-size: 13.5px; color: var(--muted); }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 26px; }
+.chips span { padding: 5px 12px; border-radius: 999px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.1); font-size: 13px; color: #cdd9d3; }
+@media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } .hero { padding: 48px 0 64px; } }
+/* hero board */
+.board { border-radius: 20px; background: linear-gradient(160deg, #1c2a2f, #131b1f); border: 1px solid rgba(255,255,255,.1); box-shadow: 0 30px 80px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.08); overflow: hidden; }
+.board .bar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; background: rgba(255,255,255,.04); border-bottom: 1px solid rgba(255,255,255,.07); font-size: 12px; color: var(--muted); }
+.board .bar i { width: 10px; height: 10px; border-radius: 50%; }
+.board svg { display: block; width: 100%; height: auto; }
+.flow { stroke-dasharray: 7 9; animation: flow 1.1s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -32; } }
+@keyframes pulse { 50% { opacity: .35; } }
+.led-glow { animation: glow 1.4s ease-in-out infinite; transform-origin: center; transform-box: fill-box; }
+@keyframes glow { 0%,100% { opacity: .35; } 50% { opacity: 1; } }
+/* sections */
+section { padding: 84px 0; }
+.eyebrow { font-size: 13px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; color: #1f9d6a; }
+h2 { margin: 8px 0 12px; font-size: clamp(28px, 3.6vw, 42px); line-height: 1.1; letter-spacing: -.02em; color: var(--ink); }
+.sub { font-size: 18px; color: var(--soft); max-width: 640px; margin: 0 0 40px; }
+.grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+@media (max-width: 900px) { .grid3 { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 26px; transition: transform .2s, box-shadow .2s; }
+.card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(20,40,30,.1); }
+.ico { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; font-size: 24px; margin-bottom: 14px; }
+.card h3 { margin: 0 0 6px; font-size: 19px; color: var(--ink); } .card p { margin: 0; color: var(--soft); font-size: 15.5px; }
+/* robotics */
+.robo { background: linear-gradient(180deg, #101a1e, #0f1518); color: var(--text); }
+.robo h2 { color: #fff; } .robo .sub { color: #aebdb6; } .robo .eyebrow { color: #7ee8b4; }
+.robo .wrap { display: grid; grid-template-columns: 1fr 1fr; gap: 50px; align-items: center; }
+@media (max-width: 900px) { .robo .wrap { grid-template-columns: 1fr; } }
+.types { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-top: 8px; }
+.types div { padding: 12px 14px; border-radius: 13px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.09); font-size: 14px; }
+.types b { display: block; color: #fff; font-size: 15px; }
+.list { list-style: none; padding: 0; margin: 22px 0 0; display: grid; gap: 10px; }
+.list li { display: flex; gap: 10px; color: #cfdad4; } .list li::before { content: "✓"; color: var(--green); font-weight: 800; }
+.arm .a1 { animation: sw1 4s ease-in-out infinite; transform-origin: 150px 250px; }
+.arm .a2 { animation: sw2 4s ease-in-out infinite; transform-origin: 150px 150px; }
+.arm .a3 { animation: sw3 4s ease-in-out infinite; transform-origin: 150px 70px; }
+@keyframes sw1 { 50% { transform: rotate(-16deg); } } @keyframes sw2 { 50% { transform: rotate(30deg); } } @keyframes sw3 { 50% { transform: rotate(-34deg); } }
+/* steps */
+.steps { counter-reset: s; display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+@media (max-width: 900px) { .steps { grid-template-columns: 1fr; } }
+.step { position: relative; padding: 28px 24px 24px; border-radius: 18px; background: #fff; border: 1px solid var(--line); }
+.step::before { counter-increment: s; content: counter(s); position: absolute; top: -16px; left: 22px; width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; font-weight: 800; }
+.step h3 { margin: 4px 0 6px; color: var(--ink); } .step p { margin: 0; color: var(--soft); }
+/* classes + final cta */
+.class { background: #eaf3ee; }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; } @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.final { text-align: center; background: radial-gradient(700px 320px at 50% 0%, #1f3d36, transparent 70%), var(--ink); color: #fff; padding: 90px 0; }
+.final h2 { color: #fff; } .final p { color: #b6c5be; font-size: 18px; margin: 0 0 28px; }
+footer { background: #0b1013; color: #8a9a93; padding: 34px 0; font-size: 14px; }
+footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; } footer a { text-decoration: none; } footer a:hover { color: #fff; } footer .sp { margin-left: auto; }
+.reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s, transform .7s; } .reveal.in { opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .reveal { opacity: 1; transform: none; } html { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <a class="logo" href="/"><svg width="30" height="30" viewBox="0 0 28 28" aria-hidden="true"><rect width="28" height="28" rx="7" fill="#232b30"/><rect x="6" y="8" width="3.2" height="12" fill="#c9853c"/><rect x="12.4" y="8" width="3.2" height="12" fill="#d64b3d"/><rect x="18.8" y="8" width="3.2" height="12" fill="#e9c46a"/></svg>CircuitBench</a>
+  <a class="l" href="#features">Features</a><a class="l" href="#robotics">Robotics</a><a class="l" href="#classes">For classes</a><a class="l" href="/blog">Blog</a>
+  <a class="btn go" href="/app">Open the lab</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <div>
+    <span class="tag"><i></i> Free · runs in your browser · no install</span>
+    <h1>Build circuits and robots, <em>then watch them run.</em></h1>
+    <p class="lede">CircuitBench is a virtual electronics and robotics lab. Wire real parts, run real Arduino code, put a robot together in 3D and test it with physics, before you spend a rupee on hardware.</p>
+    <div class="cta"><a class="btn go" href="/app">Start building — it's free →</a><a class="btn ghost" href="#robotics">See the robotics lab</a></div>
+    <p class="fine">No account needed to start. Sign in with Google to save projects across devices.</p>
+    <div class="chips"><span>Arduino · ESP32 · Pico</span><span>Real firmware</span><span>3D robot builder</span><span>AI that makes any part</span></div>
+  </div>
+  <div class="board" aria-hidden="true">
+    <div class="bar"><i style="background:#ff6b5b"></i><i style="background:#ffb84a"></i><i style="background:#2fd17f"></i><span style="margin-left:8px">blink.circuitbench</span></div>
+    <svg viewBox="0 0 520 340">
+      <defs><radialGradient id="g" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#ff6b5b" stop-opacity=".9"/><stop offset="1" stop-color="#ff6b5b" stop-opacity="0"/></radialGradient></defs>
+      <rect x="30" y="40" width="150" height="250" rx="10" fill="#1d6fa5"/><rect x="48" y="56" width="52" height="40" rx="4" fill="#9aa5ab"/><text x="105" y="190" fill="#fff" font-size="26" font-weight="800" text-anchor="middle" transform="rotate(-90 105 190)">UNO</text>
+      <g fill="#111"><rect x="150" y="80" width="26" height="12"/><rect x="150" y="110" width="26" height="12"/><rect x="150" y="140" width="26" height="12"/></g>
+      <path class="flow" d="M176 86 H300 V150" fill="none" stroke="#ffb84a" stroke-width="4" stroke-linecap="round"/>
+      <rect x="270" y="150" width="60" height="22" rx="4" fill="#d9b779"/><rect x="282" y="150" width="6" height="22" fill="#c0392b"/><rect x="294" y="150" width="6" height="22" fill="#8e44ad"/><rect x="306" y="150" width="6" height="22" fill="#e9c46a"/>
+      <path class="flow" d="M300 172 V228" fill="none" stroke="#ffb84a" stroke-width="4" stroke-linecap="round"/>
+      <circle class="led-glow" cx="300" cy="252" r="46" fill="url(#g)"/><path d="M284 270 V246 a16 16 0 0 1 32 0 V270 z" fill="#ff5a4b"/><rect x="280" y="268" width="40" height="6" fill="#e04a3c"/>
+      <path class="flow" d="M300 276 V310 H176 V116" fill="none" stroke="#2fd17f" stroke-width="4" stroke-linecap="round" style="animation-direction:normal"/>
+      <g fill="#fff"><circle cx="176" cy="86" r="5"/><circle cx="176" cy="116" r="5"/></g>
+      <text x="360" y="162" fill="#9fb0a8" font-size="13" font-family="ui-monospace,monospace">220 Ω</text><text x="352" y="258" fill="#9fb0a8" font-size="13" font-family="ui-monospace,monospace">LED · 12 mA</text>
+      <rect x="360" y="40" width="130" height="64" rx="8" fill="#0b1013" stroke="#26343a"/><text x="372" y="62" fill="#2fd17f" font-size="12" font-family="ui-monospace,monospace">digitalWrite(13,</text><text x="372" y="80" fill="#2fd17f" font-size="12" font-family="ui-monospace,monospace">  HIGH);</text><text x="372" y="96" fill="#9fb0a8" font-size="12" font-family="ui-monospace,monospace">delay(500);</text>
+    </svg>
+  </div>
+</div></header>
+
+<section id="features"><div class="wrap">
+  <div class="eyebrow reveal">What you can do</div>
+  <h2 class="reveal">One bench for the whole idea.</h2>
+  <p class="sub reveal">Most simulators stop at the circuit. CircuitBench carries on to the code, the body and the test.</p>
+  <div class="grid3">
+    <div class="card reveal"><div class="ico" style="background:#fff0d9">🔌</div><h3>Circuits that behave</h3><p>Drag parts, draw wires, press Run. LEDs light, motors spin, sensors read, and a wrong connection shows up as one.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#e4efff">💻</div><h3>Real firmware</h3><p>Write Arduino C++ (or snap blocks together) and it compiles and runs on an emulated chip. Not a toy language.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#e2f6ea">🤖</div><h3>A robotics workspace</h3><p>Circuit, 3D assembly and a physics test in one place, so an arm, a rover or a drone is designed as a whole.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#f3e8ff">✨</div><h3>Any part, on request</h3><p>Search a part by name. The AI finds its datasheet and photo, then builds it with the right pins, size and sprite.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#ffe9e5">🧪</div><h3>Learn by trying</h3><p>Break things safely. Every wire, resistor and sketch is yours to change, with nothing to burn out.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#e5f4f7">🏫</div><h3>Made for classes</h3><p>Teachers make a class, share a code and follow students' progress. Students just join and build.</p></div>
+  </div>
+</div></section>
+
+<section class="robo" id="robotics"><div class="wrap">
+  <div>
+    <div class="eyebrow reveal">Robotics workspace</div>
+    <h2 class="reveal">Everything a robot needs, in one place.</h2>
+    <p class="sub reveal">Pick what you want to make and the bench sets itself up for it: the right parts, the right test, and an AI that knows your project.</p>
+    <div class="types reveal"><div><b>🦾 Robot arm</b>Servo joints that reach and pick</div><div><b>🚗 Car / rover</b>Wheels, motors and a driver</div><div><b>🚁 Drone</b>Frame, motors, props, flight controller</div><div><b>🦿 Walker</b>Legs on servos</div></div>
+    <ul class="list reveal"><li>Wire the electronics, then bolt the 3D parts together at their screw holes</li><li>Hinges become servos and wheels automatically</li><li>Test it with real physics: drive it, fly it, move each joint</li></ul>
+    <p style="margin-top:28px"><a class="btn go" href="/app">Try the robotics workspace →</a></p>
+  </div>
+  <svg class="arm reveal" viewBox="0 0 320 320" aria-hidden="true" style="width:100%;height:auto;max-width:480px;margin:auto;display:block">
+    <rect x="30" y="288" width="260" height="14" rx="6" fill="#26343a"/><rect x="104" y="258" width="92" height="30" rx="6" fill="#3b5c8f"/>
+    <g class="a1"><rect x="138" y="150" width="24" height="108" rx="8" fill="#9db0bc"/><circle cx="150" cy="250" r="14" fill="#2fd17f"/>
+      <g class="a2"><rect x="138" y="64" width="24" height="96" rx="8" fill="#c5d2da"/><circle cx="150" cy="150" r="13" fill="#ffb84a"/>
+        <g class="a3"><rect x="140" y="20" width="20" height="60" rx="8" fill="#9db0bc"/><circle cx="150" cy="70" r="11" fill="#ff6b5b"/><path d="M142 22 l-8 -14 M158 22 l8 -14" stroke="#e9efec" stroke-width="5" stroke-linecap="round"/></g></g></g>
+  </svg>
+</div></section>
+
+<section><div class="wrap">
+  <div class="eyebrow reveal">How it works</div><h2 class="reveal">From idea to running in minutes.</h2><p class="sub reveal">No setup, no downloads, no parts to wait for.</p>
+  <div class="steps">
+    <div class="step reveal"><h3>Pick what to build</h3><p>Start a circuit, a robot or an example. Search any part you need.</p></div>
+    <div class="step reveal"><h3>Wire it and write the code</h3><p>Connect parts, then write or snap together the code that drives them.</p></div>
+    <div class="step reveal"><h3>Run, test, improve</h3><p>Press Run, watch it work, fix what doesn't, and save it to come back to.</p></div>
+  </div>
+</div></section>
+
+<section class="class" id="classes"><div class="wrap two">
+  <div><div class="eyebrow reveal">For classrooms</div><h2 class="reveal">Hardware for every student, even without hardware.</h2><p class="sub reveal" style="margin-bottom:24px">A class of thirty can all have a working lab on day one. Teachers make a class, hand out a six-letter code and see how everyone is doing.</p><a class="btn dark reveal" href="/app">Set up a class</a></div>
+  <div class="card reveal"><h3>What teachers get</h3><ul class="list" style="color:var(--body)"><li style="color:var(--body)">Class codes students join in seconds</li><li style="color:var(--body)">Guided lessons with goals and checks</li><li style="color:var(--body)">Progress for every student at a glance</li></ul></div>
+</div></section>
+
+<section class="final"><div class="wrap reveal"><h2>Your bench is ready.</h2><p>Open CircuitBench and build something. It's free to start.</p><a class="btn go" href="/app">Open the lab →</a></div></section>
+
+<footer><div class="wrap"><span>© CircuitBench</span><a href="/blog">Blog</a><a href="/app">Open the lab</a><span class="sp">Built by a student, for anyone who wants to make things.</span></div></footer>
+<script>
+const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .12 }) : null;
+document.querySelectorAll('.reveal').forEach(el => io ? io.observe(el) : el.classList.add('in'));
+</script>
+</body>
+</html>

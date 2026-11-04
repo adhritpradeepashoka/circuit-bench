@@ -209,7 +209,8 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
 
       if (staticDir) {                                                     // serve the built app
         const blogPage = url.pathname === '/blog' || /^\/blog\/\d+\/?$/.test(url.pathname);        // the public blog: one page for the list and for every post
-        let rel = blogPage ? 'blog.html' : normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
+        const landing = url.pathname === '/', appPage = url.pathname === '/app' || url.pathname === '/app/';      // the website's front page at /, the lab itself at /app
+        let rel = blogPage ? 'blog.html' : landing ? 'landing.html' : appPage ? 'index.html' : normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
         if (rel.split(sep).includes('..')) return send(res, 400, { ok: false, error: 'Bad path.' });
         let file = join(staticDir, rel || 'index.html');
         try { if ((await stat(file)).isDirectory()) file = join(file, 'index.html'); } catch { file = join(staticDir, 'index.html'); }

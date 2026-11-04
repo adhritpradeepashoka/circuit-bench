@@ -65,13 +65,19 @@ export function initClassroom({ editor, code, projects, account = null, status =
     if (intent === 'student') setTimeout(() => code.focus(), 50);
   }
   function renderSignedOut() {
-    kindBody.replaceChildren(el('h1', 'start-h', 'Welcome to CircuitBench'), el('p', 'start-sub', 'An electronics lab in your browser. Build real circuits, snap together blocks or write code, and watch it run.'));
+    const hero = el('div', 'start-hero'), copy = el('div', 'start-hero-copy');
+    copy.append(el('h1', 'start-h', 'Welcome to CircuitBench'), el('p', 'start-sub', 'An electronics and robotics lab in your browser. Build real circuits, snap together blocks or write code, put a robot together in 3D, and watch it run.'));
+    const chips = el('div', 'start-chips'); for (const c of ['Real Arduino code', 'Robotics workspace', 'AI that makes any part', 'Free']) chips.append(el('span', '', c)); copy.append(chips);
+    const art = el('div', 'start-hero-art'); art.setAttribute('aria-hidden', 'true');
+    art.innerHTML = '<svg viewBox="0 0 220 120"><defs><radialGradient id="sg"><stop offset="0" stop-color="#ff6b5b" stop-opacity=".9"/><stop offset="1" stop-color="#ff6b5b" stop-opacity="0"/></radialGradient></defs><path class="sflow" d="M20 30 H110 V62" fill="none" stroke="#ffb84a" stroke-width="3" stroke-linecap="round"/><rect x="92" y="62" width="36" height="14" rx="3" fill="#d9b779"/><path class="sflow" d="M110 76 V92 H20 V30" fill="none" stroke="#2fd17f" stroke-width="3" stroke-linecap="round"/><circle class="sglow" cx="170" cy="60" r="34" fill="url(#sg)"/><path d="M158 78 V56 a12 12 0 0 1 24 0 V78 z" fill="#ff5a4b"/><path class="sflow" d="M128 69 H170 V78" fill="none" stroke="#ffb84a" stroke-width="3" stroke-linecap="round"/><rect x="8" y="22" width="24" height="14" rx="3" fill="#1d6fa5"/></svg>';
+    hero.append(copy, art);
+    kindBody.replaceChildren(hero);
     const opts = el('div', 'kind-opts');
-    const opt = (title, note, fn) => { const b = el('button', 'kind-opt'); b.type = 'button'; b.append(el('b', '', title), el('span', '', note)); b.addEventListener('click', fn); return b; };
-    opts.append(opt('Start building', 'No account needed. We\'ll guide you through your first circuit.', enter));
+    const opt = (title, note, fn, icon = '') => { const b = el('button', 'kind-opt'); b.type = 'button'; if (icon) b.append(el('i', 'kind-ico', icon)); b.append(el('b', '', title), el('span', '', note)); b.addEventListener('click', fn); return b; };
+    opts.append(opt('Start building', 'No account needed. We\'ll guide you through your first circuit.', enter, '🚀'));
     if (account?.enabled !== false) {
       const need = who => () => { lset(INTENT, who); status('Sign in with Google (top right) to continue.'); const h = $('startAccount'); h.classList.add('nudge'); setTimeout(() => h.classList.remove('nudge'), 1800); };
-      opts.append(opt('I’m a teacher', 'Sign in to make classes and follow your students’ progress.', need('teacher')), opt('I’m a student', 'Sign in, then enter the class code your teacher gave you.', need('student')));
+      opts.append(opt('I’m a teacher', 'Sign in to make classes and follow your students’ progress.', need('teacher'), '🏫'), opt('I’m a student', 'Sign in, then enter the class code your teacher gave you.', need('student'), '🎒'));
     }
     kindBody.append(opts, el('p', 'proj-note', 'Signing in with Google is how CircuitBench knows who you are. Returning? Sign in at the top right to carry on where you left off.'));
   }
