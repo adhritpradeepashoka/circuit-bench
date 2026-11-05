@@ -3,7 +3,7 @@
 // allowed; this file only asks and shows.
 import { mountHeroCircuit } from './hero-circuit.js';
 import { getMe, getToken, setSession, authed, profileMode, setProfileMode } from '../sim/session.mjs';
-import { FEATURES, PRESETS, normCode } from '../core/classroom.js';
+import { FEATURES, PRESETS, GRADES, LEVELS, CLASS_THEMES, normCode } from '../core/classroom.js';
 import { setTheme } from './theme.js';
 import { ask } from './ask.js';
 
@@ -42,7 +42,6 @@ export function initClassroom({ editor, code, projects, account = null, status =
     const r = await call('/api/classes/join', { method: 'POST', body: { code: normCode(code) } });
     if (!r.body?.ok) return sayErr(r) ?? false;
     lset(ASKED_KEY, '1');
-    if (!lget(KIDS_KEY)) { lset(KIDS_KEY, '1'); setTheme('kids'); }          // students start with the Kids look; they can change it unless the teacher locked it
     lset(INTENT, null); await reloadMe();
     status(`You joined ${r.body.class.name}.`); lset(LAST_CLASS, String(r.body.class.id)); openDashboard();
     return true;
@@ -150,12 +149,14 @@ export function initClassroom({ editor, code, projects, account = null, status =
     const side = [userCard('Teacher'), sideLabel('Classes')];
     for (const c of classes) side.push(sideItem(c.name, `${c.students} student${c.students === 1 ? '' : 's'}`, c.id === cur?.id, () => openDashboard(c.id)));
     const nameIn = el('input'); nameIn.placeholder = 'New class name'; nameIn.maxLength = 60; nameIn.setAttribute('aria-label', 'New class name');
+    const look0 = { grade: '', level: '', theme: '' }, lookForm = lookControls(look0, v => Object.assign(look0, v));
     const make = btn('＋ New class', 'primary', async () => {
-      const r = await call('/api/classes', { method: 'POST', body: { name: nameIn.value || 'My class' } });
+      if (!look0.grade || !look0.level) return status('Choose the grade and how much experience the class has, so the look and the starting projects fit.');
+      const r = await call('/api/classes', { method: 'POST', body: { name: nameIn.value || 'My class', grade: look0.grade, level: look0.level, theme: look0.theme || null } });
       if (!r.body?.ok) return sayErr(r); await reloadMe(); openDashboard(r.body.class.id);
     });
     nameIn.addEventListener('keydown', e => { if (e.key === 'Enter') make.click(); });
-    side.push(el('div', 'dash-new'), nameIn, make);
+    side.push(el('div', 'dash-new'), nameIn, lookForm, make);
     if (getMe()?.entitlements?.owner) side.push(btn('Make a demo class', '', async () => { const r = await call('/api/classes/demo', { method: 'POST' }); if (!r.body?.ok) return sayErr(r); openDashboard(r.body.class.id); }));
     side.push(el('div', 'dash-grow'), benchBtn());
     if (!cur) { shell(side, [el('h1', 'start-h', 'Teacher dashboard'), el('div', 'cls-empty', 'Make your first class, then share its code with your students.')]); return; }
@@ -238,6 +239,19 @@ export function initClassroom({ editor, code, projects, account = null, status =
     draw();
   }
 
+  /** Grade, experience and look, as three selects. `v` has the current values; `onChange` gets only what changed. */
+  function lookControls(v, onChange) {
+    const field = (label, opts, key, blank) => {
+      const sel = el('select'); sel.setAttribute('aria-label', label);
+      for (const [val, text] of [['', blank], ...opts]) { const o = el('option', '', text); o.value = val; o.selected = (v[key] || '') === val; sel.append(o); }
+      sel.addEventListener('change', () => { v[key] = sel.value; onChange({ [key]: sel.value || null }); });
+      const w = el('label', 'cls-field'); w.append(el('span', '', label), sel); return w;
+    };
+    const box = el('div', 'cls-lookform');
+    box.append(field('Grade', GRADES.map(g => [g.id, g.label]), 'grade', 'Choose…'), field('Experience', LEVELS.map(l => [l.id, `${l.label} — ${l.note}`]), 'level', 'Choose…'),
+      field('Class look', CLASS_THEMES.map(t => [t, t === 'kids' ? 'Kids' : t[0].toUpperCase() + t.slice(1)]), 'theme', 'Automatic for the grade'));
+    return box;
+  }
   function settingsPane(pane, d, cur) {
     let s = JSON.parse(JSON.stringify(d.class.settings));
     const push = async patch => { const r = await call(`/api/classes/${cur.id}`, { method: 'PATCH', body: patch }); if (r.body?.ok) { s = r.body.class.settings; status('Saved'); draw(); } else sayErr(r); };
@@ -251,7 +265,8 @@ export function initClassroom({ editor, code, projects, account = null, status =
         cb.addEventListener('change', () => push({ settings: { features: { [f.id]: cb.checked } } }));
         const t = el('div'); t.append(el('b', '', f.label), el('span', '', f.note)); lab.append(cb, t); list.append(lab);
       }
-      pane.replaceChildren(el('p', 'proj-note', 'The bench, wiring, Run, your students’ own projects and their assignments are always on. A student in more than one class gets the stricter choice.'), presets, list);
+      const look = el('div', 'cls-look'); look.append(el('h4', '', 'Who this class is for'), lookControls({ grade: s.grade || '', level: s.level || '', theme: s.theme || '' }, v => push({ settings: v })), el('p', 'proj-note', 'The look applies to class work. Students keep their own look for personal projects, and may change their in-class look unless you turn off “Changing the look” below. Changing the experience level later does not move any projects.'));
+      pane.replaceChildren(look, el('p', 'proj-note', 'The bench, wiring, Run, your students’ own projects and their assignments are always on. A student in more than one class gets the stricter choice.'), presets, list);
     };
     draw();
   }

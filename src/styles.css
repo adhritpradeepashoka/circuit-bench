@@ -1184,3 +1184,7 @@ body:not(.robot-asm) #robotParts { display: none; }
 .asm-prob { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; line-height: 1.4; padding: 8px 10px; border-radius: 9px; border: 1px solid #e0c36a; background: #fff8e1; color: #5a4300; cursor: pointer; }
 .asm-prob.info { border-color: #b9d3ea; background: #eef6fd; color: #1d3f5e; }
 .asm-prob.ok { border-color: #a9d9bb; background: #eaf8ef; color: #1c5a33; cursor: default; margin: 0; }
+/* class look form (grade, experience, theme) */
+.cls-lookform { display: grid; gap: 8px; margin: 8px 0; }
+.cls-field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); } .cls-field select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+.cls-look { margin-bottom: 14px; } .cls-look h4 { margin: 0 0 4px; }

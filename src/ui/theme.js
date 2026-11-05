@@ -23,10 +23,15 @@ export const FONTS = {
 export const DEFAULT_CUSTOM = { bar: '#1b1f3b', bg: '#f4f1ea', text: '#222222', accent: '#e4572e', font: 'default' };
 const KEY = 'virtual-lab:theme', CUSTOM_KEY = 'virtual-lab:theme-custom';
 const HEX = /^#[0-9a-fA-F]{6}$/;
-const locked = (me = getMe()) => me?.kind === 'student' && me.classroom?.features?.themes === false && !(me.classroom.features.personal && profileMode() === 'personal');
+// A student in the class profile sees the class's look (the teacher's pick, or the one that suits the grade). They may choose their own look for in-class work unless the
+// teacher turned "Changing the look" off, and that choice is kept apart from the look of their personal profile and of any other account.
+const inClass = (me = getMe()) => me?.kind === 'student' && !(me.classroom?.features?.personal && profileMode() === 'personal');
+const locked = (me = getMe()) => inClass(me) && me.classroom?.features?.themes === false;
+const classLook = (me = getMe()) => me?.classroom?.look?.theme || 'kids';
+const CLASS_KEY = 'virtual-lab:theme-class';
 /** A student who has never picked a look starts with Kids, on any device. */
 const studentDefault = (me = getMe()) => me?.kind === 'student';
-export const getTheme = () => { if (locked()) return 'kids'; try { const t = localStorage.getItem(KEY) || (studentDefault() ? 'kids' : null); return ALL_THEMES.some(x => x.id === t) && canWear(t) ? t : 'classic'; } catch { return 'classic'; } };
+export const getTheme = () => { if (locked()) return classLook(); try { const t = localStorage.getItem(inClass() ? CLASS_KEY : KEY) || (inClass() ? classLook() : studentDefault() ? 'kids' : null); return ALL_THEMES.some(x => x.id === t) && canWear(t) ? t : 'classic'; } catch { return 'classic'; } };
 export function getCustom() {
   try { const c = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '{}'); return { ...DEFAULT_CUSTOM, ...Object.fromEntries(Object.entries(c).filter(([k, v]) => valid(k, v))) }; }
   catch { return { ...DEFAULT_CUSTOM }; }
@@ -44,7 +49,7 @@ export function applyTheme(id = getTheme(), root = document.documentElement) {
     if (FONTS[c.font].css) root.style.setProperty('--ui', FONTS[c.font].css);
   }
 }
-export function setTheme(id) { if (locked()) id = 'kids'; if (!canWear(id)) id = 'classic'; try { localStorage.setItem(KEY, id); } catch { /* ignore */ } applyTheme(id); }
+export function setTheme(id) { if (locked()) id = classLook(); if (!canWear(id)) id = 'classic'; try { localStorage.setItem(inClass() ? CLASS_KEY : KEY, id); } catch { /* ignore */ } applyTheme(id); }
 // Signing in or out changes which team themes are allowed (and a revoked one falls back to Classic).
 // Becoming an admin switches that person to the Operator theme once; after that they can pick anything they hold.
 const ROLE_KEY = 'circuitbench:last-role';

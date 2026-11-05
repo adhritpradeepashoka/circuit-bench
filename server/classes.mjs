@@ -4,7 +4,7 @@
 //   · a student in several classes gets the STRICTER feature set (a feature is on only if every class allows it)
 //   · a student's projects belong to the student; only what they hand in to a class is visible to that class's teacher
 //   · only the teacher of a class (or the owner) can change it, read its roster or open handed-in work
-import { FEATURE_IDS, defaultSettings, cleanSettings, cleanCurriculum, newCurriculum, openProjects, mergeFeatures, allOn, randomCode, normCode, PRESETS } from '../src/core/classroom.js';
+import { classTheme, FEATURE_IDS, defaultSettings, cleanSettings, cleanCurriculum, newCurriculum, openProjects, mergeFeatures, allOn, randomCode, normCode, PRESETS } from '../src/core/classroom.js';
 import { normEmail } from './accounts.mjs';
 
 const MAX_CLASSES_TEACHER = 20, MAX_CLASSES_STUDENT = 8, MAX_STUDENTS = 200, MAX_WORK = 400_000;
@@ -72,7 +72,7 @@ export function createClasses({ store = createMemoryClassStore(), accounts, now 
     let d = {}; try { d = JSON.parse(c.data || '{}'); } catch { /* corrupt → defaults */ }
     const st = d.settings || {};
     // a class on a named preset always follows that preset (so a preset can improve); only "custom" keeps its own switches
-    return { ...c, settings: cleanSettings(PRESETS[st.preset] ? { preset: st.preset, unlock: st.unlock } : st), curriculum: cleanCurriculum(d.curriculum) };
+    return { ...c, settings: cleanSettings(PRESETS[st.preset] ? { preset: st.preset, unlock: st.unlock, grade: st.grade, level: st.level, theme: st.theme } : st), curriculum: cleanCurriculum(d.curriculum) };
   };
   const pack = (settings, curriculum) => JSON.stringify({ settings, curriculum });
   const who = async token => { const a = await accounts.auth(token); return a ? { ...a, kind: a.row?.kind || '' } : null; };
@@ -90,7 +90,7 @@ export function createClasses({ store = createMemoryClassStore(), accounts, now 
     if (kind === 'teacher') return { kind, classes: (await store.classesOfTeacher(email)).map(classLine), features: allOn() };
     if (kind === 'student') {
       const cs = (await store.classesOfStudent(email)).map(parse);
-      return { kind, classes: cs.map(c => ({ id: c.id, name: c.name })), features: mergeFeatures(cs.length ? cs.map(c => c.settings) : [{ features: PRESETS.focused.features }]) };
+      return { kind, classes: cs.map(c => ({ id: c.id, name: c.name })), look: cs.length ? { theme: classTheme(cs[0].settings), grade: cs[0].settings.grade, level: cs[0].settings.level } : null, features: mergeFeatures(cs.length ? cs.map(c => c.settings) : [{ features: PRESETS.focused.features }]) };
     }
     return { kind, classes: [], features: allOn() };
   }
@@ -102,13 +102,13 @@ export function createClasses({ store = createMemoryClassStore(), accounts, now 
     return !!f[feature];
   }
 
-  async function create(token, { name } = {}) {
+  async function create(token, { name, grade, level, theme } = {}) {
     const a = await who(token); if (!a) return fail(401, 'Please sign in again.');
     if (a.kind !== 'teacher' && a.role !== 'owner') return fail(403, 'Only teacher accounts can make classes.');
     if ((await store.classesOfTeacher(a.email)).length >= MAX_CLASSES_TEACHER) return fail(400, `You can have up to ${MAX_CLASSES_TEACHER} classes.`);
     let code = ''; for (let i = 0; i < 20; i++) { const t = randomCode(rand); if (!(await store.codeTaken(t))) { code = t; break; } }
     if (!code) return fail(503, 'Could not make a join code — try again.');
-    const c = await store.createClass({ code, teacher: a.email, name: clipName(name), data: pack(defaultSettings(), newCurriculum()), now: now() });
+    const s0 = cleanSettings({ grade, level, theme }), c = await store.createClass({ code, teacher: a.email, name: clipName(name), data: pack(s0, newCurriculum(s0.level)), now: now() });
     return { ok: true, class: classLine(c) };
   }
   async function list(token) {
