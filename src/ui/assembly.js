@@ -5,6 +5,7 @@ import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
 import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
+import { explainJoin, findProblems } from '../core/assembly-check.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
@@ -333,11 +334,11 @@ export function initAssembly({ editor, projects = null }) {
   let sceneFor = null, restoreToken = 0; const sceneKey = () => `${LEGACY_SCENE_KEY}:${sceneFor || 'none'}`;
   const PALETTE = [0xb8c4cc, 0x7fb3d5, 0xe8b26a, 0x9ccc9c, 0xd59fb8, 0xb7a3d8, 0xd9d27a, 0x8fd0c8], hex = n => `#${n.toString(16).padStart(6, '0')}`;
   const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
-  let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, joinMode = false, joinFirst = null, hoverInst = null, spotMode = false;
+  let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, checkOn = false, joinMode = false, joinFirst = null, hoverInst = null, spotMode = false;
   const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' }), droneEl = el('div', { className: 'asm-drone', id: 'asmDrone', hidden: true });
-  const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' });
+  const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' }), probEl = el('div', { className: 'asm-problems', id: 'asmProblems', hidden: true });
   buildBox.append(
-    el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes. Have your own STL, OBJ or glTF file? Drop it on the 3D view or use “Import your own 3D part”.' }), bnote, selBox,
+    el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes. Have your own STL, OBJ or glTF file? Drop it on the 3D view or use “Import your own 3D part”.' }), bnote, probEl, selBox,
     legacyBox, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, droneEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const dyn = new Map();                                                   // drone parts, made from their ids on demand
@@ -348,9 +349,10 @@ export function initAssembly({ editor, projects = null }) {
   const mkBtn = (label, title, fn, id) => { const b = el('button', { type: 'button', className: 'asm-tool', textContent: label, title, ariaLabel: title, id }); b.addEventListener('click', fn); return b; };
   const spotBtn = mkBtn('Add spots', 'Mark connection spots on a part\'s surface, where there is no hole. Click a part to add one, click a spot to remove it. Then use Join holes to fasten two spots together.', () => setSpot(!spotMode), 'asmSpot');
   const joinBtn = mkBtn('Join holes', 'Click a hole on one part, then a hole on another (J)', () => setJoin(!joinMode), 'asmJoin'), xrayBtn = mkBtn('X-ray', 'See through the parts', () => { xray = !xray; xrayBtn.classList.toggle('on', xray); render(); }, 'asmXray');
+  const checkBtn = mkBtn('Check my build', 'List what looks wrong: loose parts, parts through each other, joints that came apart', () => { checkOn = !checkOn; checkBtn.classList.toggle('on', checkOn); render(); }, 'asmCheck');
   const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
     ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
-    el('span', { className: 'asm-tsep' }), spotBtn, joinBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
+    el('span', { className: 'asm-tsep' }), spotBtn, joinBtn, checkBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
   const robotDock = el('div', { id: 'robotParts', role: 'region', ariaLabel: '3D parts' }), dockSearch = el('input', { type: 'search', placeholder: 'Search 3D parts', ariaLabel: 'Search 3D parts', className: 'asm-dock-search', id: 'robotPartsSearch', autocomplete: 'off' });
@@ -602,6 +604,14 @@ export function initAssembly({ editor, projects = null }) {
       }
     }
   }
+  function refreshProblems() {
+    probEl.hidden = !checkOn; if (!checkOn) return; probEl.replaceChildren();
+    const boxes = {}; for (const i of asm.instances) { const b = new three.THREE.Box3().setFromObject(i.obj); if (!b.isEmpty()) boxes[i.id] = { min: b.min.toArray(), max: b.max.toArray() }; }
+    const list = findProblems(asm, { anchorId, boxes });
+    if (!asm.instances.length) probEl.append(el('p', { className: 'asm-prob ok', textContent: 'Nothing to check yet. Add a part.' }));
+    else if (!list.length) probEl.append(el('p', { className: 'asm-prob ok', textContent: '✓ Nothing looks wrong. Every part is joined to the robot and nothing passes through anything else.' }));
+    for (const q of list) { const row = el('button', { type: 'button', className: `asm-prob ${q.level}`, textContent: q.text }); row.addEventListener('click', () => { if (asm.get(q.inst)) { selected = q.inst; render(); } }); probEl.append(row); }
+  }
   function render() {
     if (view !== 'circuit') syncTop();
     const t = three; if (!t) return;
@@ -610,7 +620,7 @@ export function initAssembly({ editor, projects = null }) {
       const glow = inst.id === selected ? 0x1d4e75 : snapShow && (snapShow.a === inst.id || snapShow.b === inst.id) ? 0x14602f : inst.id === hoverInst ? 0x2a3a44 : 0x000000;
       inst.obj.traverse(m => { if (m.isMesh) { m.material.emissive.setHex(glow); m.material.transparent = xray; m.material.opacity = xray ? 0.38 : 1; m.material.depthWrite = !xray; } });
     }
-    overlays(); t.draw(); renderPanel(); refreshTools(); save();
+    overlays(); t.draw(); renderPanel(); refreshTools(); refreshProblems(); save();
     helpEl.hidden = false;
     helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : spotMode ? 'Click a part to add a connection spot · click a spot to remove it · Esc to finish' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
   }
@@ -805,7 +815,7 @@ export function initAssembly({ editor, projects = null }) {
     });
     const end = e => {
       if (!drag) return; const d = drag; drag = null; t.controls.enabled = true; dom.style.cursor = ''; try { dom.releasePointerCapture(e.pointerId); } catch { /* already released */ }
-      if (d.moved && snapShow && d.mode !== 'ring') { const s = snapShow, r = asm.mateAll(s.a, s.aFrame, d.id, s.bFrame); if (r.ok) bsay(`Joined${r.extra ? ` (and ${r.extra} more matching hole${r.extra > 1 ? 's' : ''})` : ''}. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); }
+      if (d.moved && snapShow && d.mode !== 'ring') { const s = snapShow, r = asm.mateAll(s.a, s.aFrame, d.id, s.bFrame); if (r.ok) bsay(`Joined${r.extra ? ` (and ${r.extra} more matching hole${r.extra > 1 ? 's' : ''})` : ''}. ${r.check.notes[0] || ''} ${explainJoin(asm, s.a, d.id)}`, r.check.level === 'bad'); }
       else if (d.moved) bsay('');
       snapShow = null; render();
     };
@@ -837,7 +847,7 @@ export function initAssembly({ editor, projects = null }) {
     if (!joinFirst) { joinFirst = { inst: instId, frame: frameId }; return render(); }
     if (joinFirst.inst === instId) { joinFirst = { inst: instId, frame: frameId }; bsay('Pick the second hole on a different part.'); return render(); }
     const a = joinFirst, carried = asm.component(instId).length - 1; keep(); const r = asm.mateAll(a.inst, a.frame, instId, frameId); joinFirst = null;
-    if (!r.ok) { history.pop(); bsay(r.error, true); } else { bsay(`Joined${r.extra ? ` (and ${r.extra} more matching hole${r.extra > 1 ? 's' : ''})` : ''}${carried > 0 ? ` (brought ${carried} connected part${carried > 1 ? 's' : ''} along)` : ''}. ${r.check.notes[0] || ''}`, r.check.level === 'bad'); selected = instId; }
+    if (!r.ok) { history.pop(); bsay(r.error, true); } else { bsay(`Joined${r.extra ? ` (and ${r.extra} more matching hole${r.extra > 1 ? 's' : ''})` : ''}${carried > 0 ? ` (brought ${carried} connected part${carried > 1 ? 's' : ''} along)` : ''}. ${r.check.notes[0] || ''} ${explainJoin(asm, a.inst, instId)}`, r.check.level === 'bad'); selected = instId; }
     joinMode = false; joinBtn.classList.remove('on'); render();
   }
   async function setMode(m) {

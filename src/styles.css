@@ -1178,3 +1178,9 @@ body:not(.robot-asm) #robotParts { display: none; }
 
 .hc-flow { stroke-dasharray: 7 9; animation: sflow .9s linear infinite; }
 .start-hero { grid-template-columns: 1.1fr 1fr; } .start-hero-art { min-width: 0; } .start-hero-art .hc { margin: -8px 0; }
+
+/* assembly: "Check my build" list */
+.asm-problems { display: grid; gap: 6px; margin: 8px 0; }
+.asm-prob { display: block; width: 100%; text-align: left; font: inherit; font-size: 13px; line-height: 1.4; padding: 8px 10px; border-radius: 9px; border: 1px solid #e0c36a; background: #fff8e1; color: #5a4300; cursor: pointer; }
+.asm-prob.info { border-color: #b9d3ea; background: #eef6fd; color: #1d3f5e; }
+.asm-prob.ok { border-color: #a9d9bb; background: #eaf8ef; color: #1c5a33; cursor: default; margin: 0; }
