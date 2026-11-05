@@ -48,8 +48,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     wsSelect.value = WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE;
     paintTiles();
   };
-  const WS_ICON = { 'arduino-uno': '💡', robotics: '🤖', biosignal: '🧠', pcb: '🟩', cad: '📐' };
-  const wsIcon = id => WS_ICON[id] || '🧪';
+  const wsIcon = id => (WORKSPACES[id]?.name || id || '?').slice(0, 1).toUpperCase();                 // a plain monogram, not a picture
   function paintTiles() {
     const host = $('projTiles'); if (!host) return;
     host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available).map(([id, w]) => {

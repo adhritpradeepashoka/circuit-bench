@@ -12,9 +12,8 @@ export function initRobotType({ editor, projects, onChosen = () => {} }) {
   const grid = document.createElement('div'); grid.className = 'rt-grid';
   for (const t of ROBOT_TYPES) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'rt-choice'; b.dataset.type = t.id;
-    const ic = document.createElement('span'); ic.className = 'rt-icon'; ic.textContent = t.icon; ic.setAttribute('aria-hidden', 'true');
     const nm = document.createElement('b'); nm.textContent = t.name; const bl = document.createElement('span'); bl.textContent = t.blurb;
-    b.append(ic, nm, bl); b.addEventListener('click', () => choose(t.id)); grid.append(b);
+    b.append(nm, bl); b.addEventListener('click', () => choose(t.id)); grid.append(b);
   }
   const later = document.createElement('button'); later.type = 'button'; later.className = 'link-btn rt-later'; later.textContent = 'Decide later'; later.addEventListener('click', close);
   card.append(h, sub, grid, later); root.append(card); document.body.append(root);

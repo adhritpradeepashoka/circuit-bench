@@ -75,10 +75,10 @@ export function initClassroom({ editor, code, projects, account = null, status =
     kindBody.replaceChildren(hero);
     const opts = el('div', 'kind-opts');
     const opt = (title, note, fn, icon = '') => { const b = el('button', 'kind-opt'); b.type = 'button'; if (icon) b.append(el('i', 'kind-ico', icon)); b.append(el('b', '', title), el('span', '', note)); b.addEventListener('click', fn); return b; };
-    opts.append(opt('Start building', 'No account needed. We\'ll guide you through your first circuit.', enter, '🚀'));
+    opts.append(opt('Start building', 'No account needed. We\'ll guide you through your first circuit.', enter));
     if (account?.enabled !== false) {
       const need = who => () => { lset(INTENT, who); status('Sign in with Google (top right) to continue.'); const h = $('startAccount'); h.classList.add('nudge'); setTimeout(() => h.classList.remove('nudge'), 1800); };
-      opts.append(opt('I’m a teacher', 'Sign in to make classes and follow your students’ progress.', need('teacher'), '🏫'), opt('I’m a student', 'Sign in, then enter the class code your teacher gave you.', need('student'), '🎒'));
+      opts.append(opt('I’m a teacher', 'Sign in to make classes and follow your students’ progress.', need('teacher')), opt('I’m a student', 'Sign in, then enter the class code your teacher gave you.', need('student')));
     }
     kindBody.append(opts, el('p', 'proj-note', 'Signing in with Google is how CircuitBench knows who you are. Returning? Sign in at the top right to carry on where you left off.'));
   }
@@ -275,7 +275,7 @@ export function initClassroom({ editor, code, projects, account = null, status =
     const grid = el('div', 'dash-grid'), current = getCurrent();
     d.projects.forEach((p, i) => {
       const tile = el('div', `tile ${p.status === 'locked' ? 'locked' : ''} st-${p.status}`);
-      const top = el('div', 'tile-top'); top.append(el('span', 'n', String(i + 1)), el('span', `cls-chip ${p.status}`, { todo: 'to do', locked: '🔒 locked', submitted: 'handed in', done: '✓ done', returned: 'try again' }[p.status] || p.status));
+      const top = el('div', 'tile-top'); top.append(el('span', 'n', String(i + 1)), el('span', `cls-chip ${p.status}`, { todo: 'to do', locked: 'locked', submitted: 'handed in', done: '✓ done', returned: 'try again' }[p.status] || p.status));
       tile.append(top, el('b', 'tile-title', p.title), el('div', 'goal', p.goal));
       if (p.uses?.length) tile.append(el('div', 'uses', `You will need: ${p.uses.join(', ')}`));
       if (p.comment) tile.append(el('div', 'note', `Teacher: ${p.comment}`));

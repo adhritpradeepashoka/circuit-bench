@@ -691,7 +691,7 @@ export function initAssembly({ editor, projects = null }) {
     selBox.replaceChildren(); const inst = selected && asm.get(selected); selBox.hidden = !inst;
     instList.replaceChildren();
     for (const i of asm.instances) {
-      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: connected(asm, i.id).length > 1 && heldPart(asm, anchorId, i.id) === i.id ? 'held ⚓' : `${i.part.frames.filter(f => !f.custom).length} holes${i.part.frames.some(f => f.custom) ? ` · ${i.part.frames.filter(f => f.custom).length} spots` : ''}` }));
+      const row = el('button', { type: 'button', className: `asm-inst${i.id === selected ? ' on' : ''}` }, el('span', { className: 'asm-swatch', style: `background:${hex(colourOf(i))}` }), el('span', { className: 'asm-lib-name', textContent: i.part.name }), el('span', { className: 'asm-badge', textContent: connected(asm, i.id).length > 1 && heldPart(asm, anchorId, i.id) === i.id ? 'held' : `${i.part.frames.filter(f => !f.custom).length} holes${i.part.frames.some(f => f.custom) ? ` · ${i.part.frames.filter(f => f.custom).length} spots` : ''}` }));
       row.addEventListener('click', () => select(i.id)); row.addEventListener('dblclick', () => viewTo('iso', i)); row.addEventListener('mouseenter', () => { hoverInst = i.id; render2h(); }); row.addEventListener('mouseleave', () => { hoverInst = null; render2h(); });
       instList.append(row);
     }

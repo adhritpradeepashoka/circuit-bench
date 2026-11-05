@@ -34,6 +34,7 @@ export function parseKitId(id) {
   if ((m = /^plate-(\d{2,3})x(\d{2,3})(?:-f(\d{1,2}))?$/.exec(s))) return { kind: 'plate', w: fin(Number(m[1]), 30, 400, 100), l: fin(Number(m[2]), 30, 400, 80), feet: m[3] ? fin(Number(m[3]), 4, 60, 18) : 0 };
   if ((m = /^wheel-(\d{2,3})(?:-b([\d.]+))?$/.exec(s))) { const dia = fin(Number(m[1]), 20, 200, 65); return { kind: 'wheel', dia, bore: m[2] ? fin(Number(m[2]), 1.5, 12, 5.5) : (dia <= 50 ? 3.1 : 5.5) }; }
   if ((m = /^gearmotor-([a-z0-9]+)$/.exec(s)) && GEARMOTORS[m[1]]) return { kind: 'gearmotor', key: m[1] };
+  if ((m = /^bracket-([a-z0-9]+)$/.exec(s)) && SERVOS[m[1]]) return { kind: 'bracket', key: m[1] };
   if (s === 'caster-ball') return { kind: 'caster' };
   if ((m = /^holder-(2|4)aa$/.exec(s))) return { kind: 'holder', cells: Number(m[1]) };
   return null;
@@ -70,6 +71,13 @@ export function makeKitPart(id) {
     const opening = f && d.l > 40 ? [13, 24] : null;
     return { ...base, category: 'Structure', name: `Base plate ${d.w}×${d.l} mm${f ? ` on ${f} mm feet` : ''}`, mass: { grams: r2(d.w * d.l * t * 0.0012 + (f ? 4 * f * 0.1 : 0)), source: 'estimated' }, dims: { size: [d.w, d.l, f + t], source: 'estimated' }, kit: { ...d, t, hd, pitch, nx, ny, servoHoles: servoHoles.map(q => q.pos.slice(0, 2)), opening }, frames: [...frames, ...servoHoles] };
   }
+  if (d.kind === 'bracket') {                                                                         // an L-bracket: a foot that bolts to a servo horn, and an upright a second servo screws onto, so the two shafts are at right angles
+    const sv = SERVOS[d.key], t = 3, hd = clear(sv.horn), hd2 = 2.4, wb = Math.max(24, sv.W + 12), zc = t + sv.earHole / 2 + 4, hUp = Math.round((zc + sv.earHole / 2 + 5) * 10) / 10, Lf = Math.round(Math.max(40, sv.earZ + 26)), xUp = Lf / 2, xh = -Lf / 2 + 8, open = [sv.W + 2, sv.L + 1.5];
+    const up = [[1, zc + sv.earHole / 2], [2, zc - sv.earHole / 2]].flatMap(([k, z]) => [hole(`up-${k}-out`, [xUp, 0, z], [1, 0, 0], hd2), hole(`up-${k}-in`, [xUp - t, 0, z], [-1, 0, 0], hd2)]);
+    return { ...base, category: 'Structure', name: `L-bracket for ${sv.name}`, mass: { grams: r2((Lf * wb * t + hUp * wb * t) * 0.0012), source: 'estimated' }, dims: { size: [Lf, wb, hUp], source: 'estimated' },
+      kit: { ...d, t, hd, hd2, wb, zc, hUp, Lf, xh, open, earHole: sv.earHole },
+      frames: [hole('foot-1-top', [xh, 0, t], UP, hd), hole('foot-1-bottom', [xh, 0, 0], DOWN, hd), ...up] };
+  }
   if (d.kind === 'wheel') {
     const wd = Math.max(8, d.dia * 0.32), hubR = Math.max(d.bore / 2 + 2.5, 6);
     return { ...base, category: 'Wheels & drive', name: `Wheel ${d.dia} mm`, mass: { grams: r2(Math.max(4, d.dia * 0.45)), source: 'estimated' }, dims: { size: [d.dia, d.dia, wd], source: 'estimated' }, kit: { ...d, wd, hubR },
@@ -102,9 +110,9 @@ export function makeKitPart(id) {
 export const KIT_PRESETS = [
   ['SG90 micro servo', 'servo-sg90'], ['MG90S metal-gear servo', 'servo-mg90s'], ['MG996R servo', 'servo-mg996r'], ['DS3218 servo (20 kg)', 'servo-ds3218'],
   ['Link 40 mm', 'link-40'], ['Link 60 mm', 'link-60'], ['Link 80 mm', 'link-80'], ['Link 120 mm (M3)', 'link-120'], ['Link 160 mm (M3)', 'link-160'],
-  ['Base plate 100×80', 'plate-100x80'], ['Base plate 100×80 on feet (for servos)', 'plate-100x50-f18'], ['Base plate 150×100', 'plate-150x100'], ['Base plate 200×150', 'plate-200x150'],
+  ['Base plate 100×80', 'plate-100x80'], ['Base plate 100×50 on feet (for servos)', 'plate-100x50-f18'], ['L-bracket for SG90 (turns a servo 90°)', 'bracket-sg90'], ['L-bracket for MG996R', 'bracket-mg996r'], ['Base plate 150×100', 'plate-150x100'], ['Base plate 200×150', 'plate-200x150'],
   ['TT gear motor', 'gearmotor-tt'], ['N20 gear motor', 'gearmotor-n20'], ['Wheel 65 mm (TT)', 'wheel-65'], ['Wheel 43 mm (N20)', 'wheel-43'], ['Ball caster', 'caster-ball'],
   ['4×AA battery holder', 'holder-4aa'], ['2×AA battery holder', 'holder-2aa'],
 ];
 /** What the AI is told about these part ids. */
-export const KIT_ID_HELP = 'Everyday robot parts are made from ids too: servo-<sg90|mg90s|mg996r|ds3218>, link-<length mm>[-m2|-m3], plate-<width>x<length>[-f<feet height mm>] (mm; with feet it has an opening so a servo body hangs through, e.g. plate-100x80-f18), wheel-<diameter mm>[-b<bore mm>], gearmotor-<tt|n20>, caster-ball, holder-<2|4>aa. A servo\'s output hole is "horn-screw" (an M2 or M3 hole on the shaft); a link has holes "hole-1-top/bottom" … "hole-3-*"; a plate has a grid of "h<i>-<j>-top/bottom" holes and, in the middle, servo mounting holes "sv-sg90-1-top"/"sv-sg90-2-top" (and "sv-mg996r-*"): screw a servo down by joining its "ear-1-bottom" to the first and the second joins by itself; a link of 52 mm or more has "pair-1"/"pair-2" holes beside its end holes for the same; a wheel\'s bore is "bore-in"/"bore-out"; a gear motor\'s shafts are "shaft-left"/"shaft-right" and its screws "mount-1-*".';
+export const KIT_ID_HELP = 'Everyday robot parts are made from ids too: servo-<sg90|mg90s|mg996r|ds3218>, link-<length mm>[-m2|-m3], bracket-<servo key> (an L-bracket: its foot "foot-1-top/bottom" takes a servo horn, its upright "up-1-out" and "up-2-out" take a servo\'s "ear-1-bottom" and "ear-2-bottom", which turns that servo\'s shaft 90° from the first: yaw then pitch), plate-<width>x<length>[-f<feet height mm>] (mm; with feet it has an opening so a servo body hangs through, e.g. plate-100x80-f18), wheel-<diameter mm>[-b<bore mm>], gearmotor-<tt|n20>, caster-ball, holder-<2|4>aa. A servo\'s output hole is "horn-screw" (an M2 or M3 hole on the shaft); a link has holes "hole-1-top/bottom" … "hole-3-*"; a plate has a grid of "h<i>-<j>-top/bottom" holes and, in the middle, servo mounting holes "sv-sg90-1-top"/"sv-sg90-2-top" (and "sv-mg996r-*"): screw a servo down by joining its "ear-1-bottom" to the first and the second joins by itself; a link of 52 mm or more has "pair-1"/"pair-2" holes beside its end holes for the same; a wheel\'s bore is "bore-in"/"bore-out"; a gear motor\'s shafts are "shaft-left"/"shaft-right" and its screws "mount-1-*".';

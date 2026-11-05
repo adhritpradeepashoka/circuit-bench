@@ -71,7 +71,7 @@ export function initBlocks({ editor, code }) {
       ws.registerToolboxCategoryCallback('VARIABLE', variableFlyout);
       ws.registerButtonCallback('CB_MAKEVAR', () => Blockly.Variables.createVariableButtonHandler(ws, null, ''));
       const tools = document.createElement('div'); tools.className = 'blocks-tools';
-      tools.innerHTML = '<button type="button" data-a="start" title="Start from a small program for the parts on your bench">✨ Start from my circuit</button><button type="button" data-a="clear" title="Remove every block">Clear</button>';
+      tools.innerHTML = '<button type="button" data-a="start" title="Start from a small program for the parts on your bench">Start from my circuit</button><button type="button" data-a="clear" title="Remove every block">Clear</button>';
       tools.addEventListener('click', e => { const a = e.target.closest('button')?.dataset.a; if (a === 'start') start(); if (a === 'clear') clear(); });
       msg = document.createElement('div'); msg.className = 'blocks-msg'; msg.hidden = true; msg.setAttribute('role', 'status');
       pane.append(tools, msg);
@@ -159,7 +159,7 @@ export function initBlocks({ editor, code }) {
     if (!s) return;
     if (ws.getAllBlocks(false).length && !confirm('Replace your blocks with a fresh starter program?')) return;
     load(s); persistProgram(); regenerate(true);
-    say(bench.devices.length ? 'Here is a starter for your circuit. Change it however you like!' : 'Nothing is wired to the board yet, so this starter just talks. Wire up a light or a button and press ✨ again.', 6000);
+    say(bench.devices.length ? 'Here is a starter for your circuit. Change it however you like!' : 'Nothing is wired to the board yet, so this starter just talks. Wire up a light or a button and press again.', 6000);
   }
   function clear() {
     if (ws.getAllBlocks(false).length > 3 && !confirm('Remove every block?')) return;

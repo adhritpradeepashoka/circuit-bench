@@ -32,6 +32,13 @@ export function buildKitMesh(THREE, part) {
     if (d.opening) { const o = new THREE.Path(), [ow, ol] = d.opening; o.moveTo(-ow / 2, -ol / 2); o.lineTo(ow / 2, -ol / 2); o.lineTo(ow / 2, ol / 2); o.lineTo(-ow / 2, ol / 2); o.closePath(); sh.holes.push(o); }
     plate(sh, d.t, d.feet, C.plate, { metal: 0.3 });
     if (d.feet) for (const [sx, sy] of [[1, 1], [-1, 1], [-1, -1], [1, -1]]) cyl(4.5, d.feet, 0, C.holder, 20, { metal: 0.3 }, sx * (d.w / 2 - 7), sy * (d.l / 2 - 7));
+  } else if (d.kind === 'bracket') {
+    const foot = new THREE.Shape(); foot.moveTo(-d.Lf / 2, -d.wb / 2); foot.lineTo(d.Lf / 2, -d.wb / 2); foot.lineTo(d.Lf / 2, d.wb / 2); foot.lineTo(-d.Lf / 2, d.wb / 2); foot.closePath(); holes(foot, [[d.xh, 0]], d.hd / 2); plate(foot, d.t, 0, C.alu, { metal: 0.4 });
+    const upr = new THREE.Shape(); upr.moveTo(0, -d.wb / 2); upr.lineTo(d.hUp, -d.wb / 2); upr.lineTo(d.hUp, d.wb / 2); upr.lineTo(0, d.wb / 2); upr.closePath();     // (u, v) = (height, width), turned upright below
+    const o = new THREE.Path(), [ow, ol] = d.open; o.moveTo(d.zc - ol / 2, -ow / 2); o.lineTo(d.zc + ol / 2, -ow / 2); o.lineTo(d.zc + ol / 2, ow / 2); o.lineTo(d.zc - ol / 2, ow / 2); o.closePath(); upr.holes.push(o);
+    holes(upr, [[d.zc + d.earHole / 2, 0], [d.zc - d.earHole / 2, 0]], d.hd2 / 2);
+    const g2 = new THREE.ExtrudeGeometry(upr, { depth: d.t, bevelEnabled: false }); g2.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1));    // (u, v, w) → (w, v, u): height along Z, thickness along X
+    add(g2, d.Lf / 2 - d.t, 0, 0, C.alu, { metal: 0.4, rough: 0.45 });
   } else if (d.kind === 'wheel') {
     const R = d.dia / 2, tireT = Math.max(2.5, R * 0.14);
     const tire = new THREE.Shape(); tire.absarc(0, 0, R, 0, Math.PI * 2, false); const inner = new THREE.Path(); inner.absarc(0, 0, R - tireT, 0, Math.PI * 2, true); tire.holes.push(inner); plate(tire, d.wd, 0, C.tire, { rough: 0.9 });

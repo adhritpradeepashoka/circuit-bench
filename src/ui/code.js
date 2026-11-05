@@ -30,7 +30,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
   let files = [], active = MAIN;                         // the project: [{ name, content }] — first .ino is the main sketch
   let diagnostics = [];
   let running = false, runSnapshot = null, last = null, lastBuiltFrom = null, buildId = 0, controller = null;
-  let onAiFix = null;                                      // set by the AI panel: "✨ Fix with AI" on a failed compile
+  let onAiFix = null;                                      // set by the AI panel: "Fix with AI" on a failed compile
 
   const cleanBlocks = b => (b && typeof b === 'object' && (b.mode === 'blocks' || b.mode === 'code') ? { mode: b.mode, program: b.program && typeof b.program === 'object' ? b.program : null } : null);
   /* ── project state ────────────────────── */
@@ -214,7 +214,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     else {
       const h = head(res.unreachable ? 'Compile service not reachable' : `Compilation failed · ${errors || 1} error${errors === 1 ? '' : 's'}${warns ? ` · ${warns} warning${warns > 1 ? 's' : ''}` : ''}`, 'bad');
       if (!res.unreachable && onAiFix) {
-        const fix = document.createElement('button'); fix.type = 'button'; fix.className = 'out-ai-fix'; fix.id = 'aiFixCompile'; fix.textContent = '✨ Fix with AI';
+        const fix = document.createElement('button'); fix.type = 'button'; fix.className = 'out-ai-fix'; fix.id = 'aiFixCompile'; fix.textContent = 'Fix with AI';
         fix.addEventListener('click', e => { e.stopPropagation(); onAiFix(); });
         h.append(fix);
       }
@@ -443,7 +443,7 @@ export function initCode({ compile = defaultCompile, editor = createTextEditor()
     get editor() { return ed; },
     /** The most recent compile result (or null), and whether the files have been edited since it ran. */
     get lastBuild() { return last ? { ...last, stale: lastBuiltFrom !== snapshot() } : null; },
-    /** Registers the "✨ Fix with AI" handler shown on a failed compile (re-renders the current output so it appears). */
+    /** Registers the "Fix with AI" handler shown on a failed compile (re-renders the current output so it appears). */
     onAiFix(fn) { onAiFix = fn; if (last && !last.ok) renderOutput(last); },
     setRunning(on) { running = on; runSnapshot = on ? snapshot() : null; if (last && !on) showResult(last); },
     serial,

@@ -83,11 +83,11 @@ async function showList(r) {
     for (const p of posts) {
       const card = el('article', 'blog-card');
       const meta = el('div', 'blog-meta'); meta.append(chip(p.flair), el('span', '', `${p.author} · ${when(p.createdAt)}`));
-      const title = link(`/blog/${p.id}`, 'blog-title', `${p.pinned ? '📌 ' : ''}${p.title}`);
+      const title = link(`/blog/${p.id}`, 'blog-title', `${p.pinned ? 'Pinned: ' : ''}${p.title}`);
       if (p.pinned) card.classList.add('pinned');
-      const foot = el('div', 'blog-foot', `💬 ${p.comments} comment${p.comments === 1 ? '' : 's'}`);
+      const foot = el('div', 'blog-foot', `${p.comments} comment${p.comments === 1 ? '' : 's'}`);
       if (staff()) {                                              // the team can pin and unpin straight from the list
-        const pin = el('button', 'blog-pin', p.pinned ? '📌 Unpin' : '📌 Pin'); pin.type = 'button'; pin.style.marginLeft = 'auto';
+        const pin = el('button', 'blog-pin', p.pinned ? 'Unpin' : 'Pin'); pin.type = 'button'; pin.style.marginLeft = 'auto';
         pin.addEventListener('click', async () => { pin.disabled = true; await call(`/api/community/posts/${p.id}`, { method: 'PATCH', body: { pinned: !p.pinned } }); showList(r); });
         const del = el('button', 'blog-pin blog-del', 'Delete'); del.type = 'button'; del.style.marginLeft = '0';
         del.addEventListener('click', async () => {             // two clicks: the first asks, the second deletes
@@ -117,7 +117,7 @@ function showComposer(focus) {
   const t = el('input'); t.placeholder = 'Title'; t.maxLength = 120; t.setAttribute('aria-label', 'Title');
   const b = el('textarea'); b.rows = 6; b.placeholder = 'Write your post. Links are made clickable.'; b.maxLength = 8000; b.setAttribute('aria-label', 'Text');
   let pinBox = null, pinLine = null;
-  if (staff()) { pinLine = el('label', 'blog-pinline'); pinBox = el('input'); pinBox.type = 'checkbox'; pinLine.append(pinBox, ' 📌 Pin this post to the top'); }
+  if (staff()) { pinLine = el('label', 'blog-pinline'); pinBox = el('input'); pinBox.type = 'checkbox'; pinLine.append(pinBox, ' Pin this post to the top'); }
   const post = el('button', '', 'Post'); post.type = 'submit'; const msg = el('p', 'proj-note'); msg.setAttribute('role', 'status');
   f.addEventListener('submit', async e => {
     e.preventDefault(); post.disabled = true;
@@ -139,7 +139,7 @@ async function showPost(id) {
   document.title = `${p.title} — CircuitBench Blog`;
   const card = el('article', 'blog-post');
   const meta = el('div', 'blog-meta'); meta.append(chip(p.flair), el('span', '', `${p.author} · ${when(p.createdAt)}`));
-  card.append(link('/blog', 'blog-back', '← All posts'), meta, el('h1', '', `${p.pinned ? '📌 ' : ''}${p.title}`), text(p.body, 'cm-text blog-body'));
+  card.append(link('/blog', 'blog-back', '← All posts'), meta, el('h1', '', `${p.pinned ? 'Pinned: ' : ''}${p.title}`), text(p.body, 'cm-text blog-body'));
   const acts = el('div', 'proj-acts');
   const act = (label, fn) => { const b = el('button', 'proj-act', label); b.type = 'button'; b.addEventListener('click', () => fn.call(b)); acts.append(b); };
   if (p.canPin) act(p.pinned ? 'Unpin' : 'Pin', async () => { await call(`/api/community/posts/${id}`, { method: 'PATCH', body: { pinned: !p.pinned } }); showPost(id); });

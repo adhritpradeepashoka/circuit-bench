@@ -55,7 +55,7 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     else if (!r.posts.length) list.append(el('p', 'proj-note', tab === 'update' ? 'No updates yet.' : 'No discussions yet — start one!'));
     else for (const p of r.posts) {
       const row = el('button', 'cm-row'); row.type = 'button';
-      const top = el('div', 'cm-rowtop'); top.append(chip(p.flair), el('b', '', `${p.pinned ? '📌 ' : ''}${p.title}`));
+      const top = el('div', 'cm-rowtop'); top.append(chip(p.flair), el('b', '', `${p.pinned ? 'Pinned: ' : ''}${p.title}`));
       row.append(top, el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)} · ${p.comments} comment${p.comments === 1 ? '' : 's'}`));
       row.addEventListener('click', () => showPost(p.id)); list.append(row);
     }
@@ -86,7 +86,7 @@ export function initCommunity({ fetchImpl = (...a) => globalThis.fetch(...a), st
     if (!r?.ok) { await showList(); return; }
     const back = el('button', 'proj-act', '← Back'); back.type = 'button'; back.addEventListener('click', showList);
     const p = r.post, card = el('article', 'cm-post');
-    card.append(chip(p.flair), el('h3', '', `${p.pinned ? '📌 ' : ''}${p.title}`), el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)}`), text(p.body));
+    card.append(chip(p.flair), el('h3', '', `${p.pinned ? 'Pinned: ' : ''}${p.title}`), el('span', 'proj-meta', `${p.author} · ${when(p.createdAt)}`), text(p.body));
     const acts = el('div', 'proj-acts');
     if (p.canPin) { const b = el('button', 'proj-act', p.pinned ? 'Unpin' : 'Pin'); b.type = 'button'; b.addEventListener('click', async () => { await call(`/api/community/posts/${id}`, { method: 'PATCH', body: { pinned: !p.pinned } }); showPost(id); }); acts.append(b); }
     if (p.mine) { const b = el('button', 'proj-act', 'Delete post'); b.type = 'button'; b.addEventListener('click', async () => { await call(`/api/community/posts/${id}`, { method: 'DELETE' }); showList(); }); acts.append(b); }

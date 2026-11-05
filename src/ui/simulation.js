@@ -48,7 +48,7 @@ export class Simulation {
     this.timed = new Map(); this.timedInfo = []; this.probes = new Map(); this.reactive = new Map(); this.lastSolveAt = 0;
     const soundBtn = $('simSound');
     if (soundBtn) {
-      const paint = () => { soundBtn.textContent = this.sound.enabled ? '🔊' : '🔇'; soundBtn.setAttribute('aria-pressed', String(this.sound.enabled)); };
+      const paint = () => { soundBtn.textContent = this.sound.enabled ? 'Sound on' : 'Sound off'; soundBtn.setAttribute('aria-pressed', String(this.sound.enabled)); };
       paint();
       soundBtn.addEventListener('click', () => { this.sound.setEnabled(!this.sound.enabled); paint(); });
     }

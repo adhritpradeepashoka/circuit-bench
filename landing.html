@@ -63,7 +63,7 @@ h2 { margin: 8px 0 12px; font-size: clamp(28px, 3.6vw, 42px); line-height: 1.1; 
 @media (max-width: 900px) { .grid3 { grid-template-columns: 1fr; } }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 26px; transition: transform .2s, box-shadow .2s; }
 .card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(20,40,30,.1); }
-.ico { width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; font-size: 24px; margin-bottom: 14px; }
+.ico { color: #1d2b26; width: 48px; height: 48px; border-radius: 13px; display: grid; place-items: center; font-size: 24px; margin-bottom: 14px; }
 .card h3 { margin: 0 0 6px; font-size: 19px; color: var(--ink); } .card p { margin: 0; color: var(--soft); font-size: 15.5px; }
 /* robotics */
 .robo { background: linear-gradient(180deg, #101a1e, #0f1518); color: var(--text); }
@@ -108,7 +108,7 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
   <div>
     <span class="tag"><i></i> Free · runs in your browser · no install</span>
     <h1>Build circuits and robots, <em>then watch them run.</em></h1>
-    <p class="lede">CircuitBench is a virtual electronics and robotics lab. Wire real parts, run real Arduino code, put a robot together in 3D and test it with physics, before you spend a rupee on hardware.</p>
+    <p class="lede">CircuitBench is a virtual electronics and robotics lab. Wire real parts, run real Arduino code, put a robot together in 3D and test it with physics, before you spend anything on hardware.</p>
     <div class="cta"><a class="btn go" href="/app">Start building — it's free →</a><a class="btn ghost" href="#robotics">See the robotics lab</a></div>
     <p class="fine">No account needed to start. Sign in with Google to save projects across devices.</p>
     <div class="chips"><span>Arduino · ESP32 · Pico</span><span>Real firmware</span><span>3D robot builder</span><span>AI that makes any part</span></div>
@@ -124,12 +124,12 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
   <h2 class="reveal">One bench for the whole idea.</h2>
   <p class="sub reveal">Most simulators stop at the circuit. CircuitBench carries on to the code, the body and the test.</p>
   <div class="grid3">
-    <div class="card reveal"><div class="ico" style="background:#fff0d9">🔌</div><h3>Circuits that behave</h3><p>Drag parts, draw wires, press Run. LEDs light, motors spin, sensors read, and a wrong connection shows up as one.</p></div>
-    <div class="card reveal"><div class="ico" style="background:#e4efff">💻</div><h3>Real firmware</h3><p>Write Arduino C++ (or snap blocks together) and it compiles and runs on an emulated chip. Not a toy language.</p></div>
-    <div class="card reveal"><div class="ico" style="background:#e2f6ea">🤖</div><h3>A robotics workspace</h3><p>Circuit, 3D assembly and a physics test in one place, so an arm, a rover or a drone is designed as a whole.</p></div>
-    <div class="card reveal"><div class="ico" style="background:#f3e8ff">✨</div><h3>Any part, on request</h3><p>Search a part by name. The AI finds its datasheet and photo, then builds it with the right pins, size and sprite.</p></div>
-    <div class="card reveal"><div class="ico" style="background:#ffe9e5">🧪</div><h3>Learn by trying</h3><p>Break things safely. Every wire, resistor and sketch is yours to change, with nothing to burn out.</p></div>
-    <div class="card reveal"><div class="ico" style="background:#e5f4f7">🏫</div><h3>Made for classes</h3><p>Teachers make a class, share a code and follow students' progress. Students just join and build.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#fff0d9"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2v6M15 2v6M7 8h10v4a5 5 0 0 1-10 0zM12 17v5"/></svg></div><h3>Circuits that behave</h3><p>Drag parts, draw wires, press Run. LEDs light, motors spin, sensors read, and a wrong connection shows up as one.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#e4efff"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 8l-4 4 4 4M16 8l4 4-4 4M13.5 5l-3 14"/></svg></div><h3>Real firmware</h3><p>Write Arduino C++ (or snap blocks together) and it compiles and runs on an emulated chip. Not a toy language.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#e2f6ea"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01M9 16.5h6"/></svg></div><h3>A robotics workspace</h3><p>Circuit, 3D assembly and a physics test in one place, so an arm, a rover or a drone is designed as a whole.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#f3e8ff"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></div><h3>Any part, on request</h3><p>Search a part by name. The AI finds its datasheet and photo, then builds it with the right pins, size and sprite.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#ffe9e5"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3M7.5 15h9"/></svg></div><h3>Learn by trying</h3><p>Break things safely. Every wire, resistor and sketch is yours to change, with nothing to burn out.</p></div>
+    <div class="card reveal"><div class="ico" style="background:#e5f4f7"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10l9-6 9 6M5 10v9h14v-9M9 19v-5h6v5"/></svg></div><h3>Made for classes</h3><p>Teachers make a class, share a code and follow students' progress. Students just join and build.</p></div>
   </div>
 </div></section>
 
@@ -138,7 +138,7 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
     <div class="eyebrow reveal">Robotics workspace</div>
     <h2 class="reveal">Everything a robot needs, in one place.</h2>
     <p class="sub reveal">Pick what you want to make and the bench sets itself up for it: the right parts, the right test, and an AI that knows your project.</p>
-    <div class="types reveal"><div><b>🦾 Robot arm</b>Servo joints that reach and pick</div><div><b>🚗 Car / rover</b>Wheels, motors and a driver</div><div><b>🚁 Drone</b>Frame, motors, props, flight controller</div><div><b>🦿 Walker</b>Legs on servos</div></div>
+    <div class="types reveal"><div><b>Robot arm</b>Servo joints that reach and pick</div><div><b>Car / rover</b>Wheels, motors and a driver</div><div><b>Drone</b>Frame, motors, props, flight controller</div><div><b>Walker</b>Legs on servos</div></div>
     <ul class="list reveal"><li>Wire the electronics, then bolt the 3D parts together at their screw holes</li><li>Hinges become servos and wheels automatically</li><li>Test it with real physics: drive it, fly it, move each joint</li></ul>
     <p style="margin-top:28px"><a class="btn go" href="/app">Try the robotics workspace →</a></p>
   </div>

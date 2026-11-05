@@ -34,11 +34,11 @@
     </div>
     <button id="workspacesBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Workspaces and resource packs: Electronics, Bioelectronics, extra boards, your own and community ones">Workspaces &amp; packs</button>
     <button id="communityBtn" type="button" class="top-btn" aria-haspopup="dialog" title="Updates, fixes and discussions: the CircuitBench blog and community">Community</button>
-    <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">✨ Ask AI</button>
+    <button id="aiBtn" type="button" aria-pressed="false" aria-controls="aiPane" title="Open the AI chat (beta)">Ask AI</button>
     <div class="account"><div id="accountSlot" class="account-slot" hidden></div>
       <div class="menu account-menu" id="accountMenu" hidden><div class="account-who"><b id="accountWho"></b><span id="accountEmail"></span><em class="role-badge" id="accountRole" hidden></em></div><p class="account-note">Your Google account only proves who you are. Your name, email and role are kept by CircuitBench so beta access can follow your account.</p><hr><div id="accountClassItems"></div><button id="accountSignOut" type="button">Sign out</button></div>
     </div>
-    <button id="settingsBtn" type="button" class="help-btn settings-btn" title="Settings: AI keys, themes, and other options" aria-label="Settings" aria-haspopup="dialog">⚙</button>
+    <button id="settingsBtn" type="button" class="help-btn settings-btn" title="Settings: AI keys, themes, and other options" aria-label="Settings" aria-haspopup="dialog"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   </header>
 
   <main class="main" id="main">
@@ -122,7 +122,7 @@
             <span class="sim-state"><i class="sim-dot" id="simDot"></i><span id="simStatus">Stopped</span></span>
             <span class="sim-readout"><span id="simChip">ATmega328P</span> <b id="simTime">0.00 s</b></span>
             <span class="sim-readout">High pins <b id="simPin">–</b></span>
-            <span class="sim-actions"><button id="simAskAi" class="sim-ai" title="Ask the AI, with these live readings">✨ Ask AI why</button><button id="simSound" type="button" title="Sound on / off (buzzers and speakers)" aria-pressed="true" hidden>🔊</button><button id="simPause">Pause</button><button id="simStop">Stop</button></span>
+            <span class="sim-actions"><button id="simAskAi" class="sim-ai" title="Ask the AI, with these live readings">Ask AI why</button><button id="simSound" type="button" title="Sound on / off (buzzers and speakers)" aria-pressed="true" hidden>Sound on</button><button id="simPause">Pause</button><button id="simStop">Stop</button></span>
           </div>
           <ul class="sim-notes" id="simNotes"></ul>
         </div>
@@ -132,7 +132,7 @@
         <div class="code-resize" id="codeResize" title="Drag to resize"></div>
         <div class="code-head">
           <span class="mode-switch" id="codeMode" role="group" aria-label="Coding style">
-            <button type="button" id="modeBlocks" data-mode="blocks" title="Build the program from blocks">🧩 Blocks</button>
+            <button type="button" id="modeBlocks" data-mode="blocks" title="Build the program from blocks">Blocks</button>
             <button type="button" id="modeCode" data-mode="code" title="Write or read the Arduino code">{ } Code</button>
           </span>
           <span class="code-title">sketch.ino</span>
@@ -187,7 +187,7 @@
     <aside class="side" id="sidePanel" aria-label="Side panel">
       <section class="pane ai-pane" id="aiPane" aria-label="AI chat" hidden>
         <div class="pane-head">
-          <span class="pane-title">✨ AI <span class="beta-tag">beta</span></span>
+          <span class="pane-title">AI <span class="beta-tag">beta</span></span>
           <span class="pane-actions">
             <button type="button" class="pane-btn" id="aiNewChat" title="Clear this conversation and start over">New chat</button>
             <button type="button" class="pane-x" id="aiClose" title="Close the AI chat" aria-label="Close the AI chat"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
@@ -214,7 +214,7 @@
       </div>
     </section>
       <nav class="side-rail" id="sideRail" aria-label="Closed panels">
-        <button type="button" class="rail-btn" id="railAi" title="Open the AI chat">✨ AI</button>
+        <button type="button" class="rail-btn" id="railAi" title="Open the AI chat">AI</button>
         <button type="button" class="rail-btn" id="railParts" title="Open the parts panel">Parts</button>
       </nav>
     </aside>
@@ -225,7 +225,7 @@
     <div class="modal-head"><h2 id="partTitle">Create a part</h2><button type="button" class="pane-x" id="partClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
     <div class="pc-body">
       <div class="pc-ai">
-        <label for="pcDescribe"><b>✨ Describe it</b> — the AI fills in the form below (you can still change anything)</label>
+        <label for="pcDescribe"><b>Describe it</b> — the AI fills in the form below (you can still change anything)</label>
         <div class="pc-ai-row">
           <textarea id="pcDescribe" rows="2" maxlength="1500" placeholder="e.g. a KY-038 sound sensor module with VCC, GND, analog out and digital out"></textarea>
           <button type="button" id="pcAiGo">Make it</button>
@@ -345,7 +345,7 @@
     <div class="modal-head"><h2 id="settingsTitle">Settings</h2><button type="button" class="pane-x" id="settingsClose" aria-label="Close"><svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button></div>
     <div class="settings-body">
       <section class="set-sec ai-only"><h3>AI</h3>
-        <p class="proj-note">Pick who answers in ✨ Ask AI. “On this device” needs no key; with your own free key a hosted model is used instead. Keys stay in this browser.</p>
+        <p class="proj-note">Pick who answers in Ask AI. “On this device” needs no key; with your own free key a hosted model is used instead. Keys stay in this browser.</p>
         <div class="ai-key-row" id="aiKeyRow">
           <p>AI features are in beta and need a free API key for now. It's stored only in this browser.</p>
           <div class="ai-provider-tabs" id="aiProviderTabs" role="tablist" aria-label="AI provider"></div>

@@ -54,3 +54,35 @@ body.blog-page { color: var(--text); height: auto; min-height: 100%; overflow: a
 .blog-del:hover { border-color: var(--red); color: var(--red); }
 .blog-pin:hover { border-color: var(--blue); color: var(--blue); }
 .blog-pinline { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+
+/* Same look as the landing page: ink top bar, a dark banner for the title, paper background, green accents. Fixed palette, so it matches whichever app theme is chosen. */
+body.blog-page { background: #f6f8f5; color: #26322d; font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+.blog-page .topbar { background: rgba(15,21,24,.92); backdrop-filter: blur(10px); border-bottom: 1px solid rgba(255,255,255,.07); height: 62px; padding: 0 clamp(16px, 4vw, 40px); }
+.blog-page .brand-name { font-weight: 800; font-size: 18px; letter-spacing: -.01em; color: #fff; }
+.blog-page .blog-sub { color: #9fb0a8; }
+.blog-page .blog-lab { margin-left: auto; height: 38px; padding: 0 16px; border: 0; border-radius: 11px; background: #2fd17f; color: #07140d; font-weight: 700; font-size: 14px; box-shadow: 0 6px 22px rgba(47,209,127,.3); }
+.blog-page .blog-lab:hover { filter: brightness(1.05); }
+.blog-page .project-menu { margin-left: 12px; }
+.blog-wrap { max-width: 1120px; padding: 28px 20px 70px; gap: 26px; }
+.blog-head { position: relative; overflow: hidden; margin-bottom: 18px; padding: 28px 30px 24px; border-radius: 20px; background: radial-gradient(700px 300px at 85% 0%, #1d3b34 0%, transparent 65%), linear-gradient(160deg, #182126, #0f1518); }
+.blog-head::before { content: ""; position: absolute; inset: 0; background-image: linear-gradient(rgba(255,255,255,.045) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.045) 1px, transparent 1px); background-size: 38px 38px; mask-image: linear-gradient(180deg, #000 20%, transparent); pointer-events: none; }
+.blog-head > * { position: relative; }
+.blog-head h1 { margin: 0 0 8px; font-size: clamp(28px, 4vw, 40px); letter-spacing: -.02em; color: #fff; }
+.blog-lead { color: #b9c7c0; margin: 0 0 16px; font-size: 15.5px; }
+.blog-sort { margin: 0; }
+.blog-pill { border-color: #d5ddd8; color: #26322d; background: #fff; } .blog-pill:hover { border-color: #2fd17f; }
+.blog-sort { margin: 0 0 14px; }
+.blog-pill.on { background: #2fd17f; border-color: #2fd17f; color: #07140d; }
+.blog-card, .blog-post, .side-card, .blog-composer { background: #fff; border: 1px solid #e3e9e5; border-radius: 16px; box-shadow: 0 1px 2px rgba(15,21,24,.04); color: #26322d; }
+.blog-card { padding: 18px 20px; transition: transform .15s, box-shadow .15s, border-color .15s; }
+.blog-card:hover { border-color: #2fd17f; transform: translateY(-2px); box-shadow: 0 10px 30px rgba(15,21,24,.08); }
+.blog-card.pinned { border-color: #2fd17f; box-shadow: inset 3px 0 0 #2fd17f; }
+.blog-title { color: #0f1518; font-size: 18px; letter-spacing: -.01em; } .blog-title:hover { color: #1f9d6a; }
+.blog-snippet, .blog-meta, .blog-foot, .side-card h3 { color: #5d6c65; }
+.blog-back { color: #1f9d6a; }
+.side-item { color: #26322d; } .side-item:hover, .side-item.on { background: #e8f7ef; } .side-item.on { color: #14784f; }
+.blog-new { padding: 13px 16px; border-radius: 12px; background: #2fd17f; color: #07140d; box-shadow: 0 6px 22px rgba(47,209,127,.3); font-size: 15px; }
+.blog-pin { color: #26322d; border-color: #d5ddd8; } .blog-pin:hover { border-color: #2fd17f; color: #14784f; }
+.blog-composer { border-color: #2fd17f; }
+.blog-page .cm-form button { background: #2fd17f; color: #07140d; font-weight: 700; }
+.blog-page .cm-text a { color: #1f9d6a; }
