@@ -48,14 +48,12 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     wsSelect.value = WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE;
     paintTiles();
   };
-  const wsIcon = id => (WORKSPACES[id]?.name || id || '?').slice(0, 1).toUpperCase();                 // a plain monogram, not a picture
   function paintTiles() {
     const host = $('projTiles'); if (!host) return;
     host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available).map(([id, w]) => {
       const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${wsSelect.value === id ? ' on' : ''}`; t.dataset.ws = id; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(wsSelect.value === id));
-      const i = document.createElement('i'); i.textContent = wsIcon(id); i.setAttribute('aria-hidden', 'true');
       const b = document.createElement('b'); b.textContent = w.name; const s = document.createElement('span'); s.textContent = w.blurb;
-      t.append(i, b, s); t.addEventListener('click', () => { wsSelect.value = id; paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
+      t.append(b, s); t.addEventListener('click', () => { wsSelect.value = id; paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
     }));
     $('projNewBoard').hidden = wsSelect.value === 'robotics';
   }
@@ -174,7 +172,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
         main.append(openBtn);
       }
       main.append(el('span', 'proj-meta', `Edited ${ago(m.updatedAt)}`));
-      const chip = el('span', 'proj-chip'); chip.append(el('i', '', wsIcon(m.workspace)), document.createTextNode(WORKSPACES[m.workspace]?.name || m.workspace)); if (m.id === current?.id) chip.append(el('em', '', 'open now'));
+      const chip = el('span', 'proj-chip'); chip.append(document.createTextNode(WORKSPACES[m.workspace]?.name || m.workspace)); if (m.id === current?.id) chip.append(el('em', '', 'open now'));
       li.append(chip);
       const acts = el('div', 'proj-acts');
       const b = (act, label, title) => { const x = el('button', `proj-act ${act}`, label); x.type = 'button'; x.dataset.act = act; x.title = title; return x; };
