@@ -48,12 +48,22 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     wsSelect.value = WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE;
     paintTiles();
   };
+  // A small line icon for each kind of workspace (fixed markup, drawn here, no pictures to load)
+  const WS_PATH = {
+    'arduino-uno': '<rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 3v3M12 3v3M15 3v3M9 18v3M12 18v3M15 18v3M3 9h3M3 12h3M3 15h3M18 9h3M18 12h3M18 15h3"/>',
+    robotics: '<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01M9 16.5h6"/>',
+    bioelectronics: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+    biosignal: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
+    pcb: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4v4M11 13h5M16 9v.01M7 16h.01"/>',
+    cad: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
+  };
+  const wsIcon = id => { const i = document.createElement('i'); i.className = 'ws-ico'; i.setAttribute('aria-hidden', 'true'); i.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${WS_PATH[id] || '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>'}</svg>`; return i; };
   function paintTiles() {
     const host = $('projTiles'); if (!host) return;
     host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available).map(([id, w]) => {
       const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${wsSelect.value === id ? ' on' : ''}`; t.dataset.ws = id; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(wsSelect.value === id));
       const b = document.createElement('b'); b.textContent = w.name; const s = document.createElement('span'); s.textContent = w.blurb;
-      t.append(b, s); t.addEventListener('click', () => { wsSelect.value = id; paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
+      t.append(wsIcon(id), b, s); t.addEventListener('click', () => { wsSelect.value = id; paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
     }));
     $('projNewBoard').hidden = wsSelect.value === 'robotics';
   }
@@ -172,7 +182,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
         main.append(openBtn);
       }
       main.append(el('span', 'proj-meta', `Edited ${ago(m.updatedAt)}`));
-      const chip = el('span', 'proj-chip'); chip.append(document.createTextNode(WORKSPACES[m.workspace]?.name || m.workspace)); if (m.id === current?.id) chip.append(el('em', '', 'open now'));
+      const chip = el('span', 'proj-chip'); chip.append(wsIcon(m.workspace), document.createTextNode(WORKSPACES[m.workspace]?.name || m.workspace)); if (m.id === current?.id) chip.append(el('em', '', 'open now'));
       li.append(chip);
       const acts = el('div', 'proj-acts');
       const b = (act, label, title) => { const x = el('button', `proj-act ${act}`, label); x.type = 'button'; x.dataset.act = act; x.title = title; return x; };

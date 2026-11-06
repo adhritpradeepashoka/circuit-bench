@@ -1188,3 +1188,9 @@ body:not(.robot-asm) #robotParts { display: none; }
 .cls-lookform { display: grid; gap: 8px; margin: 8px 0; }
 .cls-field { display: grid; gap: 3px; font-size: 12px; color: var(--muted); } .cls-field select { font: inherit; font-size: 13px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
 .cls-look { margin-bottom: 14px; } .cls-look h4 { margin: 0 0 4px; }
+
+/* workspace icon badges */
+.ws-ico { display: inline-grid; place-items: center; flex: none; color: var(--blue); }
+.proj-tile .ws-ico { width: 40px; height: 40px; margin-bottom: 6px; border-radius: 11px; background: var(--blue-soft); } .proj-tile .ws-ico svg { width: 22px; height: 22px; }
+.proj-tile.on .ws-ico { background: var(--blue); color: var(--on-blue); }
+.proj-chip .ws-ico { width: 16px; height: 16px; margin-right: 5px; vertical-align: -3px; } .proj-chip .ws-ico svg { width: 15px; height: 15px; }
