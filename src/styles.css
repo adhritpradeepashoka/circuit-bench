@@ -18,7 +18,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
 :focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
-.app { height: 100vh; height: 100dvh; display: grid; grid-template-rows: 52px minmax(0, 1fr); }
+.app { height: 100vh; height: 100dvh; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 52px minmax(0, 1fr); }
+.topbar { min-width: 0; }
+.topbar > * { flex-shrink: 0; }
+.topbar > .top-search { flex-shrink: 1; min-width: 70px; }
+.topbar > .top-search input { width: 100%; }
+@media (max-width: 1380px) { .brand-name { display: none; } .brand { min-width: 0; } }
 
 /* ── top bar ─────────────────────────────────────────── */
 .topbar { display: flex; align-items: center; gap: 12px; padding: 0 14px; background: var(--ink); color: var(--ink-text); position: relative; z-index: 60; }

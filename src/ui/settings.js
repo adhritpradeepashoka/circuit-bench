@@ -5,6 +5,7 @@ import { initAdmin } from './admin.js';
 import { cachedModels, deleteLocalModels } from '../sim/webllm.mjs';
 import { PROVIDER_IDS, setStoredKey } from '../sim/ai-client.mjs';
 import { createKeySync, syncOn, setSyncOn } from '../sim/key-sync.mjs';
+import { ask } from './ask.js';
 import { getToken } from '../sim/session.mjs';
 
 export function initSettings({ tour, ai, status = () => {} }) {
@@ -12,8 +13,8 @@ export function initSettings({ tour, ai, status = () => {} }) {
   const modal = $('settingsModal');
   const admin = initAdmin();
   const keySync = createKeySync({ onChange: n => { ai.refresh(); status(`Brought ${n} API key${n > 1 ? 's' : ''} from your account`); }, say: t => status(t) });
-  const paintKeySync = () => { $('setKeySync').checked = syncOn(); $('setKeySync').disabled = !getToken() && !syncOn(); };
-  $('setKeySync').addEventListener('change', async e => { setSyncOn(e.target.checked); if (e.target.checked) { if (!getToken()) { setSyncOn(false); e.target.checked = false; return status('Sign in first (top bar), then turn this on'); } status('Syncing your keys…'); const r = await keySync.sync(); status(r ? 'Your keys now follow your account' : 'Could not reach the key sync. Try again in a moment.'); } });
+  const paintKeySync = () => {};
+  globalThis.cbBeforeAi = () => (keySync.waiting ? keySync.offer(ask) : null);                  // the AI chat calls this before it sends: a new device is asked once whether to use the keys saved with the account
   addEventListener('cb-keys-changed', () => keySync.changed()); addEventListener('cb-session', () => { paintKeySync(); keySync.sync(); }); addEventListener('focus', () => keySync.sync()); setTimeout(() => keySync.sync(), 2000);
   async function paintModel() {
     const have = await cachedModels();
@@ -51,6 +52,6 @@ export function initSettings({ tour, ai, status = () => {} }) {
   $('setGuide').addEventListener('click', () => { close(); tour.startGuide(); });
   $('setHint').addEventListener('click', () => { const c = $('hintCard'); if (c) c.hidden = false; close(); });
   $('setClearChat').addEventListener('click', () => { ai.clearChat(); status('AI chat history cleared'); });
-  $('setForgetKeys').addEventListener('click', async () => { const was = syncOn(); setSyncOn(false); for (const p of PROVIDER_IDS) setStoredKey('', p); ai.refresh(); const gone = was && await keySync.forget(); setSyncOn(was && !gone); paintKeySync(); status(gone ? 'All saved API keys removed from this browser and your account' : 'All saved API keys removed from this browser'); });
+  $('setForgetKeys').addEventListener('click', async () => { const was = syncOn(); setSyncOn(false); for (const p of PROVIDER_IDS) setStoredKey('', p); ai.refresh(); const gone = was && await keySync.forget(); setSyncOn(was); paintKeySync(); status(gone ? 'All saved API keys removed from this browser and your account' : 'All saved API keys removed from this browser'); });
   return { open, close, get isOpen() { return !modal.hidden; } };
 }

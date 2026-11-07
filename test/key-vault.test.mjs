@@ -23,16 +23,19 @@ for (const [name, factory] of [['memory', () => createMemoryKeyStore()], ['postg
 }
 test('key vault is off without a secret', async () => { const acc = accounts(), v = createKeyVault({ accounts: acc }); const t = (await acc.signIn('good:a@example.com')).token; assert.equal(v.enabled, false); assert.equal((await v.get(t)).status, 503); });
 
-test('key sync (browser side): fills gaps from the account, local keys win, nothing happens when off or signed out', async () => {
+test('key sync (browser side): on by default, never applies keys silently, asks once on a new device, local keys win, merged set goes back', async () => {
   const mem = new Map(); globalThis.localStorage = { getItem: k => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)), removeItem: k => mem.delete(k) };
+  const smem = new Map(); globalThis.sessionStorage = { getItem: k => (smem.has(k) ? smem.get(k) : null), setItem: (k, v) => smem.set(k, String(v)), removeItem: k => smem.delete(k) };
   const sent = []; let server = { keys: { gemini: 'G-server', groq: 'Q-server' }, models: {} };
   const call = async (path, method, body) => { sent.push(method); if (method === 'GET') return { status: 200, json: { ok: true, ...server } }; if (method === 'PUT') { server = body; return { status: 200, json: { ok: true } }; } return { status: 200, json: { ok: true } }; };
-  let signed = true, pulled = 0; const ks = createKeySync({ call, token: () => (signed ? 't' : ''), onChange: n => { pulled = n; }, on: () => mem.get('circuitbench:key-sync') === '1' });
-  assert.equal(await ks.sync(), null, 'off by default'); assert.deepEqual(sent, []);
-  setSyncOn(true); mem.set('virtual-lab:ai-key:gemini', 'G-local');
-  const r = await ks.sync(); assert.equal(r.got, 1); assert.equal(pulled, 1);
-  assert.equal(mem.get('virtual-lab:ai-key:gemini'), 'G-local', 'the local key wins'); assert.equal(mem.get('virtual-lab:ai-key:groq'), 'Q-server', 'a missing key is filled in');
-  assert.deepEqual(server.keys, { gemini: 'G-local', groq: 'Q-server' }, 'the merged set goes back');
+  let signed = true, taken = 0; const ks = createKeySync({ call, token: () => (signed ? 't' : ''), onChange: n => { taken = n; } });
+  mem.set('virtual-lab:ai-key:gemini', 'G-local');
+  const r = await ks.sync(); assert.equal(r.waiting, 1, 'one key is on the account only'); assert.equal(mem.get('virtual-lab:ai-key:groq') ?? null, null, 'it is NOT applied without asking');
+  assert.deepEqual(server.keys, { gemini: 'G-local', groq: 'Q-server' }, 'the account keeps what it had, plus this device\'s key');
+  const asked = []; assert.equal(await ks.offer(async q => { asked.push(q.title); return false; }), 0); assert.deepEqual(asked, ['Use your saved AI keys?']); assert.equal(mem.get('virtual-lab:ai-key:groq') ?? null, null, 'no means no');
+  assert.equal(await ks.offer(async () => assert.fail('asks only once per session')), 0);
+  smem.clear(); assert.equal(await ks.offer(async () => true), 1, 'yes takes the key'); assert.equal(mem.get('virtual-lab:ai-key:groq'), 'Q-server'); assert.equal(taken, 1); assert.equal(mem.get('virtual-lab:ai-key:gemini'), 'G-local', 'the local key wins');
   signed = false; sent.length = 0; assert.equal(await ks.sync(), null); assert.deepEqual(sent, []);
-  delete globalThis.localStorage;
+  setSyncOn(false); signed = true; assert.equal(await ks.sync(), null, 'opted out');
+  delete globalThis.localStorage; delete globalThis.sessionStorage;
 });

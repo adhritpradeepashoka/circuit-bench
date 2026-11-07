@@ -354,6 +354,7 @@ export function initAiPanel(editor, code, sim = null) {
     const text = promptEl.value.trim();
     if (!text) return;
     if (busy) return setStatus('Wait for the current reply first.');
+    { const offer = globalThis.cbBeforeAi?.(); if (offer) try { if (await offer) refreshKeyUi(); } catch { /* the question is a convenience */ } }
     // Tier 1: plainly worded edits are answered instantly by rules. Tier 2: the CircuitBench tiny model (2.5 MB, in-page, no GPU) understands
     // looser wording and politely declines what is outside the bench. Anything either is unsure about goes on to the chosen AI.
     const asmApi = window.__vlab?.assembly?.ai, in3d = !!asmApi?.active?.();
