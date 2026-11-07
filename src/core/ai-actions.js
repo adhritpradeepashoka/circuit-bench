@@ -66,7 +66,7 @@ export function applyCircuitActions(project, actions) {
       switch (a.op) {
         case 'create_part': {           // a new drawn, working part; the client fills a.spec from the part maker before this runs
           if (!a.spec) { warnings.push(`Could not make "${String(a.description || a.id || 'the part').slice(0, 60)}"${a.error ? `: ${String(a.error).slice(0, 200)}` : ''}.`); break; }
-          if (newSpecs.length >= 3) { warnings.push('At most 3 new parts at a time — skipped one.'); break; }
+          if (newSpecs.length >= 12) { warnings.push('At most 12 new parts at a time — skipped one.'); break; }
           const v = validatePartSpec(a.spec, { id: a.spec.id });
           if (!v.ok) { warnings.push(`New part rejected: ${(v.errors || []).join(' ')}`); break; }
           registerCustomPart(v.spec); newSpecs.push(v.spec);

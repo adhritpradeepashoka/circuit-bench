@@ -16,9 +16,10 @@ import { learnedRecipes, addLearned, learningOn, setLearning } from '../core/lea
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 const isCustomSketch = src => { const t = String(src || '').replace(/\s+/g, ' ').trim(); return !!t && t !== DEFAULT_SKETCH.replace(/\s+/g, ' ').trim(); };
 import { hasHostedAi } from '../sim/session.mjs';
-import { probeWebGPU, generateLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
+import { probeWebGPU, generateLocal, planLocal, LOCAL_PROVIDER, LOCAL_MODELS, DEFAULT_LOCAL_MODEL, getLocalModel, setLocalModel, webgpuAvailable } from '../sim/webllm.mjs';
 import { generateCode, createPart, hasAnyKey, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS, providersWithKeys } from '../sim/ai-client.mjs';
 import { applyCircuitActions, guardRoboticsBoards } from '../core/ai-actions.js';
+import { looksBig, runSteps } from '../core/ai-steps.js';
 import { BOARD_SPECS } from '../core/boards.js';
 import { activeWorkspace } from '../core/workspaces.js';
 import { droneWiring } from '../core/drone-wiring.js';
@@ -311,7 +312,7 @@ export function initAiPanel(editor, code, sim = null) {
     const remap = new Map(); let n = 0;
     for (const a of acts) {
       if (a?.op !== 'create_part' || a.spec) continue;
-      if (++n > 3) { a.error = 'at most 3 new parts at a time'; continue; }
+      if (++n > 12) { a.error = 'at most 12 new parts at a time'; continue; }
       setStatus(`Drawing "${String(a.description || a.id).slice(0, 40)}"…`);
       const r = await createPart({ description: String(a.description || a.id || ''), hosted: hostedOn() });
       if (r.ok && r.spec) { a.spec = r.spec; if (a.id && a.id !== r.spec.id) remap.set(a.id, r.spec.id); }
@@ -371,7 +372,7 @@ export function initAiPanel(editor, code, sim = null) {
       let q3 = null; try { q3 = quickAssembly(text, await asmApi.snapshot()); } catch { /* fall through to the AI */ }
       if (q3) {
         messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
-        const ops = q3.actions.slice(0, 60), m3 = { id: ++seq, role: 'assistant', text: q3.explanation, summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
+        const ops = q3.actions.slice(0, 400), m3 = { id: ++seq, role: 'assistant', text: q3.explanation, summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
         if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); saveChat(); render(); return;
       }
     }
@@ -401,6 +402,12 @@ export function initAiPanel(editor, code, sim = null) {
         res = await generateCode({ ...args, hosted: true });
       } else if (localOn()) {
         setStatus('Starting the on-device model…');
+        const prog = p => setStatus(p?.progress < 1 ? `Downloading the model (first time only): ${Math.round((p.progress || 0) * 100)}%` : 'Starting the model…');
+        const plan = !in3d && looksBig(text) ? await planLocal({ instruction: text, circuit, onProgress: prog }) : null;
+        if (plan?.ok && plan.steps.length > 1) {          // a big request: do it in small steps, each one seeing what the last one built
+          res = await runSteps({ instruction: text, steps: plan.steps, circuit, code: code.source, onStep: (k, n, t) => setStatus(`Step ${k + 1} of ${n}: ${t.slice(0, 70)}`), step: (ins, cur, curCode) => generateLocal({ ...args, instruction: ins, circuit: cur, code: curCode, history: [], onProgress: prog }) });
+          if (res.ok) res.meta = { provider: 'On this device', model: `${plan.steps.length} steps`, ms: 0 };
+        } else
         res = await generateLocal({ ...args, onProgress: p => setStatus(p?.progress < 1 ? `Downloading the model (first time only): ${Math.round((p.progress || 0) * 100)}%` : 'Starting the model…') });
         if (!res.ok && hasAnyKey()) { localErr = res.error; console.warn('[on-device AI]', res.error); messages.push({ id: ++seq, role: 'error', text: `On-device model failed: ${res.error}` }); render(); setStatus('On-device model failed — trying your saved key…'); const fb = getStoredKey(getStoredProvider()) ? getStoredProvider() : providersWithKeys()[0]; res = await generateCode({ ...args, provider: fb, userKey: getStoredKey(fb), model: getStoredModel(fb) }); }
       } else res = await generateCode(args);
@@ -411,7 +418,7 @@ export function initAiPanel(editor, code, sim = null) {
       }
       if (res.meta) setStatus(`${res.meta.provider} · ${res.meta.model} · ${(res.meta.ms / 1000).toFixed(1)} s${res.meta.tried ? ` (${res.meta.tried} unavailable model${res.meta.tried > 1 ? 's' : ''} skipped)` : ''}`);
       if (in3d) {                                                                // the reply is 3D edits: keep them for Apply, nothing to compile
-        const ops = Array.isArray(res.actions) ? res.actions.filter(a => a && typeof a === 'object').slice(0, 60) : [];
+        const ops = Array.isArray(res.actions) ? res.actions.filter(a => a && typeof a === 'object').slice(0, 400) : [];
         const m3 = { id: ++seq, role: 'assistant', text: res.explanation || (ops.length ? 'Here is the change.' : 'Done.'), summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
         if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); return;
       }

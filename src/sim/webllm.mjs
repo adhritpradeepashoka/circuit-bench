@@ -2,6 +2,7 @@
 // No key, no server, nothing leaves the machine — but a one-time model download and a smaller brain than the hosted models.
 // The model code is imported lazily so students who never use it never download it.
 import { buildPrompt, parseReply } from '../core/ai-prompt.js';
+import { buildPlanPrompt, parsePlan } from '../core/ai-steps.js';
 
 export const LOCAL_PROVIDER = 'local';
 export const LOCAL_MODELS = [
@@ -87,6 +88,16 @@ export async function generateLocal({ instruction, circuit, code, context = null
     return { ok: false, error: 'The on-device model did not return a usable edit — small models struggle with big requests. Try a shorter, simpler instruction, or add a free API key for a stronger model.' };
   }
   return { ok: true, ...result, meta: { provider: 'On this device', model: (usedModel || modelId).replace(/-q\d.*$/, ''), ms: now() - t0 } };
+}
+
+/** Ask the on-device model to split a big request into small ordered steps (see src/core/ai-steps.js). → {ok, steps} */
+export async function planLocal({ instruction, circuit, modelId = getLocalModel(), onProgress, factory }) {
+  let eng; try { eng = await loadLocal(modelId, { onProgress, factory }); } catch (err) { return { ok: false, error: String(err?.message || err) }; }
+  try {
+    const r = await eng.chat.completions.create({ messages: [{ role: 'user', content: buildPlanPrompt({ instruction, circuit }) }], temperature: 0.1, max_tokens: 700 });
+    const steps = parsePlan(r?.choices?.[0]?.message?.content || '');
+    return steps.length ? { ok: true, steps } : { ok: false, error: 'no plan' };
+  } catch (err) { return { ok: false, error: String(err?.message || err) }; }
 }
 
 /* ── managing the downloaded models (they live in the browser's cache, 1–5 GB each) ── */
