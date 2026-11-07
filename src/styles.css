@@ -1194,3 +1194,8 @@ body:not(.robot-asm) #robotParts { display: none; }
 .proj-tile .ws-ico { width: 40px; height: 40px; margin-bottom: 6px; border-radius: 11px; background: var(--blue-soft); } .proj-tile .ws-ico svg { width: 22px; height: 22px; }
 .proj-tile.on .ws-ico { background: var(--blue); color: var(--on-blue); }
 .proj-chip .ws-ico { width: 16px; height: 16px; margin-right: 5px; vertical-align: -3px; } .proj-chip .ws-ico svg { width: 15px; height: 15px; }
+/* tour: a name tag on each highlight, so the pins and holes are easy to find */
+.tour-rings i em { position: absolute; left: 50%; top: calc(100% + 9px); transform: translateX(-50%); white-space: nowrap; padding: 4px 10px; border-radius: 99px; background: #4d8dff; color: #fff; font: 700 12px/1.2 var(--ui, system-ui); font-style: normal; box-shadow: 0 4px 14px rgba(0, 0, 0, .3); pointer-events: none; }
+.tour-rings i:not(:first-child) em { background: #27a560; }
+.tour-rings i em::after { content: ""; position: absolute; left: 50%; bottom: 100%; margin-left: -5px; border: 5px solid transparent; border-bottom-color: #4d8dff; }
+.tour-rings i:not(:first-child) em::after { border-bottom-color: #27a560; }

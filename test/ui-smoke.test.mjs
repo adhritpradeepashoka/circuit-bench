@@ -1405,7 +1405,7 @@ test('ui: "Do this for me" — every guided step can be done by the guide, and t
   const doc = w.document;
   const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
   const tour = w.__lab.initTour({ editor, sim, code, projects });
-  const tick = () => new Promise(r => setTimeout(r, 380));
+  const tick = () => new Promise(r => setTimeout(r, 900));
   await tour.startGuide();
   assert.ok(doc.getElementById('codeDock').classList.contains('collapsed'), 'starting the guide must not pop the code panel over the circuit');
   for (const title of ['Add an LED', 'Plug the LED into the breadboard', 'Add a resistor', 'Connect the resistor to the LED\'s + leg', 'Wire pin 13 to the resistor', 'Wire the LED\'s − leg to GND']) {
@@ -1425,7 +1425,7 @@ test('ui: "Build it with me" — points at each part, hole and pin in order, and
   const doc = w.document;
   const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
   const tour = w.__lab.initTour({ editor, sim, code, projects });
-  const tick = () => new Promise(r => setTimeout(r, 380));
+  const tick = () => new Promise(r => setTimeout(r, 900));
   await tour.startGuide();
   assert.equal(projects.current.name, 'First circuit: Blink', 'the guide works in a fresh project');
   assert.equal(doc.getElementById('tourTitle').textContent, 'Add an LED');

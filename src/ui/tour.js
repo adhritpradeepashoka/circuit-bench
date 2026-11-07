@@ -34,7 +34,7 @@ export function initTour({ editor, sim, code, projects }) {
   document.body.append(root);
   const card = root.querySelector('.tour-card'), dimPath = root.querySelector('.tour-dim path'), rings = root.querySelector('.tour-rings');
 
-  let steps = [], i = 0, raf = 0, poll = 0, ctx = {}, blogClicked = false;
+  let steps = [], i = 0, raf = 0, poll = 0, okSince = 0, ctx = {}, blogClicked = false;
   document.addEventListener('click', e => { if (e.target.closest?.('.cm-blog-link')) { blogClicked = true; $('communityClose')?.click(); } });
 
   /* ── where things are on screen ──────── */
@@ -46,10 +46,10 @@ export function initTour({ editor, sim, code, projects }) {
     return r.width || r.height ? { x: r.left, y: r.top, w: r.width, h: r.height } : null;
   };
   /** A box around some world points (holes, pins) in screen pixels. */
-  const worldRect = (points, pad = 7) => {
+  const worldRect = (points, pad = 7, label = '') => {
     const c = editor.canvas.getBoundingClientRect(), { x, y, z } = editor.view;
     const sx = points.map(p => c.left + p.x * z + x), sy = points.map(p => c.top + p.y * z + y);
-    return { x: Math.min(...sx) - pad, y: Math.min(...sy) - pad, w: Math.max(...sx) - Math.min(...sx) + pad * 2, h: Math.max(...sy) - Math.min(...sy) + pad * 2 };
+    return { x: Math.min(...sx) - pad, y: Math.min(...sy) - pad, w: Math.max(...sx) - Math.min(...sx) + pad * 2, h: Math.max(...sy) - Math.min(...sy) + pad * 2, label };
   };
   const bb = () => editor.state.parts.find(p => p.type === 'breadboard');
   const uno = () => mainBoard(editor.state.parts);
@@ -70,16 +70,17 @@ export function initTour({ editor, sim, code, projects }) {
     const W = window.innerWidth, H = window.innerHeight;
     let spots = (typeof s.spots === 'function' ? s.spots() : (s.spots || [])).map(t => (t && typeof t === 'object' && !(t instanceof Element) && 'w' in t ? t : rectOf(t))).filter(Boolean);
     const pad = 6;
-    spots = spots.map(r => ({ x: r.x - pad, y: r.y - pad, w: r.w + pad * 2, h: r.h + pad * 2 }));
+    spots = spots.map(r => { const w = Math.max(r.w + pad * 2, 34), h = Math.max(r.h + pad * 2, 34); return { x: r.x - pad - (w - r.w - pad * 2) / 2, y: r.y - pad - (h - r.h - pad * 2) / 2, w, h, label: r.label || '' }; });   // never smaller than a fingertip, so a single pin or hole is easy to spot
     const rr = r => { const k = Math.min(10, r.w / 2, r.h / 2); return `M${r.x + k},${r.y}h${r.w - 2 * k}a${k},${k} 0 0 1 ${k},${k}v${r.h - 2 * k}a${k},${k} 0 0 1 -${k},${k}h-${r.w - 2 * k}a${k},${k} 0 0 1 -${k},-${k}v-${r.h - 2 * k}a${k},${k} 0 0 1 ${k},-${k}z`; };
     root.querySelector('.tour-dim').setAttribute('viewBox', `0 0 ${W} ${H}`);
     dimPath.setAttribute('d', `M0,0H${W}V${H}H0z ${spots.map(rr).join(' ')}`);
     root.classList.toggle('light', !!s.interactive);
-    const ringHtml = spots.map(r => `<i style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px"></i>`).join('');
+    const ringHtml = spots.map(r => `<i style="left:${r.x}px;top:${r.y}px;width:${r.w}px;height:${r.h}px">${r.label ? `<em>${esc(r.label)}</em>` : ''}</i>`).join('');
     if (rings.innerHTML !== ringHtml) rings.innerHTML = ringHtml;
 
     // card: beside the first spot (below, above, left, right — whichever fits), else centred
-    const cw = card.offsetWidth || 340, ch = card.offsetHeight || 200, gap = 14, a = spots[0];
+    const cw = card.offsetWidth || 340, ch = card.offsetHeight || 200, gap = 14;
+    const zones = spots.map(r => (r.label ? { ...r, x: Math.min(r.x, r.x + r.w / 2 - 140), w: Math.max(r.w, 280), h: r.h + 44 } : r)), a = zones[0];     // a highlight's name tag sits under it, so the card keeps clear of that too
     let left = (W - cw) / 2, top = (H - ch) / 2, side = 'center';
     if (a && !s.center) {
       // beside the first spot if that leaves every highlighted thing visible, else wherever the card covers the least: the thing you have to drag must never be under the card
@@ -88,7 +89,7 @@ export function initTour({ editor, sim, code, projects }) {
         ['bottom', a.x + a.w / 2 - cw / 2, a.y + a.h + gap], ['top', a.x + a.w / 2 - cw / 2, a.y - gap - ch],
         ['left', a.x - gap - cw, a.y + a.h / 2 - ch / 2], ['right', a.x + a.w + gap, a.y + a.h / 2 - ch / 2],
         ['corner', 12, H - ch - 12], ['corner', W - cw - 12, H - ch - 12], ['corner', 12, 12], ['corner', W - cw - 12, 12], ['corner', (W - cw) / 2, H - ch - 12], ['corner', (W - cw) / 2, 12],
-      ].map(([side, x, y], k) => { x = clampX(x); y = clampY(y); const hit = spots.reduce((sum, r) => sum + Math.max(0, Math.min(x + cw, r.x + r.w) - Math.max(x, r.x)) * Math.max(0, Math.min(y + ch, r.y + r.h) - Math.max(y, r.y)), 0); return { side, x, y, cost: hit + k * 0.01 }; });
+      ].map(([side, x, y], k) => { x = clampX(x); y = clampY(y); const hit = zones.reduce((sum, r) => sum + Math.max(0, Math.min(x + cw, r.x + r.w) - Math.max(x, r.x)) * Math.max(0, Math.min(y + ch, r.y + r.h) - Math.max(y, r.y)), 0); return { side, x, y, cost: hit + k * 0.01 }; });
       const pick = tries.reduce((best, t) => (t.cost < best.cost ? t : best), tries[0]);
       [side, left, top] = [pick.side, pick.x, pick.y];
     }
@@ -122,13 +123,21 @@ export function initTour({ editor, sim, code, projects }) {
   function go(n) {
     if (n < 0) return;
     if (n >= steps.length) return end(true);
-    i = n; render();
+    i = n; okSince = 0; render();
   }
   function start(list, opts = {}) {
     steps = list; ctx = opts; i = 0; blogClicked = false;
     root.hidden = false; document.body.classList.add('touring'); cancelAnimationFrame(raf); loop();
     clearInterval(poll);
-    poll = setInterval(() => { const s = steps[i]; if (s?.when?.()) { try { s.after?.(); } catch { /* cosmetic */ } go(i + 1); } }, 300);
+    // A step is done only when the thing it asked for is in place AND the hand has let go of it AND it stayed that way for a moment: parts snap into holes live while being dragged, so
+    // acting on the first moment the circuit looks right would take the highlight away before the part was actually dropped.
+    okSince = 0;
+    poll = setInterval(() => {
+      const s = steps[i]; if (!s?.when) return; let ok = false; try { ok = !!s.when() && !editor.gesture && !document.querySelector('.dragging'); } catch { ok = false; }
+      if (!ok) { okSince = 0; return; }
+      if (!okSince) { okSince = Date.now(); return; }
+      if (Date.now() - okSince >= 350) { okSince = 0; try { s.after?.(); } catch { /* cosmetic */ } go(i + 1); }
+    }, 150);
     render();
   }
   function end(finished = false) {
@@ -242,22 +251,22 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>Press <b>Add</b> on the LED (or drag it onto the bench).</p><p class="tour-why">An LED lights when current flows into its <b>+ leg</b> (anode, the longer one) and out of its <b>− leg</b> (cathode).</p>`,
       assist: () => addClear('led', 0), when: () => !!led() },
     { label: 'Step 2 of 7', title: 'Plug the LED into the breadboard', interactive: true, noBack: true, before: () => editor.fit(),
-      spots: () => [worldRect([...holes(10, 'E'), ...holes(11, 'E')], 9), led() && worldRect([pinWorld(led(), 'A'), pinWorld(led(), 'C')], 12)],
-      body: `<p>Drag the LED by its round top and drop it so its two legs click into <b>row E, holes 10 and 11</b> (highlighted). Any two neighbouring holes in rows A to E work too.</p><p class="tour-why">Each column of 5 holes (A to E) is joined by a metal strip inside the breadboard, so anything in the same column is connected.</p>`,
+      spots: () => [worldRect([...holes(10, 'E'), ...holes(11, 'E')], 9, 'Put the legs here: row E, holes 10 and 11'), led() && worldRect([pinWorld(led(), 'A'), pinWorld(led(), 'C')], 12, 'The LED\'s two legs')],
+      body: `<p>Drag the LED by its round top and drop it so its two legs click into <b>row E, holes 10 and 11</b> (highlighted). Any two neighbouring holes in rows A to E work too.</p><p>The <b>breadboard</b> is the white board with the grid of small holes. Letters A to J run down its side and numbers run along it, so "row E, hole 10" is where the E row meets the 10 column.</p><p class="tour-why">Each column of 5 holes (A to E) is joined by a metal strip inside the breadboard, so anything in the same column is connected.</p>`,
       assist: assistSeatLed, when: ledSeated },
     { label: 'Step 3 of 7', title: 'Add a resistor', interactive: true, noBack: true, before: showCard('resistor'), spots: () => [card$('resistor')()],
       body: `<p>Press <b>Add</b> on the Resistor. It's already 220 Ω (right-click it later to see the colour bands).</p><p class="tour-why">Without it, too much current would flow and burn out the LED, and maybe the Arduino pin.</p>`,
       assist: () => addClear('resistor', 150), after: () => { const r = res(), b = bb(); if (r && b) { r.rot = 0; r.x = b.x + 220; r.y = b.y + PART_DEFS.breadboard.h + 45; editor.syncParts(); editor.markDirty(); editor.commit(); editor.fit(); } }, when: () => !!res() },
     { label: 'Step 4 of 7', title: 'Connect the resistor to the LED\'s + leg', interactive: true, noBack: true, before: () => editor.fit(),
-      spots: () => { const a = seatedCol(led(), 'A'); return [a && worldRect(holes(a.col), 8), res() && worldRect([pinWorld(res(), '1'), pinWorld(res(), '2')], 10)]; },
+      spots: () => { const a = seatedCol(led(), 'A'); return [a && worldRect(holes(a.col), 8, `Column ${a.col}`), res() && worldRect([pinWorld(res(), '1'), pinWorld(res(), '2')], 10, 'The resistor')]; },
       body: () => { const a = seatedCol(led(), 'A'); return `<p>Drag the resistor by its middle so <b>one end goes into column ${a ? a.col : 'of the LED\'s + leg'}</b> (highlighted, the same column as the LED's + leg, any row A to D) and the other end into an <b>empty column</b>.</p><p class="tour-why">Now current can go resistor → LED.</p>`; },
       assist: assistResistor, when: resPlaced },
     { label: 'Step 5 of 7', title: 'Wire pin 13 to the resistor', interactive: true, noBack: true,
-      spots: () => { const f = farCol(); return [worldRect(pinPt(uno(), '13'), 9), f && worldRect(holes(f.col), 8)]; },
-      body: () => { const f = farCol(); return `<p>Press on <b>pin 13</b> on the Arduino (top edge, highlighted) and drag to any hole in <b>column ${f ? f.col : '…'}</b>, the resistor's other end. Let go on the hole.</p><p class="tour-why">Pin 13 is what the code switches on and off.</p>`; },
+      spots: () => { const f = farCol(); return [worldRect(pinPt(uno(), '13'), 9, 'Pin 13 on the Arduino'), f && worldRect(holes(f.col), 8, `Column ${f.col}: drop the wire on any hole here`)]; },
+      body: () => { const f = farCol(); return `<p>Press on <b>pin 13</b> on the Arduino (top edge, highlighted) and drag to any hole in <b>column ${f ? f.col : '…'}</b>, the resistor's other end. Let go on the hole.</p><p>Pin 13 is one of the small gold sockets along the top edge of the blue board, marked <b>13</b> in white print.</p><p class="tour-why">Pin 13 is what the code switches on and off.</p>`; },
       assist: assistPin13, when: () => { const e = resEnds(); return !!e && pin13() === net(res(), e.far); } },
     { label: 'Step 6 of 7', title: 'Wire the LED\'s − leg to GND', interactive: true, noBack: true,
-      spots: () => { const c = seatedCol(led(), 'C'); return [c && worldRect(holes(c.col), 8), worldRect(pinPt(uno(), 'GND.1'), 9)]; },
+      spots: () => { const c = seatedCol(led(), 'C'); return [c && worldRect(holes(c.col), 8, `Column ${c.col}`), worldRect(pinPt(uno(), 'GND.1'), 9, 'GND pin on the Arduino')]; },
       body: () => { const c = seatedCol(led(), 'C'); return `<p>Drag a wire from any hole in <b>column ${c ? c.col : '…'}</b> (the LED's − leg) to the <b>GND</b> pin next to pin 13.</p><p class="tour-why">GND (ground) is where current returns to the Arduino, which completes the circuit.</p>`; },
       assist: assistGnd, when: () => { const l = led(); return !!l && gnd().has(net(l, 'C')); } },
     { label: 'Step 7 of 7', title: 'Press Run', interactive: true, noBack: true, spots: ['#runBtn'],
