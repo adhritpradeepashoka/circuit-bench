@@ -682,7 +682,7 @@ button { cursor: pointer; }
   --mat: #fff4c9; --mat-line: rgba(124, 77, 255, .16); --mat-major: rgba(124, 77, 255, .3);
   --paper: #fffaf0; --line: #ead9ff; --text: #2b2350; --muted: #6f63a8;
   --blue: #ff6f3c; --blue-soft: #ffe9df; --green: #1fb86b; --red: #ef476f; --amber: #d98a00; --amber-soft: #fff0b8;
-  --ui: "Trebuchet MS", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; font-size: 14px;
+  font-size: 14px;
 }
 :root[data-theme="kids"] .topbar button, :root[data-theme="kids"] .run, :root[data-theme="kids"] .tool { border-radius: 14px; }
 :root[data-theme="kids"] .topbar button { border-color: #9d86ff; }
@@ -1204,3 +1204,18 @@ body:not(.robot-asm) #robotParts { display: none; }
 .tour-rings i:not(:first-child) em { background: #27a560; }
 .tour-rings i em::after { content: ""; position: absolute; left: 50%; bottom: 100%; margin-left: -5px; border: 5px solid transparent; border-bottom-color: #4d8dff; }
 .tour-rings i:not(:first-child) em::after { border-bottom-color: #27a560; }
+
+/* ── Classic: a little more finish (softer surfaces, calmer top bar, clearer panels) ── */
+:root:not([data-theme]), :root[data-theme="classic"] {
+  --ink: #141a1f; --ink-2: #222b32; --paper: #f4f6f5; --line: #d9e0dc; --mat: #e3eae5;
+  --blue: #2563eb; --blue-soft: #e9f0ff; font-size: 13.5px;
+}
+:root:not([data-theme]) .topbar, :root[data-theme="classic"] .topbar { background: linear-gradient(180deg, #1b2229, #12171b); border-bottom: 1px solid #0b0e10; box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 2px 10px rgba(10,20,25,.18); }
+:root:not([data-theme]) .topbar button, :root[data-theme="classic"] .topbar button, :root:not([data-theme]) .project-btn, :root[data-theme="classic"] .project-btn { border-radius: 9px; border-color: #34414a; transition: background .12s, border-color .12s; }
+:root:not([data-theme]) .run, :root[data-theme="classic"] .run { box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 2px 8px rgba(31,157,85,.35); }
+:root:not([data-theme]) .side, :root[data-theme="classic"] .side { background: #fbfcfb; box-shadow: -6px 0 18px rgba(10,20,25,.05); }
+:root:not([data-theme]) .toolbar, :root[data-theme="classic"] .toolbar { background: #fbfcfb; border-bottom: 1px solid var(--line); }
+:root:not([data-theme]) .modal-card, :root[data-theme="classic"] .modal-card, :root:not([data-theme]) .menu, :root[data-theme="classic"] .menu { border-radius: 14px; box-shadow: 0 18px 48px rgba(10,20,25,.22); }
+:root:not([data-theme]) .sim-tray, :root[data-theme="classic"] .sim-tray, :root:not([data-theme]) .hint-card, :root[data-theme="classic"] .hint-card { border-radius: 12px; box-shadow: 0 8px 26px rgba(10,20,25,.14); }
+
+.tour-arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }

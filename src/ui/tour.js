@@ -33,6 +33,7 @@ export function initTour({ editor, sim, code, projects }) {
     </div>`;
   document.body.append(root);
   const card = root.querySelector('.tour-card'), dimPath = root.querySelector('.tour-dim path'), rings = root.querySelector('.tour-rings');
+  const arrowSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); arrowSvg.setAttribute('class', 'tour-arrows'); arrowSvg.setAttribute('aria-hidden', 'true'); root.insertBefore(arrowSvg, card);
 
   let steps = [], i = 0, raf = 0, poll = 0, okSince = 0, ctx = {}, blogClicked = false;
   document.addEventListener('click', e => { if (e.target.closest?.('.cm-blog-link')) { blogClicked = true; $('communityClose')?.click(); } });
@@ -96,6 +97,24 @@ export function initTour({ editor, sim, code, projects }) {
     card.style.left = `${Math.max(8, Math.min(left, W - cw - 8))}px`;
     card.style.top = `${Math.max(8, Math.min(top, H - ch - 8))}px`;
     card.dataset.side = side;
+    // arrows: from the card to each highlighted thing, so the eye knows where to look
+    const cl = Math.max(8, Math.min(left, W - cw - 8)), ct = Math.max(8, Math.min(top, H - ch - 8));
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(v, hi));
+    const arrows = s.center ? '' : spots.map((r, k) => {
+      const cx = r.x + r.w / 2, cy = r.y + r.h / 2;
+      const sx = clamp(cx, cl, cl + cw), sy = clamp(cy, ct, ct + ch);                  // nearest point on the card
+      const ex0 = clamp(sx, r.x, r.x + r.w), ey0 = clamp(sy, r.y, r.y + r.h);          // nearest point on the highlight
+      let dx = ex0 - sx, dy = ey0 - sy; const d = Math.hypot(dx, dy);
+      if (d < 36) return '';                                                            // already touching: no arrow needed
+      dx /= d; dy /= d;
+      const ex = ex0 - dx * 6, ey = ey0 - dy * 6, bx = sx + dx * 4, by = sy + dy * 4;
+      const mx = (bx + ex) / 2 - dy * Math.min(30, d / 5), my = (by + ey) / 2 + dx * Math.min(30, d / 5);   // a gentle curve
+      const ang = Math.atan2(ey - my, ex - mx), hx = Math.cos(ang), hy = Math.sin(ang), c = k ? '#27a560' : '#4d8dff';
+      const head = `M${ex},${ey}L${ex - hx * 13 - hy * 7},${ey - hy * 13 + hx * 7}L${ex - hx * 13 + hy * 7},${ey - hy * 13 - hx * 7}z`;
+      return `<path d="M${bx},${by}Q${mx},${my} ${ex - hx * 4},${ey - hy * 4}" fill="none" stroke="${c}" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 7"/><path d="${head}" fill="${c}"/>`;
+    }).join('');
+    if (arrowSvg.innerHTML !== arrows) arrowSvg.innerHTML = arrows;
+    arrowSvg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   }
   const loop = () => { layout(); raf = requestAnimationFrame(loop); };
 
