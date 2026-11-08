@@ -17,6 +17,17 @@ export function buildKitMesh(THREE, part) {
 
   if (d.kind === 'servo') {
     const s = d.servo, ex = s.earHole / 2;
+    if (s.style === 'block') {                                                                                                                   // RDS51150: a plain block, M2.5 holes in its big faces, a hub and shaft out of each side
+      const face = (z, pts) => { for (const [x, y] of pts) cyl(1.25, 0.3, z - (z > 0 ? 0.15 : 0.15), C.black, 12, {}, x, y); };
+      box(s.W, s.L, s.H, 0, 0, 0, C.servoDark, { rough: 0.45, metal: 0.3 }); box(s.W + 0.4, s.L + 0.4, 6, 0, 0, s.H / 2 - 3 + 0, C.alu, { metal: 0.5, rough: 0.4 });   // the case and its seam band
+      face(s.H, s.faceTop); face(0, s.faceBottom);
+      for (const [z, dz] of [[s.H, 1], [0, -1]]) {
+        cyl(s.W * 0.4, 2, dz > 0 ? z : z - 2, C.alu, 36, { metal: 0.6, rough: 0.35 }, 0, d.yShaft);                                             // the round hub
+        cyl(s.shaftD / 2, s.shaftH, dz > 0 ? z : z - s.shaftH, C.steel, 28, { metal: 0.8, rough: 0.3 }, 0, d.yShaft);                           // the splined output shaft
+      }
+      box(3.5, 1.2, 4, 0, -s.L / 2 - 0.6, s.H * 0.5, C.black); for (const [k, c] of [0x7a4a1a, C.red, 0xe8a200].entries()) box(0.8, 5, 0.8, (k - 1) * 1.1, -s.L / 2 - 3, s.H * 0.5 + 1.5, c);
+      return g;
+    }
     box(s.W, s.L, s.H, 0, 0, 0, C.servo, { rough: 0.5 });                                                                                  // the body
     const ears = holes(rrect(s.W, s.ear, 1.5), [[0, ex], [0, -ex]], 1.2); plate(ears, s.earT, s.earZ, C.servo);                                  // mounting ears, with their screw holes
     cyl(s.W * 0.42, 2.2, s.H, C.servoDark, 28, {}, 0, d.yShaft);                                                                            // the round boss round the shaft

@@ -18,6 +18,9 @@ export const SERVOS = {
   sg90:   { name: 'SG90 micro servo',   L: 22.5, W: 12.2, H: 22.7, ear: 32.2, earHole: 27.6, earZ: 15.9, earT: 2.5, shaftOff: 5.8, shaftD: 4.8, shaftH: 3.2, horn: 'M2', mass: 9,    torque: 0.176, speed: 600, volts: 4.8, stall: 0.65, real: true },
   mg90s:  { name: 'MG90S metal-gear servo', L: 22.8, W: 12.4, H: 28.5, ear: 32.5, earHole: 28.0, earZ: 19.0, earT: 2.5, shaftOff: 5.8, shaftD: 4.8, shaftH: 3.6, horn: 'M2', mass: 13.4, torque: 0.216, speed: 545, volts: 4.8, stall: 0.7, real: true },
   mg996r: { name: 'MG996R servo',       L: 40.7, W: 19.7, H: 42.9, ear: 53.5, earHole: 49.5, earZ: 28.5, earT: 3, shaftOff: 10, shaftD: 5.8, shaftH: 4.5, horn: 'M3', mass: 55,   torque: 0.92, speed: 300, volts: 4.8, stall: 2.5, real: true },
+  // DSSERVO RDS51150 (150 kg, dual shaft): no ears. It is bolted down by M2.5 holes tapped into its two large faces (drawing DSSERVO-RDS51150-Drawing.pdf: body 65 × 30 × 48, 4 holes on a 24 × 24 pattern on the top face, 3 on the bottom, 61.4 over both horns). Shaft 13.4 mm in from the +Y end.
+  rds51150: { name: 'RDS51150 servo (150 kg, dual shaft)', style: 'block', L: 65, W: 30, H: 48, ear: 0, earHole: 24, earZ: 0, earT: 0, shaftOff: 13.4, shaftD: 12, shaftH: 6.7, horn: 'M3', mass: 163, torque: 16.2, speed: 286, volts: 12, stall: 8, real: true,
+    faceTop: [[-12, -29.5], [12, -29.5], [-12, -5.5], [12, -5.5]], faceBottom: [[12, -29.5], [-12, -29.5], [12, -17.5]], faceScrew: 'M2.5' },
   ds3218: { name: 'DS3218 servo (20 kg)', L: 40.2, W: 20.2, H: 40.5, ear: 54.5, earHole: 49.5, earZ: 27, earT: 3, shaftOff: 10, shaftD: 5.8, shaftH: 4.5, horn: 'M3', mass: 60,   torque: 1.96, speed: 340, volts: 6.0, stall: 3.2, real: false },
 };
 /** Gear motors and the wheel bore each one wants. */
@@ -34,7 +37,7 @@ export function parseKitId(id) {
   if ((m = /^plate-(\d{2,3})x(\d{2,3})(?:-f(\d{1,2}))?$/.exec(s))) return { kind: 'plate', w: fin(Number(m[1]), 30, 400, 100), l: fin(Number(m[2]), 30, 400, 80), feet: m[3] ? fin(Number(m[3]), 4, 60, 18) : 0 };
   if ((m = /^wheel-(\d{2,3})(?:-b([\d.]+))?$/.exec(s))) { const dia = fin(Number(m[1]), 20, 200, 65); return { kind: 'wheel', dia, bore: m[2] ? fin(Number(m[2]), 1.5, 12, 5.5) : (dia <= 50 ? 3.1 : 5.5) }; }
   if ((m = /^gearmotor-([a-z0-9]+)$/.exec(s)) && GEARMOTORS[m[1]]) return { kind: 'gearmotor', key: m[1] };
-  if ((m = /^bracket-([a-z0-9]+)$/.exec(s)) && SERVOS[m[1]]) return { kind: 'bracket', key: m[1] };
+  if ((m = /^bracket-([a-z0-9]+)$/.exec(s)) && SERVOS[m[1]] && SERVOS[m[1]].style !== 'block') return { kind: 'bracket', key: m[1] };
   if (s === 'caster-ball') return { kind: 'caster' };
   if ((m = /^holder-(2|4)aa$/.exec(s))) return { kind: 'holder', cells: Number(m[1]) };
   return null;
@@ -46,6 +49,17 @@ export function makeKitPart(id) {
   const base = { format: ROBOT_PART_FORMAT, version: ROBOT_PART_VERSION, id, model: { file: `${id}.gen`, format: 'gen', units: 'mm', up: 'z' } };
   if (d.kind === 'servo') {
     const s = SERVOS[d.key], src = s.real ? 'datasheet' : 'estimated', hd = clear(s.horn), yShaft = s.L / 2 - s.shaftOff, top = s.H + s.shaftH, ex = s.earHole / 2;
+    if (s.style === 'block') {                                                                                                                   // no ears: M2.5 holes in the two big faces, and a shaft out of each
+      const fh = clear(s.faceScrew), at = ([x, y]) => [x, y];
+      return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.L, s.H + 2 * s.shaftH], source: src }, kit: { ...d, servo: s, yShaft, top },
+        frames: [
+          ...s.faceTop.map((p, k) => hole(`face-top-${k + 1}`, [...at(p), s.H], UP, fh, src)),
+          ...s.faceBottom.map((p, k) => hole(`face-bottom-${k + 1}`, [...at(p), 0], DOWN, fh, src)),
+          { id: 'shaft', kind: 'shaft', pos: [0, yShaft, top].map(r2), dir: UP, diameter: s.shaftD, source: src },
+          { id: 'shaft-bottom', kind: 'shaft', pos: [0, yShaft, -s.shaftH].map(r2), dir: DOWN, diameter: s.shaftD, source: src },
+          hole('horn-screw', [0, yShaft, top], UP, hd, src), hole('horn-screw-bottom', [0, yShaft, -s.shaftH], DOWN, hd, src),
+        ] };
+    }
     return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.ear, top], source: src }, kit: { ...d, servo: s, yShaft, top },
       frames: [
         hole('ear-1-top', [0, ex, s.earZ + s.earT], UP, 2.4, src), hole('ear-1-bottom', [0, ex, s.earZ], DOWN, 2.4, src),
@@ -108,7 +122,7 @@ export function makeKitPart(id) {
 
 /** Parts offered ready-made in the list. [name, id] */
 export const KIT_PRESETS = [
-  ['SG90 micro servo', 'servo-sg90'], ['MG90S metal-gear servo', 'servo-mg90s'], ['MG996R servo', 'servo-mg996r'], ['DS3218 servo (20 kg)', 'servo-ds3218'],
+  ['SG90 micro servo', 'servo-sg90'], ['MG90S metal-gear servo', 'servo-mg90s'], ['MG996R servo', 'servo-mg996r'], ['DS3218 servo (20 kg)', 'servo-ds3218'], ['RDS51150 servo (150 kg, dual shaft, no brackets)', 'servo-rds51150'],
   ['Link 40 mm', 'link-40'], ['Link 60 mm', 'link-60'], ['Link 80 mm', 'link-80'], ['Link 120 mm (M3)', 'link-120'], ['Link 160 mm (M3)', 'link-160'],
   ['Base plate 100×80', 'plate-100x80'], ['Base plate 100×50 on feet (for servos)', 'plate-100x50-f18'], ['L-bracket for SG90 (turns a servo 90°)', 'bracket-sg90'], ['L-bracket for MG996R', 'bracket-mg996r'], ['Base plate 150×100', 'plate-150x100'], ['Base plate 200×150', 'plate-200x150'],
   ['TT gear motor', 'gearmotor-tt'], ['N20 gear motor', 'gearmotor-n20'], ['Wheel 65 mm (TT)', 'wheel-65'], ['Wheel 43 mm (N20)', 'wheel-43'], ['Ball caster', 'caster-ball'],
