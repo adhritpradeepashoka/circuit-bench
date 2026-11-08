@@ -2,7 +2,7 @@
 // AI, which fills in the same form. Either way the result is a declarative spec checked by validatePartSpec()
 // (src/core/custom-parts.js): it can only describe a part, never run code. Saved parts live in "My parts"
 // (this browser) and travel inside any project that uses them.
-import { BEHAVIOURS, PACKAGES, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
+import { BEHAVIOURS, PACKAGES, PHOTO_MAX_CHARS, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
 import { FUNCTIONS } from '../core/expr.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
@@ -257,6 +257,32 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     return v;
   }
 
+  /** A picture the student picked → a small raster (never their SVG text: it is drawn to a canvas first, so no script can ride along). */
+  async function pickPicture(file) {
+    const note = $('pcPicNote'); note.className = 'pc-pic-note';
+    if (!file) return;
+    if (file.size > 12_000_000) { note.textContent = 'That picture is over 12 MB. Pick a smaller one.'; note.classList.add('bad'); return; }
+    if (draft.package !== 'module') { $('pcPackage').value = 'module'; $('pcPackage').dispatchEvent(new Event('change', { bubbles: true })); }
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('bad')); i.src = url; });
+      const nat = Math.max(img.naturalWidth || img.width, img.naturalHeight || img.height, 1);
+      let max = 240, data = '', w = 0, h = 0;
+      for (let tries = 0; tries < 5; tries++, max = Math.round(max * 0.8)) {
+        const k = Math.min(1, max / nat); w = Math.max(8, Math.round((img.naturalWidth || img.width) * k)); h = Math.max(8, Math.round((img.naturalHeight || img.height) * k));
+        const cv = document.createElement('canvas'); cv.width = w; cv.height = h; const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0, w, h);
+        data = cv.toDataURL('image/webp', 0.82); if (!data.startsWith('data:image/webp')) data = cv.toDataURL('image/png');
+        if (data.length <= PHOTO_MAX_CHARS) break;
+      }
+      if (data.length > PHOTO_MAX_CHARS) { note.textContent = 'Could not shrink that picture enough. Try a simpler one.'; note.classList.add('bad'); return; }
+      draft.photo = { data, w, h }; $('pcPicClear').hidden = false; note.textContent = 'Picture set. It is stored with the part (in this browser and in your projects).'; preview();
+    } catch { note.textContent = 'That file could not be read as a picture.'; note.classList.add('bad'); }
+    finally { URL.revokeObjectURL(url); }
+  }
+  $('pcPicBtn').addEventListener('click', () => $('pcPicFile').click());
+  $('pcPicFile').addEventListener('change', e => { pickPicture(e.target.files?.[0]); e.target.value = ''; });
+  $('pcPicClear').addEventListener('click', () => { delete draft.photo; $('pcPicClear').hidden = true; $('pcPicNote').textContent = 'Picture removed.'; preview(); });
+
   function open(type = null, prefill = null) {
     if (typeof paintProvider === 'function') paintProvider();
     editing = type && PART_DEFS[type]?.custom ? type : null;
@@ -265,7 +291,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     $('pcSave').textContent = editing ? 'Save changes' : 'Save & place';
     $('pcDelete').hidden = !editing;
     $('pcAiStatus').textContent = ''; $('pcAiStatus').className = 'pc-ai-status';
-    paintForm();
+    paintForm(); $('pcPicClear').hidden = !draft.photo; $('pcPicNote').className = 'pc-pic-note';
     lastPhoto = null; $('pcPhoto').hidden = true; $('pcFix').hidden = true;
     modal.hidden = false;
     if (!editing && prefill?.name) {

@@ -235,11 +235,20 @@ export function validatePartSpec(raw, { id, strict = false } = {}) {
     pins, behaviour, breadboard, package: pkg,
     ...(pkg === 'board' ? { board: cleanBoard(raw.board) } : {}),
     ...(pkg === 'module' && LOOK_IDS.has(raw.look) ? { look: raw.look } : {}),
+    ...(pkg === 'module' && cleanPhoto(raw.photo) ? { photo: cleanPhoto(raw.photo) } : {}),
     ...(pkg === 'art' && art ? { art } : {}),
     ...(cleanRobot(raw.robot) ? { robot: cleanRobot(raw.robot) } : {}),
     ...(pkg === 'sprite' ? { sprite: { art: SPRITE_ARTS.includes(raw.sprite?.art) ? raw.sprite.art : SPRITE_ARTS[0], w: clampN(raw.sprite?.w, 20, 400), h: clampN(raw.sprite?.h, 20, 400), ...(raw.sprite?.note ? { note: str(raw.sprite.note, 40) } : {}) } } : {}),
   };
   return { ok: true, spec };
+}
+
+/** A student's own picture of the part: a small raster (png, jpeg or webp) as a data URL. Never SVG, so a picture can never carry a script. */
+export const PHOTO_MAX_CHARS = 140_000;
+export function cleanPhoto(p) {
+  if (!p || typeof p !== 'object' || typeof p.data !== 'string') return null;
+  if (p.data.length > PHOTO_MAX_CHARS || !/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(p.data)) return null;
+  return { data: p.data, w: clampN(p.w, 8, 1000), h: clampN(p.h, 8, 1000) };
 }
 
 /** The drawing of an imported board: sizes in millimetres, every number clamped, shapes limited to a few known kinds. */

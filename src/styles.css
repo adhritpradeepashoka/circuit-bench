@@ -1230,3 +1230,8 @@ body:not(.robot-asm) #robotParts { display: none; }
 .gal-acts { display: flex; flex-wrap: wrap; gap: 8px; }
 .gal-copy { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
 #projGallery { margin-left: auto; }
+
+.pc-pic { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.pc-pic button { height: 30px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-weight: 650; }
+.pc-pic-note { flex-basis: 100%; font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.pc-pic-note.bad { color: var(--red); }

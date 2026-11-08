@@ -329,6 +329,7 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
   if (spec.package === 'art' && spec.art) return artSVG(spec, w, h, pins, { lit, aux, levels });
   if (spec.package === 'sprite' && spec.sprite) return spriteSVG(spec, w, h, pins);
   if (spec.package === 'dip' || spec.package === 'dip-wide') return dipSVG(spec, w, h, pins);
+  if (spec.package === 'module' && spec.photo) return photoSVG(spec, w, h, pins);
   if (spec.look && lookSVG(spec.look, spec, w, h, pins)) {
     const dots = pins.map(p => `<rect x="${(p.x - 2.4).toFixed(1)}" y="${(p.y - 2.4).toFixed(1)}" width="4.8" height="4.8" rx="0.8" fill="#d9b44a" stroke="#8a6d1d" stroke-width="0.6"><title>${esc(p.label || p.id)}</title></rect>`).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${lookSVG(spec.look, spec, w, h, pins)}${dots}</svg>`;
@@ -356,19 +357,34 @@ export function customPartSVG(spec, { lit = 0, aux = 0, levels = null } = {}) {
     ? `<circle class="cp-led" cx="${w / 2}" cy="${h / 2 - 7}" r="6" fill="${color}" opacity="${0.25 + 0.75 * lit}" stroke="#0003"/>${lit ? `<circle cx="${w / 2}" cy="${h / 2 - 7}" r="11" fill="${color}" opacity="${0.35 * lit}"/>` : ''}`
     : kind === 'button' || kind === 'digital-sensor' ? `<circle class="cp-cap" cx="${w / 2}" cy="${h / 2 - 7}" r="6.5" fill="#20262c" stroke="#0006"/>`
     : ICON_KINDS.has(kind) ? iconSVG(spec, { lit, aux, levels }, w / 2, h / 2 - 16, spec.textColor) : '';
-  const nameY = ICON_KINDS.has(kind) ? h / 2 + 5 : kind === 'led' || kind === 'button' || kind === 'digital-sensor' ? h / 2 + 8 : h / 2 + 3;
+  const nameY = spec.package === 'module' && h < 70 && !ICON_KINDS.has(kind) ? 15 : ICON_KINDS.has(kind) ? h / 2 + 5 : kind === 'led' || kind === 'button' || kind === 'digital-sensor' ? h / 2 + 8 : h / 2 + 3;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">
     ${leads}
-    <rect x="${inset}" y="${inset}" width="${bw}" height="${bh}" rx="5" fill="${spec.color}" stroke="#0005"/>
+    <rect x="${inset}" y="${inset}" width="${bw}" height="${bh}" rx="5" fill="${spec.color}" stroke="#0005"/>${spec.package === 'module' ? `<rect x="${inset}" y="${inset}" width="${bw}" height="${(bh * 0.42).toFixed(1)}" rx="5" fill="#fff" opacity=".08"/><rect x="${inset + 2.6}" y="${inset + 2.6}" width="${bw - 5.2}" height="${bh - 5.2}" rx="3" fill="none" stroke="#fff" stroke-opacity=".26" stroke-dasharray="3 2"/>${bw >= 50 && bh >= 36 ? [[1, 1], [-1, 1], [1, -1], [-1, -1]].map(([sx, sy]) => [inset + (sx > 0 ? 6.5 : bw - 6.5), inset + (sy > 0 ? 6.5 : bh - 6.5)]).filter(([x, y]) => !pins.some(p => Math.hypot(p.x - x, p.y - y) < 9)).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.4" fill="#0d1215" stroke="#d9b44a" stroke-width="1"/>`).join('') : ''}` : ''}
     ${extra}${pin1}
     ${labels}
-    <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="8.5" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
+    <text x="${w / 2}" y="${nameY}" text-anchor="middle" font-size="${nameY === 15 ? 6.4 : 8.5}" font-weight="700" font-family="sans-serif" fill="${spec.textColor}"
       stroke="${spec.color}" stroke-width="${quad ? 2.2 : 0}" paint-order="stroke">${esc(spec.label)}</text>
   </svg>`;
 }
 const LIVE_ICON_KINDS = new Set([...ICON_KINDS].filter(k => k !== 'hbridge').concat(['led', 'button', 'digital-sensor']));
 /** Any breakout board without a ready-made picture, drawn like the real thing: a coloured PCB, gold pads where the pins are, the pin names in silkscreen along the
  *  edges, and the main chip in the middle carrying the part's label. The fallback for every module the AI or a student defines without its own drawing. */
+/** The student's own picture is the part's body; the pins sit on top of it at the edges, each with its name on a dark chip so it reads on any photo. */
+function photoSVG(spec, w, h, pins) {
+  const size = 5.2, uid = `ph${Math.abs([...String(spec.id)].reduce((a, c) => a * 31 + c.charCodeAt(0) | 0, 7))}`;
+  const pads = pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3" fill="#d9b44a" stroke="#6b5214" stroke-width=".7"><title>${esc(p.label || p.id)}</title></circle>`).join('');
+  const names = pins.map(p => {
+    const t = esc(p.id), tw = Math.max(8, t.length * size * 0.62 + 4), vertical = p.side === 'top' || p.side === 'bottom';
+    const [x, y] = { left: [p.x + 5, p.y], right: [p.x - 5 - tw, p.y], top: [p.x, p.y + 5], bottom: [p.x, p.y - 5 - tw] }[p.side] || [p.x, p.y];
+    return vertical
+      ? `<g transform="translate(${x} ${y})"><rect x="-4" y="0" width="8" height="${tw}" rx="2" fill="#000" opacity=".62"/><text transform="rotate(-90)" x="${-tw + 2}" y="${size * 0.36}" font-size="${size}" font-family="sans-serif" font-weight="700" fill="#fff">${t}</text></g>`
+      : `<g transform="translate(${x} ${y - 4})"><rect x="0" y="0" width="${tw}" height="8" rx="2" fill="#000" opacity=".62"/><text x="2" y="${4 + size * 0.36}" font-size="${size}" font-family="sans-serif" font-weight="700" fill="#fff">${t}</text></g>`;
+  }).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><clipPath id="${uid}"><rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4"/></clipPath></defs>
+    <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="${spec.color}" stroke="#0007"/><image href="${spec.photo.data}" x="1" y="1" width="${w - 2}" height="${h - 2}" preserveAspectRatio="xMidYMid meet" clip-path="url(#${uid})"/>
+    <rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="none" stroke="#0007"/>${names}${pads}</svg>`;
+}
 function moduleBoardSVG(spec, w, h, pins) {
   const size = 5.4, ink = spec.textColor || '#ffffff';
   const pads = pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="2.9" fill="#d9b44a" stroke="#8a6d1d" stroke-width=".6"><title>${esc(p.label || p.id)}</title></circle><circle cx="${p.x}" cy="${p.y}" r="1.1" fill="#0d1215"/>`).join('');
@@ -378,10 +394,32 @@ function moduleBoardSVG(spec, w, h, pins) {
     const vertical = p.side === 'top' || p.side === 'bottom';
     return `<text x="${pos[0]}" y="${pos[1]}" text-anchor="${pos[2]}" font-size="${size}" font-family="sans-serif" font-weight="700" fill="${ink}" opacity=".9"${vertical ? ` transform="rotate(-90 ${pos[0]} ${pos[1]})"` : ''}>${esc(p.id)}</text>`;
   }).join('');
-  const cw = Math.min(34, Math.max(20, w * 0.34)), ch = Math.min(30, Math.max(16, h * 0.34)), cx = w / 2 - cw / 2, cy = h / 2 - ch / 2;
-  const chip = w >= 56 && h >= 40 ? `<rect x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#16181c" stroke="#000" stroke-width=".8"/><circle cx="${(cx + 3.6).toFixed(1)}" cy="${(cy + 3.6).toFixed(1)}" r="1.3" fill="#555a62"/>
-    <text x="${w / 2}" y="${(h / 2 + 2.4).toFixed(1)}" text-anchor="middle" font-size="${Math.min(8, Math.max(4.6, (cw - 4) / Math.max(4, String(spec.label).length) * 1.45)).toFixed(1)}" font-family="monospace" font-weight="700" fill="#cfd3d8">${esc(spec.label)}</text>` : `<text x="${w / 2}" y="${(h / 2 + 3).toFixed(1)}" text-anchor="middle" font-size="7.5" font-family="sans-serif" font-weight="800" fill="${ink}">${esc(spec.label)}</text>`;
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="${spec.color}" stroke="#05080c" stroke-width="1.2"/><rect x="3" y="3" width="${w - 6}" height="${h - 6}" rx="3" fill="none" stroke="#ffffff" stroke-opacity=".15"/>${chip}${names}${pads}</svg>`;
+  const cw = Math.min(34, Math.max(20, w * 0.34)), ch = Math.min(30, Math.max(16, h * 0.34)), cx = w / 2 - cw / 2, cy = h / 2 - ch / 2, big = w >= 56 && h >= 40;
+  const kind = spec.behaviour?.kind, mx = w / 2, my = h / 2, seed = [...String(spec.id || spec.name)].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7), rnd = n => { let x = (seed + n * 2654435761) >>> 0; x ^= x << 13; x >>>= 0; x ^= x >> 17; x ^= x << 5; return (x >>> 0) / 4294967296; };
+  const chipSvg = `<rect x="${cx.toFixed(1)}" y="${cy.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="#16181c" stroke="#000" stroke-width=".8"/><circle cx="${(cx + 3.6).toFixed(1)}" cy="${(cy + 3.6).toFixed(1)}" r="1.3" fill="#555a62"/>
+    <text x="${w / 2}" y="${(h / 2 + 2.4).toFixed(1)}" text-anchor="middle" font-size="${Math.min(8, Math.max(4.6, (cw - 4) / Math.max(4, String(spec.label).length) * 1.45)).toFixed(1)}" font-family="monospace" font-weight="700" fill="#cfd3d8">${esc(spec.label)}</text>`;
+  // the main component of the board, drawn for what the part does (a sensing element, two ultrasonic cans, a relay cube …)
+  const r = Math.min(cw, ch) * 0.46;
+  const hero = ({
+    'analog-sensor': `<circle cx="${mx}" cy="${my - 1}" r="${r}" fill="#caa23a" stroke="#6f5410"/><circle cx="${mx}" cy="${my - 1}" r="${r * 0.62}" fill="#e9d37a" opacity=".85"/><circle cx="${mx}" cy="${my - 1}" r="${r * 0.2}" fill="#5b4608"/>`,
+    'digital-sensor': `<rect x="${mx - r}" y="${my - r}" width="${r * 2}" height="${r * 2}" rx="3" fill="#1a1d22" stroke="#000"/><circle cx="${mx}" cy="${my}" r="${r * 0.55}" fill="#3a6fbf" opacity=".9"/>`,
+    ultrasonic: `<circle cx="${mx - r * 1.05}" cy="${my}" r="${r}" fill="#9aa3ab" stroke="#3a4046"/><circle cx="${mx - r * 1.05}" cy="${my}" r="${r * 0.62}" fill="#2a2f35"/><circle cx="${mx + r * 1.05}" cy="${my}" r="${r}" fill="#9aa3ab" stroke="#3a4046"/><circle cx="${mx + r * 1.05}" cy="${my}" r="${r * 0.62}" fill="#2a2f35"/>`,
+    relay: `<rect x="${mx - r * 1.2}" y="${my - r}" width="${r * 2.4}" height="${r * 2}" rx="2" fill="#2b6cc4" stroke="#123a78"/><rect x="${mx - r * 0.9}" y="${my - r * 0.5}" width="${r * 1.8}" height="${r}" fill="#1c4d96" opacity=".7"/>`,
+    buzzer: `<circle cx="${mx}" cy="${my}" r="${r * 1.05}" fill="#15171a" stroke="#000"/><circle cx="${mx}" cy="${my}" r="${r * 0.22}" fill="#3a3d42"/>`,
+    led: `<circle cx="${mx}" cy="${my}" r="${r * 0.8}" fill="${{ red: '#ff4a40', green: '#33d06a', blue: '#4a8dff', yellow: '#ffd23a', orange: '#ff9a2e', white: '#f4f4f0' }[spec.behaviour?.color] || '#ff4a40'}" stroke="#0006"/><circle cx="${mx - r * 0.25}" cy="${my - r * 0.25}" r="${r * 0.22}" fill="#fff" opacity=".6"/>`,
+    button: `<rect x="${mx - r * 0.9}" y="${my - r * 0.9}" width="${r * 1.8}" height="${r * 1.8}" rx="2" fill="#2a2d33" stroke="#000"/><circle cx="${mx}" cy="${my}" r="${r * 0.55}" fill="#c23b2f" stroke="#000"/>`,
+    servo: `<rect x="${mx - r * 1.2}" y="${my - r}" width="${r * 2.4}" height="${r * 2}" rx="2" fill="#2b6cb0" stroke="#0e2f55"/><circle cx="${mx}" cy="${my}" r="${r * 0.5}" fill="#eee" stroke="#555"/>`,
+  })[kind];
+  const smd = [];                                                                        // a few resistors and capacitors, placed the same way every time for the same part
+  if (big) for (let n = 0; n < Math.min(9, Math.round(w * h / 900)); n++) {
+    const px = 8 + rnd(n * 3 + 1) * (w - 22), py = 8 + rnd(n * 3 + 2) * (h - 22), horiz = rnd(n * 3 + 3) > 0.5, near = Math.abs(px - mx) < cw * 0.75 && Math.abs(py - my) < ch * 0.9;
+    if (near) continue;
+    const cap = rnd(n + 40) > 0.55; smd.push(`<rect x="${px.toFixed(1)}" y="${py.toFixed(1)}" width="${horiz ? 6 : 3.4}" height="${horiz ? 3.4 : 6}" rx=".6" fill="${cap ? '#b99a62' : '#232323'}" stroke="#000" stroke-width=".4"/>`);
+  }
+  const holes = big ? [[7, 7], [w - 7, 7], [7, h - 7], [w - 7, h - 7]].filter(([x, y]) => !pins.some(p => Math.hypot(p.x - x, p.y - y) < 9)).map(([x, y]) => `<circle cx="${x}" cy="${y}" r="2.6" fill="#0d1215" stroke="#d9b44a" stroke-width="1"/>`).join('') : '';
+  const centre = !big ? `<text x="${w / 2}" y="10" text-anchor="middle" font-size="${Math.min(7.5, Math.max(4.4, (w - 14) / Math.max(5, String(spec.label).length) * 1.5)).toFixed(1)}" font-family="sans-serif" font-weight="800" fill="${ink}">${esc(spec.label)}</text>` : hero ? `${hero}<text x="${mx}" y="11" text-anchor="middle" font-size="${Math.min(7, Math.max(4.4, (w - 18) / Math.max(6, String(spec.label).length) * 1.5)).toFixed(1)}" font-family="monospace" font-weight="700" fill="${ink}" opacity=".9">${esc(spec.label)}</text>` : chipSvg;
+  const gid = `mb${seed}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs><linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${spec.color}"/><stop offset="1" stop-color="${spec.color}" stop-opacity=".78"/></linearGradient></defs><rect x="1" y="1" width="${w - 2}" height="${h - 2}" rx="4" fill="url(#${gid})" stroke="#05080c" stroke-width="1.2"/><rect x="1" y="1" width="${w - 2}" height="${(h * 0.45).toFixed(1)}" rx="4" fill="#fff" opacity=".07"/><rect x="3.4" y="3.4" width="${w - 6.8}" height="${h - 6.8}" rx="3" fill="none" stroke="#ffffff" stroke-opacity=".28" stroke-dasharray="3 2"/>${holes}${smd.join('')}${centre}${names}${pads}</svg>`;
 }
 /** A part drawn by the AI (or the student) as SVG: its picture, with the moving pieces driven by the live simulation, and a lead dot on every pin. */
 function artSVG(spec, w, h, pins, st) {
