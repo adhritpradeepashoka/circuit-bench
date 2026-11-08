@@ -352,7 +352,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     $('pcAiGo').disabled = true; status.className = 'pc-ai-status'; status.textContent = `Designing your part with ${PROVIDER_INFO[getStoredProvider()].label}…`;
     let res;
     const refine = opts.refine ? { spec: JSON.stringify(opts.refine.spec), instruction: opts.refine.instruction } : null;
-    try { res = await createPart({ description, workspace: activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal }); } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
+    try { res = await createPart({ description, workspace: activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal, onProgress: (id, name, tried) => { status.textContent = tried ? `${tried} provider${tried > 1 ? 's' : ''} could not answer — trying ${name}…` : `Designing your part with ${name}…`; } }); } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
     finally { $('pcAiGo').disabled = false; }
     if (!res?.ok && res?.needsKey) { paintProvider(); provKey.focus(); res = { ...res, error: `Paste your ${PROVIDER_INFO[getStoredProvider()].label} key above (or pick a provider that has one), then try again.` }; }
     if (!res?.ok) { status.textContent = res?.error || 'The AI could not make that part.'; status.className = 'pc-ai-status bad'; return; }

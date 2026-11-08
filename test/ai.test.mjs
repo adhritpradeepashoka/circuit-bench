@@ -535,7 +535,7 @@ test('Part Maker client: a provider that says "too large" or "quota" hands the r
   const tried = [];
   const fetchImpl = async (_u, o) => { const b = JSON.parse(o.body); tried.push(b.provider); return { status: 200, json: async () => (b.provider === 'groq' ? { ok: false, error: 'Groq error: Request too large for model x' } : { ok: true, spec: { name: 'P' }, note: '' }) }; };
   const r = await clientCreatePart({ description: 'a sensor', fetchImpl, endpoint: '/api/part' });
-  assert.equal(r.ok, true); assert.deepEqual(tried, ['groq', 'gemini']); assert.match(r.note, /made it/);
+  assert.equal(r.ok, true); assert.deepEqual(tried, ['gemini']); assert.equal(r.note ?? '', '');   // Groq cannot take this request, so a saved Gemini key goes first
   tried.length = 0; store.delete('virtual-lab:ai-key:gemini');
   const r2 = await clientCreatePart({ description: 'a sensor', fetchImpl, endpoint: '/api/part' });
   assert.equal(r2.ok, false); assert.match(r2.error, /pick Gemini or OpenRouter/); assert.deepEqual(tried, ['groq']);

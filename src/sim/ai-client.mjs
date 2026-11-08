@@ -60,15 +60,22 @@ async function createPartOnce({ description, workspace = '', refine = null, phot
 const TOO_BIG = /too large|tokens per minute|\bTPM\b|context (length|window)|maximum context|reduce (your|the) (message|prompt)/i;
 const USED_UP = /quota|rate.?limit|resource.?exhausted|\b429\b|too many requests/i;
 export async function createPart(opts = {}) {
-  const first = await createPartOnce(opts);
-  const big = TOO_BIG.test(String(first.error || '')); if (first.ok || opts.hosted || !(big || USED_UP.test(String(first.error || '')))) return first;
-  const cur = opts.provider || getStoredProvider();
-  for (const id of PROVIDER_IDS) {
-    if (id === cur || id === 'groq' || !getStoredKey(id)) continue;      // (Groq's free tier cannot take this request at all)
-    const r = await createPartOnce({ ...opts, provider: id, userKey: getStoredKey(id), model: getStoredModel(id) });
-    if (r.ok) return { ...r, note: `${r.note ? `${r.note} ` : ''}(${PROVIDER_INFO[cur]?.label || cur} could not answer (too big or out of free quota), so ${PROVIDER_INFO[id]?.label || id} made it.)`.trim() };
+  if (opts.hosted) return createPartOnce(opts);
+  const cur = opts.provider || getStoredProvider(), label = id => PROVIDER_INFO[id]?.label || id;
+  // Groq's free tier cannot take this request at all, so it only goes first when it is the only key there is.
+  const others = PROVIDER_IDS.filter(id => id !== cur && id !== 'groq' && getStoredKey(id));
+  const order = cur === 'groq' && others.length ? others : [cur, ...others];
+  const failures = []; let first = null;
+  for (const id of order) {
+    opts.onProgress?.(id, label(id), failures.length);
+    const r = await createPartOnce(id === cur ? { ...opts, provider: id } : { ...opts, provider: id, userKey: getStoredKey(id), model: getStoredModel(id) });
+    if (r.ok) return failures.length ? { ...r, note: `${r.note ? `${r.note} ` : ''}(${failures.map(f => label(f.id)).join(', ')} could not answer, so ${label(id)} made it.)`.trim() } : r;
+    first ||= r;
+    if (r.needsKey || opts.signal?.aborted) return r;
+    failures.push({ id, error: String(r.error || '') });
   }
-  return { ...first, error: big ? `${first.error} The Part Maker needs a bigger model than ${PROVIDER_INFO[cur]?.label || cur}'s free tier allows: pick Gemini or OpenRouter in the AI menu.` : first.error };
+  if (failures.length < 2) { const f = failures[0]; return f && TOO_BIG.test(f.error) ? { ...first, error: `${first.error} The Part Maker needs a bigger model than ${label(f.id)}'s free tier allows: pick Gemini or OpenRouter in the AI menu.` } : first; }
+  return { ...first, error: `No provider could make it. ${failures.map(f => `${label(f.id)}: ${f.error.replace(/\s+/g, ' ').slice(0, 140)}`).join(' · ')}` };
 }
 
 /**
