@@ -385,6 +385,16 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       const hit = GUESS[role] && draft.pins.find(p => GUESS[role].test(p.id) && !Object.values(roles).includes(p.id));
       if (hit && !(role in roles && roles[role] === hit.id)) roles[role] = hit.id;
     }
+    // a type that needs more pins than the part has (an op-amp wants five): add the missing ones, named for their jobs, instead of leaving "pick which pin it is" errors
+    { const used = new Set(), side = draft.breadboard ? 'bottom' : 'right', rl = BEHAVIOURS[kind].roleLabels || {};
+      for (const role of BEHAVIOURS[kind].roles) {
+        const cur = roles[role];
+        if (cur && !used.has(cur) && draft.pins.some(p => p.id === cur)) { used.add(cur); continue; }
+        let id = role.replace(/[^a-z0-9]/gi, '').toUpperCase().slice(0, 8) || 'P', n = 2; const base = id; while (draft.pins.some(p => p.id === id)) id = `${base}${n++}`;
+        draft.pins.push({ id, label: String(rl[role] || id).replace(/\s*\(.*$/, '').slice(0, 24), side }); roles[role] = id; used.add(id);
+      }
+      if (kind === 'stepper') for (const n of [1, 2, 3, 4]) if (!draft.pins.some(p => new RegExp(`^in?${n}$`, 'i').test(p.id))) draft.pins.push({ id: `IN${n}`, label: `Coil input ${n}`, side });      // a stepper always has four coil inputs
+      paintPins(); }
     const params = Object.fromEntries((BEHAVIOURS[kind].params || []).map(p => [p.key, p.def]));
     draft.behaviour = { kind, roles, ...params, ...(kind === 'resistor' ? { ohms: 1000 } : {}), ...(kind === 'led' || kind === 'led-array' ? { color: kind === 'led' ? 'red' : 'green' } : {}),
       ...(kind === 'led-array' ? { segments: draft.pins.filter(p => !Object.values(roles).includes(p.id)).map(p => p.id) } : {}),

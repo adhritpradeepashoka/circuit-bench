@@ -46,7 +46,7 @@ function aiEndpoint(loc = globalThis.location, win = globalThis, path = '/api/ai
 }
 
 /** Describe a part → { ok, spec, note } (a validated part spec), or { ok:false, error, needsKey? }. */
-export async function createPart({ description, workspace = '', refine = null, photoUrl = '', provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false } = {}) {
+async function createPartOnce({ description, workspace = '', refine = null, photoUrl = '', provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false } = {}) {
   if (!userKey && !hosted) return { ok: false, needsKey: true, error: 'Add a free AI key first (open ✨ Ask AI → Settings) — then describe your part again.' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask.' };
   let res;
@@ -54,6 +54,21 @@ export async function createPart({ description, workspace = '', refine = null, p
   catch (err) { if (err?.name === 'AbortError') throw err; return { ok: false, error: `Could not reach ${endpoint}.` }; }
   let body = null; try { body = await res.json(); } catch { /* ignore */ }
   return body || { ok: false, error: noReply(res.status) };
+}
+
+/** The Part Maker's request is big (the whole behaviour list and drawing rules): Groq's free tier refuses it, and any free tier can run out. When the provider says the request is too large or its quota is used up, try the other providers you have a key for. */
+const TOO_BIG = /too large|tokens per minute|\bTPM\b|context (length|window)|maximum context|reduce (your|the) (message|prompt)/i;
+const USED_UP = /quota|rate.?limit|resource.?exhausted|\b429\b|too many requests/i;
+export async function createPart(opts = {}) {
+  const first = await createPartOnce(opts);
+  const big = TOO_BIG.test(String(first.error || '')); if (first.ok || opts.hosted || !(big || USED_UP.test(String(first.error || '')))) return first;
+  const cur = opts.provider || getStoredProvider();
+  for (const id of PROVIDER_IDS) {
+    if (id === cur || id === 'groq' || !getStoredKey(id)) continue;      // (Groq's free tier cannot take this request at all)
+    const r = await createPartOnce({ ...opts, provider: id, userKey: getStoredKey(id), model: getStoredModel(id) });
+    if (r.ok) return { ...r, note: `${r.note ? `${r.note} ` : ''}(${PROVIDER_INFO[cur]?.label || cur} could not answer (too big or out of free quota), so ${PROVIDER_INFO[id]?.label || id} made it.)`.trim() };
+  }
+  return { ...first, error: big ? `${first.error} The Part Maker needs a bigger model than ${PROVIDER_INFO[cur]?.label || cur}'s free tier allows: pick Gemini or OpenRouter in the AI menu.` : first.error };
 }
 
 /**

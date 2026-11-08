@@ -527,3 +527,22 @@ test('the AI is shown the drone wiring check, so "fix my circuit" fixes real wir
   assert.match(t, /Motor 2 is not wired/); assert.match(t, /Do not add a flight-controller board/);
   assert.equal(describeContext({ drone: { present: false } }), '');
 });
+
+import { createPart as clientCreatePart } from '../src/sim/ai-client.mjs';
+test('Part Maker client: a provider that says "too large" or "quota" hands the request to the next provider that has a key', async () => {
+  const store = new Map([['virtual-lab:ai-key:groq', 'g'], ['virtual-lab:ai-key:gemini', 'm'], ['virtual-lab:ai-provider', 'groq']]);
+  globalThis.localStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) };
+  const tried = [];
+  const fetchImpl = async (_u, o) => { const b = JSON.parse(o.body); tried.push(b.provider); return { status: 200, json: async () => (b.provider === 'groq' ? { ok: false, error: 'Groq error: Request too large for model x' } : { ok: true, spec: { name: 'P' }, note: '' }) }; };
+  const r = await clientCreatePart({ description: 'a sensor', fetchImpl, endpoint: '/api/part' });
+  assert.equal(r.ok, true); assert.deepEqual(tried, ['groq', 'gemini']); assert.match(r.note, /made it/);
+  tried.length = 0; store.delete('virtual-lab:ai-key:gemini');
+  const r2 = await clientCreatePart({ description: 'a sensor', fetchImpl, endpoint: '/api/part' });
+  assert.equal(r2.ok, false); assert.match(r2.error, /pick Gemini or OpenRouter/); assert.deepEqual(tried, ['groq']);
+  tried.length = 0; store.set('virtual-lab:ai-key:gemini', 'm');
+  const quota = async (_u, o) => { const b = JSON.parse(o.body); tried.push(b.provider); return { status: 200, json: async () => (b.provider === 'gemini' ? { ok: false, error: 'Gemini error: You exceeded your current quota' } : { ok: true, spec: {}, note: '' }) }; };
+  store.set('virtual-lab:ai-provider', 'gemini'); store.set('virtual-lab:ai-key:openrouter', 'o');
+  const r3 = await clientCreatePart({ description: 'a sensor', fetchImpl: quota, endpoint: '/api/part' });
+  assert.equal(r3.ok, true); assert.equal(tried[0], 'gemini'); assert.notEqual(tried[1], 'groq');
+  delete globalThis.localStorage;
+});
