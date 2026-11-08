@@ -1219,3 +1219,14 @@ body:not(.robot-asm) #robotParts { display: none; }
 :root:not([data-theme]) .sim-tray, :root[data-theme="classic"] .sim-tray, :root:not([data-theme]) .hint-card, :root[data-theme="classic"] .hint-card { border-radius: 12px; box-shadow: 0 8px 26px rgba(10,20,25,.14); }
 
 .tour-arrows { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+
+/* ── Public gallery ── */
+.gal-search { flex: 1; min-width: 0; max-width: 320px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); }
+.gal-body { padding: 12px 18px 18px; }
+.gal-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 8px; }
+.gal-name { font-size: 20px; font-weight: 700; }
+.gal-facts { margin: 6px 0 12px; color: var(--muted); line-height: 1.5; }
+.gal-code { margin: 6px 0 14px; padding: 10px 12px; max-height: 260px; overflow: auto; border-radius: 8px; background: #12181b; color: #dce6e1; font: 12px/1.5 var(--mono); white-space: pre; }
+.gal-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.gal-copy { background: var(--blue); color: var(--on-blue); border-color: var(--blue); }
+#projGallery { margin-left: auto; }

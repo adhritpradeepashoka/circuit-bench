@@ -89,7 +89,7 @@ test('RDS51150 servo: ear-less block from the drawing, M2.5 face holes on a 24 x
   const top = p.frames.filter(f => f.id.startsWith('face-top')), bot = p.frames.filter(f => f.id.startsWith('face-bottom'));
   assert.equal(top.length, 4); assert.equal(bot.length, 3);
   assert.equal(Math.abs(top[0].pos[0] - top[1].pos[0]), 24); assert.equal(Math.abs(top[0].pos[1] - top[2].pos[1]), 24);
-  assert.ok(top.every(f => f.pos[2] === 48 && f.dir[2] === 1) && bot.every(f => f.pos[2] === 0 && f.dir[2] === -1));
+  assert.ok(top.every(f => Math.abs(f.pos[2] - 54.7) < 0.01 && f.dir[2] === 1) && bot.every(f => Math.abs(f.pos[2] - 6.7) < 0.01 && f.dir[2] === -1));
   assert.ok(p.frames.some(f => f.id === 'shaft') && p.frames.some(f => f.id === 'shaft-bottom'));
   assert.equal(p.frames.some(f => /^ear-/.test(f.id)), false);
   assert.equal(_pk('bracket-rds51150'), null);

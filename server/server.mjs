@@ -81,9 +81,17 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
         if (!id && req.method === 'GET') return out(await cloudProjects.list(tok));
         if (id && req.method === 'GET') return out(await cloudProjects.get(tok, id));
+        if (id && req.method === 'PUT' && url.pathname.split('/')[4] === 'public') { const on = !!(await readJson(req, 2_000)).public; if (on) await gate(req, 'community', 'sharing projects'); return out(await cloudProjects.setPublic(tok, id, on)); }
         if (id && req.method === 'PUT') return out(await cloudProjects.put(tok, id, await readJson(req, 3_000_000)));
         if (id && req.method === 'DELETE') return out(await cloudProjects.remove(tok, id));
         return send(res, 405, { ok: false, error: 'Use GET, PUT or DELETE.' });
+      }
+      if (url.pathname.startsWith('/api/gallery')) {                          // public projects: anyone may look
+        if (!cloudProjects) return send(res, 404, { ok: false, error: 'Project sharing is not enabled on this server.' });
+        if (req.method !== 'GET') return send(res, 405, { ok: false, error: 'Use GET.' });
+        await gate(req, 'community', 'the public gallery');
+        const [, , , handle, id] = url.pathname.split('/'), out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
+        return out(handle ? await cloudProjects.galleryGet(handle, decodeURIComponent(id || '')) : await cloudProjects.gallery(url.searchParams.get('q') || ''));
       }
       if (url.pathname === '/api/keys') {
         if (!keyVault) return send(res, 404, { ok: false, error: 'Key sync is not enabled on this server.' });

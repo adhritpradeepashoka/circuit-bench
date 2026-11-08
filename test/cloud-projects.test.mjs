@@ -34,3 +34,25 @@ test('cloud projects: a person can keep up to the limit of projects', async () =
   for (let i = 0; i < LIMITS.perUser; i++) assert.equal((await c.put(tok, `p-n${i}x`, P())).ok, true);
   assert.equal((await c.put(tok, 'p-onetoomany', P())).status, 409); assert.equal((await c.put(tok, 'p-n0x', P({ updatedAt: 3000 }))).ok, true, 'saving an existing one is still fine');
 });
+
+for (const [name, factory] of [['memory', () => createMemoryProjectStore()], ['postgres (pg-mem)', async () => { const { newDb } = await import('pg-mem'); const { Pool } = newDb().adapters.createPg(); return createPgProjectStore(new Pool()); }]]) {
+  test(`public gallery (${name}): private by default, shared on request, no email shown, stops when unshared, copy-safe`, async () => {
+    const acc = accounts(), st = await factory(); await st.init(); const c = createCloudProjects({ accounts: acc, store: st, now: () => 9000 });
+    const me = (await acc.signIn('good:ada.lovelace@example.com')).token, other = (await acc.signIn('good:bob@example.com')).token;
+    await c.put(me, 'p-aaa-1', P({ name: 'Blinker' })); await c.put(me, 'p-aaa-2', P({ name: 'Secret robot' }));
+    assert.equal((await c.gallery('')).projects.length, 0, 'nothing is public until the owner says so');
+    assert.equal((await c.setPublic(other, 'p-aaa-1', true)).status, 404, 'someone else cannot share my project');
+    const r = await c.setPublic(me, 'p-aaa-1', true); assert.equal(r.ok, true); assert.match(r.handle, /^[0-9a-f]{16}$/);
+    const g = (await c.gallery('')).projects; assert.equal(g.length, 1); assert.equal(g[0].name, 'Blinker'); assert.equal(g[0].author, 'A CircuitBench maker');
+    assert.equal(JSON.stringify(g).includes('@'.concat('example')), false, 'an email must never appear');
+    assert.equal((await c.gallery('blink')).projects.length, 1); assert.equal((await c.gallery('zzz')).projects.length, 0);
+    const got = await c.galleryGet(g[0].handle, 'p-aaa-1'); assert.equal(got.ok, true); assert.deepEqual(got.project.data, { circuit: { a: 1 } });
+    assert.equal((await c.galleryGet(g[0].handle, 'p-aaa-2')).status, 404, 'a private project of the same owner is not reachable');
+    await c.put(me, 'p-aaa-1', P({ name: 'Blinker v2', updatedAt: 3000 }));
+    assert.equal((await c.gallery('')).projects[0].name, 'Blinker v2', 'saving an edit keeps it public');
+    assert.equal((await c.list(me)).projects.find(p => p.id === 'p-aaa-1').public, true);
+    await c.setPublic(me, 'p-aaa-1', false); assert.equal((await c.gallery('')).projects.length, 0);
+    assert.equal((await c.galleryGet(g[0].handle, 'p-aaa-1')).status, 404);
+    await c.setPublic(me, 'p-aaa-1', true); await c.remove(me, 'p-aaa-1'); assert.equal((await c.gallery('')).projects.length, 0, 'a deleted project disappears from the gallery');
+  });
+}

@@ -18,7 +18,7 @@ export const SERVOS = {
   sg90:   { name: 'SG90 micro servo',   L: 22.5, W: 12.2, H: 22.7, ear: 32.2, earHole: 27.6, earZ: 15.9, earT: 2.5, shaftOff: 5.8, shaftD: 4.8, shaftH: 3.2, horn: 'M2', mass: 9,    torque: 0.176, speed: 600, volts: 4.8, stall: 0.65, real: true },
   mg90s:  { name: 'MG90S metal-gear servo', L: 22.8, W: 12.4, H: 28.5, ear: 32.5, earHole: 28.0, earZ: 19.0, earT: 2.5, shaftOff: 5.8, shaftD: 4.8, shaftH: 3.6, horn: 'M2', mass: 13.4, torque: 0.216, speed: 545, volts: 4.8, stall: 0.7, real: true },
   mg996r: { name: 'MG996R servo',       L: 40.7, W: 19.7, H: 42.9, ear: 53.5, earHole: 49.5, earZ: 28.5, earT: 3, shaftOff: 10, shaftD: 5.8, shaftH: 4.5, horn: 'M3', mass: 55,   torque: 0.92, speed: 300, volts: 4.8, stall: 2.5, real: true },
-  // DSSERVO RDS51150 (150 kg, dual shaft): no ears. It is bolted down by M2.5 holes tapped into its two large faces (drawing DSSERVO-RDS51150-Drawing.pdf: body 65 × 30 × 48, 4 holes on a 24 × 24 pattern on the top face, 3 on the bottom, 61.4 over both horns). Shaft 13.4 mm in from the +Y end.
+  // DSSERVO RDS51150 (150 kg, dual shaft): no ears. It is bolted down by M2.5 holes tapped into its two large faces (drawing DSSERVO-RDS51150-Drawing.pdf: body 65 × 30 × 48, standing on its lower shaft so the part spans z 0 to 61.4, 4 holes on a 24 × 24 pattern on the top face, 3 on the bottom, 61.4 over both horns). Shaft 13.4 mm in from the +Y end.
   rds51150: { name: 'RDS51150 servo (150 kg, dual shaft)', style: 'block', L: 65, W: 30, H: 48, ear: 0, earHole: 24, earZ: 0, earT: 0, shaftOff: 13.4, shaftD: 12, shaftH: 6.7, horn: 'M3', mass: 163, torque: 16.2, speed: 286, volts: 12, stall: 8, real: true,
     faceTop: [[-12, -29.5], [12, -29.5], [-12, -5.5], [12, -5.5]], faceBottom: [[12, -29.5], [-12, -29.5], [12, -17.5]], faceScrew: 'M2.5' },
   ds3218: { name: 'DS3218 servo (20 kg)', L: 40.2, W: 20.2, H: 40.5, ear: 54.5, earHole: 49.5, earZ: 27, earT: 3, shaftOff: 10, shaftD: 5.8, shaftH: 4.5, horn: 'M3', mass: 60,   torque: 1.96, speed: 340, volts: 6.0, stall: 3.2, real: false },
@@ -53,11 +53,11 @@ export function makeKitPart(id) {
       const fh = clear(s.faceScrew), at = ([x, y]) => [x, y];
       return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.L, s.H + 2 * s.shaftH], source: src }, kit: { ...d, servo: s, yShaft, top },
         frames: [
-          ...s.faceTop.map((p, k) => hole(`face-top-${k + 1}`, [...at(p), s.H], UP, fh, src)),
-          ...s.faceBottom.map((p, k) => hole(`face-bottom-${k + 1}`, [...at(p), 0], DOWN, fh, src)),
-          { id: 'shaft', kind: 'shaft', pos: [0, yShaft, top].map(r2), dir: UP, diameter: s.shaftD, source: src },
-          { id: 'shaft-bottom', kind: 'shaft', pos: [0, yShaft, -s.shaftH].map(r2), dir: DOWN, diameter: s.shaftD, source: src },
-          hole('horn-screw', [0, yShaft, top], UP, hd, src), hole('horn-screw-bottom', [0, yShaft, -s.shaftH], DOWN, hd, src),
+          ...s.faceTop.map((p, k) => hole(`face-top-${k + 1}`, [...at(p), s.H + s.shaftH], UP, fh, src)),
+          ...s.faceBottom.map((p, k) => hole(`face-bottom-${k + 1}`, [...at(p), s.shaftH], DOWN, fh, src)),
+          { id: 'shaft', kind: 'shaft', pos: [0, yShaft, top + s.shaftH].map(r2), dir: UP, diameter: s.shaftD, source: src },
+          { id: 'shaft-bottom', kind: 'shaft', pos: [0, yShaft, 0].map(r2), dir: DOWN, diameter: s.shaftD, source: src },
+          hole('horn-screw', [0, yShaft, top + s.shaftH], UP, hd, src), hole('horn-screw-bottom', [0, yShaft, 0], DOWN, hd, src),
         ] };
     }
     return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.ear, top], source: src }, kit: { ...d, servo: s, yShaft, top },

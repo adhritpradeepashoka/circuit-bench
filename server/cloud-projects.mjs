@@ -3,12 +3,18 @@
 // A delete leaves a small "tombstone" so the other devices learn it was deleted instead of bringing it back.
 // What is stored: the project's own data (circuit + code, or the robotics settings) and its 3D scene (which parts, where).
 // NOT stored: imported 3D model files — those stay in the browser they were imported in.
+import { createHash } from 'node:crypto';
 import { normEmail } from './accounts.mjs';
 
 export const LIMITS = { projectBytes: 2_500_000, perUser: 100, name: 80, workspace: 40 };
 const fail = (status, error) => ({ ok: false, status, error });
 const idOk = id => /^p-[a-z0-9-]{3,40}$/.test(String(id || ''));
-const meta = r => ({ id: r.id, name: r.name, workspace: r.workspace, createdAt: r.createdAt, updatedAt: r.updatedAt, deleted: !!r.deleted });
+const meta = r => ({ id: r.id, name: r.name, workspace: r.workspace, createdAt: r.createdAt, updatedAt: r.updatedAt, deleted: !!r.deleted, public: !!r.public });
+/** A public project is found by an opaque handle for its owner, never by their email. */
+export const handleOf = email => createHash('sha256').update(`cb-public:${normEmail(email)}`).digest('hex').slice(0, 16);
+/** What other people may see of an author: a first name and an initial ("Adhrit P."), or "A CircuitBench maker". */
+export const authorName = name => { const w = (/@/.test(String(name)) ? '' : String(name || '')).trim().split(/\s+/).filter(Boolean); return w.length ? (w.length > 1 ? `${w[0]} ${w[w.length - 1][0].toUpperCase()}.` : w[0]) : 'A CircuitBench maker'; };
+const cleanQuery = q => String(q || '').toLowerCase().replace(/\s+/g, ' ').trim().slice(0, 60);
 
 export function createMemoryProjectStore() {
   const rows = new Map();                                   // `${email}\n${id}` → row
@@ -19,24 +25,29 @@ export function createMemoryProjectStore() {
     async get(email, id) { return rows.get(key(email, id)) || null; },
     async put(email, row) { rows.set(key(email, row.id), { ...row, email }); },
     async count(email) { return [...rows.values()].filter(r => r.email === email && !r.deleted).length; },
+    async listPublic(q, limit) { return [...rows.values()].filter(r => r.public && !r.deleted && (!q || `${r.name} ${r.workspace}`.toLowerCase().includes(q))).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit).map(r => ({ ...meta(r), email: r.email })); },
+    async getPublic(handle, id) { return [...rows.values()].find(r => r.id === id && r.public && !r.deleted && handleOf(r.email) === handle) || null; },
   };
 }
-const R = r => r && ({ id: r.id, name: r.name, workspace: r.workspace, createdAt: Number(r.created_at), updatedAt: Number(r.updated_at), deleted: !!r.deleted, payload: r.payload });
+const R = r => r && ({ id: r.id, name: r.name, workspace: r.workspace, createdAt: Number(r.created_at), updatedAt: Number(r.updated_at), deleted: !!r.deleted, public: !!r.public, email: r.email, payload: r.payload });
 export function createPgProjectStore(pool) {
   const q = (sql, args) => pool.query(sql, args);
   return {
     async init() {
       await q(`create table if not exists cb_projects (email text not null, id text not null, name text not null, workspace text not null, created_at bigint not null, updated_at bigint not null, deleted boolean not null default false, payload text not null default '', primary key (email, id))`);
+      try { await q('alter table cb_projects add column if not exists public boolean not null default false'); await q('create index if not exists cb_projects_public on cb_projects (updated_at) where public'); } catch { /* old Postgres */ }
       try { await q('alter table cb_projects enable row level security'); } catch { /* not Postgres-proper (tests) */ }
     },
-    async list(email) { return (await q('select id, name, workspace, created_at, updated_at, deleted from cb_projects where email = $1', [email])).rows.map(r => meta(R(r))); },
+    async list(email) { return (await q('select id, name, workspace, created_at, updated_at, deleted, public from cb_projects where email = $1', [email])).rows.map(r => meta(R(r))); },
     async get(email, id) { return R((await q('select * from cb_projects where email = $1 and id = $2', [email, id])).rows[0]); },
     async put(email, r) {
-      await q(`insert into cb_projects (email, id, name, workspace, created_at, updated_at, deleted, payload) values ($1,$2,$3,$4,$5,$6,$7,$8)
-               on conflict (email, id) do update set name = $3, workspace = $4, created_at = $5, updated_at = $6, deleted = $7, payload = $8`,
-        [email, r.id, r.name, r.workspace, r.createdAt, r.updatedAt, !!r.deleted, r.payload || '']);
+      await q(`insert into cb_projects (email, id, name, workspace, created_at, updated_at, deleted, payload, public) values ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+               on conflict (email, id) do update set name = $3, workspace = $4, created_at = $5, updated_at = $6, deleted = $7, payload = $8, public = $9`,
+        [email, r.id, r.name, r.workspace, r.createdAt, r.updatedAt, !!r.deleted, r.payload || '', !!r.public]);
     },
     async count(email) { return Number((await q('select count(*) as n from cb_projects where email = $1 and deleted = false', [email])).rows[0].n); },
+    async listPublic(qq, limit) { return (await q(`select email, id, name, workspace, created_at, updated_at, deleted, public from cb_projects where public and not deleted ${qq ? "and lower(name || ' ' || workspace) like $2" : ''} order by updated_at desc limit $1`, qq ? [limit, `%${qq.replace(/[%_\\]/g, '')}%`] : [limit])).rows.map(r => ({ ...meta(R(r)), email: r.email })); },
+    async getPublic(handle, id) { return R((await q('select * from cb_projects where id = $1 and public and not deleted', [id])).rows.find(r => handleOf(r.email) === handle)); },
   };
 }
 
@@ -64,8 +75,27 @@ export function createCloudProjects({ accounts, store = createMemoryProjectStore
       const old = await store.get(e, id);
       if (old && old.updatedAt > updatedAt) return { ok: true, kept: 'server', updatedAt: old.updatedAt };
       if (!old && await store.count(e) >= LIMITS.perUser) return fail(409, `You can sync up to ${LIMITS.perUser} projects.`);
-      await store.put(e, { id, name, workspace, createdAt, updatedAt, deleted: false, payload });
+      await store.put(e, { id, name, workspace, createdAt, updatedAt, deleted: false, payload, public: !!old?.public && !old.deleted });
       return { ok: true, updatedAt };
+    },
+    /** Share a project with everyone (or stop sharing). Only its owner can. */
+    async setPublic(token, id, on) {
+      const e = await who(token); if (!e) return need; if (!idOk(id)) return fail(400, 'Bad project id.');
+      const old = await store.get(e, id); if (!old || old.deleted) return fail(404, 'Save the project first, then share it.');
+      await store.put(e, { ...old, public: !!on }); return { ok: true, public: !!on, handle: handleOf(e) };
+    },
+    /** Browse public projects: anyone can. Never includes an email. */
+    async gallery(q) {
+      const rows = await store.listPublic(cleanQuery(q), 60), out = [];
+      for (const r of rows) { const u = await accounts.store?.get?.(r.email); out.push({ handle: handleOf(r.email), id: r.id, name: r.name, workspace: r.workspace, updatedAt: r.updatedAt, author: authorName(u?.name) }); }
+      return { ok: true, projects: out };
+    },
+    async galleryGet(handle, id) {
+      if (!/^[0-9a-f]{16}$/.test(String(handle)) || !idOk(id)) return fail(400, 'Bad link.');
+      const r = await store.getPublic(handle, id); if (!r) return fail(404, 'That project is not public any more.');
+      let body = {}; try { body = r.payload ? JSON.parse(r.payload) : {}; } catch { body = {}; }
+      const u = await accounts.store?.get?.(r.email);
+      return { ok: true, project: { ...meta(r), handle, author: authorName(u?.name), data: body.data ?? null, scene: body.scene ?? null } };
     },
     async remove(token, id) {
       const e = await who(token); if (!e) return need; if (!idOk(id)) return fail(400, 'Bad project id.');

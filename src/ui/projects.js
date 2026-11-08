@@ -12,6 +12,8 @@ import { setRobotType } from '../core/robot-context.js';
 import { cleanRobotType } from '../core/robot-types.js';
 import { getWorkspace } from '../core/workspaces.js';
 import { EXAMPLES } from '../sim/examples.js';
+import { getToken, authed } from '../sim/session.mjs';
+import { initGallery } from './gallery.js';
 
 // Which project is open is per *tab* (sessionStorage), so two tabs can work on different projects without
 // trading places; localStorage only remembers the last one opened, for the next new tab.
@@ -136,6 +138,34 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     return current;
   }
 
+  /** A project someone shared: make it a new project of mine (the original is never touched) and open it. */
+  async function copyPublic({ name, workspace, data, scene }) {
+    try { fromProjectFile(data); } catch { editor.status('That shared project is damaged, so it could not be copied.'); return null; }          // a bad file must not leave an empty project behind
+    await saveNow();
+    const taken = (await store.list()).map(m => m.name), ws = WORKSPACES[workspace] ? workspace : DEFAULT_WORKSPACE;
+    const p = newProject({ name: uniqueName(cleanName(name), taken), workspace: ws, data });
+    await store.save(p);
+    try { if (scene) localStorage.setItem(`circuitbench:robot-scene:${p.id}`, JSON.stringify(scene)); } catch { /* the scene is a bonus */ }
+    current = null; await open(p.id); return current;
+  }
+  /** Which of my projects are public (the server knows). */
+  let shared = new Map(), handle = '';
+  async function loadShared() {
+    if (!getToken()) { shared = new Map(); return; }
+    try { const r = await (await authed('/api/projects')).json(); if (r?.ok) shared = new Map(r.projects.filter(m => m.public).map(m => [m.id, true])); } catch { /* offline */ }
+  }
+  async function setShared(id, on) {
+    if (!getToken()) { editor.status('Sign in to share a project. Public projects need an account so people know who made them.'); return; }
+    await saveNow(); await (store.flush?.() ?? null);
+    try {
+      const r = await (await authed(`/api/projects/${encodeURIComponent(id)}/public`, { method: 'PUT', body: JSON.stringify({ public: on }) })).json();
+      if (!r?.ok) { editor.status(r?.error || 'Could not change sharing.'); return; }
+      if (on) shared.set(id, true); else shared.delete(id); handle = r.handle || handle;
+      editor.status(on ? 'This project is public now: anyone can view it and copy it. Your own copy stays yours.' : 'This project is private again.');
+    } catch { editor.status('Could not reach the server.'); }
+    renderList();
+  }
+
   async function duplicate(id) {
     if (id === current?.id) await saveNow();
     const src = await store.load(id); if (!src) return;
@@ -186,7 +216,8 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
       li.append(chip);
       const acts = el('div', 'proj-acts');
       const b = (act, label, title) => { const x = el('button', `proj-act ${act}`, label); x.type = 'button'; x.dataset.act = act; x.title = title; return x; };
-      acts.append(b('rename', 'Rename', 'Rename this project'), b('duplicate', 'Duplicate', 'Make a copy'),
+      acts.append(b('share', shared.get(m.id) ? 'Public' : 'Share', shared.get(m.id) ? 'Anyone can view and copy this. Press to make it private again.' : 'Let anyone view and copy this project'),
+        b('rename', 'Rename', 'Rename this project'), b('duplicate', 'Duplicate', 'Make a copy'),
         confirmDelete === m.id ? b('delete-yes', 'Delete for good?', 'This cannot be undone') : b('delete', 'Delete', 'Delete this project'));
       li.append(main, acts);
       li.style.setProperty('--tint', `hsl(${[...(m.workspace || '')].reduce((a, c) => a + c.charCodeAt(0) * 7, 40) % 360} 55% 50%)`);
@@ -198,6 +229,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     const id = btn.closest('.proj-row')?.dataset.id, act = btn.dataset.act;
     if (act !== 'delete-yes') confirmDelete = null;
     if (act === 'open') open(id);
+    else if (act === 'share') setShared(id, !shared.get(id));
     else if (act === 'rename') { renaming = id; renderList(); }
     else if (act === 'duplicate') duplicate(id);
     else if (act === 'delete') { confirmDelete = id; renderList(); }
@@ -215,7 +247,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   fillBoards(); onPacksChange(fillBoards);
 
   function openModal({ focusNew = false } = {}) {
-    fillWorkspaces(); modal.hidden = false; confirmDelete = null; renaming = null; projQuery = ''; $('projSearch').value = ''; renderList();
+    fillWorkspaces(); modal.hidden = false; confirmDelete = null; renaming = null; projQuery = ''; $('projSearch').value = ''; renderList(); loadShared().then(renderList);
     (focusNew ? nameInput : $('projSearch')).focus();
   }
   function close() { modal.hidden = true; }
@@ -244,6 +276,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target) && !pbtn.contains(e.target)) closeSwitch(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !pop.hidden) { closeSwitch(); pbtn.focus(); } });
   $('projectsClose').addEventListener('click', close);
+  $('projGallery').addEventListener('click', () => gallery.open());
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
   $('projNewForm').addEventListener('submit', async e => {
@@ -267,10 +300,11 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     return current;
   })();
 
+  const gallery = initGallery({ projects: { copyPublic }, status: t => editor.status(t) });
   return {
     /** Which kind of robot the open project is (arm, rover …), or null. Saved with the project. */
     async setRobotType(id) { if (!current) return; current = { ...current, robotType: cleanRobotType(id) }; setRobotType(current.robotType); await saveNow(); },
-    ready, open, create, duplicate, remove, rename, saveNow, openModal, close,
+    ready, open, create, duplicate, remove, rename, saveNow, openModal, close, copyPublic, openGallery: () => gallery.open(),
     get current() { return current; },
     /** Called with the project whenever a different one is on screen (also once at start). */
     onSwitch(fn) { switchListeners.push(fn); if (current) fn(current); },
