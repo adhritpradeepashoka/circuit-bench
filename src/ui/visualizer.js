@@ -43,6 +43,7 @@ export function initVisualizer({ editor }) {
   stage.append(hintEl, labels, hoverEl, credit);
 
   const side = el('div', { className: 'viz-side' });
+  for (const t of ['wheel', 'touchmove']) side.addEventListener(t, e => e.stopPropagation(), { passive: true });   // the bench underneath zooms on the wheel and would swallow the scrolling of this panel
   const lead = el('p', { className: 'viz-note', textContent: 'Each amplifier is a channel. Drag its E+ and E− onto the head, or choose sites from the lists. Illustrative signals — not medical data.' });
   const refSel = siteSelect('Shared reference electrode', ['Reference', 'EEG']);
   const refRow = el('label', { className: 'viz-ref' }, el('span', { textContent: 'Shared REF' }), refSel);
