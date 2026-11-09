@@ -406,3 +406,27 @@ If the message only asks a question, answer in "explanation" (plain text, a few 
 }
 Only use hole ids that exist on those parts, and only join holes whose sizes are compatible (a 2 mm hole will not take an M3 screw). Mind which side is which: a hole listed with an outward direction points away from the part, and joining puts the two holes facing each other. When you add several parts, join them in the order that makes the chain you were asked for. If something cannot be done with these parts and edits, say so in "explanation" with "actions": [] instead of faking it.`;
 }
+
+
+/** A SMALL prompt (about 2,500 characters) for the "brain" of a part: name, pins and behaviour only — no drawing. It fits free tiers and the
+ *  on-device model; the picture is asked for separately (see createPartSplit in src/sim/ai-client.mjs). */
+export function buildBrainPrompt(description, problems = null) {
+  const kinds = Object.entries(BEHAVIOURS).filter(([k]) => !['logic', 'slime-mold', 'keypad', 'switch-bank', 'led-array', 'mux'].includes(k))
+    .map(([k, b]) => `${k}: ${b.roles.join(', ') || '-'}${b.optional?.length ? ` (+ ${b.optional.join(', ')})` : ''}`).join('\n');
+  return `Define an electronics part for a student simulator. Reply with ONE fenced json block and nothing else.
+
+Part wanted: ${String(description).slice(0, 600)}
+
+Pick the real part's ACTUAL pin names (datasheet order) and the closest behaviour kind. Each kind needs "roles" mapping its role names to your pin ids.
+Kinds and their roles:
+${kinds}
+Extras: resistor needs "ohms"; led takes "color" (red, green, blue, yellow, orange, white); stepper needs "coils": [4 pin ids] and roles vcc, gnd.
+${problems ? `\nYour last answer was rejected: ${problems.slice(0, 4).join(' ')} Fix it.\n` : ''}
+Example:
+\`\`\`json
+{"name":"Ultrasonic distance sensor HC-SR04","label":"HC-SR04","description":"Send a pulse on TRIG, time the pulse on ECHO.","color":"#2b6cb0","textColor":"#ffffff","package":"module","breadboard":true,
+ "pins":[{"id":"VCC","label":"5V","side":"bottom"},{"id":"TRIG","label":"Trigger","side":"bottom"},{"id":"ECHO","label":"Echo","side":"bottom"},{"id":"GND","label":"Ground","side":"bottom"}],
+ "behaviour":{"kind":"ultrasonic","roles":{"vcc":"VCC","gnd":"GND","trig":"TRIG","echo":"ECHO"}}}
+\`\`\`
+Use package "module" with every pin on "bottom" for boards and small parts; "dip" (pins listed pin 1 first, no sides) for a chip.`;
+}

@@ -1,6 +1,8 @@
 // Browser side of the AI "Generate Code" feature. v0.1 (beta) is bring-your-own-key: the key lives only
 // in this browser's localStorage and is sent with each request — CircuitBench's own server never stores it.
 import { getToken } from './session.mjs';
+import { matchTemplate, heuristicSpec } from '../core/part-match.js';
+import { validatePartSpec, BEHAVIOURS } from '../core/custom-parts.js';
 const KEY_STORAGE = 'virtual-lab:ai-key';              // before there were several providers: one key for whichever was selected
 const PROVIDER_STORAGE = 'virtual-lab:ai-provider';
 const MODEL_STORAGE = 'virtual-lab:ai-model:';
@@ -46,11 +48,11 @@ function aiEndpoint(loc = globalThis.location, win = globalThis, path = '/api/ai
 }
 
 /** Describe a part → { ok, spec, note } (a validated part spec), or { ok:false, error, needsKey? }. */
-async function createPartOnce({ description, workspace = '', refine = null, photoUrl = '', provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false } = {}) {
+async function createPartOnce({ description, workspace = '', refine = null, photoUrl = '', provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false, brain = false } = {}) {
   if (!userKey && !hosted) return { ok: false, needsKey: true, error: 'Add a free AI key first (open ✨ Ask AI → Settings) — then describe your part again.' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask.' };
   let res;
-  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { description, workspace, refine, photoUrl, hosted: true } : { description, workspace, refine, photoUrl, userKey, provider, model }), signal }); }
+  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { description, workspace, refine, photoUrl, brain, hosted: true } : { description, workspace, refine, photoUrl, brain, userKey, provider, model }), signal }); }
   catch (err) { if (err?.name === 'AbortError') throw err; return { ok: false, error: `Could not reach ${endpoint}.` }; }
   let body = null; try { body = await res.json(); } catch { /* ignore */ }
   return body || { ok: false, error: noReply(res.status) };
@@ -95,4 +97,62 @@ export async function generateCode({ instruction, circuit, code, context = null,
   try { body = await res.json(); } catch { /* ignore */ }
   if (!body) return { ok: false, error: noReply(res.status) };
   return body;
+}
+
+
+/** One part, made by several workers at once and combined:
+ *   1. a ready-made template that clearly matches the words → instant, no AI at all;
+ *   2. the "brain" (name, pins, behaviour — a SMALL request): the on-device model when it is switched on, otherwise any provider with a key
+ *      (Groq's free tier is fine for this one), otherwise a plain keyword guess — so a part always comes out;
+ *   3. the "picture" (a detailed drawing — the BIG request) from the providers that can take it, started as soon as the brain is back and
+ *      merged into it when it arrives. If it never arrives you keep the brain's part with its generic board.
+ *  onPartial(res) is called as soon as there is a usable part; the returned promise resolves with the final one. */
+export async function createPartSplit({ description, templates = [], local = null, onProgress, onPartial, drawMs = 110_000, signal, ...rest } = {}) {
+  const note = msg => onProgress?.(msg);
+  const text = String(description || '').trim();
+  if (!text) return { ok: false, error: 'Describe the part first.' };
+  const hit = matchTemplate(text, templates);
+  if (hit) {
+    const { id, group, ...raw } = hit, v = validatePartSpec(raw);
+    if (v.ok) return { ok: true, spec: v.spec, source: 'template', note: `This is the built-in "${hit.name}" template — instant, no AI needed.`, meta: { provider: 'Templates', model: 'built-in', ms: 0 } };
+  }
+  // ── the brain
+  let brain = null; const why = [];
+  if (local) { note('Asking the model on this device…'); const r = await local(text).catch(e => ({ ok: false, error: String(e?.message || e) })); if (r?.ok) brain = r; else why.push(`On this device: ${String(r?.error || 'no answer').slice(0, 100)}`); }
+  if (!brain) {
+    const cur = rest.provider || getStoredProvider(), ids = [cur, ...PROVIDER_IDS.filter(id => id !== cur)].filter(id => id === cur ? !!(rest.userKey || getStoredKey(id) || rest.hosted) : !!getStoredKey(id));
+    for (const id of ids.length ? ids : [cur]) {
+      if (signal?.aborted) return { ok: false, error: 'Stopped.' };
+      note(`Working out the pins with ${PROVIDER_INFO[id]?.label || id}…`);
+      const r = await createPartOnce({ ...rest, description: text, signal, brain: true, provider: id, ...(id === cur ? {} : { userKey: getStoredKey(id), model: getStoredModel(id) }) });
+      if (r.ok) { brain = r; break; }
+      if (r.needsKey && !rest.hosted) continue;
+      why.push(`${PROVIDER_INFO[id]?.label || id}: ${String(r.error || 'no answer').replace(/\s+/g, ' ').slice(0, 100)}`);
+    }
+  }
+  if (!brain) {
+    const spec = heuristicSpec(text);
+    if (!spec) return { ok: false, error: `No AI could make that part right now. ${why.join(' · ')}` };
+    return { ok: true, spec, source: 'guess', note: `No AI answered, so this is a plain ${BEHAVIOURS[spec.behaviour.kind]?.label || 'part'} made from your words — check the pins. (${why.join(' · ').slice(0, 220)})`, meta: { provider: 'Keywords', model: 'built-in', ms: 0 } };
+  }
+  const first = { ...brain, source: 'brain', note: brain.note || '' };
+  onPartial?.(first);
+  // ── the picture (only the providers with a key that can take the big request)
+  if (!rest.hosted && !PROVIDER_IDS.some(id => id !== 'groq' && getStoredKey(id)) && !getStoredKey(rest.provider || getStoredProvider())) return first;
+  note('Drawing it in detail…');
+  const stop = new AbortController(), link = () => stop.abort(); signal?.addEventListener('abort', link);
+  const timer = setTimeout(link, drawMs);
+  try {
+    const instruction = 'Keep EVERY pin id and the whole "behaviour" exactly as in this draft. Only change the look: package "art" with a detailed, true-to-scale drawing of the real part, each pin given x and y at the end of its lead (drop "side"), and sizeMm.';
+    const r = await createPart({ ...rest, description: text, refine: { spec: JSON.stringify(brain.spec), instruction }, signal: stop.signal });
+    if (r?.ok && r.spec?.package === 'art') {
+      const ids = s => (s.pins || []).map(p => p.id).sort().join('|');
+      const merged = validatePartSpec({ ...r.spec, behaviour: brain.spec.behaviour });
+      if (merged.ok && ids(merged.spec) === ids(brain.spec)) return { ...r, spec: merged.spec, source: 'split', note: `${brain.meta?.provider ? `Pins and behaviour: ${brain.meta.provider}. ` : ''}Drawing: ${r.meta?.provider || 'AI'}.`.trim(), meta: r.meta };
+    }
+    return { ...first, note: `${first.note} (The detailed drawing didn't come through, so this uses a generic board.)`.trim() };
+  } catch (err) {
+    if (err?.name === 'AbortError' && signal?.aborted) throw err;
+    return { ...first, note: `${first.note} (The detailed drawing took too long, so this uses a generic board.)`.trim() };
+  } finally { clearTimeout(timer); signal?.removeEventListener('abort', link); }
 }

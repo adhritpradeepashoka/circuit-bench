@@ -21,7 +21,7 @@ import { RequestError } from './compile-service.mjs';
 import { validatePartSpec } from '../src/core/custom-parts.js';
 import { findPhoto } from './part-photo.mjs';
 import { cleanRobotType } from '../src/core/robot-types.js';
-import { LIMITS, buildPrompt, parseReply, matchJsonFence, extractJsonText, tryParseJson, describeContext, describeHistory, buildPartPrompt, buildPhotoLookupPrompt } from '../src/core/ai-prompt.js';
+import { LIMITS, buildPrompt, parseReply, matchJsonFence, extractJsonText, tryParseJson, describeContext, describeHistory, buildPartPrompt, buildPhotoLookupPrompt, buildBrainPrompt } from '../src/core/ai-prompt.js';
 export { describeContext, describeHistory, buildPartPrompt };
 
 function statusFor(httpStatus, message) {
@@ -140,7 +140,7 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
   async function ask(p, userKey, prompt, { search = false, model = '', maxTokens = 0, image = null } = {}) {
     const typed = /^[\w./:@-]{1,80}$/.test(String(model || '')) ? String(model) : '';
     const wanted = typed ? [typed] : [...new Set([works.get(keyId(p, userKey)), ...(await discover(p, userKey)).slice(0, p.anyChat ? 8 : 6), ...p.models].filter(Boolean))].slice(0, p.anyChat ? 8 : 7);   // a model the student typed is the only one tried
-    const tried = [], t0 = now();
+    const tried = [], t0 = now(); let gone = 0;
     let res, body, msg, fast = true;
     for (let i = 0; i < wanted.length; i++) {
       // A slow free tier can hold one request for minutes; the host in front of us gives up on the whole thing after a while.
@@ -162,7 +162,8 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
       if (fast && res.status === 400 && /reason|thinking|effort|unknown (field|param)|unrecognized|unexpected|extra inputs|invalid json payload/i.test(msg) && !/key/i.test(msg)) { fast = false; i--; continue; }   // this model doesn't take the speed-up hint: same model, plain request
       tried.push(wanted[i]);
       if (search && !modelGone(res.status, msg) && /tool|search|grounding|not supported|unsupported|invalid argument|400/i.test(`${msg} ${res.status}`)) return ask(p, userKey, prompt, { search: false, model, maxTokens, image });
-      if (i < wanted.length - 1 && (modelGone(res.status, msg) || transient(res.status, msg))) continue;            // that model isn't available to this key — try the next one
+      if (modelGone(res.status, msg)) gone++;
+      if (i < wanted.length - 1 && gone < 5 && (modelGone(res.status, msg) || transient(res.status, msg))) continue;   // five models 'not found' means the key has no access: stop, don't walk the whole list            // that model isn't available to this key — try the next one
       throw new RequestError(`${p.label} error: ${msg}${modelGone(res.status, msg) ? ` — none of ${tried.length > 1 ? `the ${tried.length} models I tried (${tried.slice(0, 4).join(', ')}${tried.length > 4 ? '…' : ''})` : `“${tried[0]}”`} is open to this key. Type a model your account can use in the AI settings, or pick another provider.` : ''}`, statusFor(res.status, msg));
     }
     if (!typed) works.set(keyId(p, userKey), wanted[Math.min(tried.length, wanted.length - 1)]);
@@ -187,9 +188,21 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
   }
 
   /** Describe a part in words → a validated part spec, drawn from its real photo when one can be found (a few repair rounds if the answer doesn't validate). */
-  async function createPart({ description, userKey, provider = 'gemini', model, workspace = '', refine = null, photoUrl = '' }) {
+  async function createPart({ description, userKey, provider = 'gemini', model, workspace = '', refine = null, photoUrl = '', brain = false }) {
     if (!description || !String(description).trim()) throw new RequestError('Describe the part you want to make.');
     const p = needKey(userKey, provider);
+    if (brain) {                                          // the small job: name, pins and behaviour — fits free tiers; the drawing is a separate request
+      let problems = null;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        const r = await ask(p, userKey, buildBrainPrompt(description, problems), { search: false, model, maxTokens: 1200 });
+        const json = extractJsonText(r.text), raw = json ? tryParseJson(json) : null;
+        if (!raw) { problems = ['The reply was not a complete JSON object.']; continue; }
+        const v = validatePartSpec(raw);
+        if (v.ok) return { ok: true, brain: true, spec: v.spec, note: String(raw.note || '').slice(0, 200), sources: [], meta: r.meta };
+        problems = v.errors;
+      }
+      throw new RequestError(`The AI's part didn't check out: ${problems.join(' ')}`, 502);
+    }
     const look = await lookUpPart({ p, userKey, description: String(description), model, photoUrl: /^https:\/\//.test(String(photoUrl)) ? String(photoUrl) : '' });
     let problems = null, fallback = null, useImage = !!look.photo;
     for (let attempt = 0; attempt < 3; attempt++) {

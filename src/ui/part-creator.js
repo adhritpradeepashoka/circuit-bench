@@ -7,7 +7,7 @@ import { FUNCTIONS } from '../core/expr.js';
 import { PART_DEFS } from '../core/parts.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { customPartSVG } from '../parts/elements.js';
-import { createPart as defaultCreatePart, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS } from '../sim/ai-client.mjs';
+import { createPart as defaultCreatePart, createPartSplit, getStoredKey, setStoredKey, getStoredProvider, setStoredProvider, getStoredModel, setStoredModel, PROVIDER_INFO, PROVIDER_IDS } from '../sim/ai-client.mjs';
 
 const LIBRARY = 'circuitbench:my-parts';
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -352,7 +352,16 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     $('pcAiGo').disabled = true; status.className = 'pc-ai-status'; status.textContent = `Designing your part with ${PROVIDER_INFO[getStoredProvider()].label}…`;
     let res;
     const refine = opts.refine ? { spec: JSON.stringify(opts.refine.spec), instruction: opts.refine.instruction } : null;
-    try { res = await createPart({ description, workspace: activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal, onProgress: (id, name, tried) => { status.textContent = tried ? `${tried} provider${tried > 1 ? 's' : ''} could not answer — trying ${name}…` : `Designing your part with ${name}…`; } }); } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
+    const progress = (id, name, tried) => { status.textContent = tried ? `${tried} provider${tried > 1 ? 's' : ''} could not answer — trying ${name}…` : `Designing your part with ${name}…`; };
+    try {
+      if (!refine && !opts.photoUrl && createPart === defaultCreatePart) {      // a fresh part: template → brain (small) + picture (big), combined
+        const [{ TEMPLATES }, web] = await Promise.all([import('../core/part-templates.js'), import('../sim/webllm.mjs')]);
+        const onDevice = (() => { try { return localStorage.getItem('virtual-lab:ai-local') === '1'; } catch { return false; } })() && web.webgpuAvailable();
+        res = await createPartSplit({ description, workspace: activeWorkspace().id, signal: aiBusy.signal, templates: TEMPLATES, local: onDevice ? d => web.brainLocal({ description: d, onProgress: p => { status.textContent = `Loading the on-device model… ${Math.round((p?.progress || 0) * 100)}%`; } }) : null,
+          onProgress: msg => { status.textContent = msg; },
+          onPartial: r => { draft = { ...clone(r.spec), id: editing || draft.id }; paintForm(); $('pcFix').hidden = false; status.textContent = 'Pins and behaviour are ready — drawing it in detail (you can already save this)…'; } });
+      } else res = await createPart({ description, workspace: activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal, onProgress: progress });
+    } catch (err) { if (err?.name === 'AbortError') return; res = { ok: false, error: String(err?.message || err) }; }
     finally { $('pcAiGo').disabled = false; }
     if (!res?.ok && res?.needsKey) { paintProvider(); provKey.focus(); res = { ...res, error: `Paste your ${PROVIDER_INFO[getStoredProvider()].label} key above (or pick a provider that has one), then try again.` }; }
     if (!res?.ok) { status.textContent = res?.error || 'The AI could not make that part.'; status.className = 'pc-ai-status bad'; return; }

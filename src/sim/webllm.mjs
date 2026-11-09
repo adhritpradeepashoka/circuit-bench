@@ -1,7 +1,8 @@
 // "On this device" AI: a small open model that runs in the student's own browser through WebGPU (WebLLM).
 // No key, no server, nothing leaves the machine — but a one-time model download and a smaller brain than the hosted models.
 // The model code is imported lazily so students who never use it never download it.
-import { buildPrompt, parseReply } from '../core/ai-prompt.js';
+import { buildPrompt, parseReply, buildBrainPrompt, extractJsonText, tryParseJson } from '../core/ai-prompt.js';
+import { validatePartSpec } from '../core/custom-parts.js';
 import { buildPlanPrompt, parsePlan } from '../core/ai-steps.js';
 
 export const LOCAL_PROVIDER = 'local';
@@ -98,6 +99,24 @@ export async function planLocal({ instruction, circuit, modelId = getLocalModel(
     const steps = parsePlan(r?.choices?.[0]?.message?.content || '');
     return steps.length ? { ok: true, steps } : { ok: false, error: 'no plan' };
   } catch (err) { return { ok: false, error: String(err?.message || err) }; }
+}
+
+/** The on-device model makes the "brain" of a part (name, pins, behaviour) from a small prompt. → {ok, spec, meta} */
+export async function brainLocal({ description, modelId = getLocalModel(), onProgress, factory, now = () => Date.now() }) {
+  const t0 = now();
+  let eng; try { eng = await loadLocal(modelId, { onProgress, factory }); } catch (err) { return { ok: false, error: String(err?.message || err) }; }
+  let problems = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    let text = '';
+    try { const r = await eng.chat.completions.create({ messages: [{ role: 'user', content: buildBrainPrompt(description, problems) }], temperature: 0.1, max_tokens: 900 }); text = r?.choices?.[0]?.message?.content || ''; }
+    catch (err) { return { ok: false, error: String(err?.message || err) }; }
+    const json = extractJsonText(text), raw = json ? tryParseJson(json) : null;
+    if (!raw) { problems = ['The reply was not a complete JSON object.']; continue; }
+    const v = validatePartSpec(raw);
+    if (v.ok) return { ok: true, brain: true, spec: v.spec, meta: { provider: 'On this device', model: (usedModel || modelId).replace(/-q\d.*$/, ''), ms: now() - t0 } };
+    problems = v.errors;
+  }
+  return { ok: false, error: 'The on-device model could not make a valid part.' };
 }
 
 /* ── managing the downloaded models (they live in the browser's cache, 1–5 GB each) ── */
