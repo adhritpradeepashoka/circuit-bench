@@ -16,7 +16,16 @@ export function buildRig(asm) {
   const pairs = new Map();
   for (const m of asm.mates) { if (!ix.has(m.a.inst) || !ix.has(m.b.inst)) continue; const k = [m.a.inst, m.b.inst].sort().join('|'); (pairs.get(k) || pairs.set(k, []).get(k)).push(m); }
   const hinges = [];
+  // A servo's output: whatever is screwed to its shaft or its horn holes turns with it, however many screws hold it. That pair is a hinge about the shaft.
+  const isRotor = (side) => /^(shaft|horn)/.test(side.frame);
+  const shaftFrameOf = side => { const f = asm.get(side.inst)?.part.frames.find(fr => fr.kind === 'shaft' && (side.frame === fr.id || side.frame.endsWith('-bottom') === fr.id.endsWith('-bottom'))); return f ? f.id : null; };
   for (const ms of pairs.values()) {
+    const rotor = ms.find(m => !m.fixed && (isRotor(m.a) || isRotor(m.b)) && shaftFrameOf(isRotor(m.a) ? m.a : m.b));
+    if (rotor && !ms.some(m => m.fixed)) {
+      const servoSide = isRotor(rotor.a) ? rotor.a : rotor.b, other = servoSide === rotor.a ? rotor.b : rotor.a;
+      const view = { a: { inst: servoSide.inst, frame: shaftFrameOf(servoSide) }, b: other };
+      hinges.push(new Proxy(rotor, { get: (t, k) => (k in view ? view[k] : t[k]) })); continue;   // reads see the servo's shaft as one end; angle and limits are still stored on the real mate
+    }
     const wf = ms.map(m => frameOf(asm, m.a)), line = wf.every(f => Math.abs(dot(f.dir, wf[0].dir)) > 0.999 && Math.hypot(...cross(sub(f.pos, wf[0].pos), wf[0].dir)) < 0.15);
     if (!ms.some(m => m.fixed) && line) hinges.push(ms[0]); else ms.forEach(m => union(ix.get(m.a.inst), ix.get(m.b.inst)));
   }

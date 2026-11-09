@@ -37,7 +37,7 @@ export class RobotSim {
     for (let s = 0; s < n; s++) {
       for (const [k, j] of this.model.joints.entries()) {
         const a = this.act[k]; if (a < 0) continue;
-        if (j.mode === 'servo') { const want = this.cmd[k], dv = SERVO_SPEED * DT; this.target[k] += clamp(want - this.target[k], -dv, dv); d.ctrl[a] = this.target[k] * RAD; }
+        if (j.mode === 'servo') { const want = this.cmd[k], dv = (j.servo?.speed || SERVO_SPEED) * DT; this.target[k] += clamp(want - this.target[k], -dv, dv); d.ctrl[a] = this.target[k] * RAD; }
         else d.ctrl[a] = this.cmd[k] * WHEEL_RAD_S;
       }
       mj.mj_step(m, d); this.t += DT;

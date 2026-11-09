@@ -89,7 +89,9 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes =
     const key = `${m.a.inst}:${m.a.frame}|${m.b.inst}:${m.b.frame}`, wheel = looksLikeWheel(body.points, axis, anchor), explicit = m.min != null || m.max != null;
     const mode = JOINT_MODES.includes(modes[key]) ? modes[key] : (wheel && !explicit ? 'motor' : 'servo'), lo = (m.min ?? -90) - (m.angle || 0), hi = (m.max ?? 90) - (m.angle || 0);
     body.parent = bodies.indexOf(parent); body.joint = joints.length;
-    joints.push({ key, name: `${body.name}${parent ? ` on ${parent.name}` : ''}`, body: bodies.indexOf(body), axis, anchor, range: mode === 'motor' ? null : [lo, hi], mode, wheel, fixed: !!m.fixed });
+    const motorPart = [asm.get(m.a.inst), asm.get(m.b.inst)].map(i => i?.part).find(pt => pt?.kit?.servo), sv = motorPart?.kit.servo;
+    joints.push({ key, name: sv ? `${body.name} turned by ${motorPart.name}` : `${body.name}${parent ? ` on ${parent.name}` : ''}`, body: bodies.indexOf(body), axis, anchor, range: mode === 'motor' ? null : [lo, hi], mode, wheel, fixed: !!m.fixed,
+      servo: sv ? { name: motorPart.name, torque: sv.torque, speed: sv.speed } : null });      // a servo's real torque (N·m) and speed (°/s) drive the joint it turns
   }
   // Forward is +Y (the way the drone's arrow points), or +X when the wheels' axles run along Y. A wheel's "positive" is whichever way drives the robot forward, so the same
   // command on every wheel drives straight even though the left and right axles face opposite ways.
@@ -122,7 +124,7 @@ export function toMJCF(model, { dt = 0.002, floorFriction = 1.0, servo = { stall
   };
   const rootBody = body(0), act = [];
   for (const [k, j] of model.joints.entries()) {
-    if (j.mode === 'servo') act.push(`<position name="a${k}" joint="j${k}" kp="${servo.kp}" kv="${servo.kv}" ctrllimited="true" ctrlrange="${f(j.range[0] * Math.PI / 180)} ${f(j.range[1] * Math.PI / 180)}" forcelimited="true" forcerange="${-servo.stall} ${servo.stall}"/>`);
+    if (j.mode === 'servo') { const tq = j.servo?.torque ?? servo.stall, sc = tq / servo.stall; act.push(`<position name="a${k}" joint="j${k}" kp="${f(servo.kp * sc)}" kv="${f(servo.kv * sc)}" ctrllimited="true" ctrlrange="${f(j.range[0] * Math.PI / 180)} ${f(j.range[1] * Math.PI / 180)}" forcelimited="true" forcerange="${-tq} ${tq}"/>`); }
     else if (j.mode === 'motor') act.push(`<velocity name="a${k}" joint="j${k}" kv="${motor.kv}" ctrllimited="true" ctrlrange="-60 60" forcelimited="true" forcerange="${-motor.stall} ${motor.stall}"/>`);
   }
   return `<mujoco model="robot"><compiler angle="degree" autolimits="true"/><option timestep="${dt}" integrator="implicitfast" gravity="0 0 -9.81"/>

@@ -63,3 +63,29 @@ test('a sketch drives the joints and reads the sensors, and cannot reach the pag
   const bad = new RobotController('function loop() { window.alert(1); }', model); bad.tick(st, 0); assert.match(bad.error, /TypeError/);
   assert.equal(new RobotController('var x = ;', model).error?.startsWith('SyntaxError'), true);
 });
+
+/* ── a part bolted to a servo's shaft or horn turns with the servo ── */
+import { makeKitPart } from '../src/core/robot-kit.js';
+function armOn(servoId, hornFrames = ['horn-1']) {
+  const as = new Assembly(), pl = makeKitPart('plate-100x80'), sv = makeKitPart(servoId), lk = makeKitPart('link-80');
+  const P = as.add(pl, [0, 0, 0]), S = as.add(sv, [0, 0, 40]), L = as.add(lk, [0, 0, 80]);
+  const top = pl.frames.filter(f => /-top$/.test(f.id)), e1 = sv.frames.find(f => f.id === 'ear-1-bottom'), e2 = sv.frames.find(f => f.id === 'ear-2-bottom'), ear = Math.abs(e1.pos[1] - e2.pos[1]);
+  const pair = top.flatMap(a => top.map(b => [a, b])).find(([a, b]) => Math.abs(Math.abs(a.pos[1] - b.pos[1]) - ear) < 0.3 && Math.abs(a.pos[0] - b.pos[0]) < 0.3);
+  assert.ok(pair && as.mate(P.id, pair[0].id, S.id, 'ear-1-bottom').ok && as.mate(P.id, pair[1].id, S.id, 'ear-2-bottom').ok, 'the servo case is screwed to the plate by its ears');
+  for (const [k, h] of hornFrames.entries()) assert.ok(as.mate(S.id, h, L.id, k ? 'hole-1-top' : 'hole-1-top').ok, `link screwed to ${h}`);
+  return { as, P, S, L };
+}
+test('a link screwed to the servo horn is a hinge about the shaft, driven at that servo\'s real torque and speed', async () => {
+  for (const [id, torque] of [['servo-sg90', 0.176], ['servo-ds3218', 1.96]]) {
+    const { as, P, S } = armOn(id), model = robotFromAssembly(as, { anchorId: P.id });
+    assert.equal(model.ok, true); assert.equal(model.joints.length, 1); const j = model.joints[0];
+    assert.equal(j.mode, 'servo'); assert.deepEqual(j.axis.map(v => Math.round(v)), [0, 0, 1], 'it turns about the shaft');
+    const sh = as.get(S.id).part.frames.find(f => f.id === 'shaft'), w = [as.get(S.id).T.t[0] + sh.pos[0], as.get(S.id).T.t[1] + sh.pos[1]];
+    assert.ok(Math.hypot(j.anchor[0] * 1000 - w[0], j.anchor[1] * 1000 - w[1]) < 1.5, 'the hinge sits on the shaft, not on the screw hole');
+    assert.equal(j.servo.torque, torque); assert.match(toMJCF(model), new RegExp(`forcerange="-${torque} ${torque}"`));
+  }
+});
+test('the servo moves what is bolted to it: 60° on the command turns the link 60°', async () => {
+  const { as, P } = armOn('servo-sg90'), model = robotFromAssembly(as, { anchorId: P.id }), mj = await loadMujoco(), sim = new RobotSim(mj, model);
+  try { sim.step(250); sim.command(0, 60); sim.step(1200); assert.ok(Math.abs(Math.abs(sim.angle(0)) - 60) < 4, `turned ${sim.angle(0)}°`); } finally { sim.dispose(); }
+});

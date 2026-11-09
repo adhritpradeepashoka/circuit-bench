@@ -44,11 +44,13 @@ export function parseKitId(id) {
 }
 
 /** The geometry a part needs, in numbers (the viewer turns it into a shape). Z up, centred in X and Y, resting on z = 0. */
+/** The four screw holes of a cross horn, up to 8 mm from the shaft (less on a narrow servo, so the holes stay on the part). A part screwed to these (or to the shaft itself) turns with the servo: see buildRig in assembly-pose.js. */
+const hornHoles = (yShaft, z, dir, src, tail = '', R = 8) => [[1, 0], [0, 1], [-1, 0], [0, -1]].map(([x, y], k) => hole(`horn-${k + 1}${tail}`, [x * R, yShaft + y * R, z], dir, 2.2, src));
 export function makeKitPart(id) {
   const d = parseKitId(id); if (!d) return null;
   const base = { format: ROBOT_PART_FORMAT, version: ROBOT_PART_VERSION, id, model: { file: `${id}.gen`, format: 'gen', units: 'mm', up: 'z' } };
   if (d.kind === 'servo') {
-    const s = SERVOS[d.key], src = s.real ? 'datasheet' : 'estimated', hd = clear(s.horn), yShaft = s.L / 2 - s.shaftOff, top = s.H + s.shaftH, ex = s.earHole / 2;
+    const s = SERVOS[d.key], src = s.real ? 'datasheet' : 'estimated', hd = clear(s.horn), hr = Math.min(8, s.W / 2 - 0.6, s.L / 2 - Math.abs(s.L / 2 - s.shaftOff) - 0.6), yShaft = s.L / 2 - s.shaftOff, top = s.H + s.shaftH, ex = s.earHole / 2;
     if (s.style === 'block') {                                                                                                                   // no ears: M2.5 holes in the two big faces, and a shaft out of each
       const fh = clear(s.faceScrew), at = ([x, y]) => [x, y];
       return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.L, s.H + 2 * s.shaftH], source: src }, kit: { ...d, servo: s, yShaft, top },
@@ -58,6 +60,7 @@ export function makeKitPart(id) {
           { id: 'shaft', kind: 'shaft', pos: [0, yShaft, top + s.shaftH].map(r2), dir: UP, diameter: s.shaftD, source: src },
           { id: 'shaft-bottom', kind: 'shaft', pos: [0, yShaft, 0].map(r2), dir: DOWN, diameter: s.shaftD, source: src },
           hole('horn-screw', [0, yShaft, top + s.shaftH], UP, hd, src), hole('horn-screw-bottom', [0, yShaft, 0], DOWN, hd, src),
+          ...hornHoles(yShaft, top + s.shaftH, UP, src, '', hr), ...hornHoles(yShaft, 0, DOWN, src, '-bottom', hr),
         ] };
     }
     return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.ear, top], source: src }, kit: { ...d, servo: s, yShaft, top },
@@ -66,6 +69,7 @@ export function makeKitPart(id) {
         hole('ear-2-top', [0, -ex, s.earZ + s.earT], UP, 2.4, src), hole('ear-2-bottom', [0, -ex, s.earZ], DOWN, 2.4, src),
         { id: 'shaft', kind: 'shaft', pos: [0, yShaft, top].map(r2), dir: UP, diameter: s.shaftD, source: src },
         hole('horn-screw', [0, yShaft, top], UP, hd, src),
+        ...hornHoles(yShaft, top, UP, src, '', hr),
         hole('base-1', [0, -s.L / 2 + 3, 0], DOWN, 2.4, 'estimated'),
       ] };
   }
