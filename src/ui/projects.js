@@ -174,13 +174,13 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     renderList();
   }
 
-  async function remove(id) {
+  async function remove(id, { quiet = false } = {}) {
     await store.remove(id);
     if (id === current?.id) {
       current = null;
       const rest = await store.list();
       if (rest.length) await open(rest[0].id); else await create({ name: 'My first project' });
-      openModal();
+      if (!quiet) openModal();
     } else renderList();
   }
 
@@ -254,19 +254,27 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   // The quick switcher: a list under the project button, one click to change project (the full dialog stays for rename, copy and delete)
   const pop = el('div', 'proj-switch'); pop.hidden = true; pop.setAttribute('role', 'menu'); document.body.append(pop);
   const pbtn = $('projectBtn');
+  let swConfirm = null;
   async function renderSwitch() {
     const items = await store.list(), ul = el('ul');
     for (const m of items) {
       const li = el('li', m.id === current?.id ? 'current' : ''), b = el('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
       b.append(el('b', '', m.name), el('span', '', `${WORKSPACES[m.workspace]?.name || m.workspace} · edited ${ago(m.updatedAt)}${m.id === current?.id ? ' · open now' : ''}`));
-      b.addEventListener('click', () => { closeSwitch(); open(m.id); }); li.append(b); ul.append(li);
+      b.addEventListener('click', () => { closeSwitch(); open(m.id); }); li.append(b);
+      // hover (or keyboard focus) shows a bin; the first click asks "Delete?", the second deletes for good
+      const ask = swConfirm === m.id, del = el('button', `ps-del${ask ? ' ask' : ''}`); del.type = 'button';
+      del.title = ask ? 'Click again to delete this project for good' : `Delete ${m.name}`; del.setAttribute('aria-label', del.title);
+      if (ask) del.textContent = 'Delete?'; else del.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4.5h10M6.2 4.5V3h3.6v1.5M4.4 4.5l.6 8.5h6l.6-8.5M6.8 7v4M9.2 7v4"/></svg>';
+      del.addEventListener('click', async e => { e.stopPropagation(); if (swConfirm !== m.id) { swConfirm = m.id; await renderSwitch(); return; } swConfirm = null; await remove(m.id, { quiet: true }); await renderSwitch(); });
+      del.addEventListener('mouseleave', () => { if (swConfirm === m.id) { swConfirm = null; renderSwitch(); } });
+      li.append(del); ul.append(li);
     }
     const foot = el('div', 'ps-foot'), nw = el('button', 'ps-new', '+ New project'), all = el('button', '', 'Manage…');
     nw.type = all.type = 'button'; nw.addEventListener('click', () => { closeSwitch(); openModal({ focusNew: true }); }); all.addEventListener('click', () => { closeSwitch(); openModal(); });
     foot.append(nw, all); pop.replaceChildren(ul, foot);
     ul.querySelector('.current button')?.scrollIntoView?.({ block: 'nearest' });
   }
-  function closeSwitch() { pop.hidden = true; pbtn.setAttribute('aria-expanded', 'false'); }
+  function closeSwitch() { swConfirm = null; pop.hidden = true; pbtn.setAttribute('aria-expanded', 'false'); }
   async function openSwitch() {
     await saveNow(); await renderSwitch(); const r = pbtn.getBoundingClientRect();
     pop.hidden = false; pop.style.left = `${Math.max(8, Math.min(r.left, innerWidth - pop.offsetWidth - 8))}px`; pop.style.top = `${r.bottom + 6}px`;

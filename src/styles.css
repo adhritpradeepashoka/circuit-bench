@@ -1252,3 +1252,10 @@ body:not(.robot-asm) #robotParts { display: none; }
 .top-suggest .ts-make .plus { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; border: 1px dashed currentColor; font-size: 18px; opacity: .8; }
 .top-suggest .ts-make > span:last-child { display: flex; flex-direction: column; }
 .top-suggest .ts-link { font-size: 12px; opacity: .8; justify-content: center; }
+.proj-switch li { position: relative; }
+.proj-switch li button:not(.ps-del) { padding-right: 44px; }
+.proj-switch .ps-del { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; min-width: 28px; height: 28px; padding: 0 6px; border: 0; border-radius: 7px; background: transparent; color: #7a8a82; cursor: pointer; opacity: 0; transition: opacity .12s, background .12s, color .12s; font: 700 11.5px/1 inherit; width: auto; }
+.proj-switch li:hover .ps-del, .proj-switch li:focus-within .ps-del, .proj-switch .ps-del.ask { opacity: 1; }
+.proj-switch .ps-del:hover, .proj-switch .ps-del:focus-visible { background: #fbe3e0; color: #b3261e; outline: none; }
+.proj-switch .ps-del.ask { background: #b3261e; color: #fff; }
+@media (hover: none) { .proj-switch .ps-del { opacity: .8; } }
