@@ -34,8 +34,11 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
   let user = null, google = null, enabled = false;
   try { user = JSON.parse(localStorage.getItem(STORE) || 'null'); } catch { user = null; }
 
+  const openSettingsFromMenu = () => { menu.hidden = true; $('settingsBtn')?.click(); };
   function paint() {
     slot.replaceChildren(); menu.hidden = true;
+    const gear = $('settingsBtn'); if (gear) gear.hidden = !!user;       // signed in: Settings lives in the account menu, one button instead of two
+    $('accountSettings')?.addEventListener('click', openSettingsFromMenu, { once: true });
     if (user) {
       const btn = document.createElement('button');
       btn.type = 'button'; btn.className = 'account-btn'; btn.id = 'accountBtn';

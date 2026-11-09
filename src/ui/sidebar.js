@@ -66,12 +66,14 @@ export function initSidebar(editor) {
   // "drv 8833", "DRV-8833" and "drv8833" all find the same part: compare with spaces and dashes taken out, and every word of the search must appear
   const squash = t => t.toLowerCase().replace(/[^a-z0-9]+/g, '');
   const matches = (text, q) => { const t = text.toLowerCase(), c = squash(text); return t.includes(q) || c.includes(squash(q)) || q.split(/\s+/).filter(Boolean).every(w => t.includes(w) || c.includes(squash(w))); };
+  /** Every part whose name, category, keywords or description matches q (all parts for an empty q). */
+  const defsMatching = q => [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type)).filter(d => !q || matches(`${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`, q));
   function renderCatalog() {
     const host = $('catalog');
     host.innerHTML = '';
     const q = query.trim().toLowerCase();
     const blurb = d => BLURB[d.type] || (d.custom ? d.spec.description || BEHAVIOURS[d.spec.behaviour.kind].label : '');
-    const items = [...CATALOG_ORDER, ...builtinTypes(), ...customTypes()].map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type)).filter(d => !q || matches(`${d.name} ${d.category} ${KEYWORDS[d.type] || ''} ${d.custom ? `${d.spec.description} custom` : ''}`, q));
+    const items = defsMatching(q);
     // A robotics project that knows what it is building leads with the parts for that robot (everything else is one click away, and search always looks through everything)
     const rt = activeWorkspace().robotics && !q ? robotType(getRobotType()) : null, focus = rt && !showingAll() ? circuitPartsFor(rt.id, t => !!PART_DEFS[t]) : null;
     if (focus) { const order = t => { const i = focus.indexOf(t); return i < 0 ? 999 : i; }; items.splice(0, items.length, ...items.filter(d => focus.includes(d.type) || (d.custom && !d.builtin)).sort((a, b) => order(a.type) - order(b.type))); }
@@ -163,8 +165,53 @@ export function initSidebar(editor) {
 
   const setQuery = v => { query = v; $('partsSearch').value = v; $('topSearch').value = v; renderCatalog(); };
   $('partsSearch').addEventListener('input', e => setQuery(e.target.value));
-  $('topSearch').addEventListener('input', e => { setCollapsed(false); setQuery(e.target.value); });
-  $('topSearch').addEventListener('focus', () => setCollapsed(false));
+  // ── the top-bar search: a drop-down of parts (like search suggestions), with the Part Maker in it — the side panel stays out of the way
+  const top = $('topSearch'), box = document.createElement('div');
+  box.id = 'topSuggest'; box.className = 'top-suggest'; box.setAttribute('role', 'listbox'); box.hidden = true; document.body.append(box);
+  let active = -1, rows = [];
+  const closeSuggest = () => { box.hidden = true; active = -1; top.setAttribute('aria-expanded', 'false'); };
+  const pick = fn => { closeSuggest(); fn(); };
+  const mark = i => { active = rows.length ? (i + rows.length) % rows.length : -1; rows.forEach((r, k) => r.el.classList.toggle('on', k === active)); rows[active]?.el.scrollIntoView({ block: 'nearest' }); };
+  function paintSuggest() {
+    const q = top.value.trim(), ql = q.toLowerCase();
+    const defs = (q ? defsMatching(ql) : CATALOG_ORDER.map(t => PART_DEFS[t]).filter(d => d && partAvailable(d.type))).slice(0, q ? 8 : 6);
+    const total = q ? defsMatching(ql).length : 0;
+    box.replaceChildren(); rows = [];
+    const head = (txt) => { const h = document.createElement('div'); h.className = 'ts-head'; h.textContent = txt; box.append(h); };
+    const row = (el, fn) => { el.setAttribute('role', 'option'); el.tabIndex = -1; el.addEventListener('mousedown', e => e.preventDefault()); el.addEventListener('click', () => pick(fn)); el.addEventListener('mousemove', () => mark(rows.findIndex(r => r.el === el))); box.append(el); rows.push({ el, fn }); };
+    if (defs.length) head(q ? 'Parts' : 'Popular parts');
+    for (const def of defs) {
+      const el = document.createElement('div'); el.className = 'ts-row';
+      const copy = document.createElement('span'); copy.className = 'ts-copy';
+      const nm = document.createElement('b'); nm.textContent = def.name; const cat = document.createElement('span'); cat.textContent = def.category || '';
+      copy.append(nm, cat);
+      const add = document.createElement('span'); add.className = 'add'; add.textContent = 'Add';
+      el.append(thumb(def.type), copy, add);
+      el.draggable = true; el.addEventListener('dragstart', e => { e.dataTransfer.setData(DRAG_MIME, def.type); e.dataTransfer.effectAllowed = 'copy'; });
+      row(el, () => editor.addPart(def.type));
+    }
+    if (q && total > defs.length) { const more = document.createElement('button'); more.type = 'button'; more.className = 'ts-link'; more.textContent = `See all ${total} results in the Parts panel`; row(more, () => { panes.open('parts'); setQuery(q); }); }
+    head('Make a part');
+    if (q) {
+      const ai = document.createElement('button'); ai.type = 'button'; ai.className = 'ts-make'; ai.innerHTML = '<span class="plus">+</span><span><b></b><span>Let the AI look it up and build it</span></span>'; ai.querySelector('b').textContent = `Make “${q.slice(0, 40)}”`;
+      row(ai, () => editor.emit('create-part', { name: q, ask: true }));
+    }
+    const own = document.createElement('button'); own.type = 'button'; own.className = 'ts-make'; own.id = 'topMakePart'; own.innerHTML = `<span class="plus">+</span><span><b>${q ? 'Draw it myself' : 'Open the Part Maker'}</b><span>${q ? 'Pick the pins and behaviour yourself' : 'Describe a part to the AI, or draw your own'}</span></span>`;
+    row(own, () => editor.emit('create-part', q ? { name: q } : undefined));
+    const r = top.getBoundingClientRect(); box.style.left = `${Math.max(8, Math.min(r.left, innerWidth - 388))}px`; box.style.top = `${r.bottom + 6}px`; box.style.width = `${Math.min(380, innerWidth - 16)}px`;
+    box.hidden = false; top.setAttribute('aria-expanded', 'true'); mark(q && defs.length ? 0 : -1);
+  }
+  top.setAttribute('role', 'combobox'); top.setAttribute('aria-controls', 'topSuggest'); top.setAttribute('aria-expanded', 'false'); top.autocomplete = 'off';
+  top.addEventListener('input', paintSuggest);
+  top.addEventListener('focus', paintSuggest);
+  top.addEventListener('keydown', e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (box.hidden) paintSuggest(); else mark(active + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(active - 1); }
+    else if (e.key === 'Enter') { if (!box.hidden && rows[active]) { e.preventDefault(); const f = rows[active].fn; pick(f); top.value = ''; } }
+    else if (e.key === 'Escape') { closeSuggest(); top.blur(); }
+  });
+  top.addEventListener('blur', () => setTimeout(closeSuggest, 120));
+  window.addEventListener('resize', closeSuggest);
 
   const panes = sidePanes(editor);
   // Kept for callers that still think in "collapse the parts column": collapsed = Parts pane closed.
