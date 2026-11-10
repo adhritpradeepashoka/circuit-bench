@@ -117,7 +117,7 @@ export function initAssembly({ editor, projects = null }) {
       scene.add(new THREE.HemisphereLight(0xffffff, 0x8899aa, 1.1));
       const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(150, -200, 300); scene.add(sun);
       const grid = new THREE.GridHelper(400, 40, 0x7f8f88, 0xb9c4bf); grid.rotation.x = Math.PI / 2; scene.add(grid);
-      const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = false;
+      const controls = new OrbitControls(camera, renderer.domElement); controls.enableDamping = false; controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };   // right-drag always looks around, so a plain drag can draw a selection box
       const root = new THREE.Group(), gizmos = new THREE.Group(), sceneRoot = new THREE.Group(), sceneGizmos = new THREE.Group(); sceneRoot.visible = sceneGizmos.visible = false; scene.add(root, gizmos, sceneRoot, sceneGizmos);
       const ray = new THREE.Raycaster();
       let model = null, scale = 1;
@@ -343,7 +343,7 @@ export function initAssembly({ editor, projects = null }) {
   let sceneFor = null, restoreToken = 0; const sceneKey = () => `${LEGACY_SCENE_KEY}:${sceneFor || 'none'}`;
   const PALETTE = [0xb8c4cc, 0x7fb3d5, 0xe8b26a, 0x9ccc9c, 0xd59fb8, 0xb7a3d8, 0xd9d27a, 0x8fd0c8], hex = n => `#${n.toString(16).padStart(6, '0')}`;
   const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
-  const group = new Set(), groupBoxes = []; let boxMode = false;
+  const group = new Set(), groupBoxes = []; let boxMode = true;
   let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, checkOn = false, joinMode = false, joinFirst = null, hoverInst = null, spotMode = false;
   const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' }), droneEl = el('div', { className: 'asm-drone', id: 'asmDrone', hidden: true });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' }), probEl = el('div', { className: 'asm-problems', id: 'asmProblems', hidden: true });
@@ -360,7 +360,7 @@ export function initAssembly({ editor, projects = null }) {
   const spotBtn = mkBtn('Add spots', 'Mark connection spots on a part\'s surface, where there is no hole. Click a part to add one, click a spot to remove it. Then use Join holes to fasten two spots together.', () => setSpot(!spotMode), 'asmSpot');
   const joinBtn = mkBtn('Join holes', 'Click a hole on one part, then a hole on another (J)', () => setJoin(!joinMode), 'asmJoin'), xrayBtn = mkBtn('X-ray', 'See through the parts', () => { xray = !xray; xrayBtn.classList.toggle('on', xray); render(); }, 'asmXray');
   const checkBtn = mkBtn('Check my build', 'List what looks wrong: loose parts, parts through each other, joints that came apart', () => { checkOn = !checkOn; checkBtn.classList.toggle('on', checkOn); render(); }, 'asmCheck');
-  const boxBtn = mkBtn('Box select', 'Drag a box round parts to select them (or hold Shift while dragging)', () => { boxMode = !boxMode; boxBtn.classList.toggle('on', boxMode); }, 'asmBoxSelect');
+  const boxBtn = mkBtn('Box select', 'On: drag on empty space to draw a box round parts and select them, and right-drag to look around. Off: drag on empty space to look around.', () => { boxMode = !boxMode; boxBtn.classList.toggle('on', boxMode); boxBtn.setAttribute('aria-pressed', String(boxMode)); render(); }, 'asmBoxSelect'); boxBtn.classList.add('on'); boxBtn.setAttribute('aria-pressed', 'true');
   const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
     ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
     el('span', { className: 'asm-tsep' }), mkBtn('Select all', 'Select the whole build to move or turn it (Ctrl+A). Or hold Shift and drag a box round some parts.', () => selectAll(), 'asmSelectAll'), boxBtn, spotBtn, joinBtn, checkBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
@@ -670,7 +670,7 @@ export function initAssembly({ editor, projects = null }) {
     if (group.size > 1) for (const inst of groupInsts()) { const bx = new t.THREE.Box3Helper(new t.THREE.Box3().setFromObject(inst.obj), 0x2f9bff); bx.material.depthTest = false; bx.renderOrder = 10; t.sceneGizmos.add(bx); groupBoxes.push(bx); }   // a bright box round every selected part, so you can see what is selected
     t.draw(); renderPanel(); refreshTools(); refreshProblems(); save();
     helpEl.hidden = false;
-    helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : spotMode ? 'Click a part to add a connection spot · click a spot to remove it · Esc to finish' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
+    helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : spotMode ? 'Click a part to add a connection spot · click a spot to remove it · Esc to finish' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : (boxMode ? 'Click a part to select it · drag on empty space to select a box of parts · right-drag to look around' : 'Click a part to select it · drag the background to look around');
   }
   const render2 = () => { for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } overlays(); three.draw(); save(); };
   /** One motor part for every size: pick the size and Kv here and this motor is rebuilt in place (same spot, same joints). */
@@ -833,7 +833,7 @@ export function initAssembly({ editor, projects = null }) {
         drag = { id: inst.id, mode: 'axis', a, c, s0, start: { x: e.clientX, y: e.clientY }, t0: [...inst.T.t], moved: false, pending: asm.snapshot() }; return;
       }
       const h = instAt(e);
-      if (!h && (boxMode || e.shiftKey)) { t.controls.enabled = false; dom.setPointerCapture(e.pointerId); const r0 = dom.getBoundingClientRect(); marq = { x0: e.clientX, y0: e.clientY, add: e.shiftKey && group.size > 0, base: new Set(group) }; marqEl.style.cssText = `left:${e.clientX - r0.left}px;top:${e.clientY - r0.top}px;width:0;height:0`; marqEl.hidden = false; return; }
+      if (!h && e.button === 0 && (boxMode || e.shiftKey)) { t.controls.enabled = false; dom.setPointerCapture(e.pointerId); const r0 = dom.getBoundingClientRect(); marq = { x0: e.clientX, y0: e.clientY, add: e.shiftKey && group.size > 0, base: new Set(group) }; marqEl.style.cssText = `left:${e.clientX - r0.left}px;top:${e.clientY - r0.top}px;width:0;height:0`; marqEl.hidden = false; return; }
       if (!h) { if (selected || group.size) { group.clear(); select(null); } return; }
       if (e.shiftKey) { const ids = new Set(group); if (selected) ids.add(selected); ids.has(h.id) ? ids.delete(h.id) : ids.add(h.id); setGroup([...ids]); return; }
       if (group.size > 1 && group.has(h.id)) {                                                   // many parts selected: pull one and they all move
