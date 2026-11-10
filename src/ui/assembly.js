@@ -19,6 +19,7 @@ import { initDroneTest } from './drone-test.js';
 import { droneWiring } from '../core/drone-wiring.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
 import { offFeatures } from './features.js';
+import { createViewCube } from './viewcube.js';
 import { buildRig, isMate, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
@@ -362,7 +363,7 @@ export function initAssembly({ editor, projects = null }) {
   const checkBtn = mkBtn('Check my build', 'List what looks wrong: loose parts, parts through each other, joints that came apart', () => { checkOn = !checkOn; checkBtn.classList.toggle('on', checkOn); render(); }, 'asmCheck');
   const boxBtn = mkBtn('Box select', 'On: drag on empty space to draw a box round parts and select them, and right-drag to look around. Off: drag on empty space to look around.', () => { boxMode = !boxMode; boxBtn.classList.toggle('on', boxMode); boxBtn.setAttribute('aria-pressed', String(boxMode)); render(); }, 'asmBoxSelect'); boxBtn.classList.add('on'); boxBtn.setAttribute('aria-pressed', 'true');
   const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
-    ...[['Front', 'front'], ['Top', 'top'], ['Side', 'side'], ['3D', 'iso']].map(([l, v]) => mkBtn(l, `${l} view`, () => viewTo(v), `asmView-${v}`)), mkBtn('Fit', 'Fit everything in view', () => fitScene(), 'asmFit'),
+    mkBtn('Fit', 'Fit the whole build in view (the cube in the corner turns the view)', () => fitScene(), 'asmFit'),
     el('span', { className: 'asm-tsep' }), mkBtn('Select all', 'Select the whole build to move or turn it (Ctrl+A). Or hold Shift and drag a box round some parts.', () => selectAll(), 'asmSelectAll'), boxBtn, spotBtn, joinBtn, checkBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
@@ -596,6 +597,25 @@ export function initAssembly({ editor, projects = null }) {
       mkBtn(`⟲ ${n}`, `${n}: turn ${tip} (anticlockwise)`, () => turnGroup(ax, 1), `asmTurn-${n}-l`), mkBtn(`${n} ⟳`, `${n}: turn ${tip} (clockwise)`, () => turnGroup(ax, -1), `asmTurn-${n}-r`)]),
     el('span', { className: 'asm-lbl', textContent: 'Step' }), stepSel, mkBtn('Done', 'Let go of the selection (Esc)', () => setGroup([]), 'asmGroupDone'));
   stage.append(groupBar);
+  // — Tinkercad's keys: arrows nudge what is selected along the floor (Shift = 10 mm steps), Ctrl+↑/↓ or PageUp/PageDown lift and lower it, D drops it to the floor, F zooms to it
+  const targets = () => (group.size > 1 ? groupInsts() : selected && asm.get(selected) ? [asm.get(selected)] : []);
+  function nudge(key, big, lift) {
+    const ts = targets(), t = three; if (!ts.length || !t) return false;
+    const step = big ? 10 : 1, cam = t.camera, right = new t.THREE.Vector3(1, 0, 0).applyQuaternion(cam.quaternion), fwd = new t.THREE.Vector3(0, 0, -1).applyQuaternion(cam.quaternion);
+    const axisOf = v => (Math.abs(v.x) >= Math.abs(v.y) ? [Math.sign(v.x) || 1, 0, 0] : [0, Math.sign(v.y) || 1, 0]);
+    let d = [0, 0, 0];
+    if (lift) d = [0, 0, key === 'ArrowUp' || key === 'PageUp' ? step : -step];
+    else if (key === 'ArrowLeft' || key === 'ArrowRight') { const a = axisOf(right), g = key === 'ArrowRight' ? 1 : -1; d = a.map(v => v * g * step); }
+    else { const a = axisOf(fwd), g = key === 'ArrowUp' ? 1 : -1; d = a.map(v => v * g * step); }
+    keep(); if (ts.length === 1) detach(ts[0]); for (const i of ts) i.T = { q: i.T.q, t: [i.T.t[0] + d[0], i.T.t[1] + d[1], i.T.t[2] + d[2]] };
+    render(); return true;
+  }
+  function dropSelected() {
+    const ts = targets(), t = three; if (!ts.length || !t) return false; keep(); let lo = Infinity;
+    for (const i of ts) lo = Math.min(lo, new t.THREE.Box3().setFromObject(i.obj).min.z);
+    for (const i of ts) i.T = { q: i.T.q, t: [i.T.t[0], i.T.t[1], i.T.t[2] - lo] }; render(); bsay('Dropped to the floor.'); return true;
+  }
+  function zoomToSelected() { const ts = targets(); viewTo('iso', ts.length === 1 ? ts[0] : null); }
   function paintGroup() { groupBar.hidden = group.size < 1; groupLabel.textContent = group.size === asm.instances.length ? `Whole build (${group.size} parts)` : `${group.size} parts selected`; }
   const centreOf = inst => { const b = new three.THREE.Box3().setFromObject(inst.obj), c = b.getCenter(new three.THREE.Vector3()); return [c.x, c.y, c.z]; };
   const detach = inst => { const n = asm.mates.length; asm.mates = asm.mates.filter(m => m.a.inst !== inst.id && m.b.inst !== inst.id); if (asm.mates.length < n) bsay('Unjoined from the parts it was attached to, so it can move freely. Ctrl+Z undoes this.'); };
@@ -615,7 +635,7 @@ export function initAssembly({ editor, projects = null }) {
   function viewTo(name, focusInst = null) {
     const t = three; if (!t) return; const b = new t.THREE.Box3(); if (focusInst) b.setFromObject(focusInst.obj); else b.setFromObject(t.sceneRoot); if (b.isEmpty()) return;
     const s = b.getSize(new t.THREE.Vector3()), c = b.getCenter(new t.THREE.Vector3()), d = Math.max(s.x, s.y, s.z, 30) * (focusInst ? 2.6 : 2.2);
-    const dir = { front: [0, -1, 0.001], top: [0, -0.001, 1], side: [1, 0, 0.001], iso: [0.5, -1, 0.6] }[name] || [0.5, -1, 0.6], L = Math.hypot(...dir);
+    const dir = Array.isArray(name) ? (Math.abs(name[2]) > 0.99 ? [0, -0.001, name[2]] : [name[0], name[1], name[2] + 0.001]) : { front: [0, -1, 0.001], top: [0, -0.001, 1], side: [1, 0, 0.001], iso: [0.5, -1, 0.6] }[name] || [0.5, -1, 0.6], L = Math.hypot(...dir);
     t.controls.target.copy(c); t.camera.position.set(c.x + dir[0] / L * d, c.y + dir[1] / L * d, c.z + dir[2] / L * d); t.camera.near = d / 100; t.camera.far = d * 100; t.camera.updateProjectionMatrix(); t.controls.update(); t.draw();
   }
 
@@ -670,7 +690,7 @@ export function initAssembly({ editor, projects = null }) {
     if (group.size > 1) for (const inst of groupInsts()) { const bx = new t.THREE.Box3Helper(new t.THREE.Box3().setFromObject(inst.obj), 0x2f9bff); bx.material.depthTest = false; bx.renderOrder = 10; t.sceneGizmos.add(bx); groupBoxes.push(bx); }   // a bright box round every selected part, so you can see what is selected
     t.draw(); renderPanel(); refreshTools(); refreshProblems(); save();
     helpEl.hidden = false;
-    helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : spotMode ? 'Click a part to add a connection spot · click a spot to remove it · Esc to finish' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : (boxMode ? 'Click a part to select it · drag on empty space to select a box of parts · right-drag to look around' : 'Click a part to select it · drag the background to look around');
+    helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : spotMode ? 'Click a part to add a connection spot · click a spot to remove it · Esc to finish' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · right-drag or drag the cube to look around · scroll to zoom' : (boxMode ? 'Click a part to select it · drag on empty space to select a box of parts · right-drag to look around' : 'Click a part to select it · drag the background to look around, or drag the cube');
   }
   const render2 = () => { for (const inst of asm.instances) { inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); } overlays(); three.draw(); save(); };
   /** One motor part for every size: pick the size and Kv here and this motor is rebuilt in place (same spot, same joints). */
@@ -806,7 +826,7 @@ export function initAssembly({ editor, projects = null }) {
 
   // — the mouse: grab a part or an arrow to move it, drag the background to look around
   function attach(t) {
-    if (attached) return; attached = true; const dom = t.renderer.domElement, { THREE } = t, plane = new THREE.Plane(), hitPt = new THREE.Vector3(); let marq = null; const marqEl = el('div', { className: 'asm-marquee', hidden: true }); stage.append(marqEl);
+    if (attached) return; attached = true; const dom = t.renderer.domElement, { THREE } = t, plane = new THREE.Plane(), hitPt = new THREE.Vector3(); const cube = createViewCube({ THREE, camera: t.camera, controls: t.controls, onFace: dir => viewTo(dir), onHome: () => viewTo('iso'), redraw: () => t.draw() }); stage.append(cube.el); t.controls.addEventListener('change', cube.update); let marq = null; const marqEl = el('div', { className: 'asm-marquee', hidden: true }); stage.append(marqEl);
     const ndc = e => { const r = dom.getBoundingClientRect(); return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -(((e.clientY - r.top) / r.height) * 2 - 1)); };
     const ownerOf = o => { while (o && !o.userData.inst && !o.userData.axis) o = o.parent; return o; };
     const instAt = e => { t.ray.setFromCamera(ndc(e), t.camera); const h = t.ray.intersectObjects(t.sceneRoot.children, true)[0]; if (!h) return null; let o = h.object; while (o && !o.userData.inst) o = o.parent; return o ? { id: o.userData.inst, point: h.point } : null; };
@@ -914,6 +934,9 @@ export function initAssembly({ editor, projects = null }) {
       else if ((e.ctrlKey || e.metaKey) && k === 'c' && selected) { e.preventDefault(); copyInst(selected); }
       else if ((e.ctrlKey || e.metaKey) && k === 'v') { e.preventDefault(); pasteInst(); }
       else if ((e.ctrlKey || e.metaKey) && k === 'd' && selected) { e.preventDefault(); dupInst(selected); }
+      else if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'pageup', 'pagedown'].includes(k) && !e.altKey && (selected || group.size > 1)) { if (nudge(e.key, e.shiftKey, e.ctrlKey || e.metaKey || k.startsWith('page'))) e.preventDefault(); }
+      else if (k === 'd' && !e.ctrlKey && !e.metaKey && (selected || group.size > 1)) { if (dropSelected()) e.preventDefault(); }
+      else if (k === 'f' && !e.ctrlKey && !e.metaKey) { zoomToSelected(); e.preventDefault(); }
       else if (k === 'j') setJoin(!joinMode);
       else if (e.key === 'Escape') { if (spotMode) setSpot(false); else if (joinMode) setJoin(false); else if (group.size) setGroup([]); else if (selected) select(null); }
       else if (k === 'f') fitScene();

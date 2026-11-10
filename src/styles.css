@@ -1289,3 +1289,7 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .robot-tabs { flex: none; } .robot-tabs button { min-width: 0; white-space: nowrap; }
 .toolbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; } .toolbar::-webkit-scrollbar { display: none; }
 .toolbar > * { flex-shrink: 0; }
+
+.viewcube { position: absolute; top: 10px; right: 10px; z-index: 3; width: 104px; height: 104px; } .viewcube canvas { display: block; touch-action: none; }
+.viewcube-home { position: absolute; left: -2px; top: -2px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
+.asm-floating { max-width: calc(100% - 138px); flex-wrap: wrap; }
