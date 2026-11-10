@@ -29,18 +29,31 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
   const holdBox = el('input', { type: 'checkbox', id: 'robHold', ariaLabel: 'Hold it still in the air' });
   const holdRow = el('label', { className: 'asm-check', title: 'The main body stays fixed in the air with nothing under it, so you can swing the joints and watch them without it falling or driving off' }, holdBox, el('span', { textContent: ' Hold it still in the air' }));
   holdBox.addEventListener('change', () => { rebuild(); });
+  const hitBox = el('input', { type: 'checkbox', id: 'robCollide', checked: true, ariaLabel: 'Parts collide with each other' });
+  const hitRow = el('label', { className: 'asm-check', title: 'Parts push on each other instead of passing through, and every servo stops hard at the ends of its range' }, hitBox, el('span', { textContent: ' Parts collide with each other' }));
+  hitBox.addEventListener('change', () => { rebuild(); });
+  const rangeBtn = el('button', { type: 'button', className: 'asm-btn', id: 'robRange', textContent: 'Check range of motion' }), rangeOut = el('div', { className: 'asm-note', id: 'robRangeOut', hidden: true });
+  rangeBtn.addEventListener('click', () => {
+    if (!sim || !model) return; const lines = [];
+    model.joints.forEach((j, k) => {
+      if (!j.range) return; const r = sim.sweep(k, 2); if (!r) return; const name = `${k + 1} ${j.name}`, partName = i => model.bodies[i]?.name || `part ${i + 1}`;
+      const clip = (r.min > j.range[0] + 1 || r.max < j.range[1] - 1);
+      lines.push(clip ? `${name}: parts collide beyond ${r.min.toFixed(0)}° to ${r.max.toFixed(0)}° (set range ${j.range[0]}° to ${j.range[1]}°)${r.hitUp ? `, ${partName(r.hitUp[0])} meets ${partName(r.hitUp[1])}` : r.hitDown ? `, ${partName(r.hitDown[0])} meets ${partName(r.hitDown[1])}` : ''}.` : `${name}: clear all the way, ${j.range[0]}° to ${j.range[1]}°.`);
+    });
+    sim.reset(); rangeOut.hidden = false; rangeOut.textContent = (lines.length ? lines.join(' ') : 'No servo hinges to check.') + ' Each servo’s end of range is a hard stop in this simulation. A real wearable also needs a physical stop or a mechanical limit, because software and servos can fail.';
+  });
   const field = (label, ctl) => el('label', { className: 'asm-field' }, el('span', { textContent: label }), ctl);
   const summary = el('p', { className: 'asm-note', id: 'robSummary' }), notes = el('div', { className: 'asm-note bad', id: 'robNotes' }), jointBox = el('div', { className: 'fly-motors', id: 'robJoints' });
   const whichSel = el('select', { id: 'robWhich', ariaLabel: 'Which controller' }, el('option', { value: 'starter', textContent: 'Built-in (sliders and keys, read-only)' }), el('option', { value: 'mine', textContent: 'My sketch (edit below)' }));
   const code = el('textarea', { id: 'robCode', className: 'fly-code', spellcheck: false, rows: 16, ariaLabel: 'Robot sketch' });
   const applyBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'robApply', textContent: 'Run this sketch' }), restoreBtn = el('button', { type: 'button', className: 'asm-btn', id: 'robRestore', textContent: 'Start from the starter' });
   const errBox = el('div', { className: 'asm-note bad', id: 'robErr', hidden: true }), logBox = el('pre', { className: 'fly-log', id: 'robLog', hidden: true });
-  side.append(el('h4', { textContent: 'Physics test' }), el('div', { className: 'asm-row' }, resetBtn), holdRow, field('Camera', camSel), field('Time', speedSel),
+  side.append(el('h4', { textContent: 'Physics test' }), el('div', { className: 'asm-row' }, resetBtn), holdRow, hitRow, el('div', { className: 'asm-row' }, rangeBtn), rangeOut, field('Camera', camSel), field('Time', speedSel),
     el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> ↑↓ / W S drive forward and back · ←→ / A D turn · Q E sideways · R drop it again. A game pad works too. Orbit with the mouse, scroll to zoom.' }),
     el('h4', { textContent: 'This robot' }), summary, notes, el('h4', { textContent: 'Joints' }), jointBox,
     el('p', { className: 'asm-note', textContent: 'Each hinge is a servo by default. A round part turning on its axle is found as a wheel (a motor). Choose “Free” for a hinge with no motor, like a passive wheel.' }),
     el('h4', { textContent: 'Controller' }), field('Runs', whichSel), code, el('div', { className: 'asm-row' }, applyBtn, restoreBtn), errBox, logBox,
-    el('p', { className: 'asm-note', textContent: 'An estimate: rigid parts shaped from your 3D models, the masses you gave, a typical 9 g servo (0.18 N·m, 500°/s) and a hobby gear motor, friction 1.0 on a flat floor, and no wiring or battery limits yet. Parts only touch the floor, not each other. Your sketch runs as code in this page, so only run sketches you trust.' }));
+    el('p', { className: 'asm-note', textContent: 'An estimate: rigid parts shaped from your 3D models, the masses you gave, a typical 9 g servo (0.18 N·m, 500°/s) and a hobby gear motor, friction 1.0 on a flat floor, and no wiring or battery limits yet. Parts push on each other and on the floor, and each servo stops hard at the ends of its range. Your sketch runs as code in this page, so only run sketches you trust.' }));
   const saved = store.get(SKETCH_KEY); let mine = saved && saved.includes('loop') ? saved : STARTER_ROBOT_SKETCH, which = store.get(WHICH_KEY) === 'mine' ? 'mine' : 'starter';
   const showCode = () => { whichSel.value = which; code.value = which === 'mine' ? mine : STARTER_ROBOT_SKETCH; code.scrollTop = 0; code.readOnly = which !== 'mine'; applyBtn.textContent = which === 'mine' ? 'Run this sketch' : 'Drop it again'; restoreBtn.hidden = which !== 'mine'; };
   showCode();
@@ -135,10 +148,10 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
     empty.hidden = false; empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('p', { textContent: 'Loading the physics engine…' })));
     try { mj = await loadMujoco(); } catch (e) { return showEmpty('The physics engine did not load', e.message); }
     if (my !== building) return;
-    try { sim = new RobotSim(mj, m); } catch (e) { console.error(e); return showEmpty('This robot could not be set up', `The physics engine did not accept it (${e?.message || e}). Check for parts with no size or mass in Assembly.`); }
+    try { sim = new RobotSim(mj, m, { selfCollide: hitBox.checked }); } catch (e) { console.error(e); return showEmpty('This robot could not be set up', `The physics engine did not accept it (${e?.message || e}). Check for parts with no size or mass in Assembly.`); }
     model = m; empty.hidden = true; hud.hidden = false; buildScene(); makeRows(); newController(); acc = 0;
     summary.textContent = `${Math.round(m.massKg * 1000)} g · ${m.bodies.length} rigid part${m.bodies.length > 1 ? 's' : ''} · ${m.joints.length} hinge${m.joints.length === 1 ? '' : 's'}${m.fixedBase ? ' · held still in place' : ' · free, dropped on the floor'}`;
-    notes.textContent = m.notes.join(' '); notes.hidden = !m.notes.length;
+    notes.textContent = [...m.notes, ...(sim.exclude.length ? [`${sim.exclude.length} pair${sim.exclude.length > 1 ? 's' : ''} of parts already overlap where they are screwed together, so those pairs are not checked for collision.`] : [])].join(' '); rangeOut.hidden = true; notes.hidden = !m.notes.length;
     for (const k of m.joints.keys()) { modes[m.joints[k].key] ??= m.joints[k].mode; }
   }
   function frame(now) {
@@ -149,7 +162,8 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
       if (now - hudAt > 100) {
         hudAt = now; const s = sim.imu();
         hud.replaceChildren(...[['Height', `${(s.height * 100).toFixed(1)} cm`], ['Speed', `${s.speed.toFixed(2)} m/s`], ['Tilt', `${s.roll.toFixed(0)}° / ${s.pitch.toFixed(0)}°`], ['Time', `${sim.t.toFixed(1)} s`]].flatMap(([a, b]) => [el('span', { textContent: a }), el('b', { textContent: b })]));
-        rows.forEach((r, k) => { r.textContent = model.joints[k].mode === 'motor' ? `${(sim.speed(k) / 360 * 60).toFixed(0)} rpm` : `${sim.angle(k).toFixed(0)}°`; });
+        rows.forEach((r, k) => { r.textContent = model.joints[k].mode === 'motor' ? `${(sim.speed(k) / 360 * 60).toFixed(0)} rpm` : `${sim.angle(k).toFixed(0)}°${sim.atStop(k) ? ' · at its stop' : ''}`; });
+        const hits = hitBox.checked ? sim.partContacts(-0.0003) : []; if (hits.length) hud.append(el('span', { textContent: 'Contact' }), el('b', { textContent: hits.slice(0, 2).map(([a, b]) => `${model.bodies[a]?.name || a + 1} ↔ ${model.bodies[b]?.name || b + 1}`).join(', ') }));
       }
     }
     if (T) T.renderer.render(T.scene, T.camera);

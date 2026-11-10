@@ -16,14 +16,53 @@ export function loadMujoco() {
 
 export class RobotSim {
   constructor(mj, model, opts = {}) {
-    this.mj = mj; this.model = model; this.opts = opts; this.xml = toMJCF(model, { dt: DT, ...opts });
+    this.mj = mj; this.model = model; this.opts = opts; this.exclude = [];
+    this.build(opts.selfCollide === false ? [] : null);
+  }
+  /** Compile the model. With `exclude` null, parts that already overlap at the start (screwed-together neighbours) are found first and left out of collision. */
+  build(exclude) {
+    const { mj, model } = this;
+    this.xml = toMJCF(model, { dt: DT, ...this.opts, exclude: exclude || [] });
     this.m = mj.MjModel.from_xml_string(this.xml); this.d = new mj.MjData(this.m);
+    if (exclude === null) {
+      mj.mj_forward(this.m, this.d); this.bid = model.bodies.map((_, i) => mj.mj_name2id(this.m, mj.mjtObj.mjOBJ_BODY.value ?? mj.mjtObj.mjOBJ_BODY, `b${i}`));
+      const seen = new Set(), ex = [];
+      for (const [a, b] of this.partContacts(-1)) { const key = a + ':' + b; if (!seen.has(key)) { seen.add(key); ex.push([a, b]); } }
+      if (ex.length) { this.d.delete(); this.m.delete(); this.exclude = ex; this.xml = toMJCF(model, { dt: DT, ...this.opts, exclude: ex }); this.m = mj.MjModel.from_xml_string(this.xml); this.d = new mj.MjData(this.m); }
+    }
     const obj = mj.mjtObj, id = (kind, name) => mj.mj_name2id(this.m, kind.value ?? kind, name);
     this.bid = model.bodies.map((_, i) => id(obj.mjOBJ_BODY, `b${i}`));
     this.jq = model.joints.map((_, k) => { const j = id(obj.mjOBJ_JOINT, `j${k}`); return { q: this.m.jnt_qposadr[j], dof: this.m.jnt_dofadr[j] }; });
     this.act = model.joints.map((_, k) => id(obj.mjOBJ_ACTUATOR, `a${k}`));
     this.free = !model.fixedBase; this.cmd = model.joints.map(() => 0); this.target = model.joints.map(() => 0); this.v0 = [0, 0, 0]; this.acc = [0, 0, 0]; this.t = 0;
     this.reset();
+  }
+  /** Pairs of robot parts [a, b] (body indices) touching now; `maxDist` −1 means actually overlapping (penetration deeper than 0.1 mm). Floor contacts are left out. */
+  partContacts(maxDist = -0.0001) {
+    const { d, m } = this, out = [];
+    for (let i = 0; i < d.ncon; i++) {
+      const c = d.contact.get(i); if (c.dist > (maxDist === -1 ? 0 : maxDist)) continue;
+      const b1 = m.geom_bodyid[c.geom1], b2 = m.geom_bodyid[c.geom2], i1 = this.bid.indexOf(b1), i2 = this.bid.indexOf(b2);
+      if (i1 >= 0 && i2 >= 0) out.push(i1 < i2 ? [i1, i2] : [i2, i1]);
+    }
+    return out;
+  }
+  /** Is hinge k pressed against one of its limits (within 0.5°)? */
+  atStop(k) { const j = this.model.joints[k]; if (!j?.range) return 0; const a = this.angle(k); return a <= j.range[0] + 0.5 ? -1 : a >= j.range[1] - 0.5 ? 1 : 0; }
+  /** Sweep hinge k through its range with the others at zero and report the angles where parts first press into each other (any pair, including neighbours that
+   *  already overlap at the screw: those count once they sink 1.5 mm deeper than they started). Uses its own copy of the model with every collision on. */
+  sweep(k, step = 2) {
+    const j = this.model.joints[k], { mj } = this; if (!j?.range) return null;
+    const xml = toMJCF(this.model, { dt: DT, ...this.opts, selfCollide: true, exclude: [] }), m = mj.MjModel.from_xml_string(xml), d = new mj.MjData(m);
+    try {
+      const bid = this.model.bodies.map((_, i) => mj.mj_name2id(m, mj.mjtObj.mjOBJ_BODY.value ?? mj.mjtObj.mjOBJ_BODY, `b${i}`)), jq = m.jnt_qposadr[mj.mj_name2id(m, mj.mjtObj.mjOBJ_JOINT.value ?? mj.mjtObj.mjOBJ_JOINT, `j${k}`)];
+      const depths = () => { const o = new Map(); for (let i = 0; i < d.ncon; i++) { const c = d.contact.get(i), i1 = bid.indexOf(m.geom_bodyid[c.geom1]), i2 = bid.indexOf(m.geom_bodyid[c.geom2]); if (i1 < 0 || i2 < 0) continue; const key = i1 < i2 ? i1 + ':' + i2 : i2 + ':' + i1; o.set(key, Math.min(o.get(key) ?? 0, c.dist)); } return o; };
+      const at = t => { mj.mj_resetData(m, d); d.qpos[jq] = t * RAD; mj.mj_forward(m, d); return depths(); };
+      const base = at(0), hit = t => { for (const [key, dist] of at(t)) if (dist < (base.get(key) ?? 0) - (base.has(key) ? 0.0015 : 0.0005)) return key.split(':').map(Number); return null; };
+      const run = dir => { const lim = dir > 0 ? j.range[1] : j.range[0]; let last = 0; for (let a = step; a <= Math.abs(lim) + 1e-9; a += step) { const t = dir * a; if (hit(t)) return { angle: last, with: hit(t) }; last = t; } if (Math.abs(lim) > last * dir) { const w = hit(lim); if (w) return { angle: last, with: w }; } return null; };
+      const up = run(1), down = run(-1);
+      return { min: down ? Math.max(down.angle, j.range[0]) : j.range[0], max: up ? Math.min(up.angle, j.range[1]) : j.range[1], hitUp: up?.with || null, hitDown: down?.with || null };
+    } finally { d.delete(); m.delete(); }
   }
   reset() {
     this.mj.mj_resetData(this.m, this.d); this.t = 0; this.cmd.fill(0); this.target.fill(0); this.v0 = [0, 0, 0]; this.acc = [0, 0, 0];

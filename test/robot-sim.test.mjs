@@ -120,3 +120,15 @@ test('hold in the air: the main body is fixed 25 cm up, the hinges still swing a
   const mj = await loadMujoco(), sim = new RobotSim(mj, model);
   try { sim.step(250); const h0 = sim.imu().height; sim.command(0, 50); sim.step(1200); assert.ok(Math.abs(sim.imu().height - h0) < 0.003, 'the body did not fall'); assert.ok(Math.abs(Math.abs(sim.angle(0)) - 50) < 5, `swung ${sim.angle(0)}°`); } finally { sim.dispose(); }
 });
+
+test('parts collide: a swinging arm is stopped by the body it hinges from, and the range sweep finds that angle', async () => {
+  const as = new Assembly(), torso = as.add(mkPart('torso', 100, [80, 40, 20], [['hip', [40, 0, 10], [0, 0, 1]]]), [0, 0, 60]), arm = as.add(mkPart('arm', 15, [60, 10, 10], [['top', [-31, 0, 0], [0, 0, -1]]]), [100, 0, 0]);
+  assert.ok(as.mate(torso.id, 'hip', arm.id, 'top').ok);
+  const model = robotFromAssembly(as, { anchorId: torso.id }), mj = await loadMujoco(), sim = new RobotSim(mj, model);
+  try {
+    assert.match(sim.xml, /conaffinity="3"/); const sw = sim.sweep(0, 2); assert.ok(sw.max < 40 && sw.min > -40 && sw.hitUp, `sweep finds the clash (${JSON.stringify(sw)})`);
+    assert.equal(sim.atStop(0), 0);
+    sim.command(0, 90); sim.step(1500); assert.ok(sim.angle(0) < sw.max + 6, `the servo is blocked by the body, not driven through it (${sim.angle(0)}° vs clash at ${sw.max}°)`);
+    const off = new RobotSim(mj, model, { selfCollide: false }); try { off.command(0, 90); off.step(1500); assert.ok(off.angle(0) > 80, 'with collisions off it goes straight through'); assert.equal(off.atStop(0), 1); } finally { off.dispose(); }
+  } finally { sim.dispose(); }
+});

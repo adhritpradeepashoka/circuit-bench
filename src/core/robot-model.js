@@ -109,7 +109,7 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes =
 }
 
 /** The MJCF text MuJoCo reads. Bodies sit at their centre of mass with world-aligned axes; shapes are convex hulls of each body's points. */
-export function toMJCF(model, { dt = 0.002, floorFriction = 1.0, servo = { stall: 0.18, kp: 1.0, kv: 0.04 }, motor = { stall: 0.12, kv: 0.006 }, armature = 2e-5, damping = 0.002 } = {}) {
+export function toMJCF(model, { dt = 0.002, floorFriction = 1.0, servo = { stall: 0.18, kp: 1.0, kv: 0.04 }, motor = { stall: 0.12, kv: 0.006 }, armature = 2e-5, damping = 0.002, selfCollide = true, exclude = [] } = {}) {
   const f = v => (Number.isFinite(v) ? Number(v.toPrecision(7)) : 0), vec = a => a.map(f).join(' '), esc = s => String(s).replace(/[^\w ]/g, '_');
   const assets = [], kids = new Map(); model.bodies.forEach((b, i) => { if (b.parent != null) (kids.get(b.parent) || kids.set(b.parent, []).get(b.parent)).push(i); });
   const lift = [0, 0, model.lift];
@@ -118,8 +118,8 @@ export function toMJCF(model, { dt = 0.002, floorFriction = 1.0, servo = { stall
     assets.push(`<mesh name="m${i}" vertex="${b.points.map(p => vec(sub(p, b.origin))).join(' ')}"/>`);
     const I = b.inertia, inner = [];
     if (b.parent == null && !model.fixedBase) inner.push('<freejoint name="root"/>');
-    if (j) inner.push(`<joint name="j${b.joint}" type="hinge" axis="${vec(j.axis)}" pos="${vec(sub(add(j.anchor, lift), o))}" ${j.range ? `limited="true" range="${f(j.range[0])} ${f(j.range[1])}"` : ''} armature="${armature}" damping="${j.mode === 'free' ? damping * 0.5 : damping}" frictionloss="${j.mode === 'free' ? 0.0005 : 0}"/>`);
-    inner.push(`<inertial pos="0 0 0" mass="${f(b.mass)}" fullinertia="${vec(I)}"/>`, `<geom type="mesh" mesh="m${i}" mass="0" contype="2" conaffinity="1" friction="${f(floorFriction)} 0.005 0.0001" rgba="0.6 0.7 0.8 1"/>`);
+    if (j) inner.push(`<joint name="j${b.joint}" type="hinge" axis="${vec(j.axis)}" pos="${vec(sub(add(j.anchor, lift), o))}" ${j.range ? `limited="true" range="${f(j.range[0])} ${f(j.range[1])}" solreflimit="0.004 1" solimplimit="0.98 0.99 0.001"` : ''} armature="${armature}" damping="${j.mode === 'free' ? damping * 0.5 : damping}" frictionloss="${j.mode === 'free' ? 0.0005 : 0}"/>`);
+    inner.push(`<inertial pos="0 0 0" mass="${f(b.mass)}" fullinertia="${vec(I)}"/>`, `<geom type="mesh" mesh="m${i}" mass="0" contype="2" conaffinity="${selfCollide ? 3 : 1}" friction="${f(floorFriction)} 0.005 0.0001" solref="-60000 -60" solimp="0.95 0.99 0.001" rgba="0.6 0.7 0.8 1"/>`);
     for (const k of kids.get(i) || []) inner.push(body(k));
     return `<body name="b${i}" pos="${vec(rel)}">${inner.join('')}</body>`;
   };
@@ -128,8 +128,9 @@ export function toMJCF(model, { dt = 0.002, floorFriction = 1.0, servo = { stall
     if (j.mode === 'servo') { const tq = j.servo?.torque ?? servo.stall, sc = tq / servo.stall; act.push(`<position name="a${k}" joint="j${k}" kp="${f(servo.kp * sc)}" kv="${f(servo.kv * sc)}" ctrllimited="true" ctrlrange="${f(j.range[0] * Math.PI / 180)} ${f(j.range[1] * Math.PI / 180)}" forcelimited="true" forcerange="${-tq} ${tq}"/>`); }
     else if (j.mode === 'motor') act.push(`<velocity name="a${k}" joint="j${k}" kv="${motor.kv}" ctrllimited="true" ctrlrange="-60 60" forcelimited="true" forcerange="${-motor.stall} ${motor.stall}"/>`);
   }
-  return `<mujoco model="robot"><compiler angle="degree" autolimits="true"/><option timestep="${dt}" integrator="implicitfast" gravity="0 0 -9.81"/>
+  return `<mujoco model="robot"><compiler angle="degree" autolimits="true"/><option timestep="${dt}" integrator="implicitfast" gravity="0 0 -9.81">${selfCollide ? '<flag filterparent="disable"/>' : ''}</option>
 <asset>${assets.join('')}</asset>
 <worldbody><geom name="floor" type="plane" pos="0 0 ${f(model.floorZ)}" size="20 20 0.1" contype="1" conaffinity="2" friction="${f(floorFriction)} 0.005 0.0001"/>${rootBody}</worldbody>
+${exclude.length ? `<contact>${exclude.map(([a, b]) => `<exclude body1="b${a}" body2="b${b}"/>`).join('')}</contact>` : ''}
 <actuator>${act.join('')}</actuator></mujoco>`;
 }
