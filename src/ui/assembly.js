@@ -19,6 +19,7 @@ import { initDroneTest } from './drone-test.js';
 import { droneWiring } from '../core/drone-wiring.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
 import { offFeatures } from './features.js';
+import { ask } from './ask.js';
 import { createViewCube } from './viewcube.js';
 import { buildRig, isMate, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
@@ -364,7 +365,7 @@ export function initAssembly({ editor, projects = null }) {
   const boxBtn = mkBtn('Box select', 'On: drag on empty space to draw a box round parts and select them, and right-drag to look around. Off: drag on empty space to look around.', () => { boxMode = !boxMode; boxBtn.classList.toggle('on', boxMode); boxBtn.setAttribute('aria-pressed', String(boxMode)); render(); }, 'asmBoxSelect'); boxBtn.classList.add('on'); boxBtn.setAttribute('aria-pressed', 'true');
   const toolbarEl = el('div', { className: 'asm-floating', hidden: true },
     mkBtn('Fit', 'Fit the whole build in view (the cube in the corner turns the view)', () => fitScene(), 'asmFit'),
-    el('span', { className: 'asm-tsep' }), mkBtn('Select all', 'Select the whole build to move or turn it (Ctrl+A). Or hold Shift and drag a box round some parts.', () => selectAll(), 'asmSelectAll'), boxBtn, spotBtn, joinBtn, checkBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'), mkBtn('Clear', 'Remove every part', () => clearAll(), 'asmClear'));
+    el('span', { className: 'asm-tsep' }), mkBtn('Select all', 'Select the whole build to move or turn it (Ctrl+A). Or hold Shift and drag a box round some parts.', () => selectAll(), 'asmSelectAll'), boxBtn, spotBtn, joinBtn, checkBtn, xrayBtn, mkBtn('Drop all', 'Lower the whole model until its lowest point rests on the floor (everything stays where it is relative to everything else)', () => dropAll(), 'asmDropAll'));
   const helpEl = el('div', { className: 'asm-help', hidden: true });
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
   const robotDock = el('div', { id: 'robotParts', role: 'region', ariaLabel: '3D parts' }), dockSearch = el('input', { type: 'search', placeholder: 'Search 3D parts', ariaLabel: 'Search 3D parts', className: 'asm-dock-search', id: 'robotPartsSearch', autocomplete: 'off' });
@@ -501,7 +502,7 @@ export function initAssembly({ editor, projects = null }) {
     const none = view === 'test' ? 'not used in the Test tab' : 'circuit tool';
     set('selectTool', true, 'circuit tool'); set('wireTool', true, 'circuit tool'); set('rotateTool', true, 'circuit tool'); set('zoomOut', true, 'use the mouse wheel in 3D'); set('zoomIn', true, 'use the mouse wheel in 3D'); set('zoomFit', true, 'use Fit in the 3D view');
     set('undoTool', !build || !history.length, build ? 'nothing to undo' : none); set('redoTool', !build || !future.length, build ? 'nothing to redo' : none);
-    set('deleteTool', !build || !selected, build ? 'select a part first' : none); set('dupTool', !build || !selected, build ? 'select a part first' : none);
+    set('deleteTool', !build || !(selected || group.size || asm.instances.length), build ? 'nothing to delete' : none); { const bin = $t('deleteTool'); if (bin && build && !bin.disabled) bin.title = selected || group.size > 1 ? 'Delete the selected part (Delete)' : 'Nothing is selected, so this clears the whole build (you can undo it)'; } set('dupTool', !build || !selected, build ? 'select a part first' : none);
   }
   function applyScene() {
     const t = three; if (!t) return;
@@ -614,6 +615,13 @@ export function initAssembly({ editor, projects = null }) {
     const ts = targets(), t = three; if (!ts.length || !t) return false; keep(); let lo = Infinity;
     for (const i of ts) lo = Math.min(lo, new t.THREE.Box3().setFromObject(i.obj).min.z);
     for (const i of ts) i.T = { q: i.T.q, t: [i.T.t[0], i.T.t[1], i.T.t[2] - lo] }; render(); bsay('Dropped to the floor.'); return true;
+  }
+  /** The bin in the top bar: deletes what is selected; with nothing selected it clears the whole build (after asking). */
+  async function binAct() {
+    if (group.size > 1) { keep(); for (const id of [...group]) { const i = asm.get(id); if (i) three?.sceneRoot.remove(i.obj); asm.remove(id); } group.clear(); selected = null; applyScene(); paintGroup(); return; }
+    if (selected) return removeInst(selected);
+    if (!asm.instances.length) return;
+    if (await ask({ title: 'Clear the whole build?', body: `This removes all ${asm.instances.length} parts. You can undo it with Ctrl+Z.`, yes: 'Clear everything', danger: true })) clearAll();
   }
   function zoomToSelected() { const ts = targets(); viewTo('iso', ts.length === 1 ? ts[0] : null); }
   function paintGroup() { groupBar.hidden = group.size < 1; groupLabel.textContent = group.size === asm.instances.length ? `Whole build (${group.size} parts)` : `${group.size} parts selected`; }
@@ -1004,7 +1012,7 @@ export function initAssembly({ editor, projects = null }) {
   // the top bar's undo / redo / delete act on the 3D scene while Assembly is showing (captured before the circuit handlers see the click)
   document.querySelector('.stage .toolbar')?.addEventListener('click', e => {
     if (view === 'circuit') return; const b = e.target.closest?.('button'); if (!b) return;
-    const act = { undoTool: undo, redoTool: redo, deleteTool: () => selected && removeInst(selected), dupTool: () => selected && dupInst?.(selected) }[b.id]; if (!act) return;   // (the tab buttons share this bar)
+    const act = { undoTool: undo, redoTool: redo, deleteTool: () => binAct(), dupTool: () => selected && dupInst?.(selected) }[b.id]; if (!act) return;   // (the tab buttons share this bar)
     e.stopImmediatePropagation(); e.preventDefault(); if (!b.disabled && view === 'assembly' && mode === 'build') act();
   }, true);
   /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */
