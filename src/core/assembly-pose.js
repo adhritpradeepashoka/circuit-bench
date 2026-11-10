@@ -10,6 +10,8 @@ const frameOf = (asm, side) => { const i = asm.get(side.inst); return i && world
 const limitsOf = m => [m.min ?? DEFAULT_LIMITS[0], m.max ?? DEFAULT_LIMITS[1]];
 
 /** Groups the instances into rigid bodies joined by hinges. */
+/** The joint's mate is the very mate the user made, or a view of it that reads the servo's shaft as one end. */
+export const isMate = (jointMate, mate) => jointMate === mate || jointMate.__real === mate;
 export function buildRig(asm) {
   const ix = new Map(asm.instances.map((i, k) => [i.id, k])), par = asm.instances.map((_, k) => k);
   const find = x => (par[x] === x ? x : (par[x] = find(par[x]))), union = (a, b) => { par[find(a)] = find(b); };
@@ -24,7 +26,7 @@ export function buildRig(asm) {
     if (rotor && !ms.some(m => m.fixed)) {
       const servoSide = isRotor(rotor.a) ? rotor.a : rotor.b, other = servoSide === rotor.a ? rotor.b : rotor.a;
       const view = { a: { inst: servoSide.inst, frame: shaftFrameOf(servoSide) }, b: other };
-      hinges.push(new Proxy(rotor, { get: (t, k) => (k in view ? view[k] : t[k]) })); continue;   // reads see the servo's shaft as one end; angle and limits are still stored on the real mate
+      hinges.push(new Proxy(rotor, { get: (t, k) => (k === '__real' ? t : k in view ? view[k] : t[k]) })); continue;   // reads see the servo's shaft as one end; angle and limits are still stored on the real mate
     }
     const wf = ms.map(m => frameOf(asm, m.a)), line = wf.every(f => Math.abs(dot(f.dir, wf[0].dir)) > 0.999 && Math.hypot(...cross(sub(f.pos, wf[0].pos), wf[0].dir)) < 0.15);
     if (!ms.some(m => m.fixed) && line) hinges.push(ms[0]); else ms.forEach(m => union(ix.get(m.a.inst), ix.get(m.b.inst)));
@@ -94,7 +96,7 @@ export function dragTo(asm, anchorId, grabId, local, target, { iters = 24, dampi
 }
 /** Set one hinge to an angle (degrees, within its limits) by swinging the side away from the anchor. */
 export function setAngle(asm, anchorId, mate, deg) {
-  const rig = buildRig(asm), j = rig.joints.find(x => x.mate === mate); if (!j) return false;
+  const rig = buildRig(asm), j = rig.joints.find(x => isMate(x.mate, mate)); if (!j) return false;
   const tree = treeFor(asm, rig, mate.a.inst, anchorId), link = tree.up.get(j.a) && tree.up.get(j.a).joint === j ? tree.up.get(j.a) : tree.up.get(j.b);
   if (!link) return false; swing(asm, tree, link, deg - (mate.angle || 0)); return true;
 }
@@ -105,7 +107,7 @@ export function heldPart(asm, anchorId, instId) {
 }
 /** For a hinge: the part on the side that swings (the far side from the held part), so that holding it instead swaps which side moves. */
 export function movingSide(asm, anchorId, mate) {
-  const rig = buildRig(asm), j = rig.joints.find(x => x.mate === mate); if (!j) return null;
+  const rig = buildRig(asm), j = rig.joints.find(x => isMate(x.mate, mate)); if (!j) return null;
   const tree = treeFor(asm, rig, mate.a.inst, anchorId), u = tree.up.get(j.a)?.joint === j ? tree.up.get(j.a) : tree.up.get(j.b); if (!u) return null;
   const child = u.parent === j.a ? j.b : j.a; return rig.members.get(child)[0];
 }

@@ -105,3 +105,11 @@ test('a parametric servo drives what is bolted to its horn at the strength writt
   const { as, P } = armOn(servoId('standard', { torque: 10, speed: 0.2 })), model = robotFromAssembly(as, { anchorId: P.id });
   assert.equal(model.joints.length, 1); assert.ok(Math.abs(model.joints[0].servo.torque - 0.98) < 0.01); assert.equal(model.joints[0].servo.speed, 300);
 });
+
+import { buildRig, isMate, setAngle } from '../src/core/assembly-pose.js';
+test('the joint slider finds a horn-bolted hinge: setAngle swings the link about the servo shaft', () => {
+  const { as, P, S, L } = armOn('servo-sg90'), mate = as.mates.find(m => /^horn/.test(m.a.frame) || /^horn/.test(m.b.frame));
+  assert.ok(buildRig(as).joints.some(j => isMate(j.mate, mate)), 'the UI sees it as a hinge, so it shows the slider');
+  const before = as.get(L.id).T.t.slice(); assert.ok(setAngle(as, P.id, mate, 40), 'setAngle works on it'); assert.equal(mate.angle, 40);
+  const after = as.get(L.id).T.t; assert.ok(Math.hypot(after[0] - before[0], after[1] - before[1]) > 1, 'the link actually swung');
+});

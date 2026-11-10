@@ -18,7 +18,7 @@ import { initRobotTest } from './robot-test.js';
 import { initDroneTest } from './drone-test.js';
 import { droneWiring } from '../core/drone-wiring.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
-import { buildRig, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
+import { buildRig, isMate, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -732,7 +732,7 @@ export function initAssembly({ editor, projects = null }) {
       const un = el('button', { type: 'button', className: 'asm-x', textContent: '✕', title: 'Unjoin (the parts stay where they are)', ariaLabel: 'Unjoin' });
       un.addEventListener('click', () => { keep(); asm.mates.splice(i, 1); render(); });
       const nm = x => x.part.name;
-      const hinge = buildRig(asm).joints.some(j => j.mate === m), fx = el('select', { ariaLabel: 'Joint type', className: 'asm-mini-sel' }, el('option', { value: 'hinge', textContent: 'Hinge', selected: !m.fixed }), el('option', { value: 'fixed', textContent: 'Fixed', selected: !!m.fixed }));
+      const hinge = buildRig(asm).joints.some(j => isMate(j.mate, m)), fx = el('select', { ariaLabel: 'Joint type', className: 'asm-mini-sel' }, el('option', { value: 'hinge', textContent: 'Hinge', selected: !m.fixed }), el('option', { value: 'fixed', textContent: 'Fixed', selected: !!m.fixed }));
       fx.addEventListener('change', () => { keep(); m.fixed = fx.value === 'fixed'; if (m.fixed && m.angle) { setAngle(asm, anchorId, m, 0); } render(); });
       const jbox = el('div', { className: 'asm-joint' }, el('span', { className: 'asm-lbl', textContent: 'Joint' }), fx);
       if (hinge && !m.fixed) {
