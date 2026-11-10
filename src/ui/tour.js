@@ -248,7 +248,7 @@ export function initTour({ editor, sim, code, projects }) {
   const addClear = (type, dx) => { const b = bb(); if (!b) return editor.addPart(type); editor.addPart(type, { x: b.x + 70 + dx, y: b.y + PART_DEFS.breadboard.h + 55 }); editor.fit(); };
   const assistSeatLed = () => {
     const l = led(), b = bb(); if (!l || !b) return;
-    const a = pinWorld(l, 'A'), h = pinWorld(b, 'E10'); l.x += h.x - a.x; l.y += h.y - a.y; settle(l);
+    const a = pinWorld(l, 'A'), h = pinWorld(b, 'A10'); l.x += h.x - a.x; l.y += h.y - a.y; settle(l);
     if (!ledSeated()) throw new Error('the LED would not seat');
   };
   const assistResistor = () => {
@@ -270,8 +270,8 @@ export function initTour({ editor, sim, code, projects }) {
       body: `<p>Press <b>Add</b> on the LED (or drag it onto the bench).</p><p class="tour-why">An LED lights when current flows into its <b>+ leg</b> (anode, the longer one) and out of its <b>− leg</b> (cathode).</p>`,
       assist: () => addClear('led', 0), when: () => !!led() },
     { label: 'Step 2 of 7', title: 'Plug the LED into the breadboard', interactive: true, noBack: true, before: () => editor.fit(),
-      spots: () => [worldRect([...holes(10, 'E'), ...holes(11, 'E')], 9, 'Put the legs here: row E, holes 10 and 11'), led() && worldRect([pinWorld(led(), 'A'), pinWorld(led(), 'C')], 12, 'The LED\'s two legs')],
-      body: `<p>Drag the LED by its round top and drop it so its two legs click into <b>row E, holes 10 and 11</b> (highlighted). Any two neighbouring holes in rows A to E work too.</p><p>The <b>breadboard</b> is the white board with the grid of small holes. Letters A to J run down its side and numbers run along it, so "row E, hole 10" is where the E row meets the 10 column.</p><p class="tour-why">Each column of 5 holes (A to E) is joined by a metal strip inside the breadboard, so anything in the same column is connected.</p>`,
+      spots: () => [worldRect([...holes(10, 'A'), ...holes(11, 'A')], 9, 'Legs go here: A10 + A11'), led() && worldRect([pinWorld(led(), 'A'), pinWorld(led(), 'C')], 12, 'The LED\'s two legs')],
+      body: `<p>Drag the LED by its round top and drop it so its two legs click into <b>row A, holes 10 and 11</b>, the top holes of columns 10 and 11 (highlighted). Any two neighbouring holes in rows A to E work too.</p><p>The <b>breadboard</b> is the white board with the grid of small holes. Letters A to J run down its side and numbers run along it, so "row A, hole 10" is where the A row meets the 10 column.</p><p class="tour-why">Each column of 5 holes (A to E) is joined by a metal strip inside the breadboard, so anything in the same column is connected.</p>`,
       assist: assistSeatLed, when: ledSeated },
     { label: 'Step 3 of 7', title: 'Add a resistor', interactive: true, noBack: true, before: showCard('resistor'), spots: () => [card$('resistor')()],
       body: `<p>Press <b>Add</b> on the Resistor. It's already 220 Ω (right-click it later to see the colour bands).</p><p class="tour-why">Without it, too much current would flow and burn out the LED, and maybe the Arduino pin.</p>`,
