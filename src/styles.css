@@ -1280,3 +1280,8 @@ body:not(.robot-asm) #robotParts { display: none; }
 
 .wiring-toggle { margin-left: auto; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; } .wiring-toggle.on { background: var(--blue); border-color: var(--blue); color: #fff; }
 html[data-off~="wiring"] #robWiringToggle { display: none !important; }
+
+.asm-groupbar { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 4; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 6px 22px rgba(0,0,0,.22); max-width: calc(100% - 20px); }
+.asm-groupbar[hidden], .asm-marquee[hidden] { display: none; }
+.asm-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1.5px dashed var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
+.wiring-toggle { white-space: nowrap; flex: none; }
