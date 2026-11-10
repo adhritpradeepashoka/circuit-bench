@@ -1285,3 +1285,7 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .asm-groupbar[hidden], .asm-marquee[hidden] { display: none; }
 .asm-marquee { position: absolute; z-index: 5; pointer-events: none; border: 1.5px dashed var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent); }
 .wiring-toggle { white-space: nowrap; flex: none; }
+/* a narrow stage (the AI panel open) must never clip the Assembly / Test tabs: they keep their size and the bar scrolls sideways instead */
+.robot-tabs { flex: none; } .robot-tabs button { min-width: 0; white-space: nowrap; }
+.toolbar { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; } .toolbar::-webkit-scrollbar { display: none; }
+.toolbar > * { flex-shrink: 0; }
