@@ -11,7 +11,7 @@ import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_L
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
 import { buildKitMesh } from './kit-models.js';
-import { makeKitPart, KIT_PRESETS, KIT_ID_HELP } from '../core/robot-kit.js';
+import { makeKitPart, KIT_PRESETS, KIT_ID_HELP, SERVOS, SERVO_CLASSES, servoId, findKnownServo } from '../core/robot-kit.js';
 import { getRobotType, showingAll, setShowAll, onRobotType } from '../core/robot-context.js';
 import { robotType, parts3dFor, testFor } from '../core/robot-types.js';
 import { initRobotTest } from './robot-test.js';
@@ -363,12 +363,28 @@ export function initAssembly({ editor, projects = null }) {
   // "Make a drone part": a few numbers in, a real part (with its holes and weight) out. Nothing is stored; the numbers live in the part's name.
   const bField = (label, input, id) => { input.id = id; return el('label', { className: 'asm-field' }, el('span', { textContent: label }), input); };
   const bNum = (v, o = {}) => el('input', { type: 'number', value: v ?? '', ...o }), bSel = (opts, v) => { const x = el('select', {}, ...opts.map(o => el('option', { value: o, textContent: o, selected: String(o) === String(v) }))); return x; };
-  const bld = el('details', { className: 'asm-builder', id: 'asmBuilder' }, el('summary', { textContent: 'Make a drone part…' })), bBody = el('div', { className: 'asm-builder-body' }), dKind = bSel(['Motor', 'Prop', 'Battery', 'Frame', 'Standoff'], 'Motor');
+  const bld = el('details', { className: 'asm-builder', id: 'asmBuilder' }, el('summary', { textContent: 'Make a servo or drone part…' })), bBody = el('div', { className: 'asm-builder-body' }), dKind = bSel(['Servo', 'Motor', 'Prop', 'Battery', 'Frame', 'Standoff'], 'Servo');
   dKind.id = 'asmBKind'; dKind.ariaLabel = 'What to make'; bld.append(el('label', { className: 'asm-field' }, el('span', { textContent: 'Part' }), dKind), bBody); robotDock.insertBefore(bld, cards);
   const bMsg = el('p', { className: 'asm-note', id: 'asmBMsg', role: 'status' });
   function paintBuilder() {
     const k = dKind.value; bBody.replaceChildren(); let make = null;
-    if (k === 'Motor') {
+    if (k === 'Servo') {
+      // pick a size class (the ear and screw pattern come with it), type the model if you know it, measure the case only if it is a different size
+      const clsIds = Object.keys(SERVO_CLASSES), cls = el('select', { id: 'asmSvClass', ariaLabel: 'Servo size' }, ...clsIds.map(c => el('option', { value: c, textContent: SERVO_CLASSES[c].label }))), blurb = el('p', { className: 'asm-note', id: 'asmSvBlurb' });
+      const model = el('input', { type: 'text', placeholder: 'e.g. MG995 or DS3225 (optional)', id: 'asmSvModel', autocomplete: 'off' }), found = el('p', { className: 'asm-note', id: 'asmSvFound', role: 'status' });
+      const L = bNum('', { step: 0.1, min: 12 }), W = bNum('', { step: 0.1, min: 6 }), H = bNum('', { step: 0.1, min: 10 }), T = bNum('', { step: 0.5, min: 0.1 }), S = bNum('', { step: 0.01, min: 0.02 }), V = bNum('', { step: 0.1, min: 3 });
+      const base = () => SERVOS[SERVO_CLASSES[cls.value].base], paint = known => {
+        const b = base(); blurb.textContent = SERVO_CLASSES[cls.value].blurb; L.placeholder = `${b.L} (typical)`; W.placeholder = `${b.W} (typical)`; H.placeholder = `${b.H} (typical)`;
+        T.placeholder = `${known?.torque ?? +(b.torque / 0.0980665).toFixed(1)} (typical)`; S.placeholder = `${known?.speed ?? +(60 / b.speed).toFixed(2)} (typical)`; V.placeholder = `${known?.volts ?? b.volts} (typical)`;
+      };
+      let known = null; cls.addEventListener('change', () => paint(known = null));
+      model.addEventListener('input', () => { const f = findKnownServo(model.value); known = f?.over || null; if (f) { cls.value = f.cls; found.textContent = `Found ${f.name}: using the ${SERVO_CLASSES[f.cls].label.split(' (')[0]} size.`; } else found.textContent = model.value.trim() ? 'I do not know that model yet. Pick the closest size, then measure the case below.' : ''; paint(known); });
+      paint(null);
+      const pic = el('div', { className: 'asm-svpic', innerHTML: '<svg viewBox="0 0 220 90" width="220" height="90" role="img" aria-label="Measure A along the case, B across it, C its height"><rect x="40" y="26" width="110" height="46" rx="3" fill="#cfd8dc" stroke="#455a64"/><rect x="18" y="40" width="154" height="8" fill="#b0bec5" stroke="#455a64"/><circle cx="138" cy="22" r="6" fill="#eceff1" stroke="#455a64"/><g stroke="#c0392b" fill="#c0392b" font-size="11" font-family="sans-serif"><path d="M40 82H150" fill="none"/><text x="92" y="89">A length</text><path d="M158 26V72" fill="none"/><text x="162" y="52">C</text></g></svg><div>A: case length, not counting the ears (the two flaps). B: case width. C: from the bottom to the top of the case, not counting the shaft.</div>' });
+      const adv = el('details', { className: 'asm-adv' }, el('summary', { textContent: 'My servo is a different size / has different numbers' }), pic, bField('A · case length, mm', L, 'asmSvL'), bField('B · case width, mm', W, 'asmSvW'), bField('C · case height, mm', H, 'asmSvH'), bField('Strength on the label, kg·cm', T, 'asmSvT'), bField('Speed on the label, seconds per 60°', S, 'asmSvS'), bField('Voltage, V', V, 'asmSvV'));
+      bBody.append(bField('Size', cls, 'asmSvClass'), blurb, bField('Model (optional)', model, 'asmSvModel'), found, adv);
+      make = () => { const n = x => (Number(x.value) > 0 ? Number(x.value) : undefined); return servoId(cls.value, { L: n(L), W: n(W), H: n(H), torque: n(T) ?? known?.torque, speed: n(S) ?? known?.speed, volts: n(V) ?? known?.volts }); };
+    } else if (k === 'Motor') {
       const size = bSel(MOTOR_SIZE_LIST, '2207'), kv = bNum(MOTOR_SIZES['2207'].kvRef, { step: 50, min: 100 }), R = bNum('', { step: 1, min: 1 }), I0 = bNum('', { step: 0.05, min: 0.05 }), M = bNum('', { step: 0.1, min: 0.1 }), A = bNum('', { step: 1, min: 1 }), info = el('p', { className: 'asm-note' });
       const typical = () => { const m = makeMotor({ size: size.value, kv: Number(kv.value) }); R.placeholder = `${Math.round(m.resistance * 1000)} (typical)`; I0.placeholder = `${m.noLoadAmps.toFixed(2)} (typical)`; M.placeholder = `${m.massGrams} (typical)`; A.placeholder = `${m.maxAmps} (typical)`; const s = MOTOR_SIZES[size.value]; info.textContent = `Stator ${s.stator[0]} × ${s.stator[1]} mm · mounts ${s.mount.pattern.join('×')} mm with ${s.mount.screw.replace('_', '.')} · usually ${s.cells[0] === s.cells[1] ? s.cells[0] : s.cells.join('–')}S`; };
       size.addEventListener('change', () => { kv.value = MOTOR_SIZES[size.value].kvRef; typical(); }); kv.addEventListener('input', typical); typical();

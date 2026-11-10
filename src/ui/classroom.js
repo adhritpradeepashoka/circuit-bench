@@ -6,6 +6,7 @@ import { getMe, getToken, setSession, authed, profileMode, setProfileMode } from
 import { FEATURES, PRESETS, GRADES, LEVELS, CLASS_THEMES, normCode } from '../core/classroom.js';
 import { setTheme } from './theme.js';
 import { ask } from './ask.js';
+import { createLocalStore } from '../core/projects.js';
 
 const ENTERED = 'circuitbench:entered', KIDS_KEY = 'circuitbench:kids-default', ASKED_KEY = 'circuitbench:kind-asked', DASH_KEY = 'circuitbench:dash-shown', CURRENT_KEY = 'circuitbench:class-project', LAST_CLASS = 'circuitbench:last-class';
 const lget = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -93,24 +94,82 @@ export function initClassroom({ editor, code, projects, account = null, status =
     const me = getMe();
     if (!me) return renderSignedOut();
     if (!me.kind) return lget(INTENT) === 'teacher' && (me.teacherSignup !== false || me.entitlements?.admin) ? (choose('teacher'), kindBody.replaceChildren(el('p', 'start-sub', 'Setting up your teacher account…'))) : renderChooser();
-    if (me.kind === 'single') return enter();                   // single users go straight to the bench, as always
+    if (me.kind === 'single') return homeView();                // signed-in people land on their home, not the website
     return openDashboard();
   }
   $('startEnter').addEventListener('click', enter);
   for (const e of document.querySelectorAll('.brand-mark, .brand-name')) { e.style.cursor = 'pointer'; e.addEventListener('click', showMenu); }
 
+
+  /* ───────── home (everyone signed in without a class): a Tinkercad-style dashboard ───────── */
+  let homeTab = 'home';
+  const NEWS = [
+    ['Part Maker', 'Describe any part and the AI makes it, or upload a picture of the module.', 'part'],
+    ['Servo builder', 'One servo for hundreds of models — pick a size class or type your servo’s name.', 'bench'],
+    ['Bolt it, it moves', 'Bolt a link to a servo’s horn and it turns with real torque and speed.', 'bench'],
+    ['Bioelectronics', 'EMG, ECG and more, with a visualizer to see the signals.', 'bench'],
+    ['Robot tests', 'Drop your robot onto a test course and watch the physics.', 'bench'],
+  ];
+  const LEARN = [
+    ['Take the tour', 'Five minutes: place a part, wire it, press play.', 'tour'],
+    ['Your first LED', 'Wire an LED and a resistor, then blink it with code.', 'tour'],
+    ['Blocks or code', 'Snap blocks together, or write real Arduino code.', 'bench'],
+    ['Put a robot together', 'Snap parts into an arm or a rover in 3D.', 'bench'],
+    ['Community gallery', 'See what other people built and open a copy.', 'gallery'],
+  ];
+  function goTo(what) {
+    enter();
+    const click = id => setTimeout(() => $(id)?.click(), 80);
+    if (what === 'tour') click('setTour');
+    else if (what === 'gallery') setTimeout(() => projects?.openGallery?.(), 80);
+    else if (what === 'part') setTimeout(() => { const t = $('topSearch'); t?.focus(); t?.dispatchEvent(new Event('input', { bubbles: true })); }, 120);
+  }
+  function carousel(title, items, fn, viewAll) {
+    const sec = el('section', 'home-sec'), head = el('div', 'home-sec-head');
+    head.append(el('h2', '', title));
+    if (viewAll) { const a = el('button', 'home-link', 'View all'); a.type = 'button'; a.addEventListener('click', viewAll); head.append(a); }
+    const row = el('div', 'home-row'), mk = (t, cls) => { const b = el('button', 'home-nav ' + cls, t === 'l' ? '‹' : '›'); b.type = 'button'; b.setAttribute('aria-label', t === 'l' ? 'Scroll left' : 'Scroll right'); b.addEventListener('click', () => row.scrollBy({ left: (t === 'l' ? -1 : 1) * 300, behavior: 'smooth' })); return b; };
+    for (const it of items) { const c = el('button', 'home-card'); c.type = 'button'; fn(c, it); row.append(c); }
+    const wrap = el('div', 'home-rowwrap'); wrap.append(mk('l', 'l'), row, mk('r', 'r')); sec.append(head, wrap); return sec;
+  }
+  const card = (c, [t, d, go]) => { const a = el('div', 'home-art'); a.textContent = t.slice(0, 1); c.append(a, el('b', '', t), el('span', '', d)); c.addEventListener('click', () => goTo(go)); };
+  async function homeView() {
+    if (screen.hidden) { screen.hidden = false; setBench(true); renderAccount(); }
+    const me = getMe(), initial = (me?.name || me?.email || '?').trim().slice(0, 1).toUpperCase();
+    const user = el('div', 'dash-user home-user'); const av = el('i', 'home-av', initial); const nm = el('div'); nm.append(el('b', '', me?.name || me?.email || ''), el('span', '', 'Personal account')); user.append(av, nm);
+    const side = [user];
+    const nav = (id, label) => sideItem(label, '', homeTab === id, () => { homeTab = id; homeView(); });
+    side.push(nav('home', 'Home'), nav('designs', 'Designs'), sideItem('Community', '', false, () => goTo('gallery')), sideItem('Tutorials', '', false, () => goTo('tour')));
+    side.push(el('div', 'dash-grow'), benchBtn());
+    let list = []; try { list = await createLocalStore().list(); } catch { /* none yet */ }
+    const open = async id => { enter(); try { await projects?.open?.(id); } catch { /* ignore */ } };
+    const mkNew = () => { enter(); setTimeout(() => $('newProject')?.click(), 80); };
+    const main = [];
+    if (homeTab === 'designs') {
+      main.push(el('h1', 'start-h', 'Designs'));
+      const g = el('div', 'dash-grid'), nb = el('button', 'home-card new'); nb.type = 'button'; nb.append(el('div', 'home-art plus', '+'), el('b', '', 'New project')); nb.addEventListener('click', mkNew); g.append(nb);
+      for (const p of list) { const c = el('button', 'home-card'); c.type = 'button'; c.append(el('div', 'home-art', (p.name || '?').slice(0, 1).toUpperCase()), el('b', '', p.name || 'Untitled'), el('span', '', p.updatedAt ? new Date(p.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '')); c.addEventListener('click', () => open(p.id)); g.append(c); }
+      main.push(g);
+    } else {
+      main.push(el('h1', 'start-h', `Welcome back, ${(me?.name || me?.email || '').split(' ')[0]}`));
+      const mine = [['New project', 'Start a blank workspace.', 'new'], ...list.slice(0, 8).map(p => [p.name || 'Untitled', 'Open', p.id])];
+      main.push(carousel('Jump back in', mine, (c, [t, d, id]) => { c.append(el('div', 'home-art' + (id === 'new' ? ' plus' : ''), id === 'new' ? '+' : t.slice(0, 1).toUpperCase()), el('b', '', t), el('span', '', d)); c.addEventListener('click', () => (id === 'new' ? mkNew() : open(id))); }, () => { homeTab = 'designs'; homeView(); }));
+      main.push(carousel('What’s New', NEWS, card), carousel('Learn', LEARN, card, () => goTo('tour')));
+    }
+    shell(side, main);
+  }
+
   /* ───────── account menu ───────── */
   function paintMenu() {
     const box = $('accountClassItems'); if (!box) return; box.replaceChildren();
     const me = getMe(); if (!me) return;
-    if (me.kind !== 'single') box.append(menuItem('Main menu', showMenu));
+    box.append(menuItem(me.kind === 'single' ? 'Home' : 'Main menu', showMenu));
     if (me.kind === 'teacher') box.append(menuItem('Teacher dashboard', openDashboard));
     else if (me.kind === 'student') {
       box.append(menuItem('My class', openDashboard));
       if (me.classroom?.features?.personal) box.append(menuItem(profileMode() === 'personal' ? 'Back to my class profile' : 'Switch to my personal profile', () => { setProfileMode(profileMode() === 'personal' ? 'class' : 'personal'); status(profileMode() === 'personal' ? 'Personal profile: everything is on, and nothing here is handed in to a class.' : 'Back in your class profile.'); }));
     }
     else if (!me.kind) box.append(menuItem('Teacher or student?', showMenu));
-    else if (me.kind === 'single') box.append(menuItem('Join a class', () => status('Single-user accounts cannot join a class. Ask an admin to change your account type.')));
   }
   const menuItem = (label, fn) => { const b = el('button', '', label); b.type = 'button'; b.addEventListener('click', () => { $('accountMenu').hidden = true; fn(); }); return b; };
 

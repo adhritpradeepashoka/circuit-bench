@@ -89,3 +89,19 @@ test('the servo moves what is bolted to it: 60° on the command turns the link 6
   const { as, P } = armOn('servo-sg90'), model = robotFromAssembly(as, { anchorId: P.id }), mj = await loadMujoco(), sim = new RobotSim(mj, model);
   try { sim.step(250); sim.command(0, 60); sim.step(1200); assert.ok(Math.abs(Math.abs(sim.angle(0)) - 60) < 4, `turned ${sim.angle(0)}°`); } finally { sim.dispose(); }
 });
+
+import { parseKitId as pk, servoId, findKnownServo, SERVO_CLASSES } from '../src/core/robot-kit.js';
+import { validateRobotPart } from '../src/core/robot-part.js';
+test('parametric servo: a size class plus a few numbers makes any servo, with every hole on the part and the label numbers converted', () => {
+  for (const cls of Object.keys(SERVO_CLASSES)) for (const o of [{}, { L: 50, W: 24, H: 46, torque: 20, speed: 0.15, volts: 7.4 }, { L: 25, W: 13, H: 25 }]) {
+    const id = servoId(cls, o), p = makeKitPart(id); assert.ok(p, id); assert.ok(validateRobotPart(p).ok, `${id} is a valid part`);
+    const [w, l, h] = p.dims.size; for (const f of p.frames) assert.ok(Math.abs(f.pos[0]) <= w / 2 + 0.01 && Math.abs(f.pos[1]) <= l / 2 + 0.01 && f.pos[2] >= -0.01 && f.pos[2] <= h + 0.01, `${id}/${f.id} is on the part`);
+  }
+  const s = pk(servoId('standard', { torque: 10, speed: 0.2 })).servo; assert.ok(Math.abs(s.torque - 0.98) < 0.01, 'kg·cm → N·m'); assert.equal(s.speed, 300, 'seconds per 60° → degrees per second');
+  assert.equal(pk('servo-x-bogus'), null); assert.equal(pk('servo-x-standard-Lx'), null);
+  assert.equal(findKnownServo('TowerPro MG-995').cls, 'standard'); assert.equal(findKnownServo('my mystery servo'), null);
+});
+test('a parametric servo drives what is bolted to its horn at the strength written on its label', () => {
+  const { as, P } = armOn(servoId('standard', { torque: 10, speed: 0.2 })), model = robotFromAssembly(as, { anchorId: P.id });
+  assert.equal(model.joints.length, 1); assert.ok(Math.abs(model.joints[0].servo.torque - 0.98) < 0.01); assert.equal(model.joints[0].servo.speed, 300);
+});

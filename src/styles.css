@@ -1259,3 +1259,18 @@ body:not(.robot-asm) #robotParts { display: none; }
 .proj-switch .ps-del:hover, .proj-switch .ps-del:focus-visible { background: #fbe3e0; color: #b3261e; outline: none; }
 .proj-switch .ps-del.ask { background: #b3261e; color: #fff; }
 @media (hover: none) { .proj-switch .ps-del { opacity: .8; } }
+.asm-svpic { display: grid; gap: 4px; margin: 6px 0; font-size: 12px; color: var(--muted); }
+.asm-svpic svg { max-width: 100%; height: auto; background: #f1f5f3; border-radius: 6px; }
+
+/* ── signed-in home: Tinkercad-style cards ── */
+.home-user { display: flex !important; gap: 10px; align-items: center; } .home-user > div { display: grid; }
+.home-av { width: 40px; height: 40px; border-radius: 50%; background: var(--blue); color: #fff; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 18px; }
+.home-sec { margin: 0 0 26px; } .home-sec-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.home-sec-head h2 { margin: 0; font-size: 20px; } .home-link { border: 0; background: none; color: var(--blue); font-weight: 700; cursor: pointer; font: inherit; }
+.home-rowwrap { position: relative; } .home-row { display: flex; gap: 16px; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 2px 10px; scrollbar-width: none; } .home-row::-webkit-scrollbar { display: none; }
+.home-card { flex: 0 0 240px; display: flex; flex-direction: column; gap: 6px; text-align: left; padding: 0 0 14px; border-radius: 14px; background: var(--surface); border: 1px solid var(--line); cursor: pointer; color: inherit; font: inherit; overflow: hidden; scroll-snap-align: start; box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+.home-card:hover { border-color: var(--blue); box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+.home-card b, .home-card span { padding: 0 14px; } .home-card span { font-size: 12.5px; color: var(--muted); }
+.dash-grid > .home-card { flex: none; }
+.home-art { height: 110px; display: grid; place-items: center; font-size: 44px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #2f7dd1, #29b6a4); margin-bottom: 4px; } .home-art.plus { background: color-mix(in srgb, var(--blue) 14%, var(--surface)); color: var(--blue); }
+.home-nav { position: absolute; top: 40%; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.2); cursor: pointer; font-size: 20px; line-height: 1; color: inherit; } .home-nav.l { left: -12px; } .home-nav.r { right: -12px; }

@@ -23,6 +23,36 @@ export const SERVOS = {
     faceTop: [[-12, -29.5], [12, -29.5], [-12, -5.5], [12, -5.5]], faceBottom: [[12, -29.5], [-12, -29.5], [12, -17.5]], faceScrew: 'M2.5' },
   ds3218: { name: 'DS3218 servo (20 kg)', L: 40.2, W: 20.2, H: 40.5, ear: 54.5, earHole: 49.5, earZ: 27, earT: 3, shaftOff: 10, shaftD: 5.8, shaftH: 4.5, horn: 'M3', mass: 60,   torque: 1.96, speed: 340, volts: 6.0, stall: 3.2, real: false },
 };
+/** Size classes of hobby servo: servos of one class share their ear and screw pattern, so a student only has to pick a class (and measure the case if theirs is a little different). */
+export const SERVO_CLASSES = {
+  micro:    { base: 'sg90',     label: 'Micro (9 g, like an SG90)',            blurb: 'Small, 2 ears, about 23 × 12 × 23 mm' },
+  mini:     { base: 'mg90s',    label: 'Mini (13 g, like an MG90S)',           blurb: 'Metal gears, 2 ears, about 23 × 12 × 28 mm' },
+  standard: { base: 'mg996r',   label: 'Standard (55 g, like an MG996R / DS3218)', blurb: 'The common big hobby servo, 2 ears, about 40 × 20 × 43 mm' },
+  block:    { base: 'rds51150', label: 'Block (150 kg, like an RDS51150)',     blurb: 'No ears, screw holes in the big faces, a shaft on both ends' },
+};
+/** Popular models people type in: the class they belong to and what is printed on the box. torque kg·cm, speed s per 60°, volts. Sizes only where we know them; the rest follow the class. */
+export const KNOWN_SERVOS = {
+  sg90: ['micro', {}], 'sg 90': ['micro', {}], mg90s: ['mini', {}], mg90: ['mini', {}], mg995: ['standard', { torque: 10, speed: 0.20, volts: 6 }], mg996r: ['standard', {}], mg946r: ['standard', { torque: 13, speed: 0.17, volts: 6 }],
+  ds3218: ['standard', {}], ds3225: ['standard', { torque: 25, speed: 0.15, volts: 6.8 }], rds3225: ['standard', { torque: 25, speed: 0.15, volts: 6.8 }], rds51150: ['block', {}], ds3115: ['standard', { torque: 15, speed: 0.16, volts: 6 }],
+};
+/** Look a typed servo name up in the known list → { cls, over } or null. Spaces, dashes and case do not matter. */
+export function findKnownServo(text) { const t = String(text || '').toLowerCase().replace(/[^a-z0-9]/g, ''); for (const [k, v] of Object.entries(KNOWN_SERVOS)) if (t.includes(k.replace(/[^a-z0-9]/g, ''))) return { cls: v[0], over: v[1], name: k.toUpperCase() }; return null; }
+/** The id of a servo made from a class and the numbers a student can read or measure. Any number left out comes from the class. */
+export function servoId(cls, o = {}) {
+  const t = [['L', o.L], ['W', o.W], ['H', o.H], ['T', o.torque], ['S', o.speed], ['V', o.volts], ['M', o.mass]].filter(([, v]) => Number.isFinite(v) && v > 0).map(([k, v]) => `${k}${+Number(v).toFixed(2)}`);
+  return ['servo-x', cls, ...t].join('-');
+}
+function customServo(cls, tokens) {
+  const base = SERVOS[SERVO_CLASSES[cls].base], v = {}; for (const t of tokens) { const m = /^([LWHTSVM])(\d+(?:\.\d+)?)$/.exec(t); if (!m) return null; v[m[1]] = Number(m[2]); }
+  const k = v.L ? v.L / base.L : 1, kh = v.H ? v.H / base.H : 1, L = fin(v.L ?? base.L, 12, 120, base.L), W = fin(v.W ?? base.W, 6, 60, base.W), H = fin(v.H ?? base.H, 10, 100, base.H);
+  const out = { ...base, name: `Custom ${SERVO_CLASSES[cls].label.split(' (')[0].toLowerCase()} servo ${r2(L)}×${r2(W)}×${r2(H)}`, L, W, H, real: false,
+    ear: r2(base.ear * k), earHole: r2(base.earHole * k), earZ: r2(base.earZ * kh), shaftOff: r2(Math.min(base.shaftOff * k, L / 2 - 2)) };
+  if (base.faceTop) { const kw = W / base.W; out.faceTop = base.faceTop.map(([x, y]) => [r2(x * kw), r2(y * k)]); out.faceBottom = base.faceBottom.map(([x, y]) => [r2(x * kw), r2(y * k)]); out.earHole = r2(base.earHole * kw); }
+  if (v.T) out.torque = r2(v.T * 0.0980665);                       // the box says kg·cm; physics wants N·m
+  if (v.S) out.speed = r2(60 / v.S);                               // the box says seconds per 60°; the simulator wants °/s
+  if (v.V) out.volts = v.V; if (v.M) out.mass = v.M;
+  return out;
+}
 /** Gear motors and the wheel bore each one wants. */
 export const GEARMOTORS = {
   tt:  { name: 'TT gear motor (yellow, 1:48)', L: 64.5, W: 22.5, H: 18.6, shaftD: 5.4, shaftLen: 9, gearbox: 37, mountSpacing: 22, mountScrew: 'M3', mass: 30, volts: 6, rpm: 200, stallTorque: 0.8, real: true },
@@ -32,6 +62,7 @@ export const GEARMOTORS = {
 /** A part id → numbers, or null. */
 export function parseKitId(id) {
   const s = String(id || ''); let m;
+  if ((m = /^servo-x-(micro|mini|standard|block)((?:-[LWHTSVM]\d+(?:\.\d+)?)*)$/.exec(s))) { const sv = customServo(m[1], m[2].split('-').filter(Boolean)); return sv ? { kind: 'servo', key: `x-${m[1]}`, servo: sv } : null; }
   if ((m = /^servo-([a-z0-9]+)$/.exec(s)) && SERVOS[m[1]]) return { kind: 'servo', key: m[1] };
   if ((m = /^link-(\d{1,3}(?:\.\d)?)(?:-(m2|m3))?$/.exec(s))) { const len = fin(Number(m[1]), 15, 400, 60); return { kind: 'link', len, screw: (m[2] || (len > 90 ? 'm3' : 'm2')).toUpperCase() }; }
   if ((m = /^plate-(\d{2,3})x(\d{2,3})(?:-f(\d{1,2}))?$/.exec(s))) return { kind: 'plate', w: fin(Number(m[1]), 30, 400, 100), l: fin(Number(m[2]), 30, 400, 80), feet: m[3] ? fin(Number(m[3]), 4, 60, 18) : 0 };
@@ -50,7 +81,7 @@ export function makeKitPart(id) {
   const d = parseKitId(id); if (!d) return null;
   const base = { format: ROBOT_PART_FORMAT, version: ROBOT_PART_VERSION, id, model: { file: `${id}.gen`, format: 'gen', units: 'mm', up: 'z' } };
   if (d.kind === 'servo') {
-    const s = SERVOS[d.key], src = s.real ? 'datasheet' : 'estimated', hd = clear(s.horn), hr = Math.min(8, s.W / 2 - 0.6, s.L / 2 - Math.abs(s.L / 2 - s.shaftOff) - 0.6), yShaft = s.L / 2 - s.shaftOff, top = s.H + s.shaftH, ex = s.earHole / 2;
+    const s = d.servo || SERVOS[d.key], src = s.real ? 'datasheet' : 'estimated', hd = clear(s.horn), hr = Math.min(8, s.W / 2 - 0.6, s.L / 2 - Math.abs(s.L / 2 - s.shaftOff) - 0.6), yShaft = s.L / 2 - s.shaftOff, top = s.H + s.shaftH, ex = s.earHole / 2;
     if (s.style === 'block') {                                                                                                                   // no ears: M2.5 holes in the two big faces, and a shaft out of each
       const fh = clear(s.faceScrew), at = ([x, y]) => [x, y];
       return { ...base, category: 'Servos', name: s.name, mass: { grams: s.mass, source: src }, dims: { size: [s.W, s.L, s.H + 2 * s.shaftH], source: src }, kit: { ...d, servo: s, yShaft, top },
