@@ -446,7 +446,7 @@ export function initAssembly({ editor, projects = null }) {
     // a robot that knows what it is leads with the 3D parts for it; everything else is one click away, and search always looks through all of them
     const rt = !q ? robotType(getRobotType()) : null, want = rt && !showingAll() ? parts3dFor(rt.id) : null;
     if (rt) {
-      const bar = el('div', { className: 'robot-focus' }, el('span', {}, el('b', { textContent: `${rt.icon} ${rt.name}` }), document.createTextNode(want ? ' — showing the parts for it' : ' — showing every part')));
+      const bar = el('div', { className: 'robot-focus' }, el('span', {}, el('b', { textContent: `${rt.icon ? rt.icon + " " : ""}${rt.name}` }), document.createTextNode(want ? ' — showing the parts for it' : ' — showing every part')));
       const sw = el('button', { type: 'button', className: 'link-btn', textContent: want ? 'Show all parts' : 'Only my robot\'s parts' }); sw.addEventListener('click', () => setShowAll(!!want));
       const ch = el('button', { type: 'button', className: 'link-btn', textContent: 'Change robot' }); ch.addEventListener('click', () => editor.emit('pick-robot-type'));
       bar.append(sw, ch); cards.append(bar);

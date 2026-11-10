@@ -14,12 +14,14 @@ import { getWorkspace } from '../core/workspaces.js';
 import { EXAMPLES } from '../sim/examples.js';
 import { getToken, authed } from '../sim/session.mjs';
 import { initGallery } from './gallery.js';
+import { benchThumb } from './thumb.js';
 
 // Which project is open is per *tab* (sessionStorage), so two tabs can work on different projects without
 // trading places; localStorage only remembers the last one opened, for the next new tab.
 const LAST_KEY = 'circuitbench:current-project';
 const TAB_KEY = 'circuitbench:tab-project';
 const SAVE_DELAY = 600;
+const THUMB = 'circuitbench:thumb:';
 
 const ago = (t, now = Date.now()) => {
   const s = Math.max(0, Math.round((now - t) / 1000));
@@ -82,6 +84,16 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     try { current = await store.save({ ...current, data: workingData(), updatedAt: Date.now() }); }
     catch { editor.status('Could not save the project — this browser\'s storage is full or blocked. Download it from the File menu to keep a copy.'); }
     if (!modal.hidden) renderList();
+    saveThumb(current);
+  }
+  // a small picture of the bench for the home screen's project cards (kept beside, not inside, the project)
+  let thumbAt = 0, thumbTimer = 0;
+  async function saveThumb(p) {
+    if (!p) return;
+    if (Date.now() - thumbAt < 4000) { clearTimeout(thumbTimer); thumbTimer = setTimeout(() => saveThumb(current), 4200); return; }
+    thumbAt = Date.now();
+    const img = await benchThumb(editor);
+    try { if (img) localStorage.setItem(THUMB + p.id, img); else if (!editor.state.parts.length) localStorage.removeItem(THUMB + p.id); } catch { /* storage full: the card just shows a plain tile */ }
   }
   const scheduleSave = () => { if (!current || suspended) return; clearTimeout(timer); timer = setTimeout(saveNow, SAVE_DELAY); };
   editor.on('workspace', scheduleSave);
@@ -175,7 +187,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   }
 
   async function remove(id, { quiet = false } = {}) {
-    await store.remove(id);
+    await store.remove(id); try { localStorage.removeItem(THUMB + id); } catch { /* ignore */ }
     if (id === current?.id) {
       current = null;
       const rest = await store.list();

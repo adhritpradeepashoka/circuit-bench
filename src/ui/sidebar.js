@@ -83,7 +83,7 @@ export function initSidebar(editor) {
     if (showCreate && !cats.includes('My parts')) cats.push('My parts');
     if (rt) {
       const bar = document.createElement('div'); bar.className = 'robot-focus';
-      const lab = document.createElement('span'); lab.innerHTML = '<b></b>'; lab.querySelector('b').textContent = `${rt.icon} ${rt.name}`; lab.append(document.createTextNode(focus ? ' — showing the parts for it' : ' — showing every part'));
+      const lab = document.createElement('span'); lab.innerHTML = '<b></b>'; lab.querySelector('b').textContent = `${rt.icon ? rt.icon + " " : ""}${rt.name}`; lab.append(document.createTextNode(focus ? ' — showing the parts for it' : ' — showing every part'));
       const sw = document.createElement('button'); sw.type = 'button'; sw.className = 'link-btn'; sw.textContent = focus ? 'Show all parts' : 'Only my robot\'s parts'; sw.addEventListener('click', () => setShowAll(!!focus));
       const ch = document.createElement('button'); ch.type = 'button'; ch.className = 'link-btn'; ch.textContent = 'Change robot'; ch.addEventListener('click', () => editor.emit('pick-robot-type'));
       bar.append(lab, sw, ch); host.append(bar);

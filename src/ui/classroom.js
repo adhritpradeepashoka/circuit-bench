@@ -104,18 +104,18 @@ export function initClassroom({ editor, code, projects, account = null, status =
   /* ───────── home (everyone signed in without a class): a Tinkercad-style dashboard ───────── */
   let homeTab = 'home';
   const NEWS = [
-    ['Part Maker', 'Describe any part and the AI makes it, or upload a picture of the module.', 'part'],
-    ['Servo builder', 'One servo for hundreds of models — pick a size class or type your servo’s name.', 'bench'],
-    ['Bolt it, it moves', 'Bolt a link to a servo’s horn and it turns with real torque and speed.', 'bench'],
-    ['Bioelectronics', 'EMG, ECG and more, with a visualizer to see the signals.', 'bench'],
-    ['Robot tests', 'Drop your robot onto a test course and watch the physics.', 'bench'],
+    ['Part Maker', 'Describe any part and the AI makes it, or upload a picture of the module.', 'part', 'part'],
+    ['Servo builder', 'One servo for hundreds of models — pick a size class or type your servo’s name.', 'bench', 'servo'],
+    ['Bolt it, it moves', 'Bolt a link to a servo’s horn and it turns with real torque and speed.', 'bench', 'servo'],
+    ['Bioelectronics', 'EMG, ECG and more, with a visualizer to see the signals.', 'bench', 'bio'],
+    ['Robot tests', 'Drop your robot onto a test course and watch the physics.', 'bench', 'robot'],
   ];
   const LEARN = [
-    ['Take the tour', 'Five minutes: place a part, wire it, press play.', 'tour'],
-    ['Your first LED', 'Wire an LED and a resistor, then blink it with code.', 'tour'],
-    ['Blocks or code', 'Snap blocks together, or write real Arduino code.', 'bench'],
-    ['Put a robot together', 'Snap parts into an arm or a rover in 3D.', 'bench'],
-    ['Community gallery', 'See what other people built and open a copy.', 'gallery'],
+    ['Take the tour', 'Five minutes: place a part, wire it, press play.', 'tour', 'circuit'],
+    ['Your first LED', 'Wire an LED and a resistor, then blink it with code.', 'tour', 'circuit'],
+    ['Blocks or code', 'Snap blocks together, or write real Arduino code.', 'bench', 'blocks'],
+    ['Put a robot together', 'Snap parts into an arm or a rover in 3D.', 'bench', 'robot'],
+    ['Community gallery', 'See what other people built and open a copy.', 'gallery', 'bio'],
   ];
   function goTo(what) {
     enter();
@@ -132,7 +132,9 @@ export function initClassroom({ editor, code, projects, account = null, status =
     for (const it of items) { const c = el('button', 'home-card'); c.type = 'button'; fn(c, it); row.append(c); }
     const wrap = el('div', 'home-rowwrap'); wrap.append(mk('l', 'l'), row, mk('r', 'r')); sec.append(head, wrap); return sec;
   }
-  const card = (c, [t, d, go]) => { const a = el('div', 'home-art'); a.textContent = t.slice(0, 1); c.append(a, el('b', '', t), el('span', '', d)); c.addEventListener('click', () => goTo(go)); };
+  const thumbOf = (id, label) => { let u = null; try { u = localStorage.getItem('circuitbench:thumb:' + id); } catch { /* none */ } const a = el('div', 'home-art' + (u ? ' pic' : ''), u ? '' : (label || '?').slice(0, 1).toUpperCase()); if (u) a.style.backgroundImage = `url(${u})`; return a; };
+  const shot = (name, label) => { const a = el('div', 'home-art pic'); a.style.backgroundImage = `url(/home/${name}.jpg)`; a.setAttribute('role', 'img'); a.setAttribute('aria-label', label); return a; };
+  const card = (c, [t, d, go, img]) => { const a = img ? shot(img, t) : el('div', 'home-art', t.slice(0, 1)); c.append(a, el('b', '', t), el('span', '', d)); c.addEventListener('click', () => goTo(go)); };
   async function homeView() {
     if (screen.hidden) { screen.hidden = false; setBench(true); renderAccount(); }
     const me = getMe(), initial = (me?.name || me?.email || '?').trim().slice(0, 1).toUpperCase();
@@ -148,12 +150,12 @@ export function initClassroom({ editor, code, projects, account = null, status =
     if (homeTab === 'designs') {
       main.push(el('h1', 'start-h', 'Designs'));
       const g = el('div', 'dash-grid'), nb = el('button', 'home-card new'); nb.type = 'button'; nb.append(el('div', 'home-art plus', '+'), el('b', '', 'New project')); nb.addEventListener('click', mkNew); g.append(nb);
-      for (const p of list) { const c = el('button', 'home-card'); c.type = 'button'; c.append(el('div', 'home-art', (p.name || '?').slice(0, 1).toUpperCase()), el('b', '', p.name || 'Untitled'), el('span', '', p.updatedAt ? new Date(p.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '')); c.addEventListener('click', () => open(p.id)); g.append(c); }
+      for (const p of list) { const c = el('button', 'home-card'); c.type = 'button'; c.append(thumbOf(p.id, p.name), el('b', '', p.name || 'Untitled'), el('span', '', p.updatedAt ? new Date(p.updatedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '')); c.addEventListener('click', () => open(p.id)); g.append(c); }
       main.push(g);
     } else {
       main.push(el('h1', 'start-h', `Welcome back, ${(me?.name || me?.email || '').split(' ')[0]}`));
       const mine = [['New project', 'Start a blank workspace.', 'new'], ...list.slice(0, 8).map(p => [p.name || 'Untitled', 'Open', p.id])];
-      main.push(carousel('Jump back in', mine, (c, [t, d, id]) => { c.append(el('div', 'home-art' + (id === 'new' ? ' plus' : ''), id === 'new' ? '+' : t.slice(0, 1).toUpperCase()), el('b', '', t), el('span', '', d)); c.addEventListener('click', () => (id === 'new' ? mkNew() : open(id))); }, () => { homeTab = 'designs'; homeView(); }));
+      main.push(carousel('Jump back in', mine, (c, [t, d, id]) => { c.append(id === 'new' ? el('div', 'home-art plus', '+') : thumbOf(id, t), el('b', '', t), el('span', '', d)); c.addEventListener('click', () => (id === 'new' ? mkNew() : open(id))); }, () => { homeTab = 'designs'; homeView(); }));
       main.push(carousel('What’s New', NEWS, card), carousel('Learn', LEARN, card, () => goTo('tour')));
     }
     shell(side, main);

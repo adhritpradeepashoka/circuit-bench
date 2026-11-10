@@ -1274,3 +1274,5 @@ body:not(.robot-asm) #robotParts { display: none; }
 .dash-grid > .home-card { flex: none; }
 .home-art { height: 110px; display: grid; place-items: center; font-size: 44px; font-weight: 800; color: #fff; background: linear-gradient(135deg, #2f7dd1, #29b6a4); margin-bottom: 4px; } .home-art.plus { background: color-mix(in srgb, var(--blue) 14%, var(--surface)); color: var(--blue); }
 .home-nav { position: absolute; top: 40%; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.2); cursor: pointer; font-size: 20px; line-height: 1; color: inherit; } .home-nav.l { left: -12px; } .home-nav.r { right: -12px; }
+.home-art.pic { background-size: cover; background-position: center; background-color: #f4f7f5; }
+.pc-photo[hidden] { display: none; }
