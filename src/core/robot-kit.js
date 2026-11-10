@@ -45,7 +45,7 @@ export function servoId(cls, o = {}) {
 function customServo(cls, tokens) {
   const base = SERVOS[SERVO_CLASSES[cls].base], v = {}; for (const t of tokens) { const m = /^([LWHTSVM])(\d+(?:\.\d+)?)$/.exec(t); if (!m) return null; v[m[1]] = Number(m[2]); }
   const k = v.L ? v.L / base.L : 1, kh = v.H ? v.H / base.H : 1, L = fin(v.L ?? base.L, 12, 120, base.L), W = fin(v.W ?? base.W, 6, 60, base.W), H = fin(v.H ?? base.H, 10, 100, base.H);
-  const out = { ...base, name: `Custom ${SERVO_CLASSES[cls].label.split(' (')[0].toLowerCase()} servo ${r2(L)}×${r2(W)}×${r2(H)}`, L, W, H, real: false,
+  const out = { ...base, name: tokens.length ? `Custom ${SERVO_CLASSES[cls].label.split(' (')[0].toLowerCase()} servo ${r2(L)}×${r2(W)}×${r2(H)}` : `Servo, ${SERVO_CLASSES[cls].label.split(' (')[0].toLowerCase()}`, L, W, H, real: false,
     ear: r2(base.ear * k), earHole: r2(base.earHole * k), earZ: r2(base.earZ * kh), shaftOff: r2(Math.min(base.shaftOff * k, L / 2 - 2)) };
   if (base.faceTop) { const kw = W / base.W; out.faceTop = base.faceTop.map(([x, y]) => [r2(x * kw), r2(y * k)]); out.faceBottom = base.faceBottom.map(([x, y]) => [r2(x * kw), r2(y * k)]); out.earHole = r2(base.earHole * kw); }
   if (v.T) out.torque = r2(v.T * 0.0980665);                       // the box says kg·cm; physics wants N·m
@@ -157,7 +157,7 @@ export function makeKitPart(id) {
 
 /** Parts offered ready-made in the list. [name, id] */
 export const KIT_PRESETS = [
-  ['SG90 micro servo', 'servo-sg90'], ['MG90S metal-gear servo', 'servo-mg90s'], ['MG996R servo', 'servo-mg996r'], ['DS3218 servo (20 kg)', 'servo-ds3218'], ['RDS51150 servo (150 kg, dual shaft, no brackets)', 'servo-rds51150'],
+  ['Servo, micro (9 g class)', 'servo-x-micro'], ['Servo, mini (metal gear)', 'servo-x-mini'], ['Servo, standard (55 g class)', 'servo-x-standard'], ['Servo, large (high torque)', 'servo-x-block'],
   ['Link 40 mm', 'link-40'], ['Link 60 mm', 'link-60'], ['Link 80 mm', 'link-80'], ['Link 120 mm (M3)', 'link-120'], ['Link 160 mm (M3)', 'link-160'],
   ['Base plate 100×80', 'plate-100x80'], ['Base plate 100×50 on feet (for servos)', 'plate-100x50-f18'], ['L-bracket for SG90 (turns a servo 90°)', 'bracket-sg90'], ['L-bracket for MG996R', 'bracket-mg996r'], ['Base plate 150×100', 'plate-150x100'], ['Base plate 200×150', 'plate-200x150'],
   ['TT gear motor', 'gearmotor-tt'], ['N20 gear motor', 'gearmotor-n20'], ['Wheel 65 mm (TT)', 'wheel-65'], ['Wheel 43 mm (N20)', 'wheel-43'], ['Ball caster', 'caster-ball'],
