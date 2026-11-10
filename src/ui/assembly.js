@@ -343,7 +343,7 @@ export function initAssembly({ editor, projects = null }) {
   let sceneFor = null, restoreToken = 0; const sceneKey = () => `${LEGACY_SCENE_KEY}:${sceneFor || 'none'}`;
   const PALETTE = [0xb8c4cc, 0x7fb3d5, 0xe8b26a, 0x9ccc9c, 0xd59fb8, 0xb7a3d8, 0xd9d27a, 0x8fd0c8], hex = n => `#${n.toString(16).padStart(6, '0')}`;
   const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
-  const group = new Set(); let boxMode = false;
+  const group = new Set(), groupBoxes = []; let boxMode = false;
   let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, checkOn = false, joinMode = false, joinFirst = null, hoverInst = null, spotMode = false;
   const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' }), droneEl = el('div', { className: 'asm-drone', id: 'asmDrone', hidden: true });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' }), probEl = el('div', { className: 'asm-problems', id: 'asmProblems', hidden: true });
@@ -665,7 +665,10 @@ export function initAssembly({ editor, projects = null }) {
       const glow = inst.id === selected || group.has(inst.id) ? 0x1d4e75 : snapShow && (snapShow.a === inst.id || snapShow.b === inst.id) ? 0x14602f : inst.id === hoverInst ? 0x2a3a44 : 0x000000;
       inst.obj.traverse(m => { if (m.isMesh) { m.material.emissive.setHex(glow); m.material.transparent = xray; m.material.opacity = xray ? 0.38 : 1; m.material.depthWrite = !xray; } });
     }
-    overlays(); t.draw(); renderPanel(); refreshTools(); refreshProblems(); save();
+    overlays();
+    for (const bx of groupBoxes.splice(0)) { t.sceneGizmos.remove(bx); bx.geometry.dispose(); bx.material.dispose(); }
+    if (group.size > 1) for (const inst of groupInsts()) { const bx = new t.THREE.Box3Helper(new t.THREE.Box3().setFromObject(inst.obj), 0x2f9bff); bx.material.depthTest = false; bx.renderOrder = 10; t.sceneGizmos.add(bx); groupBoxes.push(bx); }   // a bright box round every selected part, so you can see what is selected
+    t.draw(); renderPanel(); refreshTools(); refreshProblems(); save();
     helpEl.hidden = false;
     helpEl.textContent = drag?.mode === 'pose' && drag.moved ? 'Pulling the robot. It only bends where its joints allow.' : !asm.instances.length ? 'Pick a part on the right to start.' : spotMode ? 'Click a part to add a connection spot · click a spot to remove it · Esc to finish' : joinMode ? (joinFirst ? 'Now click a hole on a different part. It will move onto the first one.' : 'Click a hole on the part that stays put.') : drag?.moved ? (snapShow ? 'Let go to snap it on.' : 'Move it next to a hole on another part.') : selected ? 'Drag the part, its arrows to slide, its rings to turn · drag the background to look around · scroll to zoom' : 'Click a part to select it · drag the background to look around';
   }
@@ -878,7 +881,11 @@ export function initAssembly({ editor, projects = null }) {
         const m = marq; marq = null; marqEl.hidden = true; t.controls.enabled = true; try { dom.releasePointerCapture(e.pointerId); } catch { /* already released */ }
         const r0 = dom.getBoundingClientRect(), x0 = Math.min(e.clientX, m.x0), x1 = Math.max(e.clientX, m.x0), y0 = Math.min(e.clientY, m.y0), y1 = Math.max(e.clientY, m.y0);
         if (x1 - x0 < 4 && y1 - y0 < 4) { if (!m.add) setGroup([]); return; }
-        const inside = asm.instances.filter(i => { const c = centreOf(i), v = new THREE.Vector3(c[0], c[1], c[2]).project(t.camera), sx = r0.left + (v.x * 0.5 + 0.5) * r0.width, sy = r0.top + (-v.y * 0.5 + 0.5) * r0.height; return v.z < 1 && sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1; }).map(i => i.id);
+        const inside = asm.instances.filter(i => {                                                  // any part whose outline touches the box
+          const b = new THREE.Box3().setFromObject(i.obj); let ax = Infinity, bx = -Infinity, ay = Infinity, by = -Infinity, vis = false;
+          for (const x of [b.min.x, b.max.x]) for (const y of [b.min.y, b.max.y]) for (const z of [b.min.z, b.max.z]) { const v = new THREE.Vector3(x, y, z).project(t.camera), sx = r0.left + (v.x * 0.5 + 0.5) * r0.width, sy = r0.top + (-v.y * 0.5 + 0.5) * r0.height; if (v.z < 1) vis = true; ax = Math.min(ax, sx); bx = Math.max(bx, sx); ay = Math.min(ay, sy); by = Math.max(by, sy); }
+          return vis && bx >= x0 && ax <= x1 && by >= y0 && ay <= y1;
+        }).map(i => i.id);
         setGroup([...(m.add ? m.base : []), ...inside]); if (group.size > 1) bsay(`Selected ${group.size} parts. Drag one to move them all, or use the turn buttons at the bottom.`);
         return;
       }
