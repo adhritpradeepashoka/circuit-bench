@@ -1276,3 +1276,4 @@ body:not(.robot-asm) #robotParts { display: none; }
 .home-nav { position: absolute; top: 40%; z-index: 2; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); box-shadow: 0 2px 8px rgba(0,0,0,.2); cursor: pointer; font-size: 20px; line-height: 1; color: inherit; } .home-nav.l { left: -12px; } .home-nav.r { right: -12px; }
 .home-art.pic { background-size: cover; background-position: center; background-color: #f4f7f5; }
 .pc-photo[hidden] { display: none; }
+.asm-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; cursor: pointer; } .asm-check input { width: 16px; height: 16px; }

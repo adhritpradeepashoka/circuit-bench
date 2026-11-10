@@ -54,16 +54,17 @@ function looksLikeWheel(points, axis, centre) {
  * @param asm        the Assembly
  * @param opts.anchorId  a part held still (bolted to the world): the robot is fixed there, like an arm on a bench. Without one the robot is free and is dropped on the floor.
  * @param opts.hullOf    (inst) → flat [x,y,z,…] of the part's 3D points in the world, mm (the viewer supplies them); without it each part is its box
+ * @param opts.hold      true: the robot's main body is held still, up in the air (no floor contact), so the joints can be tested swinging freely
  * @param opts.modes     { [jointKey]: 'servo' | 'motor' | 'free' } what drives each hinge; the default is a servo, or a motor for a wheel
  */
-export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes = {} } = {}) {
+export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes = {}, hold = false } = {}) {
   if (!asm.instances.length) return { ok: false, error: 'Nothing is built yet. Add parts in Assembly and join them first.' };
   const rig = buildRig(asm), notes = [];
   const mass = id => Math.max(0, (asm.get(id).part.mass?.grams || 0) / 1000);
   const bodyMass = new Map(); for (const [b, ids] of rig.members) bodyMass.set(b, ids.reduce((s, id) => s + mass(id), 0));
   // the root: the body that is held still, else the heaviest one (a dog's trunk, a car's chassis)
   const anchorBody = anchorId && asm.get(anchorId) ? rig.bodyOf(anchorId) : null;
-  const root = anchorBody ?? [...bodyMass].sort((a, b) => b[1] - a[1])[0][0], fixedBase = anchorBody != null;
+  const root = anchorBody ?? [...bodyMass].sort((a, b) => b[1] - a[1])[0][0], fixedBase = anchorBody != null || hold;
   // the tree of hinges out from the root; anything not reached is left out, and a hinge that would close a loop is reported
   const order = [root], up = new Map([[root, null]]), loops = [];
   for (let k = 0; k < order.length; k++) for (const j of rig.joints) {
@@ -100,11 +101,11 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes =
   const leftV = [-forward[1], forward[0], 0];                                                                 // up × forward: the robot's left (for a robot facing +Y that is −X)
   for (const j of joints) j.side = dot(sub(j.anchor, bodies[0].origin), leftV);                              // how far each hinge sits to the left (+) or right (−) of the main body, metres
   const massKg = bodies.reduce((s, b) => s + b.mass, 0), zmin = Math.min(...allPts.map(p => p[2])), top = Math.max(...allPts.map(p => p[2]));
-  const lift = fixedBase ? 0 : 0.003 - zmin;                                      // a free robot starts just above the floor and is dropped; a held one stays where it is
-  if (fixedBase) { if (zmin < -0.001) notes.push('Part of the robot is below the floor. Use “Drop all” in Assembly first.'); }
+  const lift = hold && anchorBody == null ? Math.max(0, 0.25 - zmin) : fixedBase ? 0 : 0.003 - zmin;   // held in the air: at least 25 cm above the floor                                      // a free robot starts just above the floor and is dropped; a held one stays where it is
+  if (fixedBase && !(hold && anchorBody == null)) { if (zmin < -0.001) notes.push('Part of the robot is below the floor. Use “Drop all” in Assembly first.'); }
   if (massKg < 0.002) notes.push('The whole robot weighs almost nothing; check the part masses in Assembly.');
-  if (!joints.length) notes.push(fixedBase ? 'Nothing is hinged to the part you are holding still, so nothing can move.' : 'Nothing is hinged: this will just be a rigid object that falls and lands. Join parts by one screw to make a hinge.');
-  return { ok: true, notes, fixedBase, forward, lift, floorZ: fixedBase ? Math.min(0, zmin - 0.001) : 0, bodies, joints, massKg, size: { height: top - zmin }, leftOut };
+  if (!joints.length) notes.push(fixedBase ? 'Nothing is hinged to the part being held still, so nothing can move.' : 'Nothing is hinged: this will just be a rigid object that falls and lands. Join parts by one screw to make a hinge.');
+  return { ok: true, notes, fixedBase, forward, lift, floorZ: fixedBase ? Math.min(0, zmin + lift - 0.001) : 0, bodies, joints, massKg, size: { height: top - zmin }, leftOut };
 }
 
 /** The MJCF text MuJoCo reads. Bodies sit at their centre of mass with world-aligned axes; shapes are convex hulls of each body's points. */

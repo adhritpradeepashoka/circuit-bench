@@ -113,3 +113,10 @@ test('the joint slider finds a horn-bolted hinge: setAngle swings the link about
   const before = as.get(L.id).T.t.slice(); assert.ok(setAngle(as, P.id, mate, 40), 'setAngle works on it'); assert.equal(mate.angle, 40);
   const after = as.get(L.id).T.t; assert.ok(Math.hypot(after[0] - before[0], after[1] - before[1]) > 1, 'the link actually swung');
 });
+
+test('hold in the air: the main body is fixed 25 cm up, the hinges still swing and nothing falls', async () => {
+  const { as } = armOn('servo-sg90'), model = robotFromAssembly(as, { hold: true });
+  assert.equal(model.ok, true); assert.equal(model.fixedBase, true); assert.ok(model.floorZ <= 0);
+  const mj = await loadMujoco(), sim = new RobotSim(mj, model);
+  try { sim.step(250); const h0 = sim.imu().height; sim.command(0, 50); sim.step(1200); assert.ok(Math.abs(sim.imu().height - h0) < 0.003, 'the body did not fall'); assert.ok(Math.abs(Math.abs(sim.angle(0)) - 50) < 5, `swung ${sim.angle(0)}°`); } finally { sim.dispose(); }
+});

@@ -26,13 +26,16 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
   const resetBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'robReset', textContent: 'Drop it again  (R)' });
   const camSel = el('select', { id: 'robCam', ariaLabel: 'Camera' }, el('option', { value: 'follow', textContent: 'Follow the robot' }), el('option', { value: 'fixed', textContent: 'Stay here, watch it' }));
   const speedSel = el('select', { id: 'robSpeed', ariaLabel: 'Speed of time' }, el('option', { value: '1', textContent: 'Real time' }), el('option', { value: '0.5', textContent: 'Half speed' }), el('option', { value: '0.2', textContent: 'Slow motion (0.2×)' }));
+  const holdBox = el('input', { type: 'checkbox', id: 'robHold', ariaLabel: 'Hold it still in the air' });
+  const holdRow = el('label', { className: 'asm-check', title: 'The main body stays fixed in the air with nothing under it, so you can swing the joints and watch them without it falling or driving off' }, holdBox, el('span', { textContent: ' Hold it still in the air' }));
+  holdBox.addEventListener('change', () => { rebuild(); });
   const field = (label, ctl) => el('label', { className: 'asm-field' }, el('span', { textContent: label }), ctl);
   const summary = el('p', { className: 'asm-note', id: 'robSummary' }), notes = el('div', { className: 'asm-note bad', id: 'robNotes' }), jointBox = el('div', { className: 'fly-motors', id: 'robJoints' });
   const whichSel = el('select', { id: 'robWhich', ariaLabel: 'Which controller' }, el('option', { value: 'starter', textContent: 'Built-in (sliders and keys, read-only)' }), el('option', { value: 'mine', textContent: 'My sketch (edit below)' }));
   const code = el('textarea', { id: 'robCode', className: 'fly-code', spellcheck: false, rows: 16, ariaLabel: 'Robot sketch' });
   const applyBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'robApply', textContent: 'Run this sketch' }), restoreBtn = el('button', { type: 'button', className: 'asm-btn', id: 'robRestore', textContent: 'Start from the starter' });
   const errBox = el('div', { className: 'asm-note bad', id: 'robErr', hidden: true }), logBox = el('pre', { className: 'fly-log', id: 'robLog', hidden: true });
-  side.append(el('h4', { textContent: 'Physics test' }), el('div', { className: 'asm-row' }, resetBtn), field('Camera', camSel), field('Time', speedSel),
+  side.append(el('h4', { textContent: 'Physics test' }), el('div', { className: 'asm-row' }, resetBtn), holdRow, field('Camera', camSel), field('Time', speedSel),
     el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> ↑↓ / W S drive forward and back · ←→ / A D turn · Q E sideways · R drop it again. A game pad works too. Orbit with the mouse, scroll to zoom.' }),
     el('h4', { textContent: 'This robot' }), summary, notes, el('h4', { textContent: 'Joints' }), jointBox,
     el('p', { className: 'asm-note', textContent: 'Each hinge is a servo by default. A round part turning on its axle is found as a wheel (a motor). Choose “Free” for a hinge with no motor, like a passive wheel.' }),
@@ -127,7 +130,7 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
   async function rebuild() {
     const my = ++building; await load3d(); await prepare?.();
     const asm = getAsm(); if (sim) { sim.dispose(); sim = null; }
-    const m = robotFromAssembly(asm, { anchorId: getAnchor?.() || null, hullOf: getHull, modes });
+    const m = robotFromAssembly(asm, { anchorId: getAnchor?.() || null, hullOf: getHull, modes, hold: holdBox.checked });
     if (!m.ok) { model = null; if (T) clearScene(); return showEmpty('Nothing to test yet', m.error); }
     empty.hidden = false; empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('p', { textContent: 'Loading the physics engine…' })));
     try { mj = await loadMujoco(); } catch (e) { return showEmpty('The physics engine did not load', e.message); }
