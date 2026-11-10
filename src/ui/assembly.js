@@ -18,6 +18,7 @@ import { initRobotTest } from './robot-test.js';
 import { initDroneTest } from './drone-test.js';
 import { droneWiring } from '../core/drone-wiring.js';
 import { describeAssembly, runAssemblyOps } from '../core/assembly-actions.js';
+import { offFeatures } from './features.js';
 import { buildRig, isMate, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
@@ -45,6 +46,14 @@ export function initAssembly({ editor, projects = null }) {
   for (const [id, label] of [['circuit', 'Circuit'], ['assembly', 'Assembly'], ['test', 'Test']]) { tabBtn[id] = el('button', { type: 'button', textContent: label, id: `tab-${id}` }); tabs.append(tabBtn[id]); }
   const sepAfter = el('span', { className: 'sep', hidden: true });
   toolbar.prepend(tabs, sepAfter);
+  // Robotics starts with no circuit at all (no Arduino, no breadboard, no wiring): just Assembly and Test. A switch at the top right brings wiring back; a teacher can take the switch away.
+  const WIRING_KEY = 'circuitbench:robot-wiring';
+  const wiringStored = () => { try { return localStorage.getItem(WIRING_KEY) === '1'; } catch { return false; } };
+  const wiringOn = () => wiringStored() && !offFeatures().includes('wiring');
+  const wiringBtn = el('button', { type: 'button', id: 'robWiringToggle', className: 'wiring-toggle', hidden: true, title: 'Wiring: build the electronics (an Arduino, a breadboard and wires) for this robot. Off = only the 3D build and the physics test, with no circuit to set up.' });
+  toolbar.append(wiringBtn);
+  const paintWiring = () => { const on = wiringOn(); wiringBtn.textContent = `Wiring: ${on ? 'on' : 'off'}`; wiringBtn.setAttribute('aria-pressed', String(on)); wiringBtn.classList.toggle('on', on); tabBtn.circuit.hidden = !on; };
+  wiringBtn.addEventListener('click', () => { try { localStorage.setItem(WIRING_KEY, wiringOn() ? '0' : '1'); } catch { /* ignore */ } paintWiring(); if (!wiringOn() && view === 'circuit') show('assembly'); });
 
   const draft = new PartDraft(); let mode = 'build';
   const pane = el('div', { className: 'asm-pane', hidden: true });
@@ -911,11 +920,12 @@ export function initAssembly({ editor, projects = null }) {
   for (const [id, b] of Object.entries(tabBtn)) b.addEventListener('click', () => show(id));
   const sync = () => {
     const on = !!activeWorkspace().robotics;
-    tabs.hidden = !on; sepAfter.hidden = !on;
+    tabs.hidden = !on; sepAfter.hidden = !on; wiringBtn.hidden = !on; paintWiring();
     if (!on && view !== 'circuit') show('circuit');
+    else if (on && !wiringOn() && view === 'circuit') show('assembly');
     if (on && !tabBtn.circuit.classList.contains('on') && !tabBtn.assembly.classList.contains('on') && !tabBtn.test.classList.contains('on')) tabBtn.circuit.classList.add('on');
   };
-  editor.on('catalog', sync); sync();
+  editor.on('catalog', sync); globalThis.addEventListener?.('cb-session', sync); sync();
   // the top bar's undo / redo / delete act on the 3D scene while Assembly is showing (captured before the circuit handlers see the click)
   document.querySelector('.stage .toolbar')?.addEventListener('click', e => {
     if (view === 'circuit') return; const b = e.target.closest?.('button'); if (!b) return;

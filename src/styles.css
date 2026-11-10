@@ -1277,3 +1277,6 @@ body:not(.robot-asm) #robotParts { display: none; }
 .home-art.pic { background-size: cover; background-position: center; background-color: #f4f7f5; }
 .pc-photo[hidden] { display: none; }
 .asm-check { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: 13px; cursor: pointer; } .asm-check input { width: 16px; height: 16px; }
+
+.wiring-toggle { margin-left: auto; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; } .wiring-toggle.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+html[data-off~="wiring"] #robWiringToggle { display: none !important; }

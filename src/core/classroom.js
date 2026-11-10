@@ -13,13 +13,14 @@ export const FEATURES = [
   { id: 'importFiles', label: 'Importing files', note: 'Bringing in files from outside, such as PCB files.' },
   { id: 'themes', label: 'Changing the look', note: 'Off = students keep the class look for class work.' },
   { id: 'share', label: 'Sharing and exporting', note: 'Downloading or copying projects out of the class.' },
+  { id: 'wiring', label: 'Wiring in robotics', note: 'Off = the robot workspace is only the 3D build and the physics test, with no circuit and no wiring switch.' },
   { id: 'personal', label: 'Personal profile', note: 'Students can switch to their own profile, with everything on, for projects of their own. Hand-ins stay in the class profile.' },
 ];
 export const FEATURE_IDS = FEATURES.map(f => f.id);
 const set = on => Object.fromEntries(FEATURE_IDS.map(id => [id, on.includes(id)]));
 export const PRESETS = {
   focused: { label: 'Focused', note: 'The bench, blocks and code, the look, and the assignments.', features: set(['code', 'themes', 'personal']) },
-  standard: { label: 'Standard', note: 'Adds examples and the part maker.', features: set(['code', 'themes', 'personal', 'examples', 'customParts']) },
+  standard: { label: 'Standard', note: 'Adds examples and the part maker.', features: set(['code', 'themes', 'personal', 'examples', 'customParts', 'wiring']) },
   everything: { label: 'Everything', note: 'Every feature on.', features: set(FEATURE_IDS) },
 };
 export const DEFAULT_PRESET = 'focused';
