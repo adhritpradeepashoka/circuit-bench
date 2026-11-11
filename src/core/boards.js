@@ -90,6 +90,8 @@ export const BOARD_SPECS = {
 export const DEFAULT_BOARD = 'arduino-uno';
 export const boardSpec = type => BOARD_SPECS[type] || null;
 export const isMcuBoard = type => !!BOARD_SPECS[type];
+/** A board a new project can start with: a simulated MCU board, or one of the draw-and-wire AI boards. */
+export const isStarterBoard = type => isMcuBoard(type) || type === 'arduino-uno-q' || type === 'arduino-ventuno-q';
 /** gnd | v5 | v33 | vin | null — what a board's power pin is. */
 export const boardPowerPin = powerOf;
 /** The board in a circuit that runs firmware (the first one, if several were placed). */

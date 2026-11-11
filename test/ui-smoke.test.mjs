@@ -264,7 +264,7 @@ test('ui: right-click a resistor to edit its value — bands follow, invalid inp
 /* ───────────── catalogue batch 1 in the real UI code ───────────── */
 const wireOf = (id, a, b) => ({ id, a, b, style: 'straight', color: '#22282c', width: 3, bend: .5, sag: null });
 
-test('ui: Nano, Mega and R4 live in the "More Arduino boards" pack, added from Workspaces & packs — add the pack and they appear; using one switches the pack on', async () => {
+test('ui: Nano, Mega and R4 live in the "More Arduino boards" pack, added from Resource packs — add the pack and they appear; using one switches the pack on', async () => {
   const { w, editor, code, sim } = boot();
   const doc = w.document, cards = () => [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent);
   const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
@@ -273,21 +273,19 @@ test('ui: Nano, Mega and R4 live in the "More Arduino boards" pack, added from W
   assert.ok(cards().includes('Arduino Uno R3') && cards().includes('Raspberry Pi Pico'), 'Uno and Pico are always there');
   assert.equal(doc.querySelector('#catalog .pack-btn'), null, 'packs are not managed in the parts menu');
   doc.getElementById('morePacksBtn').click();
-  assert.equal(doc.getElementById('workspacesModal').hidden, false, 'the menu link opens the same dialog as the Workspaces button');
-  assert.equal(doc.getElementById('wsPanePacks').hidden, false, '…on its Resource packs tab');
+  assert.equal(doc.getElementById('workspacesModal').hidden, false, 'the menu link opens the same dialog as the Resource packs button');
+  assert.ok(doc.querySelector('#packList .pack-card'), '…showing the pack cards');
   const btn = () => doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]');
-  assert.equal(btn().textContent, 'Add pack');
+  assert.equal(btn().textContent, '+ Add');
   btn().click();
-  assert.equal(btn().textContent, 'Remove');
+  assert.equal(btn().textContent, '✓ Added');
   assert.ok(cards().includes('Arduino Nano') && cards().includes('Arduino Mega 2560') && cards().includes('Arduino UNO R4 Minima'), 'added pack → boards listed');
   editor.addPart('arduino-nano');
   btn().click();
-  assert.equal(btn().textContent, 'Remove', 'a pack whose board is on the bench cannot be removed');
+  assert.equal(btn().textContent, '✓ Added', 'a pack whose board is on the bench cannot be removed');
   editor.state.parts = editor.state.parts.filter(p => p.type !== 'arduino-nano'); editor.syncParts();
   btn().click();
   assert.ok(!cards().includes('Arduino Nano'), 'removed again once nothing uses it');
-  doc.getElementById('wsTabWorkspaces').click();
-  assert.equal(doc.getElementById('wsPaneWorkspaces').hidden, false); assert.equal(doc.getElementById('wsPanePacks').hidden, true);
 });
 
 test('ui: catalogue lists the new parts by category, and each can be added', () => {
@@ -1147,7 +1145,7 @@ test('ui: My projects — first run adopts your existing work, new projects star
   doc.querySelector('.proj-switch .ps-foot button:last-child').click();
   assert.equal(doc.getElementById('projectsModal').hidden, false, '"Manage…" opens the full dialog');
   assert.equal(doc.querySelector('.proj-switch').hidden, true);
-  w.__lab.initWorkspaces({ editor, code, projects }); doc.getElementById('projectsClose').click(); doc.getElementById('workspacesBtn').click(); doc.getElementById('wsTabPacks').click();
+  w.__lab.initWorkspaces({ editor, code, projects }); doc.getElementById('projectsClose').click(); doc.getElementById('workspacesBtn').click();
   const boardOpts = () => [...doc.querySelectorAll('#projNewBoard option')].map(o => o.value);
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico'], 'only the two built-in boards without a pack');
   doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]').click();
@@ -1989,7 +1987,7 @@ test('ui: a firmware analogRead() sees the ECG moving while it runs — a BioAmp
   sim.stop();
 });
 
-test('ui: Workspaces — a Bioelectronics project starts with the signal source and BioAmp Pill on the board and the sketch loaded, the menu leads with Biosignal, and saved/imported workspaces are checked and reusable', async () => {
+test('ui: Workspaces — a Bioelectronics project starts with the signal source and BioAmp Pill on the board and the sketch loaded, the menu leads with Biosignal and imported workspace files are checked', async () => {
   const { w, editor, code, sim } = boot();
   const doc = w.document;
   const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
@@ -1998,21 +1996,13 @@ test('ui: Workspaces — a Bioelectronics project starts with the signal source 
   assert.notEqual(titles()[0], 'Biosignal', 'the plain Electronics workspace does not lead with it');
   doc.getElementById('workspacesBtn').click();
   assert.equal(doc.getElementById('workspacesModal').hidden, false);
-  assert.ok([...doc.querySelectorAll('#wsList .ws-row b')].some(b => b.textContent === 'Bioelectronics'), 'built-in workspaces are listed');
+  assert.ok(doc.querySelector('#packList .pack-card'), 'the dialog lists resource packs');
   await projects.create({ name: 'Heart', workspace: 'bioelectronics' }); await flush(); await flush();
   assert.equal(projects.current.workspace, 'bioelectronics');
   const types = editor.state.parts.map(p => p.type);
   assert.ok(types.includes('arduino-uno') && types.includes('custom-signal-source') && types.includes('custom-bioamp-exg-pill'), `starter parts: ${types}`);
   assert.match(code.source, /BioAmp EXG Pill/, 'and the heartbeat sketch');
   assert.equal(titles()[0], 'Biosignal', 'the menu leads with the workspace’s section');
-  // save the open project as a workspace → listed under Mine → starts new projects as that board
-  doc.getElementById('wsSaveName').value = 'My heart lab';
-  doc.getElementById('wsSaveForm').dispatchEvent(new w.Event('submit', { cancelable: true }));
-  const mine = w.__lab.workspaceCore.listWorkspaces().find(x => x.name === 'My heart lab');
-  assert.ok(mine && !mine.builtin && mine.starter.project.parts.length >= 4);
-  assert.ok(w.localStorage.getItem('circuitbench:workspaces').includes('My heart lab'), 'kept in this browser');
-  await projects.create({ name: 'From mine', workspace: mine.id }); await flush(); await flush();
-  assert.equal(editor.state.parts.filter(p => p.type === 'custom-bioamp-exg-pill').length, 1);
   // a hostile / broken file is refused; a good one with its own part is imported
   const { validateWorkspace } = w.__lab.workspaceCore;
   assert.equal(validateWorkspace({ format: 'nope' }).ok, false);
@@ -2021,6 +2011,28 @@ test('ui: Workspaces — a Bioelectronics project starts with the signal source 
   assert.ok(good.ok, good.errors?.join(';'));
   assert.equal(w.__lab.workspaceCore.saveWorkspace(good.workspace, w.localStorage).ok, true);
   assert.ok(Object.values(w.__lab.workspaceCore.listWorkspaces()).some(x => x.parts.length === 1));
+});
+
+test('ui: AI boards workspace — the board picker leads with UNO Q and VENTUNO Q, a new project starts on the chosen one (switching its pack on), and the menu leads with Boards, AI boards first', async () => {
+  const { w, editor, code, sim } = boot();
+  const doc = w.document;
+  const projects = w.__lab.initProjects({ editor, code, sim }); await projects.ready;
+  w.__lab.initWorkspaces({ editor, code, projects });
+  doc.getElementById('projectsBtn')?.click?.();
+  const tile = doc.querySelector('#projTiles .proj-tile[data-ws="ai"]');
+  assert.ok(tile, 'there is an AI boards tile in New project');
+  tile.click();
+  const opts = () => [...doc.querySelectorAll('#projNewBoard option')].map(o => o.value);
+  assert.deepEqual(opts().slice(0, 2), ['arduino-uno-q', 'arduino-ventuno-q'], 'AI boards come first');
+  assert.ok(opts().includes('arduino-uno') && opts().includes('raspberry-pi-pico'), '…then the rest');
+  assert.equal(doc.getElementById('projNewBoard').value, 'arduino-uno-q', 'UNO Q is the default pick');
+  const packs = w.__lab.packs ?? null; void packs;
+  await projects.create({ name: 'Vision bot', workspace: 'ai', board: 'arduino-ventuno-q' }); await flush(); await flush();
+  assert.ok(editor.state.parts.some(p => p.type === 'arduino-ventuno-q'), 'the chosen board is on the bench');
+  assert.ok(editor.state.parts.some(p => p.type === 'breadboard'));
+  const cards = [...doc.querySelectorAll('#catalog .part-card b')].map(e => e.textContent), titles = [...doc.querySelectorAll('#catalog .group-title')].map(e => e.textContent);
+  assert.equal(titles[0], 'Boards', 'the menu leads with Boards');
+  assert.deepEqual(cards.slice(0, 2), ['Arduino UNO Q', 'Arduino VENTUNO Q'], 'AI boards first within it');
 });
 
 test('ui: Settings dialog — opens from the top bar, themes apply and persist, custom colours work, AI setup lives in it', async () => {

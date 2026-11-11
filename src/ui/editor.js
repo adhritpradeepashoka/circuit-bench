@@ -4,7 +4,7 @@ import { allPinsWorld, partBounds, pinWorld, partSize, placeFlex } from '../core
 import { findSnap, applySnap, raiseInStrips, boardHoles, holeAt, occupiedHoles, SNAP_RADIUS } from '../core/snap.js';
 import { compile, pkey, splitKey } from '../core/netlist.js';
 import { SKINS, visualTarget } from '../parts/skins.js';
-import { isMcuBoard, boardPowerPin } from '../core/boards.js';
+import { isMcuBoard, isStarterBoard, boardPowerPin } from '../core/boards.js';
 import { wireGeometry, paramFromHandle } from '../core/wirepath.js';
 import { wireArt, resolveWireKind, DEFAULT_WIRE_KIND, LEGACY_WIRE_KIND, WIRE_KINDS, WIRE_KIND_ICONS, WIRE_KIND_ORDER } from '../core/wire-kinds.js';
 import { snapshot, restore, toProjectFile, fromProjectFile } from '../core/project.js';
@@ -117,10 +117,10 @@ export class Editor {
 
   /** A fresh canvas: the chosen board with a breadboard beside it. */
   defaultWorkspace(board = 'arduino-uno') {
-    const type = PART_DEFS[board] && isMcuBoard(board) ? board : 'arduino-uno';
-    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470, 'arduino-uno-r4': 360, 'raspberry-pi-pico': 190 }[type];
+    const type = PART_DEFS[board] && isStarterBoard(board) ? board : 'arduino-uno';
+    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470, 'arduino-uno-r4': 360, 'raspberry-pi-pico': 190 }[type] ?? Math.round((40 + PART_DEFS[type].w + 40) / GRID) * GRID;
     this.state.parts = [
-      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1', 'arduino-uno-r4': 'unor4-1', 'raspberry-pi-pico': 'pico-1' }[type], type, x: 40, y: 56, rot: 0 },
+      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1', 'arduino-uno-r4': 'unor4-1', 'raspberry-pi-pico': 'pico-1', 'arduino-uno-q': 'unoq-1', 'arduino-ventuno-q': 'ventunoq-1' }[type], type, x: 40, y: 56, rot: 0 },
       { id: 'bb-1', type: 'breadboard', x: bbX, y: 78, rot: 0 },
     ];
     this.state.wires = [];

@@ -5,9 +5,9 @@
 import { WORKSPACES, DEFAULT_WORKSPACE, newProject, uniqueName, cleanName, createLocalStore } from '../core/projects.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { fromProjectFile } from '../core/project.js';
-import { PACKS, packTypes, isInstalled, onPacksChange } from '../core/packs.js';
+import { PACKS, packTypes, isInstalled, installPack, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
-import { isMcuBoard } from '../core/boards.js';
+import { isStarterBoard } from '../core/boards.js';
 import { setRobotType } from '../core/robot-context.js';
 import { cleanRobotType } from '../core/robot-types.js';
 import { getWorkspace } from '../core/workspaces.js';
@@ -59,6 +59,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     bioelectronics: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
     biosignal: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
     pcb: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4v4M11 13h5M16 9v.01M7 16h.01"/>',
+    ai: '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h.01M15 9h.01M9 15h6M12 2v3M12 19v3M2 12h3M19 12h3"/>',
     cad: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
   };
   const wsIcon = id => { const i = document.createElement('i'); i.className = 'ws-ico'; i.setAttribute('aria-hidden', 'true'); i.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${WS_PATH[id] || '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>'}</svg>`; return i; };
@@ -67,7 +68,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available).map(([id, w]) => {
       const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${wsSelect.value === id ? ' on' : ''}`; t.dataset.ws = id; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(wsSelect.value === id));
       const b = document.createElement('b'); b.textContent = w.name; const s = document.createElement('span'); s.textContent = w.blurb;
-      t.append(wsIcon(id), b, s); t.addEventListener('click', () => { wsSelect.value = id; paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
+      t.append(wsIcon(id), b, s); t.addEventListener('click', () => { wsSelect.value = id; delete boardSel.dataset.touched; if (typeof fillBoards === 'function') fillBoards(); paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
     }));
     $('projNewBoard').hidden = wsSelect.value === 'robotics';
   }
@@ -135,6 +136,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     await saveNow();
     const taken = (await store.list()).map(m => m.name);
     const ws = getWorkspace(workspace), fresh = !data;
+    if (board) for (const pack of PACKS) if (!isInstalled(pack.id) && packTypes(pack).includes(board)) installPack(pack.id);      // a board from a pack switches the pack on
     if (!data && ws.starter?.project) data = JSON.parse(JSON.stringify(ws.starter.project));      // a workspace saved from a whole project starts as that project
     const p = newProject({ name: uniqueName(cleanName(name), taken), workspace, data });
     if (!data) { p.data = null; if (board) p.board = board; }
@@ -251,12 +253,16 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   // The board picker offers the two built-in boards plus whatever the installed resource packs add.
   const boardSel = $('projNewBoard'), baseBoards = [...boardSel.options].map(o => o.value);
   const fillBoards = () => {
-    const keep = boardSel.value;
+    const keep = boardSel.value, ws = getWorkspace(wsSelect.value), first = ws.pickBoard ? (ws.boardsFirst || []) : [];
     for (const o of [...boardSel.options]) if (!baseBoards.includes(o.value)) o.remove();
-    for (const pack of PACKS) if (isInstalled(pack.id)) for (const t of packTypes(pack).filter(isMcuBoard)) { const o = document.createElement('option'); o.value = t; o.textContent = PART_DEFS[t].name; boardSel.append(o); }
-    boardSel.value = [...boardSel.options].some(o => o.value === keep) ? keep : baseBoards[0];
+    const add = t => { if (![...boardSel.options].some(o => o.value === t)) { const o = document.createElement('option'); o.value = t; o.textContent = PART_DEFS[t].name; boardSel.append(o); } };
+    for (const pack of PACKS) if (isInstalled(pack.id)) for (const t of packTypes(pack).filter(isStarterBoard)) add(t);
+    for (const t of first) if (PART_DEFS[t]) add(t);                          // a workspace can offer its own boards before the pack is added (creating the project adds the pack)
+    if (first.length) boardSel.replaceChildren(...[...boardSel.options].sort((a, b) => (first.includes(a.value) ? first.indexOf(a.value) : 99) - (first.includes(b.value) ? first.indexOf(b.value) : 99)));
+    boardSel.value = first.length && !boardSel.dataset.touched ? first[0] : [...boardSel.options].some(o => o.value === keep) ? keep : baseBoards[0];
   };
   fillBoards(); onPacksChange(fillBoards);
+  boardSel.addEventListener('change', () => { boardSel.dataset.touched = '1'; });
 
   function openModal({ focusNew = false } = {}) {
     fillWorkspaces(); modal.hidden = false; confirmDelete = null; renaming = null; projQuery = ''; $('projSearch').value = ''; renderList(); loadShared().then(renderList);

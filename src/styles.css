@@ -612,7 +612,7 @@ button { cursor: pointer; }
 /* Workspaces dialog */
 .top-btn { height: 34px; padding: 0 13px; border: 1px solid #36424a; border-radius: 8px; background: var(--ink-2); color: var(--ink-text); cursor: pointer; }
 .top-btn:hover { background: #2b353b; }
-.ws-card { max-width: 640px; }
+.ws-card { max-width: 760px; }
 .ws-list { padding: 0 18px; overflow-y: auto; max-height: 46vh; }
 .ws-group { margin: 12px 0 4px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .ws-row { border: 1px solid var(--line); margin-bottom: 6px; }
@@ -1312,3 +1312,22 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .mx-row button { padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
 .mx-row input { flex: 1; min-width: 0; padding: 4px 7px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 12px; }
 .mx-note { margin: 0; font-size: 11px; opacity: .75; }
+
+/* resource packs: a card grid like the micro:bit extensions list */
+.pack-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; padding: 4px 0 8px; }
+.pack-grid .pack-card { display: grid; grid-template-columns: 64px 1fr; grid-template-rows: 1fr auto; gap: 4px 12px; margin: 0; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); transition: box-shadow .15s, border-color .15s, transform .15s; }
+.pack-grid .pack-card:hover { border-color: var(--accent, #2f8f83); box-shadow: 0 6px 18px rgba(10, 20, 25, .12); transform: translateY(-1px); }
+.pack-grid .pack-card.on { border-color: #2f8f83; box-shadow: inset 0 0 0 1px #2f8f83; }
+.pack-tile { position: relative; width: 64px; height: 64px; border-radius: 14px; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, #2f8f83, #1f5f7a); }
+.pack-card[data-group="ESP"] .pack-tile { background: linear-gradient(145deg, #d64b3d, #8a2f55); }
+.pack-count { position: absolute; right: -6px; bottom: -6px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; background: var(--surface); color: var(--text); border: 1px solid var(--line); font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.pack-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pack-name { font-size: 14px; }
+.pack-blurb { font-size: 12px; line-height: 1.45; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.pack-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 2px; }
+.pack-chip { font-size: 10.5px; padding: 2px 7px; border-radius: 999px; background: var(--paper); border: 1px solid var(--line); color: var(--muted); }
+.pack-grid .pack-btn { grid-column: 1 / -1; justify-self: end; padding: 6px 16px; border-radius: 999px; font-weight: 600; background: #2f8f83; border-color: #2f8f83; color: #fff; }
+.pack-grid .pack-btn:hover { filter: brightness(1.08); border-color: #2f8f83; }
+.pack-grid .pack-btn.on { background: transparent; color: #2f8f83; }
+.pack-group { border: 0; padding: 0; }
+.pack-group-head { padding: 10px 2px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }

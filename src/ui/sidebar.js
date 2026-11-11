@@ -4,7 +4,7 @@ import { formatOhms } from '../core/resistance.js';
 import { LED_COLORS } from '../core/led-colors.js';
 import { sidePanes } from './side-panes.js';
 import { customTypes, builtinTypes, BEHAVIOURS } from '../core/custom-parts.js';
-import { menuFirst, activeWorkspace } from '../core/workspaces.js';
+import { menuFirst, partsFirst, activeWorkspace } from '../core/workspaces.js';
 import { getRobotType, showingAll, setShowAll, onRobotType } from '../core/robot-context.js';
 import { robotType, circuitPartsFor } from '../core/robot-types.js';
 import { partAvailable, onPacksChange } from '../core/packs.js';
@@ -56,7 +56,7 @@ export function initSidebar(editor) {
     return box;
   }
 
-  /** The parts menu points at the dialog where resource packs are added (Workspaces & packs → Resource packs). */
+  /** The parts menu points at the dialog where resource packs are added (the Resource packs button). */
   function renderPacks(host, q) {
     if (q && !'resource packs more boards extra nano mega r4'.includes(q)) return;
     const more = document.createElement('button'); more.type = 'button'; more.className = 'pack-more'; more.id = 'morePacksBtn';
@@ -80,7 +80,8 @@ export function initSidebar(editor) {
     const rt = activeWorkspace().robotics && !q ? robotType(getRobotType()) : null, focus = rt && !showingAll() ? circuitPartsFor(rt.id, t => !!PART_DEFS[t]) : null;
     if (focus) { const order = t => { const i = focus.indexOf(t); return i < 0 ? 999 : i; }; items.splice(0, items.length, ...items.filter(d => focus.includes(d.type) || (d.custom && !d.builtin)).sort((a, b) => order(a.type) - order(b.type))); }
     const showCreate = !q || 'my parts create make new custom part creator'.includes(q) || items.some(d => d.custom && !d.builtin);
-    const first = menuFirst();
+    const first = menuFirst(), pf = partsFirst();
+    if (pf.length && !focus) { const rank = t => { const i = pf.indexOf(t); return i < 0 ? 999 : i; }; items.sort((a, b) => rank(a.type) - rank(b.type)); }      // the workspace's most relevant parts lead their section
     const cats = focus ? [...new Set(items.map(d => d.category))] : [...new Set(items.map(d => d.category))].sort((a, b) => (first.includes(a) ? first.indexOf(a) : 99) - (first.includes(b) ? first.indexOf(b) : 99));      // the active workspace's sections lead the menu
     if (showCreate && !cats.includes('My parts')) cats.push('My parts');
     if (rt) {

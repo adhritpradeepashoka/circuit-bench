@@ -39,3 +39,6 @@ export const VENTUNO_GROUPS = [
   { id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3', ...hatOf('GND'), 'QGND'] },
   { id: 'v33', pins: ['3.3V', ...hatOf('3V3'), 'Q3V3'] }, { id: 'v5', pins: ['5V', ...hatOf('5V')] },
 ];
+
+/** The AI boards a new project can start from (drawn and wired; their STM32 firmware support is separate). */
+export const AI_BOARD_TYPES = ['arduino-uno-q', 'arduino-ventuno-q'];

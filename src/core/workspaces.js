@@ -43,6 +43,14 @@ export const BUILTIN_WORKSPACES = [
     hint: { title: 'Build the circuit, then the robot', text: 'Circuit is the electronics, as always. Assembly is where you import 3D parts (STL, OBJ or glTF) and mark their holes, shafts and connectors. Test comes next.' },
     starter: { extra: [] },
   },
+  {
+    format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: 'ai', builtin: true, name: 'AI boards',
+    blurb: 'Start from an UNO Q or VENTUNO Q (or any board) — AI boards, sensors and displays come first', author: 'CircuitBench',
+    menuFirst: ['Boards', 'Sensors', 'Displays', 'Motors'], partsFirst: ['arduino-uno-q', 'arduino-ventuno-q', 'arduino-uno', 'raspberry-pi-pico'], parts: [], pickBoard: true,
+    boardsFirst: ['arduino-uno-q', 'arduino-ventuno-q'],
+    hint: { title: 'Pick your AI board', text: 'The parts menu leads with the AI boards, then the sensors and displays that go with them. Right-click the board to draw on its LED matrix.' },
+    starter: { extra: [] },
+  },
 ];
 
 /**
@@ -76,7 +84,9 @@ export function validateWorkspace(raw) {
     ok: true,
     workspace: {
       format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id, name, blurb: str(raw.blurb, 160), author: str(raw.author, 60), builtin: !!raw.builtin,
-      visualizer: raw.visualizer === true, robotics: raw.robotics === true,
+      visualizer: raw.visualizer === true, robotics: raw.robotics === true, pickBoard: raw.pickBoard === true,
+      partsFirst: (Array.isArray(raw.partsFirst) ? raw.partsFirst : []).slice(0, 20).map(t => str(t, 60)).filter(Boolean),
+      boardsFirst: (Array.isArray(raw.boardsFirst) ? raw.boardsFirst : []).slice(0, 20).map(t => str(t, 60)).filter(Boolean),
       menuFirst: (Array.isArray(raw.menuFirst) ? raw.menuFirst : []).slice(0, 6).map(c => str(c, 30)).filter(Boolean),
       hint: raw.hint && typeof raw.hint === 'object' ? { title: str(raw.hint.title, 60), text: str(raw.hint.text, 400) } : null,
       parts, starter: { extra, ...(project ? { project } : {}), ...(raw.starter?.sketch ? { sketch: str(raw.starter.sketch, 40) } : {}) },
@@ -105,6 +115,8 @@ export const setActiveWorkspace = id => { active = registry.has(id) ? id : DEFAU
 export const activeWorkspace = () => getWorkspace(active);
 /** Catalogue sections the active workspace wants at the top of the parts menu. */
 export const menuFirst = () => activeWorkspace().menuFirst || [];
+/** Parts the active workspace wants at the top of their section (most relevant first). */
+export const partsFirst = () => activeWorkspace().partsFirst || [];
 
 /* ── saved (your own / imported) workspaces: this browser ───── */
 export function loadSavedWorkspaces(storage = globalThis.localStorage) {

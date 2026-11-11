@@ -1,8 +1,6 @@
-// The Workspaces dialog: built-in workspaces, your own (saved from a project) and imported ones. Starting a project
-// in a workspace gives it that workspace's starting board; the parts menu then leads with its sections.
+// The Resource packs dialog (a card list of add-on board packs), plus the active workspace's hint and the drone quick-start.
 import { getRobotType, onRobotType } from '../core/robot-context.js';
-import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace, listWorkspaces, saveWorkspace, removeWorkspace, parseWorkspaceFile, workspaceFromProject, workspaceFile } from '../core/workspaces.js';
-import { specsUsed } from '../core/custom-parts.js';
+import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace } from '../core/workspaces.js';
 import { PACKS, packTypes, isInstalled, installPack, removePack, dependentsOf, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
 import { quickDrone } from '../core/quick-drone.js';
@@ -17,100 +15,53 @@ function showHint() {
 
 export function initWorkspaces({ editor, code, projects }) {
   const $ = id => document.getElementById(id);
-  const modal = $('workspacesModal'), list = $('wsList');
+  const modal = $('workspacesModal');
   const isBrandNew = p => !!p.createdAt && Date.now() - p.createdAt < 10 * 60_000;       // made in the last few minutes
   projects.onSwitch(p => { setActiveWorkspace(p.workspace); showHint(); editor.setHintAllowed(isBrandNew(p)); editor.emit('catalog'); });      // the parts menu leads with the open project's workspace
 
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const btn = (label, fn, title) => { const b = el('button', 'proj-act', label); b.type = 'button'; if (title) b.title = title; b.addEventListener('click', fn); return b; };
 
-  function render() {
-    const all = listWorkspaces(), groups = [['Built in', all.filter(w => w.builtin)], ['Mine & imported', all.filter(w => !w.builtin)]];
-    list.replaceChildren(...groups.flatMap(([title, items]) => {
-      const head = el('h3', 'ws-group', title);
-      if (!items.length) return [head, el('p', 'proj-note', 'None yet — save a project as a workspace below, or import a workspace file.')];
-      return [head, ...items.map(w => {
-        const row = el('div', 'proj-row ws-row'), main = el('div', 'proj-main');
-        main.append(el('b', '', w.name), el('span', 'proj-meta', `${w.blurb || 'No description'}${w.author && !w.builtin ? ` · by ${w.author}` : ''}${w.parts.length ? ` · ${w.parts.length} own part${w.parts.length > 1 ? 's' : ''}` : ''}`));
-        const acts = el('div', 'proj-acts');
-        acts.append(btn('New project', async () => { close(); await projects.create({ name: `${w.name} project`, workspace: w.id }); editor.status(`New ${w.name} project`); }, `Start a project in the ${w.name} workspace`));
-        if (!w.builtin) {
-          acts.append(btn('Export', () => download(w), 'Download this workspace as a file to share'), btn('Delete', () => { removeWorkspace(w.id); render(); editor.emit('catalog'); }, 'Remove this workspace (projects made in it keep working)'));
-        }
-        row.append(main, acts);
-        return row;
-      })];
-    }));
-  }
-  function download(w) {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([workspaceFile(w)], { type: 'application/json' }));
-    a.download = `${w.id}.circuitbench-workspace.json`; a.click(); URL.revokeObjectURL(a.href);
-    editor.status(`Workspace “${w.name}” downloaded`);
-  }
-  const note = msg => { $('wsNote').textContent = msg; };
-
-  $('wsSaveForm').addEventListener('submit', e => {
-    e.preventDefault();
-    const name = $('wsSaveName').value.trim();
-    if (!name) return note('Give the workspace a name first.');
-    const data = { ...editor.exportProject(), ...code.exportState() };
-    const r = saveWorkspace(workspaceFromProject({ name, blurb: `Saved from “${projects.current?.name || 'a project'}”` }, data, specsUsed(editor.state.parts)));
-    if (!r.ok) return note(r.errors.join(' '));
-    $('wsSaveName').value = ''; render(); editor.emit('catalog'); note(`Saved “${r.workspace.name}”. Start a new project in it from the list.`);
-  });
-  $('wsImport').addEventListener('click', () => $('wsImportFile').click());
-  $('wsImportFile').addEventListener('change', async e => {
-    const file = e.target.files[0]; e.target.value = '';
-    if (!file) return;
-    const parsed = parseWorkspaceFile(await file.text());
-    if (!parsed.ok) return note(`Could not import that file: ${parsed.errors.slice(0, 3).join(' ')}`);
-    const r = saveWorkspace(parsed.workspace);
-    if (!r.ok) return note(r.errors.join(' '));
-    render(); editor.emit('catalog'); note(`Imported “${r.workspace.name}” — ${r.workspace.parts.length} part${r.workspace.parts.length === 1 ? '' : 's'}. Nothing in it can run code; parts are checked like any you make yourself.`);
-  });
-
-  /* ── resource packs (the second tab) ── */
+  /* ── resource packs ── */
   const packList = $('packList');
   const openGroups = new Set(), seenGroups = new Set();                      // dropdowns the student opened or closed; a group with something installed starts open
+  const ICON = '<svg viewBox="0 0 48 48" width="34" height="34" aria-hidden="true"><rect x="9" y="12" width="30" height="24" rx="4" fill="none" stroke="currentColor" stroke-width="2.4"/><rect x="17" y="19" width="14" height="10" rx="2" fill="currentColor" opacity=".85"/><path d="M14 8v4M22 8v4M30 8v4M38 8v4M14 36v4M22 36v4M30 36v4M38 36v4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" transform="translate(-4 0)"/></svg>';
   function packRow(pack) {
-    const on = isInstalled(pack.id), row = el('div', `proj-row ws-row pack-card${on ? ' on' : ''}`), main = el('div', 'proj-main');
-    main.append(el('b', '', pack.name), el('span', 'proj-meta', pack.blurb), el('span', 'proj-meta pack-parts', `Adds: ${packTypes(pack).map(t => PART_DEFS[t].name).join(', ')}`));
-    const acts = el('div', 'proj-acts'), b = btn(on ? 'Remove' : 'Add pack', () => {
+    const on = isInstalled(pack.id), types = packTypes(pack), card = el('div', `pack-card${on ? ' on' : ''}`);
+    card.dataset.pack = pack.id; card.dataset.group = pack.group || 'More';
+    const tile = el('div', 'pack-tile'); tile.innerHTML = ICON; tile.append(el('span', 'pack-count', String(types.length)));
+    const info = el('div', 'pack-info'), chips = el('div', 'pack-chips');
+    for (const t of types.slice(0, 4)) chips.append(el('span', 'pack-chip', PART_DEFS[t].name));
+    if (types.length > 4) chips.append(el('span', 'pack-chip more', `+${types.length - 4} more`));
+    info.append(el('b', 'pack-name', pack.name), el('span', 'pack-blurb', pack.blurb), chips);
+    const b = el('button', `pack-btn${on ? ' on' : ''}`, on ? '✓ Added' : '+ Add'); b.type = 'button'; b.dataset.pack = pack.id;
+    b.title = on ? `Remove ${pack.name} from your parts menu` : `Add ${pack.name} to your parts menu`;
+    b.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);
+    b.addEventListener('click', () => {
       if (on) {
-        if (editor.state.parts.some(p => packTypes(pack).includes(p.type))) { editor.status(`${pack.name} is used on this bench — take those parts off first.`); packNote(`${pack.name} is used on this bench — take those parts off first.`); return; }
+        if (editor.state.parts.some(p => types.includes(p.type))) { const m = `${pack.name} is used on this bench — take those parts off first.`; editor.status(m); packNote(m); return; }
         if (!removePack(pack.id)) { const m = `${pack.name} is needed by ${dependentsOf(pack.id).map(d => d.name).join(', ')} — remove that first.`; editor.status(m); packNote(m); }
       } else installPack(pack.id);
-    }, on ? `Remove ${pack.name} from your parts menu` : `Add ${pack.name} to your parts menu`);
-    b.classList.add('pack-btn'); b.dataset.pack = pack.id; b.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);
-    acts.append(b); row.append(main, acts); return row;
+    });
+    card.append(tile, info, b); return card;
   }
   function renderPacks() {
     const packs = PACKS.filter(p => packTypes(p).length), groups = [...new Set(packs.map(p => p.group || 'More'))];
     packList.replaceChildren(...groups.map(g => {
       const list = packs.filter(p => (p.group || 'More') === g), have = list.filter(p => isInstalled(p.id)).length;
-      if (!seenGroups.has(g)) { seenGroups.add(g); if (have) openGroups.add(g); }
+      if (!seenGroups.has(g)) { seenGroups.add(g); openGroups.add(g); }
       const d = el('details', 'pack-group'); d.dataset.group = g; d.open = openGroups.has(g);
       d.addEventListener('toggle', () => { if (d.open) openGroups.add(g); else openGroups.delete(g); });
-      d.append(el('summary', 'pack-group-head', `${g} · ${list.length} pack${list.length === 1 ? '' : 's'}${have ? ` · ${have} added` : ''}`), ...list.map(packRow));
+      const grid = el('div', 'pack-grid'); grid.append(...list.map(packRow));
+      d.append(el('summary', 'pack-group-head', `${g} · ${list.length} pack${list.length === 1 ? '' : 's'}${have ? ` · ${have} added` : ''}`), grid);
       return d;
     }), el('p', 'proj-note', 'Projects that already use a pack’s parts switch it on by themselves, so nothing is ever missing.'), el('p', 'proj-note', ''));
     packList.lastChild.id = 'packNote';
   }
   const packNote = msg => { const n = $('packNote'); if (n) n.textContent = msg; };
   onPacksChange(() => { renderPacks(); editor.emit('catalog'); });
-  function showTab(name) {
-    for (const t of modal.querySelectorAll('.ws-tabs [role="tab"]')) { const on = t.dataset.tab === name; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; }
-    $('wsPaneWorkspaces').hidden = name !== 'workspaces'; $('wsPanePacks').hidden = name !== 'packs';
-    if (name === 'packs') renderPacks(); else render();
-  }
-  for (const t of modal.querySelectorAll('.ws-tabs [role="tab"]')) {
-    t.addEventListener('click', () => showTab(t.dataset.tab));
-    t.addEventListener('keydown', e => { if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { const o = [...modal.querySelectorAll('.ws-tabs [role="tab"]')].find(x => x !== t); o.focus(); showTab(o.dataset.tab); } });
-  }
-  editor.on('open-packs', () => open('packs'));
+  editor.on('open-packs', () => open());
 
-  function open(tab = 'workspaces') { modal.hidden = false; showTab(tab); (modal.querySelector('.ws-tabs [aria-selected="true"]') || $('workspacesClose')).focus(); }
+  function open() { modal.hidden = false; renderPacks(); $('workspacesClose').focus(); }
   function close() { modal.hidden = true; }
   $('workspacesBtn').addEventListener('click', () => open());
   // Robotics, no drone on the bench yet: one tap builds and wires a whole drone circuit (the same builder the chat uses, no AI needed)
@@ -133,5 +84,5 @@ export function initWorkspaces({ editor, code, projects }) {
   $('workspacesClose').addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !modal.hidden) close(); });
-  return { open, close, render };
+  return { open, close };
 }
