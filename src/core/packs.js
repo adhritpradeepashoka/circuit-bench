@@ -27,7 +27,7 @@ export const PACKS = [
     id: 'arduino-ai',
     group: 'Arduino',
     name: 'Arduino AI boards',
-    blurb: 'The new Linux + AI Arduinos for wiring and planning: UNO Q (Qualcomm QRB2210 + STM32U585) and VENTUNO Q (Dragonwing IQ8, 40 TOPS, plus its 40-pin HAT header).',
+    blurb: 'The new Linux + AI Arduinos for wiring and planning. UNO Q: on-board vision, audio and small local language models, plus a real-time STM32U585. VENTUNO Q: 40 TOPS NPU, local LLMs, speech, YOLO, pose and gesture AI, three camera inputs, plus its 40-pin HAT header.',
     types: custom(BOARD_PACK_IDS.arduinoAi),
   },
   {

@@ -1299,3 +1299,5 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .pack-group-head::-webkit-details-marker { display: none; }
 .pack-group-head::before { content: '▸'; display: inline-block; transition: transform .15s; }
 .pack-group[open] > .pack-group-head::before { transform: rotate(90deg); }
+/* the Wiring toggle stays pinned to the right edge of a scrolling toolbar instead of being cut off by the AI panel */
+.toolbar .wiring-toggle { position: sticky; right: 0; z-index: 3; box-shadow: -10px 0 8px -4px var(--surface, #000); }
