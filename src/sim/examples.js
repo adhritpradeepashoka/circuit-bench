@@ -224,7 +224,7 @@ void loop() {
   delay(2000);
 }
 ` },
-  'unoq-matrix': { name: 'UNO Q / VENTUNO Q: LED matrix heartbeat', code: `// Draws a heart on the 13 x 8 LED matrix and makes it beat. Runs on the Arduino UNO Q and VENTUNO Q (simulated STM32 side).
+  'unoq-matrix': { name: 'UNO Q / VENTUNO Q: LED matrix heartbeat', board: 'arduino-uno-q', code: `// Draws a heart on the 13 x 8 LED matrix and makes it beat. Runs on the Arduino UNO Q and VENTUNO Q (simulated STM32 side).
 #include <Arduino_RouterBridge.h>
 #include <Arduino_LED_Matrix.h>
 

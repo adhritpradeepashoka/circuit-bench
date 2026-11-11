@@ -106,6 +106,7 @@ test('digitalWrite lands on the right port/bit for pins from every port', () => 
 test('the bundled example sketches ship with real prebuilt firmware that boots', () => {
   assert.ok(PREBUILT[DEFAULT_SKETCH], 'default sketch is prebuilt');
   for (const [id, ex] of Object.entries(EXAMPLES)) {
+    if (ex.board) continue;                          // board-specific examples (UNO Q) are compiled by the service for that board
     const p = PREBUILT[ex.code];
     assert.ok(p && p.hex.startsWith(':') && p.size.flash > 500, `${id} prebuilt`);
     const mcu = new Mcu(p.hex); sec(mcu, 0.05);      // boots and runs without faulting

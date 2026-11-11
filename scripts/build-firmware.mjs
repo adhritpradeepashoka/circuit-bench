@@ -31,6 +31,7 @@ writeFileSync(join(root, 'test/fixtures/firmware.json'), JSON.stringify({ arduin
 // 2) prebuilt examples
 const prebuilt = {};
 for (const [id, ex] of Object.entries(EXAMPLES)) {
+  if (ex.board) continue;                                  // built for its own board by the compile service when it runs
   const r = await compiler.compile({ sketch: ex.code });
   if (!r.ok) { console.error(`Example “${id}” failed to compile:\n${r.output}`); process.exit(1); }
   prebuilt[ex.code] = { hex: r.hex, size: r.size, output: r.output };
