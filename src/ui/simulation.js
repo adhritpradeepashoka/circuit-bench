@@ -1,6 +1,7 @@
 import { Mcu, CPU_HZ } from '../sim/mcu.js';
 import { Rp2040Mcu } from '../sim/rp2040-mcu.js';
 import { UnoR4Mcu } from '../sim/uno-r4-mcu.js';
+import { UnoQMcu } from '../sim/uno-q-mcu.js';
 import { solveDrive } from '../core/solver.js';
 import { PART_DEFS } from '../core/parts.js';
 import { compileSketch } from '../sim/compile-client.js';
@@ -118,7 +119,7 @@ export class Simulation {
       const builtFor = Object.values(BOARD_SPECS).find(b => b.fqbn === build.fqbn);
       if (builtFor && (builtFor.chip !== spec.chip || builtFor.emulation !== spec.emulation)) { this.editor.status(`This firmware was built for the ${builtFor.name}, but the board is a ${spec.name} — press Run again to rebuild`); return; }
       const ctx = { id: bd.board?.id ?? null, boardIdx: i, spec, chipName: spec.chipName || CHIPS[spec.chip]?.name || spec.chip, boardName: boards.length > 1 ? `${spec.name} ${i + 1}` : spec.name, build };
-      try { ctx.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : spec.emulation === 'uno-r4' ? new UnoR4Mcu(build.hex) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
+      try { ctx.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : spec.emulation === 'uno-r4' ? new UnoR4Mcu(build.hex) : spec.emulation === 'uno-q' ? new UnoQMcu(build.hex) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
       Object.assign(ctx, { models: new Map(), i2cInfo: [], i2cVersion: -1, dhts: new Map(), dhtInfo: [], timed: new Map(), timedInfo: [], probes: new Map(), logicInfo: [], logicStates: new Map(), logicPorts: [], logicMap: new Map() });
       ctx.onLogicPort = () => { const keep = this.cur; this.cur = ctx; try { this.logicTick(); } finally { this.cur = keep; } };
       ctxs.push(ctx);
@@ -126,6 +127,10 @@ export class Simulation {
     this.ctxs = ctxs; this.cur = ctxs[0]; this.monitorCtx = ctxs[0]; this.linkVersion = -1; this.uartLinks = new Map(); this.linkNotes = [];
     for (const ctx of ctxs) ctx.mcu.attachSerial?.(byte => { if (this.monitorCtx === ctx) this.code.serial?.push(byte); }, (i, byte) => this.routeUart(ctx, i, byte));
     this.showMonitor(ctxs[0]);
+    if (ctxs[0].spec.linux) {                                                  // the Linux side is not emulated: the monitor only looks like its console
+      const host = ctxs[0].spec.linux, name = ctxs[0].spec.name;
+      for (const ch of `${host}:~$ arduino-app-cli start  # simulated — the Linux side of the ${name} is not emulated\r\n[router] bridge up · MCU sketch started\r\n`) this.code.serial?.push(ch.charCodeAt(0));
+    }
     $('simChip').textContent = ctxs.length > 1 ? ctxs.map(c => c.chipName).join(' + ') : ctxs[0].chipName;
     this.code.setRunning?.(true);
     this.reactive = new Map(); this.lastSolveAt = 0; this.modes = new Map(); this.duty = new Map(); this.slopes = [];
@@ -570,6 +575,7 @@ export class Simulation {
         if (el.ledPower !== live) el.ledPower = live;
         const l = live && this.modes?.get(this.pinKey(BOARD_SPECS[part.type].ledPin, ctx)) === 'H';
         if (el.led13 !== l) el.led13 = l;
+        if (live && ctx.mcu.matrixHex !== undefined && el.matrix !== ctx.mcu.matrixHex) el.matrix = ctx.mcu.matrixHex;      // the 13 x 8 matrix the sketch draws
       }
     }
   }
@@ -581,7 +587,7 @@ export class Simulation {
       if (part.type === 'rgb-led') { const el = root?.querySelector('wokwi-rgb-led'); if (el) { el.ledRed = 0; el.ledGreen = 0; el.ledBlue = 0; } }
       if (part.type === 'seven-segment') { const el = root?.querySelector('wokwi-7segment'); if (el) el.values = [0, 0, 0, 0, 0, 0, 0, 0]; }
       if (part.type === 'ldr-module') { const el = root?.querySelector('wokwi-photoresistor-sensor'); if (el) { el.ledPower = false; el.ledDO = false; } }
-      if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; } }
+      if (BOARD_SPECS[part.type]) { const el = root?.querySelector(PART_DEFS[part.type].tag); if (el) { el.ledPower = false; el.led13 = false; if ('matrix' in el) el.matrix = part.matrix || ''; } }
       if (part.type === 'mpu6050') { const el = root?.querySelector('wokwi-mpu6050'); if (el) el.led1 = false; }
       if (PART_DEFS[part.type]?.custom) { const el = visualTarget(root, PART_DEFS[part.type]); if (el) { el.lit = 0; el.aux = 0; el.levels = null; } }
       if (part.type === 'dc-motor') { const el = root?.matches?.('cb-dc-motor') ? root : root?.querySelector('cb-dc-motor'); if (el) el.rpm = 0; }

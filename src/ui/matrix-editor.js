@@ -21,7 +21,7 @@ export function initMatrixEditor(editor) {
     <div class="mx-row" id="mxPresets"></div>
     <div class="mx-row"><button type="button" data-act="invert">Invert</button><button type="button" data-act="clear">Clear</button><button type="button" data-act="fill">All on</button></div>
     <div class="mx-row"><input id="mxText" type="text" maxlength="40" placeholder="Scroll some text…" aria-label="Text to scroll"><button type="button" data-act="scroll">Scroll</button><button type="button" data-act="stop" hidden>Stop</button></div>
-    <p class="mx-note">Sketches do not run on this board here yet, so you draw the matrix by hand. The picture is saved with your project.</p>`;
+    <p class="mx-note">This is the picture shown when nothing is running; while a sketch runs, it draws the matrix itself. Saved with your project.</p>`;
   document.body.append(box);
   const grid = box.querySelector('#mxGrid'), presets = box.querySelector('#mxPresets'), text = box.querySelector('#mxText'), scrollBtn = box.querySelector('[data-act="scroll"]'), stopBtn = box.querySelector('[data-act="stop"]');
   grid.style.setProperty('--cols', MATRIX_COLS);

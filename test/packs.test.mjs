@@ -37,7 +37,7 @@ test('the Arduino AI pack holds the real UNO Q and VENTUNO Q parts: Uno-header g
   for (const t of p.types) { const d = PART_DEFS[t]; assert.ok(d, t); const ids = d.pins.map(x => x.id); assert.equal(new Set(ids).size, ids.length, `${t}: unique pin ids`); for (const pin of d.pins) assert.ok(pin.x > 0 && pin.x < d.w && pin.y > 0 && pin.y < d.h, `${t} ${pin.id} inside the board`); for (const g of d.groups) for (const id of g.pins) assert.ok(ids.includes(id), `${t} group pin ${id}`); }
   const q = PART_DEFS['arduino-uno-q'], uno = PART_DEFS['arduino-uno'];
   assert.equal(q.pins.length, 31); for (const u of uno.pins) { const m = q.pins.find(x => x.id === u.id); assert.ok(m && m.x === u.x && m.y === u.y, `${u.id} sits where the Uno's does`); }
-  assert.equal(q.pins.find(x => x.id === 'A4.2').label, 'D20 · SDA (Wire)'); assert.ok(!q.groups.some(g => g.pins.includes('A4.2') && g.pins.includes('A4')), 'SDA and A4 are different pins on the Q');
+  assert.equal(q.pins.find(x => x.id === 'A4.2').label, 'D20 · SDA (Wire)'); assert.ok(q.groups.some(g => g.pins.includes('A4.2') && g.pins.includes('A4')), 'D20/D21 are tied to the simulated I²C pins A4/A5');
   const v = PART_DEFS['arduino-ventuno-q']; assert.equal(v.pins.filter(x => /^H\d+$/.test(x.id)).length, 40); assert.equal(v.pins.filter(x => /^Q/.test(x.id)).length, 4);
   assert.equal(v.pins.find(x => x.id === 'H3').label, '3 · GPIO2 · SDA (I2C1)'); assert.equal(v.pins.find(x => x.id === 'H19').label, '19 · GPIO10 · MOSI (SPI0)');
   assert.ok(v.groups.find(g => g.id === 'gnd').pins.includes('H6'));

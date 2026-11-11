@@ -224,6 +224,41 @@ void loop() {
   delay(2000);
 }
 ` },
+  'unoq-matrix': { name: 'UNO Q / VENTUNO Q: LED matrix heartbeat', code: `// Draws a heart on the 13 x 8 LED matrix and makes it beat. Runs on the Arduino UNO Q and VENTUNO Q (simulated STM32 side).
+#include <Arduino_RouterBridge.h>
+#include <Arduino_LED_Matrix.h>
+
+Arduino_LED_Matrix matrix;
+
+byte heart[8][13] = {
+  {0,0,0,0,0,0,0,0,0,0,0,0,0},
+  {0,0,1,1,0,0,0,0,0,1,1,0,0},
+  {0,1,1,1,1,0,0,0,1,1,1,1,0},
+  {0,1,1,1,1,1,0,1,1,1,1,1,0},
+  {0,0,1,1,1,1,1,1,1,1,1,0,0},
+  {0,0,0,1,1,1,1,1,1,1,0,0,0},
+  {0,0,0,0,1,1,1,1,1,0,0,0,0},
+  {0,0,0,0,0,1,1,1,0,0,0,0,0}
+};
+
+void setup() {
+  Monitor.begin(115200);
+  matrix.begin();
+}
+
+void loop() {
+  matrix.renderBitmap(heart, 8, 13);
+  Monitor.println("lub");
+  delay(300);
+  matrix.clear();
+  delay(300);
+  matrix.renderBitmap(heart, 8, 13);
+  Monitor.println("dub");
+  delay(700);
+  matrix.clear();
+  delay(500);
+}
+` },
   ecg: { name: 'Heartbeat monitor (BioAmp EXG Pill)', code: `// Biosignal monitor: BioAmp EXG Pill OUT → A0, VCC → 5V, GND → GND, electrodes on the body source.
 // Samples at 250 Hz and prints the signal with its slow drift removed (open the Serial monitor).
 // The R wave of each heartbeat shows up as the tall spike. (Simulated, illustrative signal — not medical data.)

@@ -409,7 +409,7 @@ export class Editor {
     const count = this.state.parts.filter(p => p.type === type).length;
     const c = at || this.viewCenterWorld();
     const off = at ? 0 : (count % 6) * 14;
-    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'arduino-uno-r4' ? 'unor4' : type === 'raspberry-pi-pico' ? 'pico' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
+    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'arduino-uno-r4' ? 'unor4' : type === 'arduino-uno-q' ? 'unoq' : type === 'arduino-ventuno-q' ? 'ventunoq' : type === 'raspberry-pi-pico' ? 'pico' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
       x: Math.round((c.x - def.w / 2 + off) / GRID) * GRID, y: Math.round((c.y - def.h / 2 + off) / GRID) * GRID };
     this.state.parts.push(part);
     const s = findSnap(this.state.parts, part);

@@ -27,7 +27,7 @@ export const PACKS = [
     id: 'arduino-ai',
     group: 'Arduino',
     name: 'Arduino AI boards',
-    blurb: 'The new Linux + AI Arduinos for wiring and planning. UNO Q: on-board vision, audio and small local language models, plus a real-time STM32U585. VENTUNO Q: 40 TOPS NPU, local LLMs, speech, YOLO, pose and gesture AI, three camera inputs and a 40-pin HAT header. Both have a working 13 × 8 LED matrix: right-click the board to draw on it.',
+    blurb: 'The new Linux + AI Arduinos. Sketches for their STM32 side run in the simulator; the Linux side only looks like Linux. UNO Q: on-board vision, audio and small local language models, plus a real-time STM32U585. VENTUNO Q: 40 TOPS NPU, local LLMs, speech, YOLO, pose and gesture AI, three camera inputs and a 40-pin HAT header. Both have a working 13 × 8 LED matrix that sketches draw on (right-click the board to draw by hand).',
     types: ['arduino-uno-q', 'arduino-ventuno-q'],
   },
   {

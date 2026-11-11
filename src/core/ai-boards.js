@@ -17,8 +17,9 @@ const UNOQ_LABEL = {
 };
 const unoLabel = n => UNOQ_LABEL[n] || n.replace(/^GND\.\d$/, 'GND');
 const unoPins = (dx = 0, dy = 0, label = unoLabel) => WOKWI_PINS['wokwi-arduino-uno'].map(p => ({ id: p.name, label: label(p.name), x: r2(p.x + dx), y: r2(p.y + dy), kind: 'pin' }));
-// unlike the Uno, SDA/SCL (D20/D21) and A4/A5 are different pins on these boards, so only the grounds are tied together
-const UNO_GROUPS = [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }];
+// On the real boards SDA/SCL (D20/D21) are their own pins. The simulator's AVR core has one I²C bus on the A4/A5 pins, so here D20/D21 are tied to A4/A5
+// (a part on either reaches the same bus; A4/A5 cannot be used as separate GPIO at the same time as I²C).
+const UNO_GROUPS = [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'sda', pins: ['A4', 'A4.2'] }, { id: 'scl', pins: ['A5', 'A5.2'] }];
 
 export const UNOQ_PINS = unoPins();
 export const UNOQ_GROUPS = UNO_GROUPS;
@@ -37,6 +38,7 @@ export const VENTUNO_PINS = [...unoPins(VENTUNO_UNO_AT[0], VENTUNO_UNO_AT[1], VE
 const hatOf = name => HAT.map(([n], i) => (n === name ? `H${i + 1}` : null)).filter(Boolean);
 export const VENTUNO_GROUPS = [
   { id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3', ...hatOf('GND'), 'QGND'] },
+  { id: 'sda', pins: ['A4', 'A4.2', 'QSDA'] }, { id: 'scl', pins: ['A5', 'A5.2', 'QSCL'] },
   { id: 'v33', pins: ['3.3V', ...hatOf('3V3'), 'Q3V3'] }, { id: 'v5', pins: ['5V', ...hatOf('5V')] },
 ];
 
