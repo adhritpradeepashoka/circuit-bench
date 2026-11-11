@@ -156,7 +156,7 @@ export function initAiPanel(editor, code, sim = null) {
     const p = proposals.get(m.id); if (!p) return;
     if (p.assemblyOps) {
       const api = window.__vlab?.assembly?.ai; m.state = 'applied'; proposals.delete(m.id);
-      api?.run(p.assemblyOps).then(r => { editor.status(`AI edit applied to the 3D scene (${r.done} change${r.done === 1 ? '' : 's'})`); if (r.warnings.length) { messages.push({ id: ++seq, role: 'error', text: `Some 3D changes could not be made: ${r.warnings.join(' ')}` }); } saveChat(); render(); }).catch(e => { messages.push({ id: ++seq, role: 'error', text: e?.message || 'The 3D edit failed.' }); render(); });
+      api?.run(p.assemblyOps).then(r => { editor.status(`AI edit applied to the 3D scene (${r.done} change${r.done === 1 ? '' : 's'})`); if (r.notes?.length) messages.push({ id: ++seq, role: 'assistant', text: `Measured in the 3D view: ${r.notes.join(' ')}` }); if (r.warnings.length) { messages.push({ id: ++seq, role: 'error', text: `Some 3D changes could not be made: ${r.warnings.join(' ')}` }); } saveChat(); render(); }).catch(e => { messages.push({ id: ++seq, role: 'error', text: e?.message || 'The 3D edit failed.' }); render(); });
       saveChat(); render(); return;
     }
     if (p.circuitEdit) editor.importProject(toProjectFileShape(p.circuitEdit.parts, p.circuitEdit.wires, p.circuitEdit.customParts));

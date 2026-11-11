@@ -132,3 +132,16 @@ test('parts collide: a swinging arm is stopped by the body it hinges from, and t
     const off = new RobotSim(mj, model, { selfCollide: false }); try { off.command(0, 90); off.step(1500); assert.ok(off.angle(0) > 80, 'with collisions off it goes straight through'); assert.equal(off.atStop(0), 1); } finally { off.dispose(); }
   } finally { sim.dispose(); }
 });
+
+test('the AI sees the scene in 3D: sizes, free holes, overlaps; place_next_to and measure use real boxes', async () => {
+  const { describeAssembly, runAssemblyOps } = await import('../src/core/assembly-actions.js');
+  const as = new Assembly(), a = as.add(mkPart('plate', 100, [80, 40, 10], [['h1', [0, 0, 5], [0, 0, 1]]]), [0, 0, 0]), b = as.add(mkPart('blk', 20, [20, 20, 20], [['t', [0, 0, 10], [0, 0, 1]]]), [300, 0, 0]);
+  const half = i => i.part.dims.size.map(v => v / 2), boxes = () => Object.fromEntries(as.instances.map(i => { const h = half(i); return [i.id, { min: i.T.t.map((v, k) => v - h[k]), max: i.T.t.map((v, k) => v + h[k]) }]; }));
+  const d = describeAssembly(as, [], null, boxes()); assert.match(d.instances, /In space/); assert.match(d.instances, /box 80 × 40 × 10 mm/); assert.match(d.instances, /free holes \(world\): h1/);
+  const ctx = { boxOf: id => boxes()[id], anchorId: null };
+  let r = await runAssemblyOps(as, [{ op: 'place_next_to', id: b.id, to: a.id, side: '+x', gap: 5 }], ctx); assert.equal(r.done, 1, JSON.stringify(r));
+  assert.ok(Math.abs(boxes()[b.id].min[0] - (boxes()[a.id].max[0] + 5)) < 1e-6, 'five millimetres clear on +x'); assert.ok(Math.abs(b.T.t[1]) < 1e-6, 'centred on the other axes');
+  r = await runAssemblyOps(as, [{ op: 'place_next_to', id: b.id, to: a.id, side: '+z', align: 'minx' }], ctx); assert.ok(Math.abs(boxes()[b.id].min[2] - boxes()[a.id].max[2]) < 1e-6 && Math.abs(boxes()[b.id].min[0] - boxes()[a.id].min[0]) < 1e-6);
+  b.T.t[2] = 0; b.T.t[0] = 20; assert.match(describeAssembly(as, [], null, boxes()).instances, /OVERLAP/);
+  r = await runAssemblyOps(as, [{ op: 'measure', a: a.id, b: b.id }], ctx); assert.equal(r.done, 0); assert.match(r.notes[0], /overlap/);
+});

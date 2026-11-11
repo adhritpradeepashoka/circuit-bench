@@ -1015,10 +1015,17 @@ export function initAssembly({ editor, projects = null }) {
     const act = { undoTool: undo, redoTool: redo, deleteTool: () => binAct(), dupTool: () => selected && dupInst?.(selected) }[b.id]; if (!act) return;   // (the tab buttons share this bar)
     e.stopImmediatePropagation(); e.preventDefault(); if (!b.disabled && view === 'assembly' && mode === 'build') act();
   }, true);
+  /** Each placed part's box in the world (mm), read from its current pose in the 3D view, for the AI's spatial sense. */
+  function worldBoxes() {
+    const t = three; if (!t?.THREE) return null; const boxes = {};
+    for (const i of asm.instances) { if (!i.obj) continue; i.obj.position.fromArray(i.T.t); i.obj.quaternion.set(...i.T.q); i.obj.updateMatrixWorld(true); const b = new t.THREE.Box3().setFromObject(i.obj); if (!b.isEmpty()) boxes[i.id] = { min: b.min.toArray(), max: b.max.toArray() }; }
+    return boxes;
+  }
   /** For the AI chat: read the scene, and carry out the edits it proposes (as one undo step). */
   const ai = {
     active: () => view === 'assembly',
-    async describe() { const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId); const presets = DRONE_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
+    async describe() { if (!three && asm.instances.length) { try { attach(await load3d()); } catch { /* no 3D here: the prompt just has no sizes */ } }
+      const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId, worldBoxes()); const presets = DRONE_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
       const kit = KIT_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (${p.category}), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).slice(0, 14).join(', ')}${p.frames.length > 14 ? ', …' : ''}` : null; }).filter(Boolean);
       d.parts += `\n${presets.join('\n')}\n${kit.join('\n')}\n${DRONE_ID_HELP}\n${KIT_ID_HELP}`; return d; },
     /** What the instant 3D assistant needs: placed parts (with their kind, hole ids and frame size), the joints, and the parts list. */
@@ -1031,7 +1038,7 @@ export function initAssembly({ editor, projects = null }) {
       };
     },
     async run(ops) {
-      const t = await load3d(); attach(t); const before = asm.snapshot(), ctx = { anchorId, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
+      const t = await load3d(); attach(t); const before = asm.snapshot(), ctx = { anchorId, boxOf: id => worldBoxes()?.[id] || null, addPart: (p, at) => addToScene(p, at), partById: findPart, removePart: id => { const i = asm.get(id); if (i) t.sceneRoot.remove(i.obj); asm.remove(id); if (selected === id) selected = null; } };
       batch = true; let out; try { out = await runAssemblyOps(asm, ops, ctx); } finally { batch = false; }
       anchorId = ctx.anchorId; if (out.done) { history.push(before); if (history.length > 60) history.shift(); future = []; }
       applyScene(); if (out.done) fitScene(); return out;

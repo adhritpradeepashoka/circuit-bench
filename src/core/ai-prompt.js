@@ -396,6 +396,8 @@ If the message only asks a question, answer in "explanation" (plain text, a few 
                          //   add_part: {"op":"add_part","id":"<short name you invent, to refer to it later>","part":"<part id from the list>","x":<mm optional>,"y":<mm optional>,"z":<mm optional>}
                          //   move_part: {"op":"move_part","id":"<instance id or your short name>","x":<mm>,"y":<mm>,"z":<mm>}   (only parts that are not joined; sets the part's origin)
                          //   rotate_part: {"op":"rotate_part","id":"<id>","axis":"x"|"y"|"z","deg":<number>}   (only parts that are not joined)
+                         //   place_next_to: {"op":"place_next_to","id":"<instance>","to":"<instance>","side":"+x"|"-x"|"+y"|"-y"|"+z"|"-z","gap":<mm, default 0>,"align":"<optional, e.g. minz = bottoms level, maxz = tops level, comma-separated>"}   (slides an unjoined part against another part's box using their real sizes; use it instead of guessing coordinates)
+                         //   measure: {"op":"measure","a":"<instance>","b":"<instance>"}   (reports the gap or overlap and the centre-to-centre distance; changes nothing)
                          //   join: {"op":"join","a":{"id":"<instance>","hole":"<hole id>"},"b":{"id":"<instance>","hole":"<hole id>"}}   (the b part moves, with everything attached to it, so its hole lands on a's hole, facing it)
                          //   unjoin: {"op":"unjoin","a":"<instance>","b":"<instance optional: only that pair>"}
                          //   set_angle: {"op":"set_angle","a":"<instance>","b":"<instance>","deg":<number>}   (the two must be joined by a hinge; stays inside its limits)
@@ -404,7 +406,7 @@ If the message only asks a question, answer in "explanation" (plain text, a few 
                          //   remove_part: {"op":"remove_part","id":"<instance>"}
   "explanation": "<your reply, plain text, no markdown, at most three short sentences. Describe only what the actions really do.>"
 }
-Only use hole ids that exist on those parts, and only join holes whose sizes are compatible (a 2 mm hole will not take an M3 screw). Mind which side is which: a hole listed with an outward direction points away from the part, and joining puts the two holes facing each other. When you add several parts, join them in the order that makes the chain you were asked for. If something cannot be done with these parts and edits, say so in "explanation" with "actions": [] instead of faking it.`;
+Use the "In space" numbers: they are the real sizes, world positions, free holes and overlaps, so place parts with place_next_to or from those numbers instead of guessing coordinates, keep everything above z = 0, and mention any overlap you see. If the student names a servo or part that is not in the list, build it from the closest id pattern (see the servo ids above) instead of refusing. Only use hole ids that exist on those parts, and only join holes whose sizes are compatible (a 2 mm hole will not take an M3 screw). Mind which side is which: a hole listed with an outward direction points away from the part, and joining puts the two holes facing each other. When you add several parts, join them in the order that makes the chain you were asked for. If something cannot be done with these parts and edits, say so in "explanation" with "actions": [] instead of faking it.`;
 }
 
 
