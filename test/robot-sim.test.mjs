@@ -145,3 +145,11 @@ test('the AI sees the scene in 3D: sizes, free holes, overlaps; place_next_to an
   b.T.t[2] = 0; b.T.t[0] = 20; assert.match(describeAssembly(as, [], null, boxes()).instances, /OVERLAP/);
   r = await runAssemblyOps(as, [{ op: 'measure', a: a.id, b: b.id }], ctx); assert.equal(r.done, 0); assert.match(r.notes[0], /overlap/);
 });
+
+test('a hinge with only one limit set stays free: a minimum of 90° with no maximum must not lock the joint', () => {
+  for (const [min, max] of [[90, undefined], [undefined, -100], [-30, 40]]) {
+    const { as } = limb(), m = as.mates[0]; if (min !== undefined) m.min = min; if (max !== undefined) m.max = max; m.angle = 90;
+    const [a, b] = robotFromAssembly(as).joints[0].range;
+    assert.ok(a < b && b - a >= 70, `range ${a}..${b} for min ${min} max ${max}`);
+  }
+});

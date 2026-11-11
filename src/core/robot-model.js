@@ -88,7 +88,7 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes =
     const u = up.get(body.key), m = u.joint.mate, wf = (() => { const side = m.a, i = asm.get(side.inst); return worldFrame(i, i.part.frames.find(f => f.id === side.frame)); })();
     const parent = bodies[index.get(u.parent)], axis = (() => { const d = wf.dir, L = Math.hypot(...d) || 1; return mul(d, 1 / L); })(), anchor = mul(wf.pos, MM);
     const key = `${m.a.inst}:${m.a.frame}|${m.b.inst}:${m.b.frame}`, wheel = looksLikeWheel(body.points, axis, anchor), explicit = m.min != null || m.max != null;
-    const mode = JOINT_MODES.includes(modes[key]) ? modes[key] : (wheel && !explicit ? 'motor' : 'servo'), lo0 = (m.min ?? -90) - (m.angle || 0), hi0 = (m.max ?? 90) - (m.angle || 0);
+    const mode = JOINT_MODES.includes(modes[key]) ? modes[key] : (wheel && !explicit ? 'motor' : 'servo'), lo0 = (m.min ?? (m.max != null ? Math.min(-90, m.max - 180) : -90)) - (m.angle || 0), hi0 = (m.max ?? (m.min != null ? Math.max(90, m.min + 180) : 90)) - (m.angle || 0);      // a limit left unset is ±90° around nothing: when only one end is set, the other end opens up to keep the joint free (a minimum of 90° with no maximum must not lock the hinge)
     let lo = Math.min(lo0, hi0), hi = Math.max(lo0, hi0); if (hi - lo < 0.5) { lo -= 0.25; hi += 0.25; }          // MuJoCo needs range[0] < range[1]: a hinge whose limits are equal or reversed still gets a (tiny) valid range
     body.parent = bodies.indexOf(parent); body.joint = joints.length;
     const motorPart = [asm.get(m.a.inst), asm.get(m.b.inst)].map(i => i?.part).find(pt => pt?.kit?.servo), sv = motorPart?.kit.servo;
