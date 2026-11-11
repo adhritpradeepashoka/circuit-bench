@@ -1149,7 +1149,7 @@ test('ui: My projects — first run adopts your existing work, new projects star
   const boardOpts = () => [...doc.querySelectorAll('#projNewBoard option')].map(o => o.value);
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico'], 'only the two built-in boards without a pack');
   doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]').click();
-  assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4'], 'the picker follows the pack');
+  assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-r4-wifi'], 'the picker follows the pack');
   doc.querySelector('#packList .pack-btn[data-pack="arduino-boards"]').click();
   assert.deepEqual(boardOpts(), ['arduino-uno', 'raspberry-pi-pico']);
   doc.getElementById('workspacesClose').click(); doc.getElementById('openProjects').click();

@@ -1,8 +1,8 @@
 // Right-click an UNO Q or VENTUNO Q → a small panel for its 13 × 8 LED matrix: click or drag to draw, ready-made pictures, invert / clear, and scrolling text.
 // The frame is a part property (saved with the project); scrolling is a live animation that leaves the last frame behind.
-import { MATRIX_COLS, MATRIX_ROWS, MATRIX_LEDS, EMPTY_FRAME, decodeFrame, encodeFrame, fromRows, invert, PRESETS, scrollFrames } from '../core/matrix.js';
+import { MATRIX_COLS, MATRIX_ROWS, MATRIX_LEDS, EMPTY_FRAME, matrixCols, decodeFrame, encodeFrame, fromRows, invert, PRESETS, scrollFrames } from '../core/matrix.js';
 
-const TYPES = new Set(['arduino-uno-q', 'arduino-ventuno-q']);
+const TYPES = new Set(['arduino-uno-q', 'arduino-ventuno-q', 'arduino-uno-r4-wifi']);
 /** Text → 8-pixel-tall columns, by drawing it on a canvas and keeping the dark pixels (empty where canvas is missing). */
 export function rasterText(text) {
   try {
@@ -27,16 +27,18 @@ export function initMatrixEditor(editor) {
   grid.style.setProperty('--cols', MATRIX_COLS);
   const cells = []; for (let i = 0; i < MATRIX_LEDS; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'mx-cell'; b.dataset.i = i; b.setAttribute('aria-label', `LED row ${Math.floor(i / MATRIX_COLS) + 1}, column ${i % MATRIX_COLS + 1}`); grid.append(b); cells.push(b); }
   for (const name of Object.keys(PRESETS)) { const b = document.createElement('button'); b.type = 'button'; b.textContent = name; b.dataset.preset = name; presets.append(b); }
-  let partId = null, bits = decodeFrame(''), timer = 0, painting = null;
+  let partId = null, bits = decodeFrame(''), timer = 0, painting = null, cols = MATRIX_COLS;
+  const mask = b => b.map((v, i) => ((i % MATRIX_COLS) < cols ? v : 0));          // a 12-wide matrix keeps its 13th column dark
+  const title = box.querySelector('.mx-title');
   const part = () => (partId ? editor.partById(partId) : null);
-  const draw = () => cells.forEach((c, i) => c.classList.toggle('on', !!bits[i]));
+  const draw = () => cells.forEach((c, i) => { c.classList.toggle('on', !!bits[i]); c.disabled = (i % MATRIX_COLS) >= cols; c.style.visibility = c.disabled ? 'hidden' : ''; });
   const save = (commit = true) => { editor.setPartProp(partId, 'matrix', encodeFrame(bits) === EMPTY_FRAME ? '' : encodeFrame(bits), { commit }); };
   const stop = () => { if (timer) { clearInterval(timer); timer = 0; } stopBtn.hidden = true; scrollBtn.hidden = false; if (partId) save(true); };
   const close = () => { stop(); box.hidden = true; partId = null; };
-  const set = next => { bits = next; draw(); save(true); };
+  const set = next => { bits = mask(next); draw(); save(true); };
   function open({ part: p, clientX, clientY }) {
     if (!TYPES.has(p.type)) return;
-    stop(); partId = p.id; bits = decodeFrame(p.matrix); draw(); box.hidden = false;
+    stop(); partId = p.id; cols = matrixCols(p.type); title.textContent = `LED matrix · ${cols} × 8`; bits = mask(decodeFrame(p.matrix)); draw(); box.hidden = false;
     const r = editor.canvas.getBoundingClientRect(), bw = box.offsetWidth || 300, bh = box.offsetHeight || 330;
     box.style.left = `${Math.max(8, Math.min(clientX + 10, innerWidth - bw - 8))}px`; box.style.top = `${Math.max(8, Math.min(clientY + 10, innerHeight - bh - 8))}px`;
     void r;
@@ -53,7 +55,7 @@ export function initMatrixEditor(editor) {
     else if (act === 'scroll') {
       const cols = rasterText(text.value.trim() || 'HELLO'); if (!cols.length) { editor.status('Scrolling text needs a browser with canvas.'); return; }
       const frames = scrollFrames(cols); let n = 0; stop(); scrollBtn.hidden = true; stopBtn.hidden = false;
-      timer = setInterval(() => { if (!part()) return close(); bits = frames[n++ % frames.length]; draw(); save(false); if (n >= frames.length) stop(); }, 90);
+      timer = setInterval(() => { if (!part()) return close(); bits = mask(frames[n++ % frames.length]); draw(); save(false); if (n >= frames.length) stop(); }, 90);
     }
   });
   box.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });

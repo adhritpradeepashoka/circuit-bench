@@ -45,7 +45,7 @@ export const BUILTIN_WORKSPACES = [
   },
   {
     format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: 'ai', builtin: true, name: 'AI boards',
-    blurb: 'Start from an UNO Q or VENTUNO Q (or any board) — AI boards, sensors and displays come first', author: 'CircuitBench',
+    blurb: 'Arduino UNO Q and VENTUNO Q with their LED matrix, plus the sensors, displays and motors that go with them', author: 'CircuitBench',
     menuFirst: ['Boards', 'Sensors', 'Displays', 'Motors'], partsFirst: ['arduino-uno-q', 'arduino-ventuno-q', 'arduino-uno', 'raspberry-pi-pico'], parts: [], pickBoard: true,
     boardsFirst: ['arduino-uno-q', 'arduino-ventuno-q'],
     hint: { title: 'Pick your AI board', text: 'The parts menu leads with the AI boards, then the sensors and displays that go with them. Press Run: the heart on the LED matrix is drawn by the sketch. (Right-click the board to draw by hand.)' },

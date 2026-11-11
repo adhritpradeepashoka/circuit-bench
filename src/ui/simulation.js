@@ -119,7 +119,7 @@ export class Simulation {
       const builtFor = Object.values(BOARD_SPECS).find(b => b.fqbn === build.fqbn);
       if (builtFor && (builtFor.chip !== spec.chip || builtFor.emulation !== spec.emulation)) { this.editor.status(`This firmware was built for the ${builtFor.name}, but the board is a ${spec.name} — press Run again to rebuild`); return; }
       const ctx = { id: bd.board?.id ?? null, boardIdx: i, spec, chipName: spec.chipName || CHIPS[spec.chip]?.name || spec.chip, boardName: boards.length > 1 ? `${spec.name} ${i + 1}` : spec.name, build };
-      try { ctx.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : spec.emulation === 'uno-r4' ? new UnoR4Mcu(build.hex) : spec.emulation === 'uno-q' ? new UnoQMcu(build.hex) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
+      try { ctx.mcu = spec.chip === 'rp2040' ? new Rp2040Mcu(build.firmware) : spec.emulation === 'uno-r4' ? new UnoR4Mcu(build.hex) : spec.emulation === 'uno-q' ? new UnoQMcu(build.hex, spec.matrixCols || 13) : new Mcu(build.hex, spec.chip); } catch (err) { this.fail(err); return; }
       Object.assign(ctx, { models: new Map(), i2cInfo: [], i2cVersion: -1, dhts: new Map(), dhtInfo: [], timed: new Map(), timedInfo: [], probes: new Map(), logicInfo: [], logicStates: new Map(), logicPorts: [], logicMap: new Map() });
       ctx.onLogicPort = () => { const keep = this.cur; this.cur = ctx; try { this.logicTick(); } finally { this.cur = keep; } };
       ctxs.push(ctx);

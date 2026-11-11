@@ -12,8 +12,8 @@ export const PACKS = [
     id: 'arduino-boards',
     group: 'Arduino',
     name: 'Arduino boards (regular)',
-    blurb: 'Arduino Nano, Arduino Mega 2560 and Arduino Uno R4.',
-    types: ['arduino-nano', 'arduino-mega', 'arduino-uno-r4'],
+    blurb: 'Arduino Nano, Arduino Mega 2560, Arduino UNO R4 Minima and Arduino UNO R4 WiFi.',
+    types: ['arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-r4-wifi'],
   },
   {
     id: 'arduino-expanded',

@@ -2,6 +2,8 @@
 // row by row from the top-left, kept as a 26-character hex string so it saves in the project. Pure; the drawing lives in src/parts/ai-boards.js.
 export const MATRIX_COLS = 13, MATRIX_ROWS = 8, MATRIX_LEDS = MATRIX_COLS * MATRIX_ROWS;
 export const EMPTY_FRAME = '0'.repeat(26);
+/** The UNO R4 WiFi's matrix is 12 wide; every frame is still stored 13 wide, with the last column off. */
+export const matrixCols = type => (type === 'arduino-uno-r4-wifi' ? 12 : MATRIX_COLS);
 
 /** 26 hex characters → an array of 104 zeros and ones (anything malformed is an empty frame). */
 export function decodeFrame(hex) {

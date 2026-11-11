@@ -10,6 +10,7 @@ import { renderArt } from '../core/part-art.js';
 import { droneSprite } from './drone-art.js';
 import { WOKWI_PINS } from '../core/pins.generated.js';
 import './ai-boards.js';
+import './art-board.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';
 
@@ -238,7 +239,7 @@ function skinR4(root) {
   skin.append(chip, name);
   svg.append(skin);
 }
-function defineUnoR4() {
+function defineUnoR4_unused() {
   if (!globalThis.customElements || customElements.get('cb-uno-r4')) return;
   const Base = customElements.get('wokwi-arduino-uno');
   if (!Base) { customElements.define('cb-uno-r4', UnoR4); return; }
@@ -247,7 +248,6 @@ function defineUnoR4() {
     updated(c) { super.updated?.(c); skinR4(this.shadowRoot); }
   });
 }
-defineUnoR4();
 
 /** A student-made part (src/core/custom-parts.js): drawn from its spec — body, name, pins with their labels. */
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

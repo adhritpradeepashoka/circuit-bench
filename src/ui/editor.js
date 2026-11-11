@@ -118,9 +118,9 @@ export class Editor {
   /** A fresh canvas: the chosen board with a breadboard beside it. */
   defaultWorkspace(board = 'arduino-uno') {
     const type = PART_DEFS[board] && isStarterBoard(board) ? board : 'arduino-uno';
-    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470, 'arduino-uno-r4': 360, 'raspberry-pi-pico': 190 }[type] ?? Math.round((40 + PART_DEFS[type].w + 40) / GRID) * GRID;
+    const bbX = { 'arduino-uno': 360, 'arduino-nano': 300, 'arduino-mega': 470, 'arduino-uno-r4': 360, 'arduino-uno-r4-wifi': 360, 'raspberry-pi-pico': 190 }[type] ?? Math.round((40 + PART_DEFS[type].w + 40) / GRID) * GRID;
     this.state.parts = [
-      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1', 'arduino-uno-r4': 'unor4-1', 'raspberry-pi-pico': 'pico-1', 'arduino-uno-q': 'unoq-1', 'arduino-ventuno-q': 'ventunoq-1' }[type], type, x: 40, y: 56, rot: 0 },
+      { id: { 'arduino-uno': 'uno-1', 'arduino-nano': 'nano-1', 'arduino-mega': 'mega-1', 'arduino-uno-r4': 'unor4-1', 'raspberry-pi-pico': 'pico-1', 'arduino-uno-r4-wifi': 'unor4wifi-1', 'arduino-uno-q': 'unoq-1', 'arduino-ventuno-q': 'ventunoq-1' }[type], type, x: 40, y: 56, rot: 0 },
       { id: 'bb-1', type: 'breadboard', x: bbX, y: 78, rot: 0 },
     ];
     this.state.wires = [];
@@ -246,7 +246,7 @@ export class Editor {
       } else if (p.type === 'led') {
         const model = root.querySelector('wokwi-led');
         if (model && model.color !== p.color) model.color = p.color;
-      } else if (p.type === 'arduino-uno-q' || p.type === 'arduino-ventuno-q') {
+      } else if (p.type === 'arduino-uno-q' || p.type === 'arduino-ventuno-q' || p.type === 'arduino-uno-r4-wifi') {
         const model = root.matches?.('cb-uno-q, cb-ventuno-q') ? root : root.querySelector('cb-uno-q, cb-ventuno-q');
         if (model) model.matrix = p.matrix || '';
       } else if (p.type === 'slide-switch') {
@@ -409,7 +409,7 @@ export class Editor {
     const count = this.state.parts.filter(p => p.type === type).length;
     const c = at || this.viewCenterWorld();
     const off = at ? 0 : (count % 6) * 14;
-    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'arduino-uno-r4' ? 'unor4' : type === 'arduino-uno-q' ? 'unoq' : type === 'arduino-ventuno-q' ? 'ventunoq' : type === 'raspberry-pi-pico' ? 'pico' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
+    const part = { id: uid(type === 'arduino-uno' ? 'uno' : type === 'arduino-nano' ? 'nano' : type === 'arduino-mega' ? 'mega' : type === 'arduino-uno-r4' ? 'unor4' : type === 'arduino-uno-r4-wifi' ? 'unor4wifi' : type === 'arduino-uno-q' ? 'unoq' : type === 'arduino-ventuno-q' ? 'ventunoq' : type === 'raspberry-pi-pico' ? 'pico' : type === 'breadboard' ? 'bb' : type.slice(0, 3)), type, rot: 0, ...(def.props || {}),
       x: Math.round((c.x - def.w / 2 + off) / GRID) * GRID, y: Math.round((c.y - def.h / 2 + off) / GRID) * GRID };
     this.state.parts.push(part);
     const s = findSnap(this.state.parts, part);
@@ -569,7 +569,7 @@ export class Editor {
       if (this.draft) { e.preventDefault(); return; }
       if (e.target.closest?.('.part-editor')) return;
       const partEl = e.target.closest?.('.part'), part = partEl && this.partById(partEl.dataset.id);
-      if (part && (part.type === 'resistor' || part.type === 'led' || part.type === 'arduino-uno-q' || part.type === 'arduino-ventuno-q' || CONTROLS[part.type] || SETTINGS[part.type] || PART_DEFS[part.type]?.inspector)) {          // right-click → edit value / colour
+      if (part && (part.type === 'resistor' || part.type === 'led' || part.type === 'arduino-uno-q' || part.type === 'arduino-ventuno-q' || part.type === 'arduino-uno-r4-wifi' || CONTROLS[part.type] || SETTINGS[part.type] || PART_DEFS[part.type]?.inspector)) {          // right-click → edit value / colour
         e.preventDefault();
         this.select({ kind: 'part', id: part.id });
         this.emit('part-context', { part, clientX: e.clientX, clientY: e.clientY });

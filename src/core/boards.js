@@ -77,6 +77,16 @@ export const BOARD_SPECS = {
     pinOhms: 40, pinMaxA: 0.02, pinRatingText: 'UNO R4 pin limit: Arduino rates 8 mA per pin, 20 mA at the very most (use a transistor for anything bigger)',
     aiNote: 'Write normal UNO R4 code. It is converted to run in the simulator: analogReadResolution(14) gives true 14-bit analogRead (default 10), analogWriteResolution(12) and analogWrite(A0, value) drive the 12-bit DAC on A0 (a real analog voltage). PWM pins are 3, 5, 6, 9, 10, 11 (8-bit). Same pin layout as the UNO R3, 5 V logic. In the simulator int is 16-bit and RAM is 2 KB; CAN, RTC, USB HID and the op-amp are not available.',
   },
+  // Arduino UNO R4 WiFi: the Minima's emulation plus the 12 x 8 LED matrix (red). The ESP32-S3 Wi-Fi/Bluetooth side is not emulated: WiFiS3 / ArduinoBLE sketches do not build here.
+  'arduino-uno-r4-wifi': {
+    uarts: [{ name: 'Serial1', tx: '1', rx: '0' }],
+    name: 'Arduino UNO R4 WiFi', chip: 'atmega328p', emulation: 'uno-q', fqbn: 'cb:uno-r4-wifi', pins: PINS_328P, ledPin: '13',
+    i2c: { sda: 'A4', scl: 'A5' }, ram: 2048, flash: 32256, matrix: true, matrixCols: 12,
+    chipName: 'RA4M1 (emulated on an ATmega328P core)', logic: 5, adcBits: 14, pwm: AVR_PWM_328, pwmPrefer: ['11', '6', '5', '3', '9', '10'],
+    avoid: ['0', '1', 'A4', 'A5'],
+    pinOhms: 40, pinMaxA: 0.02, pinRatingText: 'UNO R4 pin limit: Arduino rates 8 mA per pin, 20 mA at the very most (use a transistor for anything bigger)',
+    aiNote: 'Write normal UNO R4 WiFi code. It is converted to run in the simulator: analogReadResolution(14) gives true 14-bit analogRead (default 10), analogWriteResolution(12) and analogWrite(A0, value) drive the 12-bit DAC on A0. Same pin layout as the UNO R3, 5 V logic, PWM on 3, 5, 6, 9, 10, 11. The 12 x 8 red LED matrix works: #include <Arduino_LED_Matrix.h>, ArduinoLEDMatrix matrix; matrix.begin(); matrix.renderBitmap(byte[8][12], 8, 12); matrix.loadFrame(uint32_t[3]); matrix.clear(). Wi-Fi and Bluetooth (WiFiS3, ArduinoBLE) are not available in the simulator. int is 16-bit and RAM is 2 KB.',
+  },
   // Arduino UNO Q and VENTUNO Q. Their real chips (STM32U585 / STM32H5F5, Cortex-M33) are not emulated: a sketch for them is converted at compile
   // time (src/core/unoq-compat.js) and runs on the AVR emulation like the UNO R4, with 3.3 V logic, the 14-bit ADC / 12-bit DAC and the 13 x 8 LED matrix.
   // The Linux side (QRB2210 / Dragonwing) is not emulated; the simulator only shows a Linux console for it.

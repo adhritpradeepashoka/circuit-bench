@@ -1,3 +1,4 @@
+import { seatOnArt, artSize } from './board-art-pins.js';
 import { WOKWI_PINS } from './pins.generated.js';
 import { buildBreadboard, breadboardSVG } from './breadboard.js';
 import { UNOQ_W, UNOQ_H, UNOQ_PINS, UNOQ_GROUPS, VENTUNO_W, VENTUNO_H, VENTUNO_PINS, VENTUNO_GROUPS } from './ai-boards.js';
@@ -56,12 +57,18 @@ export const PART_DEFS = {
   },
   'arduino-uno-r4': {
     type: 'arduino-uno-r4', name: 'Arduino UNO R4 Minima', category: 'Boards', tag: 'cb-uno-r4',
-    w: 72.58 * MM, h: 53.34 * MM, pins: fromWokwi('wokwi-arduino-uno', prettyUnoLabel),
+    ...artSize('arduino-uno-r4'), pins: seatOnArt(fromWokwi('wokwi-arduino-uno', prettyUnoLabel), 'arduino-uno-r4'),
     groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'a4', pins: ['A4', 'A4.2'] }, { id: 'a5', pins: ['A5', 'A5.2'] }],
     insertable: false, layer: 1,
   },
+  'arduino-uno-r4-wifi': {
+    type: 'arduino-uno-r4-wifi', name: 'Arduino UNO R4 WiFi', category: 'Boards', tag: 'cb-uno-r4-wifi',
+    ...artSize('arduino-uno-r4-wifi'), pins: seatOnArt(fromWokwi('wokwi-arduino-uno', prettyUnoLabel), 'arduino-uno-r4-wifi'),
+    groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'a4', pins: ['A4', 'A4.2'] }, { id: 'a5', pins: ['A5', 'A5.2'] }],
+    insertable: false, layer: 1, props: { matrix: '' },
+  },
   'arduino-uno-q': {
-    type: 'arduino-uno-q', name: 'Arduino UNO Q', category: 'Boards', tag: 'cb-uno-q', w: UNOQ_W, h: UNOQ_H, pins: UNOQ_PINS, groups: UNOQ_GROUPS,
+    type: 'arduino-uno-q', name: 'Arduino UNO Q', category: 'Boards', tag: 'cb-uno-q', ...artSize('arduino-uno-q'), pins: seatOnArt(UNOQ_PINS, 'arduino-uno-q'), groups: UNOQ_GROUPS,
     insertable: false, layer: 1, props: { matrix: '' },
   },
   'arduino-ventuno-q': {
@@ -208,5 +215,5 @@ export const PART_DEFS = {
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-q', 'arduino-ventuno-q', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-r4-wifi', 'arduino-uno-q', 'arduino-ventuno-q', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

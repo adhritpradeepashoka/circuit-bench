@@ -32,31 +32,6 @@ class Board extends HTMLElement {
 }
 const GLOW = '<defs><filter id="glow" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="1.2" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>';
 
-/** UNO Q: the Uno footprint and headers, one USB-C, the 13 × 8 matrix, the Qualcomm QRB2210 under its shield and the STM32U585. */
-class UnoQ extends Board {
-  markup() {
-    const W = UNOQ_W, H = UNOQ_H, top = UNOQ_PINS.filter(p => p.y < 100), bot = UNOQ_PINS.filter(p => p.y > 100);
-    const hdr = (x1, x2, y) => `<rect x="${x1 - 6}" y="${y - 6}" width="${x2 - x1 + 12}" height="12" rx="1.5" fill="#0d1113" opacity=".6"/>`;
-    const lab = (p, y) => text(p.id === 'A5.2' ? 'SCL' : p.id === 'A4.2' ? 'SDA' : short(p.id), p.x, y, 4.6, '#e3f6f8', 'text-anchor="middle"');
-    return `<svg xmlns="${NS}" width="${W}" height="${H}" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}">${GLOW}
-      <rect x="0.5" y="0.5" width="${(W - 1).toFixed(1)}" height="${(H - 1).toFixed(1)}" rx="7" fill="#0a5f6a" stroke="#06454d" stroke-width="1.2"/>
-      ${hdr(87, 255.5, 9)}${hdr(131, 255.5, 191.5)}
-      <rect x="-2" y="64" width="34" height="30" rx="2" fill="#c9ced3" stroke="#7b848c"/><rect x="2" y="70" width="22" height="18" rx="3" fill="#2a2f34"/>${text('USB-C', 14, 81, 5.5, '#e5e9ec', 'text-anchor="middle"')}
-      <rect x="40" y="22" width="14" height="14" rx="2" fill="#d6dadd" stroke="#8a9299"/><circle cx="47" cy="29" r="4.6" fill="#a02a22" stroke="#6e1c17"/>${text('RESET', 47, 44, 4.4, '#e3f6f8', 'text-anchor="middle"')}
-      ${matrixSVG(62, 70, 6.4)}
-      ${text('8 × 13 LED MATRIX', 103, 52, 4.6, '#bfeff3', 'text-anchor="middle" letter-spacing=".4"')}
-      <rect x="156" y="62" width="54" height="54" rx="3" fill="#14181b" stroke="#000"/><rect x="160" y="66" width="46" height="46" rx="2" fill="#1d2327" stroke="#2c353a"/>
-      ${text('QRB2210', 183, 91, 7.2, '#d7dce0', 'font-weight="700" text-anchor="middle"')}${text('Qualcomm', 183, 101, 4.8, '#9aa2a9', 'text-anchor="middle"')}
-      <rect x="216" y="80" width="28" height="28" rx="2" fill="#16191c" stroke="#000"/><circle cx="221" cy="85" r="1.6" fill="#454a50"/>${text('STM32', 230, 92, 4.6, '#d7dce0', 'font-weight="700" text-anchor="middle"')}${text('U585', 230, 99, 4.6, '#d7dce0', 'text-anchor="middle"')}
-      <circle class="pwr" cx="205" cy="44" r="3" fill="#103018"/>${text('ON', 205, 55, 5, '#e3f6f8', 'text-anchor="middle"')}
-      <circle cx="226" cy="44" r="3" fill="#ff5252"/><circle cx="236" cy="44" r="3" fill="#38c46a"/><circle cx="246" cy="44" r="3" fill="#4f7dff"/>${text('LED3', 236, 55, 4.2, '#e3f6f8', 'text-anchor="middle"')}
-      ${text('UNO Q', 196, 150, 15, '#f2fdfe', 'font-weight="800" text-anchor="middle"')}${text('QUALCOMM · ARDUINO', 196, 161, 5.6, '#bfeff3', 'text-anchor="middle" letter-spacing="1.4"')}
-      ${text('Qwiic', 60, 168, 4.6, '#e3f6f8')}<rect x="42" y="160" width="14" height="8" rx="1" fill="#1d2327"/>
-      ${sockets(UNOQ_PINS)}${top.map(p => lab(p, p.y + 13)).join('')}${bot.map(p => lab(p, p.y - 8)).join('')}
-    </svg>`;
-  }
-}
-
 /** VENTUNO Q: 160 × 100 mm. Uno headers and the 40-pin HAT header, Qwiic, the 13 × 8 matrix, the Dragonwing SoM under its heat sink and fan, three camera sockets, RJ45, USB, HDMI, power and an M.2 slot. */
 class VentunoQ extends Board {
   markup() {
@@ -90,4 +65,4 @@ class VentunoQ extends Board {
     </svg>`;
   }
 }
-for (const [tag, cls] of [['cb-uno-q', UnoQ], ['cb-ventuno-q', VentunoQ]]) if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
+for (const [tag, cls] of [['cb-ventuno-q', VentunoQ]]) if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
