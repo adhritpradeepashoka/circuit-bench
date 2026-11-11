@@ -115,24 +115,8 @@ const ARDUINO_EXPANDED = [
     desc: 'The Nano shape with a Raspberry Pi RP2040, Wi-Fi / Bluetooth and an IMU. 3.3 V ONLY.', rows: nanoRows() }),
 ];
 
-// ── Arduino AI boards: Linux + AI computers with a real-time microcontroller beside them. Same wiring-only treatment as the rest of the pack. ──
-const unoQRows = () => [[['SCL', 'D21 (SCL, Wire)'], ['SDA', 'D20 (SDA, Wire)'], 'AREF', 'GND', ['D13', 'D13 (SCK)'], ['D12', 'D12 (MISO)'], ['D11', 'D11 (MOSI, PWM)'], ['D10', 'D10 (SS, PWM)'], ['D9', 'D9 (PWM)'], 'D8', 'D7', ['D6', 'D6 (PWM)'], ['D5', 'D5 (PWM, CAN RX)'], ['D4', 'D4 (CAN TX)'], ['D3', 'D3 (PWM, not 5 V safe)'], 'D2', ['D1', 'D1 (TX, Serial1)'], ['D0', 'D0 (RX, Serial1)']],
-  ['BOOT', 'IOREF', 'RESET', ['3V3', '3.3 V out'], ['5V', '5 V'], 'GND', 'GND', ['VIN', 'VIN (7-24 V in)'], ['A0', 'A0 (DAC0, not 5 V safe)'], ['A1', 'A1 (DAC1, not 5 V safe)'], ['A2', 'A2 (not 5 V safe)'], ['A3', 'A3 (not 5 V safe)'], ['A4', 'A4 (not 5 V safe)'], ['A5', 'A5 (not 5 V safe)']]];
-const piHat = () => { const odd = ['3V3', G(2, 'SDA'), G(3, 'SCL'), G(4), 'GND', G(17), G(27), G(22), '3V3', G(10, 'MOSI'), G(9, 'MISO'), G(11, 'SCLK'), 'GND', G(0), G(5), G(6), G(13), G(19), G(26), 'GND'], even = ['5V', '5V', 'GND', G(14, 'TX'), G(15, 'RX'), G(18), 'GND', G(23), G(24), 'GND', G(25), G(8, 'CE0'), G(7, 'CE1'), G(1), 'GND', G(12), 'GND', G(16), G(20), G(21)]; return [odd, even]; };
-const ARDUINO_AI = [
-  board({ id: 'arduino-uno-q', name: 'Arduino UNO Q (2 GB / 4 GB)', label: 'UNO Q', color: '#00858f', chip: 'QRB2210 + STM32U585', horiz: true,
-    desc: 'An Uno-shaped board with two brains: a Qualcomm Dragonwing QRB2210 (4 x Cortex-A53, Debian Linux, 2 or 4 GB) for AI and vision, and an STM32U585 (Cortex-M33, 160 MHz) that runs your Arduino sketch. The Uno headers are 3.3 V ONLY (D3 and A0 to A5 must never see 5 V). Also has a Qwiic connector (Wire1) and JMEDIA / JMISC connectors that are not drawn. AI, as Arduino advertises it: on-board edge vision and audio (GPU + DSP + ISP) with no cloud needed, for real-time object detection, defect spotting, barcode reading and sorting; small local language models and AI agents on the Linux side; predictive maintenance from vibration, temperature and pressure data; Arduino App Lab combines sketches, Python and AI models, with ready-made Bricks and Edge Impulse for training your own.',
-    rows: unoQRows() }),
-  board({ id: 'arduino-ventuno-q', name: 'Arduino VENTUNO Q (Uno headers)', label: 'VENTUNO Q', color: '#00858f', chip: 'IQ8 + STM32H5F5', horiz: true,
-    desc: 'A 160 x 100 mm edge-AI computer: Qualcomm Dragonwing IQ8 (8 cores, Hexagon NPU, up to 40 TOPS, 16 GB), plus an STM32H5F5 (Cortex-M33, 250 MHz) for real-time control. These are its Uno-style JDIGITAL and JANALOG headers: 3.3 V logic ONLY, A0 and A1 are not 5 V tolerant. Power comes from USB-C PD (9 to 20 V), the barrel jack or the screw terminal (7 to 24 V). Qwiic, USB, Ethernet, camera and the other headers are not drawn. AI, as Arduino advertises it: a Hexagon NPU with up to 40 TOPS and 16 GB of memory; local language models (Gemma, Qwen, GGUF models through llama.cpp), a vision-language model for captioning and reading text, speech recognition (Whisper) and speech synthesis; object tracking (YOLO-X), gesture recognition (MediaPipe) and pose detection; three 4-lane MIPI camera inputs for multi-camera and stereo setups; tools: Arduino App Lab, Qualcomm AI Hub and Edge Impulse.',
-    rows: unoQRows() }),
-  board({ id: 'arduino-ventuno-q-hat', name: 'Arduino VENTUNO Q (40-pin HAT header)', label: 'VENTUNO HAT', color: '#00858f', chip: 'JHAT', horiz: true,
-    desc: 'The Raspberry Pi-compatible 40-pin JHAT header of the VENTUNO Q, shown with the usual Raspberry Pi numbering (I2C on pins 3 and 5, SPI0 on 19, 21, 23 and 24, UART on 8 and 10). Level-translated to 3.3 V from the 1.8 V processor. Check the Arduino pinout table before wiring anything that is not a plain HAT. The AI runs on the VENTUNO Q itself (up to 40 TOPS NPU): a HAT, camera or sensor wired here feeds those models.',
-    rows: piHat() }),
-];
-
-export const BOARD_TEMPLATES = [...ESP_NORMAL, ...ESP_EXPANDED, ...ARDUINO_EXPANDED, ...ARDUINO_AI];
+export const BOARD_TEMPLATES = [...ESP_NORMAL, ...ESP_EXPANDED, ...ARDUINO_EXPANDED];
 /** Template ids by pack (the ESP32-C3 Super Mini belongs to the normal ESP pack too: see PACKS in packs.js). */
 export const BOARD_PACK_IDS = {
-  espNormal: ESP_NORMAL.map(t => t.id), espExpanded: ESP_EXPANDED.map(t => t.id), arduinoExpanded: ARDUINO_EXPANDED.map(t => t.id), arduinoAi: ARDUINO_AI.map(t => t.id),
+  espNormal: ESP_NORMAL.map(t => t.id), espExpanded: ESP_EXPANDED.map(t => t.id), arduinoExpanded: ARDUINO_EXPANDED.map(t => t.id),
 };

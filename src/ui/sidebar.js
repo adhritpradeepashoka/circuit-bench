@@ -13,6 +13,8 @@ const $ = id => document.getElementById(id);
 const BLURB = {
   'arduino-uno': 'ATmega328P board',
   'arduino-uno-r4': 'UNO R3 layout · 14-bit ADC + DAC · runs on the Uno emulation',
+  'arduino-uno-q': 'Uno layout · Linux + AI · 3.3 V · 13 × 8 LED matrix (right-click)',
+  'arduino-ventuno-q': '160 × 100 mm · 40 TOPS AI · Uno + 40-pin HAT headers · LED matrix',
   'arduino-nano': 'Small Uno · plugs into a breadboard',
   'arduino-mega': 'ATmega2560 · 54 digital, 16 analog pins',
   'raspberry-pi-pico': 'RP2040 · 3.3 V · runs real firmware · plugs into a breadboard',

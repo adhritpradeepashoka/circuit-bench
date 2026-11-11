@@ -24,6 +24,7 @@ const clean = {
   phase: v => ((+v || 0) & 3),   // rotary encoder quadrature phase
   signal: v => (['ecg', 'emg', 'eeg', 'eog', 'sine'].includes(v) ? v : 'ecg'), bpm: num(40, 180), effort: num(0, 100), scale: num(0, 300), contact: num(1, 100), hum: num(0, 100), attached: v => (+v === 0 ? 0 : 1), sp: site, sn: site, sr: site, mperiod: num(10, 180), mamp: num(0, 10), mspeed: num(1, 120), mstim: num(-100, 100), mnoise: num(0, 300), mcontact: num(1, 100),   // slime mold
     // biosignal source
+  matrix: v => (/^[0-9a-f]{26}$/i.test(String(v || '')) ? String(v).toLowerCase() : ''),   // UNO Q / VENTUNO Q LED matrix: 104 bits as hex
   keys: v => ((+v || 0) & 0xffff), bits: v => ((+v || 0) & 0xffff),   // keypad: one bit per key; DIP bank: one bit per switch
   jx: num(0, 100), jy: num(0, 100), jsel: v => (+v ? 1 : 0),   // joystick
   len: num(38.4, 600),     // resistor lead spacing (world px)

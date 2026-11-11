@@ -1,5 +1,6 @@
 import { WOKWI_PINS } from './pins.generated.js';
 import { buildBreadboard, breadboardSVG } from './breadboard.js';
+import { UNOQ_W, UNOQ_H, UNOQ_PINS, UNOQ_GROUPS, VENTUNO_W, VENTUNO_H, VENTUNO_PINS, VENTUNO_GROUPS } from './ai-boards.js';
 
 const MM = 96 / 25.4; // CSS px per mm — @wokwi/elements draw everything in mm-sized SVGs
 
@@ -58,6 +59,14 @@ export const PART_DEFS = {
     w: 72.58 * MM, h: 53.34 * MM, pins: fromWokwi('wokwi-arduino-uno', prettyUnoLabel),
     groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3'] }, { id: 'a4', pins: ['A4', 'A4.2'] }, { id: 'a5', pins: ['A5', 'A5.2'] }],
     insertable: false, layer: 1,
+  },
+  'arduino-uno-q': {
+    type: 'arduino-uno-q', name: 'Arduino UNO Q', category: 'Boards', tag: 'cb-uno-q', w: UNOQ_W, h: UNOQ_H, pins: UNOQ_PINS, groups: UNOQ_GROUPS,
+    insertable: false, layer: 1, props: { matrix: '' },
+  },
+  'arduino-ventuno-q': {
+    type: 'arduino-ventuno-q', name: 'Arduino VENTUNO Q', category: 'Boards', tag: 'cb-ventuno-q', w: VENTUNO_W, h: VENTUNO_H, pins: VENTUNO_PINS, groups: VENTUNO_GROUPS,
+    insertable: false, layer: 1, props: { matrix: '' },
   },
   'arduino-nano': {
     type: 'arduino-nano', name: 'Arduino Nano', category: 'Boards', tag: 'wokwi-arduino-nano',
@@ -199,5 +208,5 @@ export const PART_DEFS = {
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-q', 'arduino-ventuno-q', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

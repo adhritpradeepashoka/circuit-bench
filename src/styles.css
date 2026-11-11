@@ -1301,3 +1301,14 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .pack-group[open] > .pack-group-head::before { transform: rotate(90deg); }
 /* the Wiring toggle stays pinned to the right edge of a scrolling toolbar instead of being cut off by the AI panel */
 .toolbar .wiring-toggle { position: sticky; right: 0; z-index: 3; box-shadow: -10px 0 8px -4px var(--surface, #000); }
+
+.matrix-editor { position: fixed; z-index: 60; width: 292px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.matrix-editor[hidden] { display: none; }
+.mx-title { font-weight: 700; font-size: 13px; }
+.mx-grid { display: grid; grid-template-columns: repeat(var(--cols, 13), 1fr); gap: 3px; padding: 8px; border-radius: 8px; background: #06141b; touch-action: none; }
+.mx-cell { aspect-ratio: 1; padding: 0; border-radius: 50%; border: 0; background: #0b2733; cursor: pointer; }
+.mx-cell.on { background: #59c2ff; box-shadow: 0 0 6px #59c2ff; }
+.mx-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+.mx-row button { padding: 4px 9px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 12px; cursor: pointer; }
+.mx-row input { flex: 1; min-width: 0; padding: 4px 7px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); color: inherit; font: inherit; font-size: 12px; }
+.mx-note { margin: 0; font-size: 11px; opacity: .75; }

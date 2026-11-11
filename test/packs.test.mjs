@@ -30,10 +30,15 @@ test('an expanded pack brings its regular pack along and cannot be left without 
   assert.equal(partAvailable('custom-esp32-devkit'), false);
 });
 
-test('the Arduino AI pack is its own pack with the UNO Q and VENTUNO Q boards, not part of the regular Arduino packs', () => {
-  const p = PACKS.find(x => x.id === 'arduino-ai'); assert.ok(p && !p.requires);
-  assert.deepEqual(p.types, ['custom-arduino-uno-q', 'custom-arduino-ventuno-q', 'custom-arduino-ventuno-q-hat']);
-  const hat = BOARD_TEMPLATES.find(t => t.id === 'arduino-ventuno-q-hat'); assert.equal(hat.pins.length, 40);
-  const q = BOARD_TEMPLATES.find(t => t.id === 'arduino-uno-q'); assert.equal(q.pins.length, 32);
-  assert.ok(!PACKS.find(x => x.id === 'arduino-expanded').types.includes('custom-arduino-uno-q'));
+test('the Arduino AI pack holds the real UNO Q and VENTUNO Q parts: Uno-header geometry, datasheet labels, the HAT header, no duplicate pins, all inside the drawing', async () => {
+  const { PART_DEFS } = await import('../src/core/parts.js');
+  const p = PACKS.find(x => x.id === 'arduino-ai'); assert.ok(p && !p.requires); assert.deepEqual(p.types, ['arduino-uno-q', 'arduino-ventuno-q']);
+  assert.ok(!PACKS.find(x => x.id === 'arduino-expanded').types.includes('arduino-uno-q'));
+  for (const t of p.types) { const d = PART_DEFS[t]; assert.ok(d, t); const ids = d.pins.map(x => x.id); assert.equal(new Set(ids).size, ids.length, `${t}: unique pin ids`); for (const pin of d.pins) assert.ok(pin.x > 0 && pin.x < d.w && pin.y > 0 && pin.y < d.h, `${t} ${pin.id} inside the board`); for (const g of d.groups) for (const id of g.pins) assert.ok(ids.includes(id), `${t} group pin ${id}`); }
+  const q = PART_DEFS['arduino-uno-q'], uno = PART_DEFS['arduino-uno'];
+  assert.equal(q.pins.length, 31); for (const u of uno.pins) { const m = q.pins.find(x => x.id === u.id); assert.ok(m && m.x === u.x && m.y === u.y, `${u.id} sits where the Uno's does`); }
+  assert.equal(q.pins.find(x => x.id === 'A4.2').label, 'D20 · SDA (Wire)'); assert.ok(!q.groups.some(g => g.pins.includes('A4.2') && g.pins.includes('A4')), 'SDA and A4 are different pins on the Q');
+  const v = PART_DEFS['arduino-ventuno-q']; assert.equal(v.pins.filter(x => /^H\d+$/.test(x.id)).length, 40); assert.equal(v.pins.filter(x => /^Q/.test(x.id)).length, 4);
+  assert.equal(v.pins.find(x => x.id === 'H3').label, '3 · GPIO2 · SDA (I2C1)'); assert.equal(v.pins.find(x => x.id === 'H19').label, '19 · GPIO10 · MOSI (SPI0)');
+  assert.ok(v.groups.find(g => g.id === 'gnd').pins.includes('H6'));
 });
