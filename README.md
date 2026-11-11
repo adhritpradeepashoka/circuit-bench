@@ -335,3 +335,9 @@ Sign in with Google; the server verifies the Google token and keeps each account
 Manage members in the app: **⚙ Settings → Members** (admins only). You can add an email before the person has ever signed in; revoking applies on their next request.
 
 Server env: `OWNER_EMAIL`, `DATABASE_URL` (Supabase Postgres; without it roles live in memory and reset on restart), `SESSION_SECRET`, `MAX_FREE_CONCURRENT`, `HOSTED_AI_KEY` / `HOSTED_AI_PROVIDER` / `HOSTED_AI_MODEL`, `FREE_HOSTED_AI=1`.
+
+## Credits
+
+The top-view drawings of the Arduino UNO Q, UNO R4 Minima, UNO R4 WiFi and VENTUNO Q are taken from Arduino's documentation
+([arduino/docs-content](https://github.com/arduino/docs-content), © Arduino, licensed CC BY-SA 4.0), optimised and annotated by
+`scripts/build-board-art.mjs`. They keep that licence.

@@ -9,7 +9,6 @@ import { layoutSpec } from '../core/custom-parts.js';
 import { renderArt } from '../core/part-art.js';
 import { droneSprite } from './drone-art.js';
 import { WOKWI_PINS } from '../core/pins.generated.js';
-import './ai-boards.js';
 import './art-board.js';
 
 const svgNS = 'http://www.w3.org/2000/svg';

@@ -1,7 +1,7 @@
 import { seatOnArt, artSize } from './board-art-pins.js';
 import { WOKWI_PINS } from './pins.generated.js';
 import { buildBreadboard, breadboardSVG } from './breadboard.js';
-import { UNOQ_W, UNOQ_H, UNOQ_PINS, UNOQ_GROUPS, VENTUNO_W, VENTUNO_H, VENTUNO_PINS, VENTUNO_GROUPS } from './ai-boards.js';
+import { UNOQ_PINS, UNOQ_GROUPS, VENTUNO_PINS, VENTUNO_GROUPS } from './ai-boards.js';
 
 const MM = 96 / 25.4; // CSS px per mm — @wokwi/elements draw everything in mm-sized SVGs
 
@@ -72,7 +72,7 @@ export const PART_DEFS = {
     insertable: false, layer: 1, props: { matrix: '' },
   },
   'arduino-ventuno-q': {
-    type: 'arduino-ventuno-q', name: 'Arduino VENTUNO Q', category: 'Boards', tag: 'cb-ventuno-q', w: VENTUNO_W, h: VENTUNO_H, pins: VENTUNO_PINS, groups: VENTUNO_GROUPS,
+    type: 'arduino-ventuno-q', name: 'Arduino VENTUNO Q', category: 'Boards', tag: 'cb-ventuno-q', ...artSize('arduino-ventuno-q'), pins: seatOnArt(VENTUNO_PINS, 'arduino-ventuno-q'), groups: VENTUNO_GROUPS,
     insertable: false, layer: 1, props: { matrix: '' },
   },
   'arduino-nano': {

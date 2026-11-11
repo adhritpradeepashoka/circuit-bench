@@ -36,5 +36,6 @@ export const ART_BOARDS = [
   { tag: 'cb-uno-r4', type: 'arduino-uno-r4', load: () => import('./art/uno-r4-minima.js') },
   { tag: 'cb-uno-r4-wifi', type: 'arduino-uno-r4-wifi', load: () => import('./art/uno-r4-wifi.js'), cols: 12, on: '#ff4638', off: '#8a6a14' },
   { tag: 'cb-uno-q', type: 'arduino-uno-q', load: () => import('./art/uno-q.js'), cols: 13, on: '#59c2ff', off: '#8a6a14' },
+  { tag: 'cb-ventuno-q', type: 'arduino-ventuno-q', load: () => import('./art/ventuno-q.js'), cols: 13, on: '#59c2ff', off: '#8a6a14' },
 ];
 if (globalThis.customElements) for (const spec of ART_BOARDS) if (!customElements.get(spec.tag)) customElements.define(spec.tag, class extends ArtBoard { static spec = spec; });

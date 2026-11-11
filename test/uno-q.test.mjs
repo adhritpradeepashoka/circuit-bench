@@ -52,11 +52,12 @@ test('UNO R4 WiFi: a runnable 5 V board with a 12-wide matrix; its frame goes in
 test('the boards drawn from Arduino’s own drawings: every pin sits on a header pad, and the matrix LEDs are tagged in the drawing', async () => {
   const { BOARD_GEOM } = await import('../src/core/board-geometry.generated.js');
   const { PART_DEFS } = await import('../src/core/parts.js');
-  for (const [type, leds] of [['arduino-uno-r4', 0], ['arduino-uno-r4-wifi', 96], ['arduino-uno-q', 104]]) {
-    const g = BOARD_GEOM[type], pads = new Set([...g.top, ...g.bottom].map(p => p.join(',')));
+  for (const [type, leds] of [['arduino-uno-r4', 0], ['arduino-uno-r4-wifi', 96], ['arduino-uno-q', 104], ['arduino-ventuno-q', 104]]) {
+    const g = BOARD_GEOM[type], pads = new Set([...g.top, ...g.bottom, ...(g.hat || []), ...(g.qwiic || [])].map(p => p.join(',')));
     assert.equal(g.top.length, 18); assert.equal(g.bottom.length, 14);
+    if (g.hat) { assert.equal(g.hat.length, 40); assert.equal(g.qwiic.length, 4); }
     for (const p of PART_DEFS[type].pins) assert.ok(pads.has(`${p.x},${p.y}`), `${type} ${p.id}`);
-    const { ART } = await import(`../src/parts/art/${{ 'arduino-uno-r4': 'uno-r4-minima', 'arduino-uno-r4-wifi': 'uno-r4-wifi', 'arduino-uno-q': 'uno-q' }[type]}.js`);
+    const { ART } = await import(`../src/parts/art/${{ 'arduino-uno-r4': 'uno-r4-minima', 'arduino-uno-r4-wifi': 'uno-r4-wifi', 'arduino-uno-q': 'uno-q', 'arduino-ventuno-q': 'ventuno-q' }[type]}.js`);
     assert.equal((ART.svg.match(/class="mx"/g) || []).length, leds, `${type}: matrix LEDs in the drawing`);
   }
 });

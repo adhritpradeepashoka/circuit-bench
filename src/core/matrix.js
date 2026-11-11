@@ -1,5 +1,5 @@
 // The 13 × 8 blue LED matrix on the Arduino UNO Q and VENTUNO Q (104 LEDs, drawn by the board's microcontroller). A frame is 104 on/off bits,
-// row by row from the top-left, kept as a 26-character hex string so it saves in the project. Pure; the drawing lives in src/parts/ai-boards.js.
+// row by row from the top-left, kept as a 26-character hex string so it saves in the project. Pure; the drawings live in src/parts/art-board.js.
 export const MATRIX_COLS = 13, MATRIX_ROWS = 8, MATRIX_LEDS = MATRIX_COLS * MATRIX_ROWS;
 export const EMPTY_FRAME = '0'.repeat(26);
 /** The UNO R4 WiFi's matrix is 12 wide; every frame is still stored 13 wide, with the last column off. */
