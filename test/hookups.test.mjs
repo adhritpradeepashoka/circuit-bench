@@ -18,7 +18,7 @@ import '../src/core/custom-parts.js';
 
 const EMPTY = () => ({ parts: [], wires: [] });
 import { BOARD_SPECS } from '../src/core/boards.js';
-const TYPES = Object.keys(PART_DEFS).filter(t => !BOARD_SPECS[t] && t !== 'breadboard');
+const TYPES = Object.keys(PART_DEFS).filter(t => !BOARD_SPECS[t] && t !== 'breadboard' && PART_DEFS[t].category !== 'Boards'); // boards (incl. draw-only UNO Q / VENTUNO Q) are the target, not a part to hook up
 const BOARDS = Object.keys(BOARD_SPECS);
 const FQBN = Object.fromEntries(Object.entries(BOARD_SPECS).map(([k, s]) => [k, s.fqbn]));
 
