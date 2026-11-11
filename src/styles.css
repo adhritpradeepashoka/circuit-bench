@@ -1376,3 +1376,5 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .ml-name { color: var(--muted); font-size: 12px; min-width: 70px; }
 .ml-val { font-family: var(--mono); font-size: 12px; text-align: right; min-width: 44px; }
 .ml-row input[type=range] { flex: 1; min-width: 120px; }
+.ai-send.stop { background: var(--red); }
+.ml-view #overlay, .ml-view #world, .ml-view #wireEditor { display: none !important; }          /* the circuit's wires and labels must not draw over the ML tabs */

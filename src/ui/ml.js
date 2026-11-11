@@ -290,7 +290,7 @@ export function initMl({ editor, code, sim }) {
     if (v !== 'train' && trainer) stopTraining(false);
     view = v;
     for (const [id] of VIEWS) { btn[id].classList.toggle('on', id === v); btn[id].setAttribute('aria-pressed', String(id === v)); }
-    pane.hidden = v === 'circuit';
+    pane.hidden = v === 'circuit'; document.body.classList.toggle('ml-view', v !== 'circuit');
     for (const id of ['train', 'run', 'viz']) secs[id].hidden = id !== v;
     if (v === 'train') { renderData(); renderTrain(); } else if (v === 'run') renderRun(); else if (v === 'viz') renderViz();
   }

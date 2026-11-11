@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { featureEdges, findHoles } from '../src/core/hole-finder.js';
-import { Assembly, worldFrame, screwFor, arc, rotate } from '../src/core/assembly-scene.js';
+import { Assembly, worldFrame, screwFor, arc, rotate, bomCsv } from '../src/core/assembly-scene.js';
 
 const part = (id, frames) => ({ id, name: id, mass: { grams: 2, source: 'estimated' }, frames });
 const hole = (id, pos, dir, d, source = 'measured') => ({ id, kind: 'hole', pos, dir, diameter: d, source });
@@ -112,4 +112,14 @@ test('two hand-placed spots a couple of degrees and a millimetre off still join,
   for (const m of as.mates) assert.ok(as.check(m).ok, as.check(m).notes.join(' '));
   const far = as.add(box('far'), [0, 0, 100]); far.part = { ...far.part, frames: [{ id: 'spot-1', pos: [0, 0, 0], dir: [0, 0, -1], custom: true }, { id: 'spot-2', pos: [30, 0, 0], dir: [0, 0, -1], custom: true }] };
   assert.equal(as.mateAll(frame.id, 'spot-2', far.id, 'spot-1').ok, true); assert.equal(as.matesOf(far.id).length, 1, 'a spot 10 mm away is not joined by accident');
+});
+
+test('the parts list exports as CSV: counts, weights, whether the numbers are verified, screws and a total', () => {
+  const as = new Assembly(), p = { ...part('leg, long', [hole('h', [0, 0, 0], [0, 0, 1], 3.4)]), category: 'Frame' };
+  const a = as.add(p), b = as.add(p); as.mate(a.id, 'h', b.id, 'h');
+  const rows = bomCsv(as).trim().split('\n');
+  assert.equal(rows[0], 'Item,Name,Category,Quantity,Unit weight (g),Total weight (g),Numbers');
+  assert.equal(rows[1], 'Part,"leg, long",Frame,2,2,4,estimated: mass');
+  assert.equal(rows[2], 'Screw,M3,Fastener,1,,,');
+  assert.equal(rows[3], 'Total,,,2,,4,');
 });

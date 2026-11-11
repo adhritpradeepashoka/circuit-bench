@@ -78,7 +78,13 @@ export function initAiPanel(editor, code, sim = null) {
   let chatKey = CHAT_STORE;     // one conversation per project once projects say which one is open (setScope)
   let messages = loadChat();     // { id, role: 'user'|'assistant'|'error', text, summary?, warnings?, fatal?, code?, codeLines?, hasEdit?, state? }
   const proposals = new Map();   // message id → { code, circuitEdit } (in memory only — never persisted)
-  let busy = false, seq = Date.now();
+  let busy = false, seq = Date.now(), ctl = null;
+  const STOP_ICON = '<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor"/></svg>', SEND_ICON = sendBtn.innerHTML;
+  /** while a reply is on its way the send button becomes Stop: it cancels the request and drops whatever comes back */
+  const sendMode = working => { sendBtn.innerHTML = working ? STOP_ICON : SEND_ICON; sendBtn.title = working ? 'Stop the reply (Esc)' : 'Send (Enter) · new line: Shift+Enter'; sendBtn.setAttribute('aria-label', working ? 'Stop' : 'Send'); sendBtn.classList.toggle('stop', working); };
+  const stopReply = () => { if (busy && ctl) { ctl.abort(); setStatus('Stopped.'); } };
+  sendBtn.addEventListener('click', e => { if (busy) { e.preventDefault(); e.stopImmediatePropagation(); stopReply(); } }, true);
+  promptEl.addEventListener('keydown', e => { if (e.key === 'Escape' && busy) { e.preventDefault(); stopReply(); } });
 
   /* ── persistence (per-viewer convenience; can come back empty) ── */
   function loadChat() {
@@ -332,6 +338,7 @@ export function initAiPanel(editor, code, sim = null) {
   async function selfCheck(res, args, circuit, text, history) {
     let cur = res, fixed = 0;
     for (let attempt = 0; ; attempt++) {
+      if (args.signal?.aborted) return { res: cur, failed: null, fixed };
       setStatus(attempt ? `Checking the fixed sketch compiles (try ${attempt + 1})…` : 'Checking the sketch compiles…');
       const o = outcome(circuit, cur);
       const boardType = o.circuitEdit?.parts?.find(p => BOARD_SPECS[p.type])?.type;
@@ -398,14 +405,15 @@ export function initAiPanel(editor, code, sim = null) {
     for (const m of messages) if (m.state === 'pending') { m.state = 'superseded'; proposals.delete(m.id); }   // an older edit no longer matches the board once you've moved on
     messages.push({ id: ++seq, role: 'user', text });
     promptEl.value = ''; autosize();
-    busy = true; sendBtn.disabled = true; saveChat(); render();
+    busy = true; ctl = new AbortController(); const signal = ctl.signal; sendMode(true); saveChat(); render();
+    const stopped = () => { messages.push({ id: ++seq, role: 'error', text: 'Stopped. Nothing was changed.' }); };
     try {
       const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
-      const args = { instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().id, robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
+      const args = { signal, instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().id, robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {
-        res = await generateCode({ ...args, hosted: true });
+        res = await generateCode({ ...args, hosted: true, signal });
       } else if (localOn()) {
         setStatus('Starting the on-device model…');
         const prog = p => setStatus(p?.progress < 1 ? `Downloading the model (first time only): ${Math.round((p.progress || 0) * 100)}%` : 'Starting the model…');
@@ -416,7 +424,8 @@ export function initAiPanel(editor, code, sim = null) {
         } else
         res = await generateLocal({ ...args, onProgress: p => setStatus(p?.progress < 1 ? `Downloading the model (first time only): ${Math.round((p.progress || 0) * 100)}%` : 'Starting the model…') });
         if (!res.ok && hasAnyKey()) { localErr = res.error; console.warn('[on-device AI]', res.error); messages.push({ id: ++seq, role: 'error', text: `On-device model failed: ${res.error}` }); render(); setStatus('On-device model failed — trying your saved key…'); const fb = getStoredKey(getStoredProvider()) ? getStoredProvider() : providersWithKeys()[0]; res = await generateCode({ ...args, provider: fb, userKey: getStoredKey(fb), model: getStoredModel(fb) }); }
-      } else res = await generateCode(args);
+      } else res = await generateCode({ ...args, signal });
+      if (signal.aborted) return stopped();
       if (!res.ok) {
         if (res.needsKey) { setStoredKey(''); refreshKeyUi(); }
         messages.push({ id: ++seq, role: 'error', text: res.error || 'Something went wrong.' });
@@ -429,9 +438,9 @@ export function initAiPanel(editor, code, sim = null) {
         if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); return;
       }
       if (activeWorkspace().robotics) res = guardRoboticsBoards(res, text, circuit);
-      await resolveNewParts(res);
+      await resolveNewParts(res); if (signal.aborted) return stopped();
       let check = { failed: null, fixed: 0 };
-      if (res.code && !quick) { check = await selfCheck(res, args, circuit, text, history); res = check.res; }
+      if (res.code && !quick) { check = await selfCheck(res, args, circuit, text, history); res = check.res; if (signal.aborted) return stopped(); }
       const o = outcome(circuit, res);
       if (check.failed) o.warnings = [...o.warnings, `This sketch does not compile yet (${errorLines(check.failed)[0] || 'see the compiler output'}). Apply it and press Fix with AI, or edit it.`];
       const hasEdit = !!(res.code || o.circuitEdit);
@@ -447,9 +456,9 @@ export function initAiPanel(editor, code, sim = null) {
       if (hasEdit) proposals.set(m.id, { code: res.code || null, circuitEdit: o.circuitEdit, learn: !quick && benchWasEmpty && !check.failed ? { request: text } : null });
       messages.push(m);
     } catch (err) {
-      messages.push({ id: ++seq, role: 'error', text: err?.message || 'Something went wrong.' });
+      if (signal.aborted) stopped(); else messages.push({ id: ++seq, role: 'error', text: err?.message || 'Something went wrong.' });
     } finally {
-      busy = false; sendBtn.disabled = false; saveChat(); render();
+      busy = false; ctl = null; sendMode(false); saveChat(); render();
       if (panes.isOpen('ai')) promptEl.focus();
     }
   }

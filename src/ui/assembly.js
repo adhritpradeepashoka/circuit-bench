@@ -4,7 +4,7 @@
 import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
 import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
-import { Assembly, worldFrame, mateTransform, turn } from '../core/assembly-scene.js';
+import { Assembly, worldFrame, mateTransform, turn, bomCsv } from '../core/assembly-scene.js';
 import { explainJoin, findProblems } from '../core/assembly-check.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
@@ -347,11 +347,11 @@ export function initAssembly({ editor, projects = null }) {
   const colourOf = inst => PALETTE[(parseInt(String(inst.id).split('#')[1], 10) - 1 + PALETTE.length) % PALETTE.length];
   const group = new Set(), groupBoxes = []; let boxMode = true;
   let anchorId = null, selected = null, drag = null, snapShow = null, attached = false, history = [], future = [], thumbs = new Map(), tip = null, xray = false, checkOn = false, joinMode = false, joinFirst = null, hoverInst = null, spotMode = false;
-  const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' }), droneEl = el('div', { className: 'asm-drone', id: 'asmDrone', hidden: true });
+  const cards = el('div', { className: 'asm-cards', id: 'asmCards' }), selBox = el('div', { className: 'asm-sel', id: 'asmSel', hidden: true }), instList = el('div', { className: 'asm-insts', id: 'asmInst' }), mateList = el('div', { className: 'asm-lib', id: 'asmMates' }), bomEl = el('div', { className: 'asm-note', id: 'asmBom' }), bomBtn = el('button', { type: 'button', className: 'asm-btn', id: 'asmBomExport', textContent: 'Export parts list (CSV)', hidden: true }), droneEl = el('div', { className: 'asm-drone', id: 'asmDrone', hidden: true });
   const bnote = el('p', { className: 'asm-msg', id: 'asmBuildMsg', role: 'status' }), probEl = el('div', { className: 'asm-problems', id: 'asmProblems', hidden: true });
   buildBox.append(
     el('p', { className: 'asm-note', textContent: 'Click a part to add it, or drag it into the scene. Drag a part by its body or its arrows; near a hole on another part it snaps on. Or press “Join holes” and click two holes. Have your own STL, OBJ or glTF file? Drop it on the 3D view or use “Import your own 3D part”.' }), bnote, probEl, selBox,
-    legacyBox, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, droneEl);
+    legacyBox, el('h4', { textContent: 'In the scene' }), instList, el('h4', { textContent: 'Joints' }), mateList, bomEl, bomBtn, droneEl);
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const dyn = new Map();                                                   // drone parts, made from their ids on demand
   const genPart = id => { if (dyn.has(id)) return dyn.get(id); const raw = makeDronePart(id) || makeKitPart(id), v = raw && validateRobotPart(raw); if (!v?.ok) return null; const p = { ...v.part, drone: raw.drone, kit: raw.kit, generated: true }; dyn.set(id, p); return p; };
@@ -808,9 +808,10 @@ export function initAssembly({ editor, projects = null }) {
       mateList.append(el('div', { className: 'asm-mate' }, el('div', { className: 'asm-lib-row' }, el('span', { className: `asm-dot ${ck.level}` }), el('span', { className: 'asm-lib-name', textContent: `${nm(A)} ⇄ ${nm(B)}` }), scr, un), jbox, el('div', { className: 'asm-note', textContent: ck.notes.join(' ') })));
     });
     renderDrone();
-    const bom = asm.bom();
+    const bom = asm.bom(); bomBtn.hidden = !asm.instances.length;
     bomEl.textContent = asm.instances.length ? `${bom.parts.map(p => `${p.count} × ${p.name}`).join(', ')}${bom.screws.length ? ' · screws: ' + bom.screws.map(s => `${s.count} × ${s.thread.replace('_', '.')}`).join(', ') : ''} · about ${bom.grams} g` : '';
   }
+  bomBtn.addEventListener('click', () => { const a = el('a', { href: URL.createObjectURL(new Blob([bomCsv(asm)], { type: 'text/csv' })), download: 'parts-list.csv' }); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); bsay?.('Saved parts-list.csv'); });
   /** A drone in the scene: what it weighs, whether it lifts, how long it hovers (typical values; see core/drone.js). */
   function renderDrone() {
     const ds = asm.instances.filter(i => i.part.drone), of = k => ds.filter(i => i.part.drone.kind === k), motors = of('motor'), props = of('prop'), bats = of('battery');

@@ -1,6 +1,6 @@
 // The assembly: part instances placed in one space, and the mates that join their marked frames. Pure maths and data, no DOM or three.js,
 // so it runs (and is tested) in Node. Units are mm. A transform is { q:[x,y,z,w], t:[x,y,z] } taking a part's own space to the world.
-import { THREADS } from './robot-part.js';
+import { THREADS, provenanceOf } from './robot-part.js';
 
 const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -174,4 +174,19 @@ export class Assembly {
     const grams = this.instances.reduce((g, i) => g + (i.part.mass?.grams || 0), 0);
     return { parts: [...parts].map(([name, count]) => ({ name, count })), screws: [...screws].map(([thread, count]) => ({ thread, count })), grams: Math.round(grams * 10) / 10 };
   }
+}
+
+const csvCell = v => { const t = String(v ?? ''); return /[",\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+/** The parts list as CSV: every part with its count, weight and whether its numbers are verified, then the screws, then the total. */
+export function bomCsv(asm) {
+  const rows = [['Item', 'Name', 'Category', 'Quantity', 'Unit weight (g)', 'Total weight (g)', 'Numbers']], byName = new Map();
+  for (const i of asm.instances) { const e = byName.get(i.part.name) || { part: i.part, n: 0 }; e.n++; byName.set(i.part.name, e); }
+  for (const { part, n } of byName.values()) {
+    const g = part.mass?.grams, pv = provenanceOf(part);
+    rows.push(['Part', part.name, part.category || '', n, g ?? '', g == null ? '' : Math.round(g * n * 10) / 10, pv.verified ? 'verified' : `estimated: ${pv.estimated.join(', ')}`]);
+  }
+  const bom = asm.bom();
+  for (const sc of bom.screws) rows.push(['Screw', sc.thread.replace('_', '.'), 'Fastener', sc.count, '', '', '']);
+  rows.push(['Total', '', '', asm.instances.length, '', bom.grams, '']);
+  return rows.map(r => r.map(csvCell).join(',')).join('\n') + '\n';
 }
