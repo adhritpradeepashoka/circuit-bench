@@ -1293,3 +1293,9 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .viewcube { position: absolute; top: 10px; right: 10px; z-index: 3; width: 104px; height: 104px; } .viewcube canvas { display: block; touch-action: none; }
 .viewcube-home { position: absolute; left: -2px; top: -2px; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); color: inherit; cursor: pointer; font-size: 15px; line-height: 1; padding: 0; }
 .asm-floating { max-width: calc(100% - 138px); flex-wrap: wrap; }
+
+.pack-group { margin: 6px 0; border: 1px solid var(--line); border-radius: 10px; padding: 0 8px 6px; }
+.pack-group-head { cursor: pointer; padding: 9px 4px; font-weight: 600; font-size: 13px; list-style: none; display: flex; align-items: center; gap: 8px; }
+.pack-group-head::-webkit-details-marker { display: none; }
+.pack-group-head::before { content: '▸'; display: inline-block; transition: transform .15s; }
+.pack-group[open] > .pack-group-head::before { transform: rotate(90deg); }

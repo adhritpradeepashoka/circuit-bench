@@ -72,18 +72,28 @@ export function initWorkspaces({ editor, code, projects }) {
 
   /* ── resource packs (the second tab) ── */
   const packList = $('packList');
+  const openGroups = new Set(), seenGroups = new Set();                      // dropdowns the student opened or closed; a group with something installed starts open
+  function packRow(pack) {
+    const on = isInstalled(pack.id), row = el('div', `proj-row ws-row pack-card${on ? ' on' : ''}`), main = el('div', 'proj-main');
+    main.append(el('b', '', pack.name), el('span', 'proj-meta', pack.blurb), el('span', 'proj-meta pack-parts', `Adds: ${packTypes(pack).map(t => PART_DEFS[t].name).join(', ')}`));
+    const acts = el('div', 'proj-acts'), b = btn(on ? 'Remove' : 'Add pack', () => {
+      if (on) {
+        if (editor.state.parts.some(p => packTypes(pack).includes(p.type))) { editor.status(`${pack.name} is used on this bench — take those parts off first.`); packNote(`${pack.name} is used on this bench — take those parts off first.`); return; }
+        if (!removePack(pack.id)) { const m = `${pack.name} is needed by ${dependentsOf(pack.id).map(d => d.name).join(', ')} — remove that first.`; editor.status(m); packNote(m); }
+      } else installPack(pack.id);
+    }, on ? `Remove ${pack.name} from your parts menu` : `Add ${pack.name} to your parts menu`);
+    b.classList.add('pack-btn'); b.dataset.pack = pack.id; b.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);
+    acts.append(b); row.append(main, acts); return row;
+  }
   function renderPacks() {
-    packList.replaceChildren(...PACKS.filter(p => packTypes(p).length).map(pack => {
-      const on = isInstalled(pack.id), row = el('div', `proj-row ws-row pack-card${on ? ' on' : ''}`), main = el('div', 'proj-main');
-      main.append(el('b', '', pack.name), el('span', 'proj-meta', pack.blurb), el('span', 'proj-meta pack-parts', `Adds: ${packTypes(pack).map(t => PART_DEFS[t].name).join(', ')}`));
-      const acts = el('div', 'proj-acts'), b = btn(on ? 'Remove' : 'Add pack', () => {
-        if (on) {
-          if (editor.state.parts.some(p => packTypes(pack).includes(p.type))) { editor.status(`${pack.name} is used on this bench — take those parts off first.`); packNote(`${pack.name} is used on this bench — take those parts off first.`); return; }
-          if (!removePack(pack.id)) { const m = `${pack.name} is needed by ${dependentsOf(pack.id).map(d => d.name).join(', ')} — remove that first.`; editor.status(m); packNote(m); }
-        } else installPack(pack.id);
-      }, on ? `Remove ${pack.name} from your parts menu` : `Add ${pack.name} to your parts menu`);
-      b.classList.add('pack-btn'); b.dataset.pack = pack.id; b.setAttribute('aria-label', `${on ? 'Remove' : 'Add'} the ${pack.name} pack`);
-      acts.append(b); row.append(main, acts); return row;
+    const packs = PACKS.filter(p => packTypes(p).length), groups = [...new Set(packs.map(p => p.group || 'More'))];
+    packList.replaceChildren(...groups.map(g => {
+      const list = packs.filter(p => (p.group || 'More') === g), have = list.filter(p => isInstalled(p.id)).length;
+      if (!seenGroups.has(g)) { seenGroups.add(g); if (have) openGroups.add(g); }
+      const d = el('details', 'pack-group'); d.dataset.group = g; d.open = openGroups.has(g);
+      d.addEventListener('toggle', () => { if (d.open) openGroups.add(g); else openGroups.delete(g); });
+      d.append(el('summary', 'pack-group-head', `${g} · ${list.length} pack${list.length === 1 ? '' : 's'}${have ? ` · ${have} added` : ''}`), ...list.map(packRow));
+      return d;
     }), el('p', 'proj-note', 'Projects that already use a pack’s parts switch it on by themselves, so nothing is ever missing.'), el('p', 'proj-note', ''));
     packList.lastChild.id = 'packNote';
   }

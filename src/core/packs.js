@@ -10,25 +10,36 @@ const custom = ids => ids.map(id => `custom-${id}`);
 export const PACKS = [
   {
     id: 'arduino-boards',
+    group: 'Arduino',
     name: 'Arduino boards (regular)',
     blurb: 'Arduino Nano, Arduino Mega 2560 and Arduino Uno R4.',
     types: ['arduino-nano', 'arduino-mega', 'arduino-uno-r4'],
   },
   {
     id: 'arduino-expanded',
+    group: 'Arduino',
     name: 'Arduino boards (expanded)',
     blurb: 'The wider Arduino family for wiring and planning: Pro Mini, Pro Micro, Leonardo, Zero, Uno WiFi, Nano Every, Nano 33 IoT and BLE, Nano ESP32, Nano RP2040 Connect. Includes the regular pack.',
     requires: ['arduino-boards'],
     types: custom(BOARD_PACK_IDS.arduinoExpanded),
   },
   {
+    id: 'arduino-ai',
+    group: 'Arduino',
+    name: 'Arduino AI boards',
+    blurb: 'The new Linux + AI Arduinos for wiring and planning: UNO Q (Qualcomm QRB2210 + STM32U585) and VENTUNO Q (Dragonwing IQ8, 40 TOPS, plus its 40-pin HAT header).',
+    types: custom(BOARD_PACK_IDS.arduinoAi),
+  },
+  {
     id: 'esp-normal',
+    group: 'ESP',
     name: 'ESP boards (normal)',
     blurb: 'The three most common ESP boards: ESP32 DevKit, ESP32-C3 Super Mini and ESP8266 NodeMCU.',
     types: custom(['esp32-devkit', 'esp32-c3-mini', 'esp8266-nodemcu']),
   },
   {
     id: 'esp-expanded',
+    group: 'ESP',
     name: 'ESP boards (expanded)',
     blurb: 'Many more: ESP32-DevKitC, ESP32-S3 DevKitC-1, ESP32-CAM, Wemos D1 Mini, ESP-01, ESP-12F, Seeed XIAO ESP32-C3 and ESP32-S3. Includes the normal pack.',
     requires: ['esp-normal'],

@@ -29,3 +29,11 @@ test('an expanded pack brings its regular pack along and cannot be left without 
   assert.ok(removePack('esp-expanded') && removePack('esp-normal'));
   assert.equal(partAvailable('custom-esp32-devkit'), false);
 });
+
+test('the Arduino AI pack is its own pack with the UNO Q and VENTUNO Q boards, not part of the regular Arduino packs', () => {
+  const p = PACKS.find(x => x.id === 'arduino-ai'); assert.ok(p && !p.requires);
+  assert.deepEqual(p.types, ['custom-arduino-uno-q', 'custom-arduino-ventuno-q', 'custom-arduino-ventuno-q-hat']);
+  const hat = BOARD_TEMPLATES.find(t => t.id === 'arduino-ventuno-q-hat'); assert.equal(hat.pins.length, 40);
+  const q = BOARD_TEMPLATES.find(t => t.id === 'arduino-uno-q'); assert.equal(q.pins.length, 32);
+  assert.ok(!PACKS.find(x => x.id === 'arduino-expanded').types.includes('custom-arduino-uno-q'));
+});
