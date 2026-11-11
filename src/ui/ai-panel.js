@@ -7,6 +7,7 @@
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
 import { getRobotType } from '../core/robot-context.js';
 import { loadTiny, understand } from '../sim/tiny-model.mjs';
+import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
 import { quickEdit } from '../core/quick-edits.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { quickDrone } from '../core/quick-drone.js';
@@ -197,7 +198,7 @@ export function initAiPanel(editor, code, sim = null) {
   const setPref = v => { try { localStorage.setItem(LOCAL_PREF, v === 'h' || v === 't' ? v : v ? '1' : '0'); } catch { /* ignore */ } };
   const TINY_PROVIDER = 'tiny';
   // "Included AI": beta members (and anyone the owner allows) use the server's own key with no setup. It leads unless they chose something else.
-  const tinyOn = () => getPref() === 't';          // only CircuitBench's own 2.5 MB model: instant, offline, needs no GPU and no key
+  const tinyOn = () => getPref() === 't' || (getPref() === null && !providersWithKeys().length);   // the default for a new account: the tiny model first, until they pick something or save a key          // only CircuitBench's own 2.5 MB model: instant, offline, needs no GPU and no key
   const hostedOn = () => !tinyOn() && hasHostedAi() && (getPref() === 'h' || getPref() === null);
   // The on-device model is a 1.6 GB download, so it only ever starts when the student explicitly chooses it.
   const localOn = () => !hostedOn() && webgpuAvailable() && getPref() === '1';
@@ -375,6 +376,11 @@ export function initAiPanel(editor, code, sim = null) {
         const ops = q3.actions.slice(0, 400), m3 = { id: ++seq, role: 'assistant', text: q3.explanation, summary: ops.length ? `Proposes: ${ops.length} change${ops.length === 1 ? '' : 's'} to the 3D scene.` : '', warnings: [], hasEdit: ops.length > 0, state: ops.length ? 'pending' : undefined };
         if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); saveChat(); render(); return;
       }
+    }
+    if (!quick && tinyOn() && !looksRelevant(text)) {          // nothing about the bench in it: one plain line, no guessing
+      messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
+      messages.push({ id: ++seq, role: 'assistant', text: NOT_RELEVANT });
+      saveChat(); render(); return;
     }
     if (!quick && tinyOn() && in3d) {
       messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();

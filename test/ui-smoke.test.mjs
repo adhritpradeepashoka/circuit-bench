@@ -1050,7 +1050,7 @@ test('ui: AI chat — the input clears, messages roll, each reply has its own Ap
 });
 
 test('ui: AI chat without a key shows the key setup in the pane and keeps your message; saving the key sends it', async () => {
-  const { w, editor, code, sim } = boot();
+  const { w, editor, code, sim } = boot(undefined, win => win.localStorage.setItem('virtual-lab:ai-local', '0'));       // '0' = a provider with a key was chosen on purpose (the tiny model is the default otherwise)
   const doc = w.document;
   const sent = [];
   w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Hi!' }) }; };
@@ -2077,6 +2077,7 @@ test('ui: members panel for admins, and beta members use the included AI with no
   assert.equal(grant.opts.headers.authorization, 'Bearer tok');
   // the included AI: no key anywhere, still chats, through the server's key
   doc.getElementById('settingsClose').click();
+  w.localStorage.setItem('virtual-lab:ai-local', 'h');       // the tiny model is the default; "Included" is one click away
   doc.getElementById('aiBtn').click();
   assert.equal(doc.getElementById('aiSetup').hidden, true);
   assert.ok(doc.getElementById('aiProvider-hosted'));
@@ -2120,7 +2121,7 @@ test('ui: Community — lists updates and discussions, posts and comments for si
 });
 
 test('ui: plainly worded edits are answered instantly with no key and no network; nothing downloads a model by itself', async () => {
-  const { w, editor, code, sim } = boot(undefined, win => { Object.defineProperty(win.navigator, 'gpu', { value: {}, configurable: true }); });
+  const { w, editor, code, sim } = boot(undefined, win => { Object.defineProperty(win.navigator, 'gpu', { value: {}, configurable: true }); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   const doc = w.document; let fetched = 0;
   w.fetch = async () => { fetched++; return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
   w.__lab.initAiPanel(editor, code, sim);
@@ -2311,4 +2312,16 @@ test('ui: a keypad works through the whole app — holding a key while the sketc
   for (const k of '*9C9#') press(k);
   assert.equal(shown(), '81');
   sim.stop();
+});
+
+test('ui: a new account starts on the tiny model, and an off-topic message gets one plain "not relevant" line', async () => {
+  const { w, editor, code, sim } = boot(undefined, win => { Object.defineProperty(win.navigator, 'gpu', { value: {}, configurable: true }); });
+  const doc = w.document; let fetched = 0;
+  w.fetch = async () => { fetched++; return { ok: true, status: 200, json: async () => ({ ok: true }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  assert.equal(doc.getElementById('aiSetup').hidden, true, 'no setup needed: the tiny model needs no key');
+  assert.equal(doc.getElementById('aiProviderSelect').value, 'tiny', 'the tiny model is selected first, not Gemini');
+  const prompt = doc.getElementById('aiPrompt'); prompt.value = 'who won the cricket match'; doc.getElementById('aiGenerate').click(); await flush();
+  assert.match(doc.getElementById('aiLog').textContent, /Your message was not relevant/); assert.equal(fetched, 0);
 });
