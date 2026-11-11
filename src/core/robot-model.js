@@ -2,6 +2,7 @@
 // them, which hinges are driven, masses and shapes. Nothing here knows about drones or any particular robot: bodies come from how the parts are joined
 // (core/assembly-pose.js), hinges from the single-screw joints, shapes from each part's own 3D points (or its box when there are none).
 // Pure maths, no DOM, no physics engine: units are metres, kilograms, radians out; the assembly's millimetres and degrees in.
+import { boxesFromMesh } from './collision-boxes.js';
 import { buildRig } from './assembly-pose.js';
 import { worldFrame, place, rotate } from './assembly-scene.js';
 
@@ -54,10 +55,11 @@ function looksLikeWheel(points, axis, centre) {
  * @param asm        the Assembly
  * @param opts.anchorId  a part held still (bolted to the world): the robot is fixed there, like an arm on a bench. Without one the robot is free and is dropped on the floor.
  * @param opts.hullOf    (inst) → flat [x,y,z,…] of the part's 3D points in the world, mm (the viewer supplies them); without it each part is its box
+ * @param opts.meshOf    (inst) → { pos, index } the part's triangles in the world, mm: parts that have them get collision boxes that follow their real shape (cradles stay hollow)
  * @param opts.hold      true: the robot's main body is held still, up in the air (no floor contact), so the joints can be tested swinging freely
  * @param opts.modes     { [jointKey]: 'servo' | 'motor' | 'free' } what drives each hinge; the default is a servo, or a motor for a wheel
  */
-export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes = {}, hold = false } = {}) {
+export function robotFromAssembly(asm, { anchorId = null, hullOf = null, meshOf = null, modes = {}, hold = false } = {}) {
   if (!asm.instances.length) return { ok: false, error: 'Nothing is built yet. Add parts in Assembly and join them first.' };
   const rig = buildRig(asm), notes = [];
   const mass = id => Math.max(0, (asm.get(id).part.mass?.grams || 0) / 1000);
@@ -95,6 +97,20 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, modes =
     joints.push({ key, name: sv ? `${body.name} turned by ${motorPart.name}` : `${body.name}${parent ? ` on ${parent.name}` : ''}`, body: bodies.indexOf(body), axis, anchor, range: mode === 'motor' ? null : [lo, hi], mode, wheel, fixed: !!m.fixed,
       servo: sv ? { name: motorPart.name, torque: sv.torque, speed: sv.speed } : null });      // a servo's real torque (N·m) and speed (°/s) drive the joint it turns
   }
+  // Detailed collision: each part that comes with triangles becomes boxes that follow its shape; wheels, and parts without a mesh, keep their convex hull.
+  if (meshOf) {
+    for (const body of bodies) {
+      const isWheel = joints.some(j => j.body === bodies.indexOf(body) && j.wheel && j.mode === 'motor'); if (isWheel) continue;
+      const boxes = [], hullPts = [];
+      for (const id of body.members) {
+        const inst = asm.get(id), mesh = inst && meshOf(inst), r = mesh && mesh.pos?.length >= 9 && (mesh.index ? mesh.index.length : mesh.pos.length / 3) <= 600_000 ? boxesFromMesh(mesh, { maxBoxes: 60 }) : null;
+        if (r) for (const b of r.boxes) boxes.push({ c: sub(mul(b.c, MM), body.origin), h: mul(b.h, MM) });
+        else { const raw = hullOf?.(inst); for (const p of (raw && raw.length >= 12 ? samplePoints(raw) : boxPoints(inst))) hullPts.push(mul(p, MM)); }
+      }
+      if (boxes.length) { body.boxes = boxes; body.hullPts = hullPts; }
+    }
+    const n = bodies.reduce((a, b) => a + (b.boxes?.length || 0), 0); if (n) notes.push(`Detailed collision is on: ${n} box${n === 1 ? '' : 'es'} follow the shapes of the parts, so hollows (a servo cradle, say) stay open.`);
+  }
   // Forward is +Y (the way the drone's arrow points), or +X when the wheels' axles run along Y. A wheel's "positive" is whichever way drives the robot forward, so the same
   // command on every wheel drives straight even though the left and right axles face opposite ways.
   const wheels = joints.filter(j => j.mode === 'motor' && j.wheel), alongX = wheels.length ? wheels.reduce((s, j) => s + Math.abs(j.axis[0]) - Math.abs(j.axis[1]), 0) >= 0 : true, forward = alongX ? [0, 1, 0] : [1, 0, 0];
@@ -116,11 +132,11 @@ export function toMJCF(model, { dt = 0.002, floorFriction = 1.0, servo = { stall
   const lift = [0, 0, model.lift];
   const body = i => {
     const b = model.bodies[i], j = b.joint != null ? model.joints[b.joint] : null, o = add(b.origin, lift), parentO = b.parent != null ? add(model.bodies[b.parent].origin, lift) : [0, 0, 0], rel = sub(o, parentO);
-    assets.push(`<mesh name="m${i}" vertex="${b.points.map(p => vec(sub(p, b.origin))).join(' ')}"/>`);
+    const hull = b.boxes ? b.hullPts : b.points; if (hull?.length >= 4) assets.push(`<mesh name="m${i}" vertex="${hull.map(p => vec(sub(p, b.origin))).join(' ')}"/>`);
     const I = b.inertia, inner = [];
     if (b.parent == null && !model.fixedBase) inner.push('<freejoint name="root"/>');
     if (j) inner.push(`<joint name="j${b.joint}" type="hinge" axis="${vec(j.axis)}" pos="${vec(sub(add(j.anchor, lift), o))}" ${j.range ? `limited="true" range="${f(j.range[0])} ${f(j.range[1])}" solreflimit="0.004 1" solimplimit="0.98 0.99 0.001"` : ''} armature="${armature}" damping="${j.mode === 'free' ? damping * 0.5 : damping}" frictionloss="${j.mode === 'free' ? 0.0005 : 0}"/>`);
-    inner.push(`<inertial pos="0 0 0" mass="${f(b.mass)}" fullinertia="${vec(I)}"/>`, `<geom type="mesh" mesh="m${i}" mass="0" contype="2" conaffinity="${selfCollide ? 3 : 1}" friction="${f(floorFriction)} 0.005 0.0001" solref="-60000 -60" solimp="0.95 0.99 0.001" rgba="0.6 0.7 0.8 1"/>`);
+    inner.push(`<inertial pos="0 0 0" mass="${f(b.mass)}" fullinertia="${vec(I)}"/>`, ...(hull?.length >= 4 ? [`<geom type="mesh" mesh="m${i}" mass="0" contype="2" conaffinity="${selfCollide ? 3 : 1}" friction="${f(floorFriction)} 0.005 0.0001" solref="-60000 -60" solimp="0.95 0.99 0.001" rgba="0.6 0.7 0.8 1"/>`] : []), ...(b.boxes || []).map(bx => `<geom type="box" pos="${vec(bx.c)}" size="${vec(bx.h.map(v => Math.max(v, 0.0002)))}" mass="0" contype="2" conaffinity="${selfCollide ? 3 : 1}" friction="${f(floorFriction)} 0.005 0.0001" solref="-60000 -60" solimp="0.95 0.99 0.001" rgba="0.6 0.7 0.8 1"/>`));
     for (const k of kids.get(i) || []) inner.push(body(k));
     return `<body name="b${i}" pos="${vec(rel)}">${inner.join('')}</body>`;
   };

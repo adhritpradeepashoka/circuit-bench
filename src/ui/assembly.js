@@ -988,6 +988,13 @@ export function initAssembly({ editor, projects = null }) {
     inst.obj.traverse(o => { const pos = o.isMesh && o.geometry?.attributes?.position; if (!pos) return; for (let i = 0; i < pos.count && out.length < 1_500_000; i++) { v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld); out.push(v.x, v.y, v.z); } });
     return out;
   }
+  /** the part's triangles in the world (mm), for collision boxes that follow its real shape */
+  function meshTriangles(inst) {
+    const t = three; if (!t || !inst.obj) return null; inst.obj.position.fromArray(inst.T.t); inst.obj.quaternion.set(...inst.T.q); inst.obj.updateMatrixWorld(true); const v = new t.THREE.Vector3(), pos = [], index = [];
+    inst.obj.traverse(o => { const a = o.isMesh && o.geometry?.attributes?.position; if (!a) return; const base = pos.length / 3; for (let i = 0; i < a.count && pos.length < 6_000_000; i++) { v.fromBufferAttribute(a, i).applyMatrix4(o.matrixWorld); pos.push(v.x, v.y, v.z); }
+      const ix = o.geometry.index; if (ix) for (let i = 0; i < ix.count; i++) index.push(base + ix.getX(i)); else for (let i = 0; i < a.count; i++) index.push(base + i); });
+    return pos.length >= 9 ? { pos, index } : null;
+  }
   async function show(v) {
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
@@ -997,7 +1004,7 @@ export function initAssembly({ editor, projects = null }) {
     if (!(v === 'test' && kind === 'fly')) droneTest?.leave(); if (!(v === 'test' && kind === 'robot')) robotTest?.leave();
     const switchTo = k => { testChoice = k; show('test'); }, prepare = async () => { await load3d(); await restoreSaved(); };
     if (v === 'test' && kind === 'fly') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare, buildExample: buildExampleQuad, goAssembly: () => show('assembly'), switchTo }); await droneTest.enter(); }
-    if (v === 'test' && kind === 'robot') { robotTest ||= initRobotTest({ host: robotPane, getAsm: () => asm, getAnchor: () => anchorId, getHull: hullPoints, prepare, goAssembly: () => show('assembly'), switchTo }); await robotTest.enter(); }
+    if (v === 'test' && kind === 'robot') { robotTest ||= initRobotTest({ host: robotPane, getAsm: () => asm, getAnchor: () => anchorId, getHull: hullPoints, getMesh: meshTriangles, prepare, goAssembly: () => show('assembly'), switchTo }); await robotTest.enter(); }
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v); syncTop();
   }

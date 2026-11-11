@@ -153,3 +153,28 @@ test('a hinge with only one limit set stays free: a minimum of 90° with no maxi
     assert.ok(a < b && b - a >= 70, `range ${a}..${b} for min ${min} max ${max}`);
   }
 });
+
+/** an axis-aligned block as 12 triangles (local mm) */
+const blockTris = ([x0, y0, z0], [x1, y1, z1]) => {
+  const c = [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]];
+  return [[0, 2, 1], [0, 3, 2], [4, 5, 6], [4, 6, 7], [0, 1, 5], [0, 5, 4], [2, 3, 7], [2, 7, 6], [1, 2, 6], [1, 6, 5], [3, 0, 4], [3, 4, 7]].flatMap(t => t.flatMap(i => c[i]));
+};
+test('detailed collision: an arm that swings inside a cradle is not switched off by the cradle’s hollow, and still hits its floor', async () => {
+  // a U-shaped cradle (floor 3 mm, walls 3 mm, 40 × 20 × 30 mm) held still, and a 15 mm arm hinged on a pin 10 mm above the floor
+  const cradleLocal = [...blockTris([-20, -10, 0], [20, 10, 3]), ...blockTris([-20, -10, 3], [-17, 10, 30]), ...blockTris([17, -10, 3], [20, 10, 30])];
+  const build = () => {
+    const as = new Assembly(), cradle = as.add(mkPart('cradle', 100, [40, 20, 30], [['pin', [0, 0, 13], [0, 1, 0]]]), [0, 0, 60]), arm = as.add(mkPart('arm', 10, [15, 4, 4], [['end', [-7, 0, 2], [0, -1, 0]]]), [100, 0, 0]);
+    assert.ok(as.mate(cradle.id, 'pin', arm.id, 'end').ok); return { as, cradle, arm };
+  };
+  const meshOf = inst => (inst.part.id === 'cradle' ? { pos: cradleLocal.flatMap((v, k, a) => (k % 3 === 0 ? place(inst.T, [a[k], a[k + 1], a[k + 2]]) : [])) } : null);
+  const { as, cradle } = build(), mj = await loadMujoco();
+  const hull = new RobotSim(mj, robotFromAssembly(as, { anchorId: cradle.id, hullOf: inst => (inst.part.id === 'cradle' ? cradleLocal.flatMap((v, k, a) => (k % 3 === 0 ? place(inst.T, [a[k], a[k + 1], a[k + 2]]) : [])) : null) }));
+  const detail = new RobotSim(mj, robotFromAssembly(as, { anchorId: cradle.id, meshOf }));
+  try {
+    assert.ok(detail.model.notes.some(n => /Detailed collision/.test(n)), 'boxes were made');
+    assert.match(detail.xml, /<geom type="box"/);
+    assert.equal(hull.exclude.length, 1, 'with one convex shape the arm starts "inside" the cradle, so that pair is switched off');
+    assert.equal(detail.exclude.length, 0, `the hollow no longer swallows the arm (${detail.exclude.length} excluded)`);
+    const sw = detail.sweep(0, 2); assert.ok(sw.hitUp && sw.max > 25 && sw.max < 50, `the arm stops against the cradle floor, about 40° down (${JSON.stringify(sw)})`); assert.ok(sw.min <= -80, 'and swings freely the other way');
+  } finally { hull.dispose(); detail.dispose(); }
+});

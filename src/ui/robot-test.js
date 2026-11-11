@@ -13,7 +13,7 @@ const store = { get: k => { try { return localStorage.getItem(k); } catch { retu
 const MODE_NAMES = { servo: 'Servo (angle)', motor: 'Motor (wheel)', free: 'Free (no motor)' };
 const STEPS = Math.round(CONTROL_DT / DT);
 
-export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAssembly, switchTo }) {
+export function initRobotTest({ host, getAsm, getAnchor, getHull, getMesh, prepare, goAssembly, switchTo }) {
   host.replaceChildren();
   const stage = el('div', { className: 'asm-stage fly-stage' }), side = el('div', { className: 'asm-side fly-side' });
   host.append(stage, side); host.classList.add('fly-pane');
@@ -32,6 +32,9 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
   const hitBox = el('input', { type: 'checkbox', id: 'robCollide', checked: true, ariaLabel: 'Parts collide with each other' });
   const hitRow = el('label', { className: 'asm-check', title: 'Parts push on each other instead of passing through, and every servo stops hard at the ends of its range' }, hitBox, el('span', { textContent: ' Parts collide with each other' }));
   hitBox.addEventListener('change', () => { rebuild(); });
+  const detailBox = el('input', { type: 'checkbox', id: 'robDetail', checked: true, ariaLabel: 'Detailed collision' });
+  const detailRow = el('label', { className: 'asm-check', title: 'Follow the real shape of every part with boxes, so a servo can sit inside its cradle and still hit the cradle walls. Off: each part is one solid convex shape (faster, but hollows are filled in).' }, detailBox, el('span', { textContent: ' Detailed collision' }));
+  detailBox.addEventListener('change', () => { rebuild(); });
   const rangeBtn = el('button', { type: 'button', className: 'asm-btn', id: 'robRange', textContent: 'Check range of motion' }), rangeOut = el('div', { className: 'asm-note', id: 'robRangeOut', hidden: true });
   rangeBtn.addEventListener('click', () => {
     if (!sim || !model) return; const lines = [];
@@ -48,7 +51,7 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
   const code = el('textarea', { id: 'robCode', className: 'fly-code', spellcheck: false, rows: 16, ariaLabel: 'Robot sketch' });
   const applyBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'robApply', textContent: 'Run this sketch' }), restoreBtn = el('button', { type: 'button', className: 'asm-btn', id: 'robRestore', textContent: 'Start from the starter' });
   const errBox = el('div', { className: 'asm-note bad', id: 'robErr', hidden: true }), logBox = el('pre', { className: 'fly-log', id: 'robLog', hidden: true });
-  side.append(el('h4', { textContent: 'Physics test' }), el('div', { className: 'asm-row' }, resetBtn), holdRow, hitRow, el('div', { className: 'asm-row' }, rangeBtn), rangeOut, field('Camera', camSel), field('Time', speedSel),
+  side.append(el('h4', { textContent: 'Physics test' }), el('div', { className: 'asm-row' }, resetBtn), holdRow, hitRow, detailRow, el('div', { className: 'asm-row' }, rangeBtn), rangeOut, field('Camera', camSel), field('Time', speedSel),
     el('p', { className: 'asm-note', innerHTML: '<b>Keys:</b> ↑↓ / W S drive forward and back · ←→ / A D turn · Q E sideways · R drop it again. A game pad works too. Orbit with the mouse, scroll to zoom.' }),
     el('h4', { textContent: 'This robot' }), summary, notes, el('h4', { textContent: 'Joints' }), jointBox,
     el('p', { className: 'asm-note', textContent: 'Each hinge is a servo by default. A round part turning on its axle is found as a wheel (a motor). Choose “Free” for a hinge with no motor, like a passive wheel.' }),
@@ -143,7 +146,7 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, prepare, goAss
   async function rebuild() {
     const my = ++building; await load3d(); await prepare?.();
     const asm = getAsm(); if (sim) { sim.dispose(); sim = null; }
-    const m = robotFromAssembly(asm, { anchorId: getAnchor?.() || null, hullOf: getHull, modes, hold: holdBox.checked });
+    const m = robotFromAssembly(asm, { anchorId: getAnchor?.() || null, hullOf: getHull, meshOf: detailBox.checked && hitBox.checked ? getMesh : null, modes, hold: holdBox.checked });
     if (!m.ok) { model = null; if (T) clearScene(); return showEmpty('Nothing to test yet', m.error); }
     empty.hidden = false; empty.replaceChildren(el('div', { className: 'fly-empty-box' }, el('p', { textContent: 'Loading the physics engine…' })));
     try { mj = await loadMujoco(); } catch (e) { return showEmpty('The physics engine did not load', e.message); }
