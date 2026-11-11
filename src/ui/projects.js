@@ -2,6 +2,7 @@
 // keep their own working copy (so a reload restores exactly where you were); this module ties that working
 // copy to a named project, autosaves it into the store, and switches between projects.
 // The store is swappable (src/core/projects.js): local now, cloud when signed in.
+import { exportMl, setMl, onMlSave } from '../core/ml-context.js';
 import { WORKSPACES, DEFAULT_WORKSPACE, newProject, uniqueName, cleanName, createLocalStore } from '../core/projects.js';
 import { DEFAULT_SKETCH } from '../sim/examples.js';
 import { fromProjectFile } from '../core/project.js';
@@ -41,7 +42,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   const setCurrentId = id => { try { sessionStorage.setItem(TAB_KEY, id); localStorage.setItem(LAST_KEY, id); } catch { /* ignore */ } };
   const switchListeners = [];
   const announce = () => switchListeners.forEach(fn => fn(current));
-  const workingData = () => ({ ...editor.exportProject(), ...code.exportState() });
+  const workingData = () => { const ml = exportMl(); return { ...editor.exportProject(), ...code.exportState(), ...(ml ? { ml } : {}) }; };
 
   const fillWorkspaces = () => {
     const keep = wsSelect.value;
@@ -97,6 +98,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     try { if (img) localStorage.setItem(THUMB + p.id, img); else if (!editor.state.parts.length) localStorage.removeItem(THUMB + p.id); } catch { /* storage full: the card just shows a plain tile */ }
   }
   const scheduleSave = () => { if (!current || suspended) return; clearTimeout(timer); timer = setTimeout(saveNow, SAVE_DELAY); };
+  onMlSave(scheduleSave);
   editor.on('workspace', scheduleSave);
   code.onChange(scheduleSave);
   window.addEventListener('pagehide', () => { if (timer) saveNow(); });
@@ -118,6 +120,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
       sim?.stop?.();
       editor.openProject(p.data, { board: p.board });
       if (!code.importState(p.data || {})) code.importState({ sketch: DEFAULT_SKETCH });
+      setMl(p.data?.ml);
     } finally { suspended = false; }
     current = p; setRobotType(cleanRobotType(p.robotType)); setCurrentId(p.id); paintName(); announce();
   }

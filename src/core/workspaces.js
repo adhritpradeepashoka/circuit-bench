@@ -47,7 +47,7 @@ export const BUILTIN_WORKSPACES = [
     format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: 'ai', builtin: true, name: 'AI boards',
     blurb: 'Arduino UNO Q and VENTUNO Q with their LED matrix, plus the sensors, displays and motors that go with them', author: 'CircuitBench',
     menuFirst: ['Boards', 'Sensors', 'Displays', 'Motors'], partsFirst: ['arduino-uno-q', 'arduino-ventuno-q', 'arduino-uno', 'raspberry-pi-pico'], parts: [], pickBoard: true,
-    boardsFirst: ['arduino-uno-q', 'arduino-ventuno-q'],
+    boardsFirst: ['arduino-uno-q', 'arduino-ventuno-q'], ml: true,
     hint: { title: 'Pick your AI board', text: 'The parts menu leads with the AI boards, then the sensors and displays that go with them. Press Run: the heart on the LED matrix is drawn by the sketch. (Right-click the board to draw by hand.)' },
     starter: { extra: [], sketch: 'unoq-matrix' },
   },
@@ -84,7 +84,7 @@ export function validateWorkspace(raw) {
     ok: true,
     workspace: {
       format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id, name, blurb: str(raw.blurb, 160), author: str(raw.author, 60), builtin: !!raw.builtin,
-      visualizer: raw.visualizer === true, robotics: raw.robotics === true, pickBoard: raw.pickBoard === true,
+      visualizer: raw.visualizer === true, robotics: raw.robotics === true, pickBoard: raw.pickBoard === true, ml: raw.ml === true,
       partsFirst: (Array.isArray(raw.partsFirst) ? raw.partsFirst : []).slice(0, 20).map(t => str(t, 60)).filter(Boolean),
       boardsFirst: (Array.isArray(raw.boardsFirst) ? raw.boardsFirst : []).slice(0, 20).map(t => str(t, 60)).filter(Boolean),
       menuFirst: (Array.isArray(raw.menuFirst) ? raw.menuFirst : []).slice(0, 6).map(c => str(c, 30)).filter(Boolean),

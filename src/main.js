@@ -31,6 +31,7 @@ import { importPcbFile } from './ui/pcb-import.js';
 import { initWorkspaces } from './ui/workspaces.js';
 import { initVisualizer } from './ui/visualizer.js';
 import { initAssembly } from './ui/assembly.js';
+import { initMl } from './ui/ml.js';
 import { loadSavedWorkspaces } from './core/workspaces.js';
 loadSavedWorkspaces();                  // your own and imported workspaces, and their parts, before any project opens
 import { WOKWI_PINS } from './core/pins.generated.js';
@@ -92,6 +93,7 @@ const projects = initProjects({ editor, code, sim, store: syncedStore });
 const workspaces = initWorkspaces({ editor, code, projects });
 initVisualizer({ editor });
 const assembly = initAssembly({ editor, projects });
+initMl({ editor, code, sim });
 const robotPicker = initRobotType({ editor, projects, onChosen: () => assembly.onRobotType?.() });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
