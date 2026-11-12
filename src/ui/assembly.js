@@ -996,6 +996,7 @@ export function initAssembly({ editor, projects = null }) {
     return pos.length >= 9 ? { pos, index } : null;
   }
   async function show(v) {
+    if (v !== 'circuit' && !activeWorkspace().robotics) v = 'circuit';       // an AI / plain project has no Assembly or Test: never leave a robot pane open on it
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
     document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
