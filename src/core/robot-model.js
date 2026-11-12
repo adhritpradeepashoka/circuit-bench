@@ -103,7 +103,7 @@ export function robotFromAssembly(asm, { anchorId = null, hullOf = null, meshOf 
       const isWheel = joints.some(j => j.body === bodies.indexOf(body) && j.wheel && j.mode === 'motor'); if (isWheel) continue;
       const boxes = [], hullPts = [];
       for (const id of body.members) {
-        const inst = asm.get(id), mesh = inst && meshOf(inst), r = mesh && mesh.pos?.length >= 9 && (mesh.index ? mesh.index.length : mesh.pos.length / 3) <= 600_000 ? boxesFromMesh(mesh, { maxBoxes: 60 }) : null;
+        const inst = asm.get(id), mesh = inst && meshOf(inst), r = mesh && mesh.pos?.length >= 9 && (mesh.index ? mesh.index.length : mesh.pos.length / 3) <= 600_000 ? boxesFromMesh(mesh, { maxBoxes: 1200 }) : null;
         if (r) for (const b of r.boxes) boxes.push({ c: sub(mul(b.c, MM), body.origin), h: mul(b.h, MM) });
         else { const raw = hullOf?.(inst); for (const p of (raw && raw.length >= 12 ? samplePoints(raw) : boxPoints(inst))) hullPts.push(mul(p, MM)); }
       }

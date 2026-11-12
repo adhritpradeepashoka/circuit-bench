@@ -31,31 +31,37 @@ function solidOf(grid, n) {
   for (let i = 0; i < grid.length; i++) grid[i] = grid[i] === 2 ? 0 : 1;
 }
 
-/** Greedy merge of solid voxels into boxes: grow along x, then y, then z while everything is solid and unused. */
-function merge(grid, n) {
-  const [nx, ny, nz] = n, idx = (x, y, z) => (z * ny + y) * nx + x, boxes = [];
-  for (let z = 0; z < nz; z++) for (let y = 0; y < ny; y++) for (let x = 0; x < nx; x++) {
-    if (grid[idx(x, y, z)] !== 1) continue;
-    let X = x; while (X + 1 < nx && grid[idx(X + 1, y, z)] === 1) X++;
-    let Y = y; grow: while (Y + 1 < ny) { for (let i = x; i <= X; i++) if (grid[idx(i, Y + 1, z)] !== 1) break grow; Y++; }
-    let Z = z; grow2: while (Z + 1 < nz) { for (let j = y; j <= Y; j++) for (let i = x; i <= X; i++) if (grid[idx(i, j, Z + 1)] !== 1) break grow2; Z++; }
-    for (let k = z; k <= Z; k++) for (let j = y; j <= Y; j++) for (let i = x; i <= X; i++) grid[idx(i, j, k)] = 3;
-    boxes.push([x, y, z, X + 1, Y + 1, Z + 1]);
+/** Greedy merge of solid voxels into boxes: from each unused solid voxel grow along axis A, then B, then C while everything is solid and unused. */
+function mergeOrder(grid0, n, [A, B, C]) {
+  const grid = grid0.slice(), [nx, ny] = n, boxes = [], at = (p) => (p[2] * ny + p[1]) * nx + p[0];
+  const cell = (a, b, c) => { const p = [0, 0, 0]; p[A] = a; p[B] = b; p[C] = c; return at(p); };
+  for (let c = 0; c < n[C]; c++) for (let b = 0; b < n[B]; b++) for (let a = 0; a < n[A]; a++) {
+    if (grid[cell(a, b, c)] !== 1) continue;
+    let a1 = a; while (a1 + 1 < n[A] && grid[cell(a1 + 1, b, c)] === 1) a1++;
+    let b1 = b; grow: while (b1 + 1 < n[B]) { for (let i = a; i <= a1; i++) if (grid[cell(i, b1 + 1, c)] !== 1) break grow; b1++; }
+    let c1 = c; grow2: while (c1 + 1 < n[C]) { for (let j = b; j <= b1; j++) for (let i = a; i <= a1; i++) if (grid[cell(i, j, c1 + 1)] !== 1) break grow2; c1++; }
+    for (let k = c; k <= c1; k++) for (let j = b; j <= b1; j++) for (let i = a; i <= a1; i++) grid[cell(i, j, k)] = 3;
+    const lo = [0, 0, 0], hi = [0, 0, 0]; lo[A] = a; lo[B] = b; lo[C] = c; hi[A] = a1 + 1; hi[B] = b1 + 1; hi[C] = c1 + 1; boxes.push([...lo, ...hi]);
   }
   return boxes;
+}
+/** the fewest boxes of the three ways round (a part that is long in one direction merges best along it) */
+function merge(grid, n) {
+  let best = null; for (const order of [[0, 1, 2], [1, 2, 0], [2, 0, 1], [0, 2, 1]]) { const b = mergeOrder(grid, n, order); if (!best || b.length < best.length) best = b; }
+  return best;
 }
 
 /**
  * @param mesh { pos: flat xyz, index?: triangle indices }
  * @returns { boxes: [{ c: [x,y,z], h: [hx,hy,hz] }] (centre and half sizes), voxel } or null when the mesh is empty or too complicated for boxes
  */
-export function boxesFromMesh(mesh, { voxel = 0, maxBoxes = 80, shrink = 0.25 } = {}) {
+export function boxesFromMesh(mesh, { voxel = 0, maxBoxes = 1200, shrink = 0.5 } = {}) {
   const { pos, index = null } = mesh; if (!pos || pos.length < 9) return null;
   const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
   for (let i = 0; i < pos.length; i += 3) for (let k = 0; k < 3; k++) { if (pos[i + k] < lo[k]) lo[k] = pos[i + k]; if (pos[i + k] > hi[k]) hi[k] = pos[i + k]; }
   const size = hi.map((h, k) => h - lo[k]), big = Math.max(...size); if (!(big > 0)) return null;
-  let v = voxel || Math.max(0.8, big / 90);
-  for (let attempt = 0; attempt < 5; attempt++, v *= 1.5) {
+  let v = voxel || 1.0;          // about a millimetre, so a part and its neighbour a millimetre away stay apart
+  for (let attempt = 0; attempt < 5; attempt++, v *= 1.35) {
     const o = lo.map(l => l - v), n = size.map(s => Math.ceil(s / v) + 3);                    // a one-voxel margin so the outside can flow all the way round
     if (n[0] * n[1] * n[2] > 12_000_000) continue;
     const grid = new Uint8Array(n[0] * n[1] * n[2]); rasterise(pos, index, o, n, v, grid); solidOf(grid, n);
