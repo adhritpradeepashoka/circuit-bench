@@ -17,7 +17,7 @@ export function featureEdges(tris, { angleDeg = 35, eps = 1e-3 } = {}) {
   const segs = [];
   for (const e of edges.values()) {
     const sharp = e.ns.length !== 2 || (e.ns[0][0] * e.ns[1][0] + e.ns[0][1] * e.ns[1][1] + e.ns[0][2] * e.ns[1][2]) < cosLim;
-    if (sharp) segs.push({ ia: e.a, ib: e.b });
+    if (sharp) segs.push({ ia: e.a, ib: e.b, cos: e.ns.length === 2 ? e.ns[0][0] * e.ns[1][0] + e.ns[0][1] * e.ns[1][1] + e.ns[0][2] * e.ns[1][2] : -1 });
   }
   return { segs, verts };
 }
@@ -37,7 +37,7 @@ export function circleNear(fe, P, N, { reach = 8, maxRadius = 30, planeTol = 0.0
     if (seen.has(start)) continue;
     const comp = [], stack = [start]; seen.add(start);
     while (stack.length) { const v = stack.pop(); comp.push(v); for (const w of adj.get(v)) if (!seen.has(w)) { seen.add(w); stack.push(w); } }
-    if (comp.length < 8 || comp.some(v => adj.get(v).length !== 2)) continue;                       // a circle is one closed chain: every vertex joins exactly two edges
+    if (comp.length < 6 || comp.some(v => adj.get(v).length !== 2)) continue;                       // a circle is one closed chain: every vertex joins exactly two edges
     const c = [0, 0, 0]; for (const v of comp) for (let k = 0; k < 3; k++) c[k] += verts[v][k] / comp.length;
     const rs = comp.map(v => Math.hypot(verts[v][0] - c[0], verts[v][1] - c[1], verts[v][2] - c[2])), r = rs.reduce((a, b) => a + b, 0) / rs.length;
     if (r < 0.2 || r > maxRadius || Math.max(...rs.map(x => Math.abs(x - r))) / r > roundness) continue;
@@ -53,8 +53,15 @@ export function circleNear(fe, P, N, { reach = 8, maxRadius = 30, planeTol = 0.0
  * One entry per axis (a through-hole has a rim on each side; the one facing away from the part's middle is kept).
  * @returns {{center:number[], axis:number[], radius:number}[]}  axis is a unit vector pointing out of the part
  */
-export function findHoles(fe, { minRadius = 0.4, maxRadius = 12, roundness = 0.04, max = 80 } = {}) {
-  const { segs, verts } = fe, adj = new Map();
+export function findHoles(fe, opts = {}) {
+  // A coarse hole (6 to 10 flat sides) has creases between its own wall panels as sharp as its rim, which breaks the rim's chain. So look twice: once at
+  // every feature edge, once at only the steep ones (a rim is about 90°, the creases between the walls of a coarse hole are 36° to 60°), and merge.
+  const steep = Math.cos((70 * Math.PI) / 180), a = findHolesIn(fe, fe.segs, opts), b = findHolesIn(fe, fe.segs.filter(s => s.cos === undefined || s.cos < steep), opts), out = [...a];
+  for (const h of b) if (!out.some(k => Math.hypot(k.center[0] - h.center[0], k.center[1] - h.center[1], k.center[2] - h.center[2]) < 0.1 && Math.abs(k.radius - h.radius) < 0.1)) out.push(h);
+  return out.slice(0, opts.max || 80);
+}
+function findHolesIn(fe, segList, { minRadius = 0.4, maxRadius = 12, roundness = 0.04, max = 80 } = {}) {
+  const { verts } = fe, segs = segList, adj = new Map();
   for (const s of segs) { (adj.get(s.ia) || adj.set(s.ia, []).get(s.ia)).push(s.ib); (adj.get(s.ib) || adj.set(s.ib, []).get(s.ib)).push(s.ia); }
   let mid = [0, 0, 0]; for (const v of verts) for (let k = 0; k < 3; k++) mid[k] += v[k] / verts.length;
   const seen = new Set(), found = [];
@@ -62,7 +69,7 @@ export function findHoles(fe, { minRadius = 0.4, maxRadius = 12, roundness = 0.0
     if (seen.has(start)) continue;
     const comp = [], stack = [start]; seen.add(start);
     while (stack.length) { const v = stack.pop(); comp.push(v); for (const w of adj.get(v)) if (!seen.has(w)) { seen.add(w); stack.push(w); } }
-    if (comp.length < 8 || comp.some(v => adj.get(v).length !== 2)) continue;
+    if (comp.length < 6 || comp.some(v => adj.get(v).length !== 2)) continue;
     const c = [0, 0, 0]; for (const v of comp) for (let k = 0; k < 3; k++) c[k] += verts[v][k] / comp.length;
     const rel = comp.map(v => [verts[v][0] - c[0], verts[v][1] - c[1], verts[v][2] - c[2]]), rs = rel.map(r => Math.hypot(...r)), r = rs.reduce((a, b) => a + b, 0) / rs.length;
     if (r < minRadius || r > maxRadius || Math.max(...rs.map(x => Math.abs(x - r))) / r > roundness) continue;

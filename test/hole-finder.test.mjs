@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { featureEdges, circleNear } from '../src/core/hole-finder.js';
+import { featureEdges, circleNear, findHoles } from '../src/core/hole-finder.js';
 
 const tris = g => Float32Array.from((g.index ? g.toNonIndexed() : g).attributes.position.array);
 /** a 32 × 12 × 2.5 plate with two through holes (r 1.1 at x = ±13.75), its top face at z = 2.5 */
@@ -44,4 +44,12 @@ test('works for a round boss (a shaft), at different sizes and coarse tessellati
 test('a rounded rectangle outline is not mistaken for a circle', () => {
   const box = new THREE.BoxGeometry(20, 20, 4).translate(0, 0, 2);
   assert.equal(circleNear(featureEdges(tris(box)), [3, 3, 4], [0, 0, 1]), null);
+});
+
+test('holes with few flat sides (coarse STL) are still found, both rims of every hole', () => {
+  for (const segs of [8, 10, 12, 24]) {
+    const found = findHoles(featureEdges(tris(plate({ r: 1, segs }))));
+    assert.equal(found.length, 4, `${segs} sides: ${found.length} rims`);
+    for (const h of found) assert.ok(Math.abs(h.radius - 1) < 0.05, `radius ${h.radius}`);
+  }
 });
