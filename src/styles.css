@@ -1378,3 +1378,11 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .ml-row input[type=range] { flex: 1; min-width: 120px; }
 .ai-send.stop { background: var(--red); }
 .ml-view #overlay, .ml-view #world, .ml-view #wireEditor { display: none !important; }          /* the circuit's wires and labels must not draw over the ML tabs */
+
+/* import from GitHub */
+.asm-gh-back { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; }
+.asm-gh { width: min(560px, 100%); max-height: 80vh; display: flex; flex-direction: column; gap: 10px; background: var(--surface, #fff); color: var(--text, inherit); border: 1px solid var(--line, #d5ddd8); border-radius: 12px; padding: 16px; }
+.asm-gh h3 { margin: 0; font-size: 16px; } .asm-gh .asm-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; } .asm-gh input[type=text] { flex: 1; min-width: 180px; height: 30px; padding: 0 8px; }
+.asm-gh-info { font-size: 13px; color: var(--muted, #667); } .asm-gh-info.bad { color: #c0392b; }
+.asm-gh-list { overflow: auto; min-height: 0; flex: 1; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; } .asm-gh-list:empty { display: none; }
+.asm-gh-row { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 13px; cursor: pointer; } .asm-gh-row span { flex: 1; overflow-wrap: anywhere; } .asm-gh-row em { color: var(--muted, #667); font-style: normal; font-size: 12px; } .asm-gh-row:hover { background: rgba(127,127,127,.12); }

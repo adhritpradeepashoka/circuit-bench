@@ -23,6 +23,7 @@ import { ask } from './ask.js';
 import { createViewCube } from './viewcube.js';
 import { buildRig, isMate, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
+import { parseGithubUrl, listModels, fetchModel } from '../core/github-models.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
 const LIB_KEY = 'circuitbench:robot-parts', DB = 'circuitbench-robot-meshes';
@@ -71,8 +72,9 @@ export function initAssembly({ editor, projects = null }) {
   pane.append(stage, side);
 
   // ── side panel ────────────────────────────────────────────────
-  const fileIn = el('input', { type: 'file', accept: '.stl,.obj,.glb,.gltf', hidden: true, id: 'asmFile' });
-  const importBtn = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Import model…', id: 'asmImport' });
+  const fileIn = el('input', { type: 'file', accept: '.stl,.obj,.glb,.gltf', multiple: true, hidden: true, id: 'asmFile' });
+  const importBtn = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Import models…', id: 'asmImport', title: 'STL, OBJ, GLB or glTF. Pick several files at once to add them all.' });
+  const ghBtn = el('button', { type: 'button', className: 'asm-btn', textContent: 'From GitHub…', id: 'asmGithub', title: 'Pick models from a public GitHub repository' });
   const nameIn = el('input', { type: 'text', placeholder: 'Part name', maxLength: 60, id: 'asmName', ariaLabel: 'Part name' });
   const unitsSel = el('select', { id: 'asmUnits', ariaLabel: 'Model units' }, ...Object.keys(UNIT_MM).map(u => el('option', { value: u, textContent: u })));
   const upSel = el('select', { id: 'asmUp', ariaLabel: 'Which way is up in the model' }, el('option', { value: 'z', textContent: 'Z up' }), el('option', { value: 'y', textContent: 'Y up' }));
@@ -93,7 +95,7 @@ export function initAssembly({ editor, projects = null }) {
   modeBar.append(modeBtn.part, modeBtn.build); modeBtn.build.classList.add('on'); side.append(modeBar, partBox, buildBox);
   const holesBtn = el('button', { type: 'button', className: 'asm-btn', textContent: 'Find all holes', id: 'asmFindHoles', title: 'Mark every round hole in the model' });
   partBox.append(
-    el('div', { className: 'asm-row' }, importBtn, fileIn),
+    el('div', { className: 'asm-row' }, importBtn, ghBtn, fileIn),
     el('label', { className: 'asm-field' }, el('span', { textContent: 'Name' }), nameIn),
     el('div', { className: 'asm-row' }, el('label', { className: 'asm-field' }, el('span', { textContent: 'Units' }), unitsSel), el('label', { className: 'asm-field' }, el('span', { textContent: 'Up' }), upSel)),
     el('div', { className: 'asm-row' }, el('label', { className: 'asm-field' }, el('span', { textContent: 'Mass (g)' }), massIn), el('label', { className: 'asm-field' }, el('span', { textContent: 'from' }), massSrc)),
@@ -224,8 +226,8 @@ export function initAssembly({ editor, projects = null }) {
   }
   async function importFile(file) {
     const fmt = formatOf(file?.name);
-    if (!fmt) return say('That file type is not supported yet. Use STL, OBJ, GLB or glTF (export STEP from your CAD as one of these).', true);
-    if (file.size > MAX_MESH) return say(`That model is ${(file.size / 1e6).toFixed(1)} MB; the limit is ${MAX_MESH / 1e6} MB. Decimate or simplify it in your CAD tool first.`, true);
+    if (!fmt) return say('That file type is not supported yet. Use STL, OBJ, GLB or glTF (export STEP from your CAD as one of these).', true), false;
+    if (file.size > MAX_MESH) return say(`That model is ${(file.size / 1e6).toFixed(1)} MB; the limit is ${MAX_MESH / 1e6} MB. Decimate or simplify it in your CAD tool first.`, true), false;
     say('Loading the model…');
     try {
       const buf = await file.arrayBuffer(), t = await load3d();
@@ -237,7 +239,8 @@ export function initAssembly({ editor, projects = null }) {
       draft.name = draft.name || file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 60); massTouched = false; estimateMass(t);
       syncForm(); renderFrames(); const n = await autoHoles(); const s = draft.sizeMm;
       say(`Loaded ${file.name}${s ? ` (${s.map(v => +v.toFixed(1)).join(' × ')} mm)` : ''}. ${n ? `Marked ${n} round hole${n > 1 ? 's' : ''} for you. ` : 'No round holes found; click the model to mark connection points by hand. '}Check the size and units, then Save part.`);
-    } catch (e) { say(`Could not read that model: ${e?.message || e}`, true); }
+      return true;
+    } catch (e) { say(`Could not read that model: ${e?.message || e}`, true); return false; }
   }
   let stagedMesh = null, massTouched = false;
   /** A guess at a printed part's weight: its volume as PLA (1.24 g/cm³) at about a third solid. Labelled "estimated" until you weigh it. */
@@ -249,11 +252,54 @@ export function initAssembly({ editor, projects = null }) {
   }
   /** Bring in a file from anywhere (the list, a drop on the 3D view): go to the import screen first. */
   async function startImport(file) { if (!file) return; if (view !== 'assembly') await show('assembly'); if (mode !== 'part') await setMode('part'); await importFile(file); }
+  /** Several files at once: each becomes a saved part (holes found, the Units / Up choices below applied to all); a single file opens for checking as before. */
+  async function startImportMany(files) {
+    files = [...files || []].filter(Boolean); if (files.length < 2) return startImport(files[0]);
+    if (view !== 'assembly') await show('assembly'); if (mode !== 'part') await setMode('part');
+    let ok = 0; const bad = [];
+    for (let i = 0; i < files.length; i++) {
+      say(`Importing ${i + 1} of ${files.length}: ${files[i].name}…`);
+      if (await importFile(files[i]) && await savePart({ add: false, quiet: true })) ok++; else bad.push(files[i].name);
+    }
+    syncForm();
+    say(`Saved ${ok} of ${files.length} models to your 3D parts list.${bad.length ? ` Skipped: ${bad.slice(0, 4).join(', ')}${bad.length > 4 ? '…' : ''}.` : ''} Check each one's size and mass in the list.`, !ok);
+  }
   importBtn.addEventListener('click', () => fileIn.click());
-  fileIn.addEventListener('change', () => { const f = fileIn.files[0]; fileIn.value = ''; if (f) startImport(f); });
+  fileIn.addEventListener('change', () => { const fs = [...fileIn.files]; fileIn.value = ''; if (fs.length) startImportMany(fs); });
+  ghBtn.addEventListener('click', () => githubPicker());
+  /** A small window: paste a repository / folder / file link, tick the models, import. */
+  function githubPicker() {
+    const back = el('div', { className: 'asm-gh-back' }), box = el('div', { className: 'asm-gh', role: 'dialog', ariaLabel: 'Import models from GitHub' });
+    const url = el('input', { type: 'text', placeholder: 'github.com/owner/repo  (or a folder or file link)', ariaLabel: 'GitHub link', id: 'asmGhUrl' }), find = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Find models', id: 'asmGhFind' });
+    const info = el('div', { className: 'asm-gh-info', textContent: 'Public repositories only. Paste a link to a repository, a folder inside it, or one file.' }), list = el('div', { className: 'asm-gh-list' });
+    const all = el('button', { type: 'button', className: 'asm-btn', textContent: 'Select all', hidden: true }), go = el('button', { type: 'button', className: 'asm-btn primary', textContent: 'Import selected', hidden: true, id: 'asmGhGo' }), close = el('button', { type: 'button', className: 'asm-btn', textContent: 'Close' });
+    box.append(el('h3', { textContent: 'Import from GitHub' }), el('div', { className: 'asm-row' }, url, find), info, list, el('div', { className: 'asm-row' }, all, go, close)); back.append(box); document.body.append(back);
+    const shut = () => back.remove(); close.addEventListener('click', shut); back.addEventListener('mousedown', e => { if (e.target === back) shut(); }); url.focus();
+    let target = null, found = null;
+    const boxes = () => [...list.querySelectorAll('input[type=checkbox]')];
+    const count = () => { const n = boxes().filter(b => b.checked).length; go.textContent = n ? `Import ${n} selected` : 'Import selected'; go.disabled = !n; };
+    const search = async () => {
+      target = parseGithubUrl(url.value); list.textContent = ''; all.hidden = go.hidden = true;
+      if (!target) { info.textContent = 'That does not look like a GitHub link. Try github.com/owner/repo.'; info.classList.add('bad'); return; }
+      info.classList.remove('bad'); info.textContent = 'Looking…';
+      try {
+        found = await listModels(target);
+        info.textContent = found.files.length ? `${found.files.length} model${found.files.length > 1 ? 's' : ''} found${found.truncated ? ' (the repository is very large, so this list may be incomplete)' : ''}. Tick the ones you want.` : 'No STL, OBJ, GLB or glTF files found there.';
+        for (const f of found.files) { const cb = el('input', { type: 'checkbox' }); cb.dataset.path = f.path; cb.addEventListener('change', count); list.append(el('label', { className: 'asm-gh-row' }, cb, el('span', { textContent: f.path }), el('em', { textContent: f.size ? `${(f.size / 1e6).toFixed(1)} MB` : '' }))); }
+        all.hidden = go.hidden = !found.files.length; if (found.files.length === 1) boxes()[0].checked = true; count();
+      } catch (e) { info.textContent = e?.message || String(e); info.classList.add('bad'); }
+    };
+    find.addEventListener('click', search); url.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+    all.addEventListener('click', () => { const on = boxes().some(b => !b.checked); boxes().forEach(b => { b.checked = on; }); all.textContent = on ? 'Clear' : 'Select all'; count(); });
+    go.addEventListener('click', async () => {
+      const picks = found.files.filter(f => boxes().some(b => b.checked && b.dataset.path === f.path)), files = [];
+      go.disabled = true; for (let i = 0; i < picks.length; i++) { info.textContent = `Downloading ${i + 1} of ${picks.length}: ${picks[i].name}…`; try { files.push(await fetchModel(target, found.ref, picks[i])); } catch (e) { info.textContent = e?.message || String(e); info.classList.add('bad'); } }
+      shut(); if (files.length) startImportMany(files);
+    });
+  }
   // dropping a file onto the stage works too
   stage.addEventListener('dragover', e => e.preventDefault());
-  stage.addEventListener('drop', e => { e.preventDefault(); const f = e.dataTransfer?.files?.[0]; if (f) startImport(f); });
+  stage.addEventListener('drop', e => { e.preventDefault(); const fs = [...(e.dataTransfer?.files || [])]; if (fs.length) startImportMany(fs); });
 
   // ── forms ─────────────────────────────────────────────────────
   function say(text, bad = false) { msg.textContent = text; msg.classList.toggle('bad', !!bad); }
@@ -302,17 +348,18 @@ export function initAssembly({ editor, projects = null }) {
   }
 
   // ── saving ────────────────────────────────────────────────────
-  async function savePart() {
+  async function savePart({ add = true, quiet = false } = {}) {
     const v = draft.validate();
-    if (!v.ok) return say(`Not saved: ${v.errors.slice(0, 3).join(' ')}`, true);
-    if (!stagedMesh && !(await getMesh(`${v.part.id}/${v.part.model.file}`))) return say('Import a model first.', true);
+    if (!v.ok) return say(`Not saved: ${v.errors.slice(0, 3).join(' ')}`, true), false;
+    if (!stagedMesh && !(await getMesh(`${v.part.id}/${v.part.model.file}`))) return say('Import a model first.', true), false;
     const list = libraryParts().filter(p => p.id !== v.part.id); list.unshift(v.part); saveLibrary(list.slice(0, 80));
     if (stagedMesh) await putMesh(`${v.part.id}/${v.part.model.file}`, stagedMesh);
-    renderLibrary(); const pv = provenanceOf(v.part);
+    renderLibrary(); const pv = provenanceOf(v.part); if (!add) return true;
     say(`Saved “${v.part.name}”.${pv.verified ? '' : ` Still estimated: ${pv.estimated.slice(0, 4).join(', ')}${pv.estimated.length > 4 ? '…' : ''} — measure and mark them when you can.`}`);
     const made = findPart(v.part.id); if (made) { await setMode('build'); await addToScene(made); bsay(`“${v.part.name}” is saved in your 3D parts list and added to the scene.`); }
+    return true;
   }
-  saveBtn.addEventListener('click', savePart);
+  saveBtn.addEventListener('click', () => savePart());
   exportBtn.addEventListener('click', () => {
     const v = draft.validate(); if (!v.ok) return say(`Cannot export yet: ${v.errors.slice(0, 3).join(' ')}`, true);
     const a = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(v.part, null, 1)], { type: 'application/json' })), download: `${v.part.id}.circuitbench-part.json` }); a.click(); URL.revokeObjectURL(a.href);
@@ -370,8 +417,8 @@ export function initAssembly({ editor, projects = null }) {
   // the 3D parts list lives in the same right-hand Parts panel as the electronics list (it shows only in Assembly and Test)
   const robotDock = el('div', { id: 'robotParts', role: 'region', ariaLabel: '3D parts' }), dockSearch = el('input', { type: 'search', placeholder: 'Search 3D parts', ariaLabel: 'Search 3D parts', className: 'asm-dock-search', id: 'robotPartsSearch', autocomplete: 'off' });
   robotDock.append(dockSearch, cards); document.getElementById('partsPanel')?.append(robotDock);
-  const dockImport = el('button', { type: 'button', className: 'asm-btn primary asm-dock-import', id: 'asmDockImport', textContent: 'Import your own 3D part…', title: 'STL, OBJ, GLB or glTF. You can also drop a file onto the 3D view.' });
-  dockImport.addEventListener('click', () => fileIn.click()); robotDock.insertBefore(dockImport, dockSearch); robotDock.append(fileIn);
+  const dockImport = el('button', { type: 'button', className: 'asm-btn primary asm-dock-import', id: 'asmDockImport', textContent: 'Import your own 3D parts…', title: 'STL, OBJ, GLB or glTF. Pick or drop several at once.' });
+  dockImport.addEventListener('click', () => fileIn.click()); const dockGh = el('button', { type: 'button', className: 'asm-btn asm-dock-import', id: 'asmDockGithub', textContent: 'Import from GitHub…' }); dockGh.addEventListener('click', () => githubPicker()); robotDock.insertBefore(dockImport, dockSearch); robotDock.insertBefore(dockGh, dockSearch); robotDock.append(fileIn);
   dockSearch.addEventListener('input', () => renderCards());
   // "Make a drone part": a few numbers in, a real part (with its holes and weight) out. Nothing is stored; the numbers live in the part's name.
   const bField = (label, input, id) => { input.id = id; return el('label', { className: 'asm-field' }, el('span', { textContent: label }), input); };
