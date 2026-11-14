@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { featureEdges, circleNear, findHoles } from '../src/core/hole-finder.js';
+import { featureEdges, circleNear, findHoles, slotNear } from '../src/core/hole-finder.js';
 
 const tris = g => Float32Array.from((g.index ? g.toNonIndexed() : g).attributes.position.array);
 /** a 32 × 12 × 2.5 plate with two through holes (r 1.1 at x = ±13.75), its top face at z = 2.5 */
@@ -52,4 +52,15 @@ test('holes with few flat sides (coarse STL) are still found, both rims of every
     assert.equal(found.length, 4, `${segs} sides: ${found.length} rims`);
     for (const h of found) assert.ok(Math.abs(h.radius - 1) < 0.05, `radius ${h.radius}`);
   }
+});
+
+test('a click beside a slot (not a circle) snaps to its centre and narrow width', () => {
+  const s = new THREE.Shape(); s.moveTo(-20, -10); s.lineTo(20, -10); s.lineTo(20, 10); s.lineTo(-20, 10); s.closePath();
+  const h = new THREE.Path(); h.absellipse(0, 0, 6, 2, 0, Math.PI * 2, true); s.holes.push(h);                    // a 12 x 4 mm oval
+  const fe = featureEdges(tris(new THREE.ExtrudeGeometry(s, { depth: 3, bevelEnabled: false, curveSegments: 32 })));
+  assert.equal(circleNear(fe, [3, 1, 3], [0, 0, 1]), null, 'not a circle');
+  const hit = slotNear(fe, [3, 1, 3], [0, 0, 1]);
+  assert.ok(hit, 'slot found'); assert.ok(Math.hypot(hit.center[0], hit.center[1]) < 0.05 && Math.abs(hit.center[2] - 3) < 0.01, `centre ${hit.center}`);
+  assert.ok(Math.abs(hit.radius * 2 - 4) < 0.1, `width ${hit.radius * 2}`);
+  assert.equal(slotNear(fe, [-15, 8, 3], [0, 0, 1]), null, 'a click far from it finds nothing');
 });

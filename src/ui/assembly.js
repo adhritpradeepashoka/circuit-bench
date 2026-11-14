@@ -3,7 +3,7 @@
 // There is no CAD here on purpose: geometry comes from the user's own CAD; this tab only ANNOTATES it. three.js loads the first time it opens.
 import { PartDraft, formatOf, UNIT_MM } from '../core/assembly-draft.js';
 import { FRAME_KINDS, THREADS, SOURCES, provenanceOf, validateRobotPart } from '../core/robot-part.js';
-import { featureEdges, circleNear, findHoles } from '../core/hole-finder.js';
+import { featureEdges, circleNear, slotNear, findHoles } from '../core/hole-finder.js';
 import { Assembly, worldFrame, mateTransform, turn, bomCsv } from '../core/assembly-scene.js';
 import { explainJoin, findProblems } from '../core/assembly-check.js';
 import { quickAssembly } from '../core/quick-assembly.js';
@@ -189,7 +189,7 @@ export function initAssembly({ editor, projects = null }) {
         const n = h.face.normal.clone().transformDirection(h.object.matrixWorld).normalize();
         if (n.dot(ray.ray.direction) > 0) n.negate();                              // the face we see points at us
         const P = [h.point.x, h.point.y, h.point.z], N = [n.x, n.y, n.z];
-        let snap = null; try { snap = model.children.length ? circleNear(edges(), P, N) : null; } catch { /* snapping is a convenience */ }
+        let snap = null; try { snap = model.children.length ? (circleNear(edges(), P, N) || slotNear(edges(), P, N)) : null; } catch { /* snapping is a convenience */ }
         return snap ? { hit: 'model', pos: snap.center, dir: N, diameter: snap.radius * 2 } : { hit: 'model', pos: P, dir: N };
       }
       const el3 = renderer.domElement; stage.prepend(el3); hint.hidden = !!model;

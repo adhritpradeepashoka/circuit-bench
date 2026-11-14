@@ -91,3 +91,31 @@ function findHolesIn(fe, segList, { minRadius = 0.4, maxRadius = 12, roundness =
   }
   return found.sort((a, b) => b.away - a.away).slice(0, max).map(({ center, axis, radius }) => ({ center, axis, radius }));
 }
+
+/**
+ * A fallback for a click beside a hole that is not a flat circle: a slot, an oval, a notch or a countersink whose outline does not lie in one plane.
+ * Any small closed loop of feature edges whose middle is close to the click counts; its centre is moved onto the clicked face, and its size is the narrow way across.
+ * @returns {{center:number[], radius:number, dist:number}|null}
+ */
+export function slotNear(fe, P, N, { reach = 4, maxSpan = 40, minVerts = 12 } = {}) {
+  const { segs, verts } = fe, adj = new Map();
+  const near = i => Math.hypot(verts[i][0] - P[0], verts[i][1] - P[1], verts[i][2] - P[2]) <= maxSpan * 2;
+  for (const s of segs) if (near(s.ia) && near(s.ib)) { (adj.get(s.ia) || adj.set(s.ia, []).get(s.ia)).push(s.ib); (adj.get(s.ib) || adj.set(s.ib, []).get(s.ib)).push(s.ia); }
+  const seen = new Set(); let best = null;
+  const ref = Math.abs(N[2]) < 0.9 ? [0, 0, 1] : [1, 0, 0], u = [N[1] * ref[2] - N[2] * ref[1], N[2] * ref[0] - N[0] * ref[2], N[0] * ref[1] - N[1] * ref[0]], ul = Math.hypot(...u), U = u.map(v => v / ul), V = [N[1] * U[2] - N[2] * U[1], N[2] * U[0] - N[0] * U[2], N[0] * U[1] - N[1] * U[0]];
+  for (const start of adj.keys()) {
+    if (seen.has(start)) continue;
+    const comp = [], stack = [start]; seen.add(start);
+    while (stack.length) { const v = stack.pop(); comp.push(v); for (const w of adj.get(v)) if (!seen.has(w)) { seen.add(w); stack.push(w); } }
+    if (comp.length < minVerts || comp.some(v => adj.get(v).length !== 2)) continue;                // one closed chain
+    const c = [0, 0, 0]; for (const v of comp) for (let k = 0; k < 3; k++) c[k] += verts[v][k] / comp.length;
+    const a = comp.map(v => (verts[v][0] - c[0]) * U[0] + (verts[v][1] - c[1]) * U[1] + (verts[v][2] - c[2]) * U[2]), b = comp.map(v => (verts[v][0] - c[0]) * V[0] + (verts[v][1] - c[1]) * V[1] + (verts[v][2] - c[2]) * V[2]);
+    const sa = Math.max(...a) - Math.min(...a), sb = Math.max(...b) - Math.min(...b), span = Math.max(sa, sb);
+    if (span > maxSpan || Math.min(sa, sb) < 0.6) continue;                                           // the part's outline, or a speck
+    const d = (P[0] - c[0]) * N[0] + (P[1] - c[1]) * N[1] + (P[2] - c[2]) * N[2], ctr = [c[0] + d * N[0], c[1] + d * N[1], c[2] + d * N[2]];   // centre, slid onto the clicked face
+    const dist = Math.hypot(ctr[0] - P[0], ctr[1] - P[1], ctr[2] - P[2]), gap = Math.max(0, dist - span / 2);
+    if (gap > reach) continue;
+    if (!best || dist < best.dist) best = { center: ctr, radius: Math.min(sa, sb) / 2, dist };
+  }
+  return best;
+}
