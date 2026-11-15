@@ -23,6 +23,7 @@ import { ask } from './ask.js';
 import { createViewCube } from './viewcube.js';
 import { buildRig, isMate, dragTo, setAngle, connected, pointOn, heldPart, movingSide } from '../core/assembly-pose.js';
 import { activeWorkspace } from '../core/workspaces.js';
+import { joinViews } from './view-groups.js';
 import { parseGithubUrl, listModels, fetchModel } from '../core/github-models.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
@@ -42,20 +43,20 @@ export const libraryParts = () => {
 };
 const saveLibrary = list => { try { localStorage.setItem(LIB_KEY, JSON.stringify(list)); memLib = null; } catch { memLib = list; } };
 
-export function initAssembly({ editor, projects = null }) {
+export function initAssembly({ editor, projects = null, circuitServos = null, circuitRunning = null }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar');
   const tabs = el('div', { className: 'view-toggle robot-tabs', role: 'group', ariaLabel: 'Robot views', hidden: true });
   const tabBtn = {};
-  for (const [id, label] of [['circuit', 'Circuit'], ['assembly', 'Assembly'], ['test', 'Test']]) { tabBtn[id] = el('button', { type: 'button', textContent: label, id: `tab-${id}` }); tabs.append(tabBtn[id]); }
+  for (const [id, label] of [['circuit', 'Circuit'], ['assembly', 'Assembly'], ['test', 'Test']]) { tabBtn[id] = el('button', { type: 'button', textContent: label, id: `tab-${id}` }); if (id === 'circuit') tabBtn[id].dataset.circuitTab = '1'; tabs.append(tabBtn[id]); }
   const sepAfter = el('span', { className: 'sep', hidden: true });
   toolbar.prepend(tabs, sepAfter);
   // Robotics starts with no circuit at all (no Arduino, no breadboard, no wiring): just Assembly and Test. A switch at the top right brings wiring back; a teacher can take the switch away.
   const WIRING_KEY = 'circuitbench:robot-wiring';
   const wiringStored = () => { try { return localStorage.getItem(WIRING_KEY) === '1'; } catch { return false; } };
-  const wiringOn = () => wiringStored() && !offFeatures().includes('wiring');
+  const wiringOn = () => (activeWorkspace().mix || wiringStored()) && !offFeatures().includes('wiring');           // a mixed project is about the circuit as much as the robot
   const wiringBtn = el('button', { type: 'button', id: 'robWiringToggle', className: 'wiring-toggle', hidden: true, title: 'Wiring: build the electronics (an Arduino, a breadboard and wires) for this robot. Off = only the 3D build and the physics test, with no circuit to set up.' });
   toolbar.append(wiringBtn);
-  const paintWiring = () => { const on = wiringOn(); wiringBtn.textContent = `Wiring: ${on ? 'on' : 'off'}`; wiringBtn.setAttribute('aria-pressed', String(on)); wiringBtn.classList.toggle('on', on); tabBtn.circuit.hidden = !on; };
+  const paintWiring = () => { const on = wiringOn(); wiringBtn.hidden = !activeWorkspace().robotics || !!activeWorkspace().mix; wiringBtn.textContent = `Wiring: ${on ? 'on' : 'off'}`; wiringBtn.setAttribute('aria-pressed', String(on)); wiringBtn.classList.toggle('on', on); tabBtn.circuit.hidden = !on; };
   wiringBtn.addEventListener('click', () => { try { localStorage.setItem(WIRING_KEY, wiringOn() ? '0' : '1'); } catch { /* ignore */ } paintWiring(); if (!wiringOn() && view === 'circuit') show('assembly'); });
 
   const draft = new PartDraft(); let mode = 'build';
@@ -1042,8 +1043,10 @@ export function initAssembly({ editor, projects = null }) {
       const ix = o.geometry.index; if (ix) for (let i = 0; i < ix.count; i++) index.push(base + ix.getX(i)); else for (let i = 0; i < a.count; i++) index.push(base + i); });
     return pos.length >= 9 ? { pos, index } : null;
   }
+  const claim = joinViews('assembly', () => view, () => show('circuit'));
   async function show(v) {
-    if (v !== 'circuit' && !activeWorkspace().robotics) v = 'circuit';       // an AI / plain project has no Assembly or Test: never leave a robot pane open on it
+    if (v !== 'circuit' && !activeWorkspace().robotics) v = 'circuit';
+    claim();       // an AI / plain project has no Assembly or Test: never leave a robot pane open on it
     view = v;
     for (const [id, b] of Object.entries(tabBtn)) { b.classList.toggle('on', id === v); b.setAttribute('aria-pressed', String(id === v)); }
     document.querySelector('#partsPanel .parts-title').textContent = v === 'circuit' ? 'Parts' : '3D parts';
@@ -1052,7 +1055,7 @@ export function initAssembly({ editor, projects = null }) {
     if (!(v === 'test' && kind === 'fly')) droneTest?.leave(); if (!(v === 'test' && kind === 'robot')) robotTest?.leave();
     const switchTo = k => { testChoice = k; show('test'); }, prepare = async () => { await load3d(); await restoreSaved(); };
     if (v === 'test' && kind === 'fly') { droneTest ||= initDroneTest({ host: testPane, getAsm: () => asm, getWiring: () => droneWiring(editor.state), prepare, buildExample: buildExampleQuad, goAssembly: () => show('assembly'), switchTo }); await droneTest.enter(); }
-    if (v === 'test' && kind === 'robot') { robotTest ||= initRobotTest({ host: robotPane, getAsm: () => asm, getAnchor: () => anchorId, getHull: hullPoints, getMesh: meshTriangles, prepare, goAssembly: () => show('assembly'), switchTo }); await robotTest.enter(); }
+    if (v === 'test' && kind === 'robot') { robotTest ||= initRobotTest({ host: robotPane, circuitServos: activeWorkspace().mix ? circuitServos : null, circuitRunning, getAsm: () => asm, getAnchor: () => anchorId, getHull: hullPoints, getMesh: meshTriangles, prepare, goAssembly: () => show('assembly'), switchTo }); await robotTest.enter(); }
     if (v === 'assembly') { if (mode === 'build') await setMode('build'); syncForm(); renderFrames(); renderLibrary(); const t = await load3d(); t.size(); t.drawGizmos(); t.draw(); }
     editor.emit?.('robot-view', v); syncTop();
   }

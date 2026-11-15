@@ -5,6 +5,7 @@
 //
 // Head: "3D human head scan" by celer (Thingiverse thing 4245056), CC BY — see ATTRIBUTION.md. If it cannot load, a plain
 // head drawn in code is used instead. Signals are illustrative, not medical data.
+import { joinViews } from './view-groups.js';
 import { SITES, SITE, SITE_GROUPS, HEAD_RADII, surfacePoint, sitePosition, describeMontage } from '../core/body-sites.js';
 import { signalAt } from '../core/signals.js';
 import { subject as person, EVENT_KINDS, MINDS } from '../core/subject.js';
@@ -30,7 +31,7 @@ export function initVisualizer({ editor }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar');
   const toggle = el('div', { className: 'view-toggle', role: 'group', ariaLabel: 'View', hidden: true });
   const bCircuit = el('button', { type: 'button', textContent: 'Circuit' }), bViz = el('button', { type: 'button', textContent: 'Visualizer' });
-  toggle.append(bCircuit, bViz);
+  bCircuit.dataset.circuitTab = '1'; toggle.append(bCircuit, bViz);
   const sepAfter = el('span', { className: 'sep', hidden: true });
   toolbar.prepend(toggle, sepAfter);
 
@@ -296,7 +297,9 @@ export function initVisualizer({ editor }) {
   channelsEl.addEventListener('pointerup', drop); channelsEl.addEventListener('pointercancel', drop);
 
   /* ── switching views ─────────────────── */
+  const claim = joinViews('viz', () => view, () => show('circuit'));
   async function show(v) {
+    claim();
     view = v;
     const viz = v === 'viz';
     bCircuit.classList.toggle('on', !viz); bViz.classList.toggle('on', viz);

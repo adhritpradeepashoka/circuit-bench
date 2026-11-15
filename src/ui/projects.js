@@ -11,7 +11,7 @@ import { PART_DEFS } from '../core/parts.js';
 import { isStarterBoard } from '../core/boards.js';
 import { setRobotType } from '../core/robot-context.js';
 import { cleanRobotType } from '../core/robot-types.js';
-import { getWorkspace } from '../core/workspaces.js';
+import { getWorkspace, mixId } from '../core/workspaces.js';
 import { EXAMPLES } from '../sim/examples.js';
 import { getToken, authed } from '../sim/session.mjs';
 import { initGallery } from './gallery.js';
@@ -61,17 +61,41 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     biosignal: '<path d="M3 12h4l2-6 4 12 2-6h6"/>',
     pcb: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 9h4v4M11 13h5M16 9v.01M7 16h.01"/>',
     ai: '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 9h.01M15 9h.01M9 15h6M12 2v3M12 19v3M2 12h3M19 12h3"/>',
+    mix: '<circle cx="9" cy="12" r="5"/><circle cx="15" cy="12" r="5"/>',
     cad: '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 12l8-4.5M12 12v9M12 12L4 7.5"/>',
   };
   const wsIcon = id => { const i = document.createElement('i'); i.className = 'ws-ico'; i.setAttribute('aria-hidden', 'true'); i.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${WS_PATH[id] || '<path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.8 3h10.4A2 2 0 0 0 19 18l-5-9V3"/>'}</svg>`; return i; };
   function paintTiles() {
     const host = $('projTiles'); if (!host) return;
-    host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available).map(([id, w]) => {
+    const mixTile = (() => {
+      const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${mixOn ? ' on' : ''}`; t.dataset.ws = 'mix'; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(mixOn));
+      const b = document.createElement('b'); b.textContent = 'Mix'; const s = document.createElement('span'); s.textContent = 'Combine workspaces: for example Robotics with Bioelectronics, or Robotics with an AI board';
+      t.append(wsIcon('mix'), b, s); t.addEventListener('click', () => { mixOn = true; if (mixSel.size < 2) { mixSel.clear(); mixSel.add('robotics'); mixSel.add('bioelectronics'); } setMix(); nameInput.focus(); }); return t;
+    })();
+    host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available && !w.mix).map(([id, w]) => {
       const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${wsSelect.value === id ? ' on' : ''}`; t.dataset.ws = id; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(wsSelect.value === id));
       const b = document.createElement('b'); b.textContent = w.name; const s = document.createElement('span'); s.textContent = w.blurb;
-      t.append(wsIcon(id), b, s); t.addEventListener('click', () => { wsSelect.value = id; delete boardSel.dataset.touched; if (typeof fillBoards === 'function') fillBoards(); paintTiles(); $('projNewBoard').hidden = id === 'robotics'; nameInput.focus(); }); return t;
-    }));
+      t.append(wsIcon(id), b, s); t.addEventListener('click', () => { mixOn = false; wsSelect.value = id; delete boardSel.dataset.touched; if (typeof fillBoards === 'function') fillBoards(); paintTiles(); $('projNewBoard').hidden = id === 'robotics'; paintMix(); nameInput.focus(); }); return t;
+    }), mixTile);
     $('projNewBoard').hidden = wsSelect.value === 'robotics';
+    t_paint_mix();
+  }
+  // "Mix": tick two or more workspaces and the project gets all their tabs and parts
+  let mixOn = false; const mixSel = new Set(['robotics', 'bioelectronics']);
+  const MIX_LABEL = { robotics: 'Robotics (3D assembly and physics)', bioelectronics: 'Bioelectronics (EMG, ECG, BioAmp)', ai: 'AI boards (UNO Q, VENTUNO Q, ML)' };
+  function paintMix() {
+    let row = $('projMix');
+    if (!row) { row = document.createElement('div'); row.id = 'projMix'; row.className = 'proj-mix'; $('projTiles').after(row); }
+    row.hidden = !mixOn; if (!mixOn) return;
+    row.replaceChildren(Object.assign(document.createElement('span'), { textContent: 'Include:' }), ...Object.keys(MIX_LABEL).map(id => {
+      const l = document.createElement('label'), c = document.createElement('input'); c.type = 'checkbox'; c.checked = mixSel.has(id); c.dataset.mix = id;
+      c.addEventListener('change', () => { if (c.checked) mixSel.add(id); else mixSel.delete(id); setMix(); }); l.append(c, document.createTextNode(` ${MIX_LABEL[id]}`)); return l;
+    }), Object.assign(document.createElement('em'), { textContent: mixSel.size < 2 ? 'Pick at least two.' : '' }));
+  }
+  const t_paint_mix = () => paintMix();
+  function setMix() {
+    const id = mixId([...mixSel]); if (mixSel.size >= 2 && WORKSPACES[id]) wsSelect.value = id;
+    delete boardSel.dataset.touched; if (typeof fillBoards === 'function') fillBoards(); paintTiles(); $('projNewBoard').hidden = false;
   }
   let projQuery = '';
   $('projSearch').addEventListener('input', e => { projQuery = e.target.value.trim().toLowerCase(); renderList(); });
@@ -311,7 +335,9 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   $('projNewForm').addEventListener('submit', async e => {
     e.preventDefault();
     const name = nameInput.value; nameInput.value = '';
+    if (mixOn && mixSel.size < 2) { paintMix(); return; }
     await create({ name: name.trim() || 'Untitled project', workspace: wsSelect.value, board: $('projNewBoard').value });
+    mixOn = false; paintTiles();
   });
 
   /* ── start: attach the working copy to a project ── */

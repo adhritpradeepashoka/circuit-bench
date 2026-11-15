@@ -32,6 +32,7 @@ import { initWorkspaces } from './ui/workspaces.js';
 import { initVisualizer } from './ui/visualizer.js';
 import { initAssembly } from './ui/assembly.js';
 import { initMl } from './ui/ml.js';
+import { tidyTabs } from './ui/view-groups.js';
 import { loadSavedWorkspaces } from './core/workspaces.js';
 loadSavedWorkspaces();                  // your own and imported workspaces, and their parts, before any project opens
 import { WOKWI_PINS } from './core/pins.generated.js';
@@ -92,8 +93,9 @@ const projects = initProjects({ editor, code, sim, store: syncedStore });
   addEventListener('cb-scene-saved', e => syncedStore.scheduleScene(e.detail)); setTimeout(sync, 1500); }
 const workspaces = initWorkspaces({ editor, code, projects });
 initVisualizer({ editor });
-const assembly = initAssembly({ editor, projects });
+const assembly = initAssembly({ editor, projects, circuitServos: () => sim.servoAngles(), circuitRunning: () => !!sim.running });
 initMl({ editor, code, sim });
+tidyTabs(document.querySelector('.stage .toolbar') || document.querySelector('.toolbar'));      // a mixed project has several tab groups: one Circuit button, and they take turns
 const robotPicker = initRobotType({ editor, projects, onChosen: () => assembly.onRobotType?.() });
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });

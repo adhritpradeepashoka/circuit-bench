@@ -433,6 +433,11 @@ export class Simulation {
     for (const p of this.probes.values()) p.detach();
     this.timed = new Map(); this.timedInfo = []; this.probes = new Map();
   }
+  /** The servos in the circuit, in the order they were placed: where each horn is now (0 to 180°). The robot's Test view moves its joints with these. */
+  servoAngles() {
+    const out = []; for (const t of this.timedInfo || []) { const e = this.timed.get(t.partId); if (t.kind === 'servo' && e) out.push({ partId: t.partId, angle: t.attached ? e.model.angle : null }); }
+    return out;
+  }
   /** Every frame: servo horns and stepper shafts move, buzzers sound. */
   animate(dt) {
     const r = this.result;

@@ -1386,3 +1386,9 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .asm-gh-info { font-size: 13px; color: var(--muted, #667); } .asm-gh-info.bad { color: #c0392b; }
 .asm-gh-list { overflow: auto; min-height: 0; flex: 1; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; } .asm-gh-list:empty { display: none; }
 .asm-gh-row { display: flex; gap: 8px; align-items: center; padding: 6px 10px; font-size: 13px; cursor: pointer; } .asm-gh-row span { flex: 1; overflow-wrap: anywhere; } .asm-gh-row em { color: var(--muted, #667); font-style: normal; font-size: 12px; } .asm-gh-row:hover { background: rgba(127,127,127,.12); }
+
+/* new project: Mix */
+.proj-mix { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center; margin: 8px 0 2px; font-size: 13px; }
+.proj-mix[hidden] { display: none; } .proj-mix label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; } .proj-mix em { color: #c0392b; font-style: normal; }
+.view-toggle button.dup { display: none; }
+.view-toggle button.idle.on { background: var(--surface); color: inherit; }

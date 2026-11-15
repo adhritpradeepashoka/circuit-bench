@@ -84,7 +84,7 @@ export function validateWorkspace(raw) {
     ok: true,
     workspace: {
       format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id, name, blurb: str(raw.blurb, 160), author: str(raw.author, 60), builtin: !!raw.builtin,
-      visualizer: raw.visualizer === true, robotics: raw.robotics === true, pickBoard: raw.pickBoard === true, ml: raw.ml === true,
+      visualizer: raw.visualizer === true, robotics: raw.robotics === true, pickBoard: raw.pickBoard === true, ml: raw.ml === true, ...(raw.mix === true ? { mix: true } : {}),
       partsFirst: (Array.isArray(raw.partsFirst) ? raw.partsFirst : []).slice(0, 20).map(t => str(t, 60)).filter(Boolean),
       boardsFirst: (Array.isArray(raw.boardsFirst) ? raw.boardsFirst : []).slice(0, 20).map(t => str(t, 60)).filter(Boolean),
       menuFirst: (Array.isArray(raw.menuFirst) ? raw.menuFirst : []).slice(0, 6).map(c => str(c, 30)).filter(Boolean),
@@ -101,13 +101,32 @@ let active = DEFAULT_WORKSPACE;
 /** Make a (validated) workspace available: lists it for new projects and adds its own parts to the catalogue. */
 export function registerWorkspace(ws) {
   registry.set(ws.id, ws);
-  WORKSPACES[ws.id] = { name: ws.name, blurb: ws.blurb, available: true, builtin: !!ws.builtin };
+  WORKSPACES[ws.id] = { name: ws.name, blurb: ws.blurb, available: true, builtin: !!ws.builtin, ...(ws.mix ? { mix: true } : {}) };
   for (const spec of ws.parts) {
     const def = registerCustomPart(spec);
     def.fromWorkspace = ws.id; def.category = ws.name;
   }
 }
 for (const b of BUILTIN_WORKSPACES) { const v = validateWorkspace(b); if (v.ok) registerWorkspace(v.workspace); }
+
+/* ── mixes: a project that is several workspaces at once (EMG into a BioAmp that drives a servo arm; a robot car with a model in it) ── */
+export const MIXABLE = ['robotics', 'bioelectronics', 'ai'];
+export const mixId = ids => { const k = MIXABLE.filter(i => ids.includes(i)); return k.length > 1 ? `mix-${k.join('-')}` : (k[0] || ''); };
+/** One workspace that has every tab, part and starter of the chosen ones. */
+export function mixWorkspace(ids) {
+  const k = MIXABLE.filter(i => ids.includes(i)), parts = k.map(i => BUILTIN_WORKSPACES.find(w => w.id === i)).filter(Boolean), uniq = a => [...new Set(a)];
+  const first = key => uniq(parts.flatMap(w => w[key] || []));
+  const sketch = (parts.find(w => w.id === 'ai') || parts.find(w => w.starter?.sketch))?.starter?.sketch;
+  return {
+    format: WORKSPACE_FORMAT, version: WORKSPACE_VERSION, id: mixId(k), builtin: true, mix: true, name: parts.map(w => w.name).join(' + '),
+    blurb: `${parts.map(w => w.name).join(', ')} in one project: every tab and part of each`, author: 'CircuitBench',
+    menuFirst: first('menuFirst').slice(0, 6), partsFirst: first('partsFirst'), boardsFirst: first('boardsFirst'), parts: [],
+    visualizer: parts.some(w => w.visualizer), robotics: parts.some(w => w.robotics), pickBoard: parts.some(w => w.pickBoard), ml: parts.some(w => w.ml),
+    hint: { title: 'A mixed project', text: parts.map(w => `${w.name}: ${w.hint.title.toLowerCase()}`).join(' · ').slice(0, 400) },
+    starter: { extra: parts.flatMap(w => w.starter.extra || []), ...(sketch ? { sketch } : {}) },
+  };
+}
+for (const combo of [['robotics', 'bioelectronics'], ['robotics', 'ai'], ['bioelectronics', 'ai'], ['robotics', 'bioelectronics', 'ai']]) { const v = validateWorkspace(mixWorkspace(combo)); if (v.ok) registerWorkspace(v.workspace); }
 
 export const getWorkspace = id => registry.get(id) || registry.get(DEFAULT_WORKSPACE);
 export const listWorkspaces = () => [...registry.values()];

@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import { mixId, MIXABLE, getWorkspace } from '../src/core/workspaces.js';
+assert.equal(mixId(['robotics']), 'robotics');
+assert.equal(mixId(['ai', 'robotics']), 'mix-robotics-ai');
+assert.equal(mixId(['ai', 'bioelectronics', 'robotics']), 'mix-robotics-bioelectronics-ai');
+assert.equal(mixId([]), '');
+const w = getWorkspace;
+const rb = w('mix-robotics-bioelectronics');
+assert.ok(rb && rb.mix && rb.robotics && rb.visualizer && !rb.ml);
+const ra = w('mix-robotics-ai');
+assert.ok(ra.robotics && ra.ml);
+assert.deepEqual(MIXABLE, ['robotics', 'bioelectronics', 'ai']);
+console.log('mix ok');

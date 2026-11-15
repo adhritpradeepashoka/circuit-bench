@@ -1,6 +1,7 @@
 // The AI workspace's machine-learning tabs: Train (collect sensor data, train a small neural network), Run (try the model live and export it as C for
 // the sketch) and Visualize (loss curve, decision map, the network itself, confusion matrix). The maths lives in src/core/ml.js; the project keeps
 // its ML work in src/core/ml-context.js. Only workspaces that ask for it (AI boards) get the tabs.
+import { joinViews } from './view-groups.js';
 import { activeWorkspace } from '../core/workspaces.js';
 import { getMl, updateMl, onMl } from '../core/ml-context.js';
 import { emptyDataset, demoDataset, parseCsv, toCsv, createTrainer, evaluate, predict, paramCount, exportC, exampleSketch, MAX_NEURONS } from '../core/ml.js';
@@ -17,7 +18,7 @@ export function initMl({ editor, code, sim }) {
   if (!canvas || !toolbar) return null;
   const toggle = el('div', { className: 'view-toggle', role: 'group', ariaLabel: 'View', hidden: true }), sepAfter = el('span', { className: 'sep', hidden: true });
   const VIEWS = [['circuit', 'Circuit'], ['train', 'Train'], ['run', 'Run model'], ['viz', 'Visualize']], btn = {};
-  for (const [id, label] of VIEWS) { btn[id] = el('button', { type: 'button', textContent: label }); btn[id].addEventListener('click', () => show(id)); toggle.append(btn[id]); }
+  for (const [id, label] of VIEWS) { btn[id] = el('button', { type: 'button', textContent: label }); if (id === 'circuit') btn[id].dataset.circuitTab = '1'; btn[id].addEventListener('click', () => show(id)); toggle.append(btn[id]); }
   toolbar.prepend(toggle, sepAfter);
   const pane = el('div', { className: 'ml-pane', hidden: true }), secs = {};
   for (const id of ['train', 'run', 'viz']) { secs[id] = el('section', { className: 'ml-sec', hidden: true }); pane.append(secs[id]); }
@@ -286,7 +287,9 @@ export function initMl({ editor, code, sim }) {
   }
 
   /* ── switching views ───────────────────────────────── */
+  const claim = joinViews('ml', () => view, () => show('circuit'));
   function show(v) {
+    claim();
     if (v !== 'train' && trainer) stopTraining(false);
     view = v;
     for (const [id] of VIEWS) { btn[id].classList.toggle('on', id === v); btn[id].setAttribute('aria-pressed', String(id === v)); }

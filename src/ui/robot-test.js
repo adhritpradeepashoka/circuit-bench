@@ -8,12 +8,13 @@ import { RobotController, STARTER_ROBOT_SKETCH, CONTROL_DT } from '../core/robot
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
 const clamp = (v, lo = -1, hi = 1) => Math.max(lo, Math.min(hi, v));
+const CIRCUIT_NOTE = 'Your circuit drives this robot.\n\nRun the circuit on the Circuit tab. Each servo in it moves one servo hinge here, in the order you placed them: 0° turns the joint to the low end of its range, 180° to the high end.';
 const SKETCH_KEY = 'circuitbench:robot-sketch', WHICH_KEY = 'circuitbench:robot-which';
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* not saved */ } } };
 const MODE_NAMES = { servo: 'Servo (angle)', motor: 'Motor (wheel)', free: 'Free (no motor)' };
 const STEPS = Math.round(CONTROL_DT / DT);
 
-export function initRobotTest({ host, getAsm, getAnchor, getHull, getMesh, prepare, goAssembly, switchTo }) {
+export function initRobotTest({ host, circuitServos = null, circuitRunning = null, getAsm, getAnchor, getHull, getMesh, prepare, goAssembly, switchTo }) {
   host.replaceChildren();
   const stage = el('div', { className: 'asm-stage fly-stage' }), side = el('div', { className: 'asm-side fly-side' });
   host.append(stage, side); host.classList.add('fly-pane');
@@ -47,7 +48,7 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, getMesh, prepa
   });
   const field = (label, ctl) => el('label', { className: 'asm-field' }, el('span', { textContent: label }), ctl);
   const summary = el('p', { className: 'asm-note', id: 'robSummary' }), notes = el('div', { className: 'asm-note bad', id: 'robNotes' }), jointBox = el('div', { className: 'fly-motors', id: 'robJoints' });
-  const whichSel = el('select', { id: 'robWhich', ariaLabel: 'Which controller' }, el('option', { value: 'starter', textContent: 'Built-in (sliders and keys, read-only)' }), el('option', { value: 'mine', textContent: 'My sketch (edit below)' }));
+  const whichSel = el('select', { id: 'robWhich', ariaLabel: 'Which controller' }, el('option', { value: 'starter', textContent: 'Built-in (sliders and keys, read-only)' }), el('option', { value: 'mine', textContent: 'My sketch (edit below)' }), ...(circuitServos ? [el('option', { value: 'circuit', textContent: 'My circuit (its servos move the joints)' })] : []));
   const code = el('textarea', { id: 'robCode', className: 'fly-code', spellcheck: false, rows: 16, ariaLabel: 'Robot sketch' });
   const applyBtn = el('button', { type: 'button', className: 'asm-btn primary', id: 'robApply', textContent: 'Run this sketch' }), restoreBtn = el('button', { type: 'button', className: 'asm-btn', id: 'robRestore', textContent: 'Start from the starter' });
   const errBox = el('div', { className: 'asm-note bad', id: 'robErr', hidden: true }), logBox = el('pre', { className: 'fly-log', id: 'robLog', hidden: true });
@@ -57,8 +58,8 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, getMesh, prepa
     el('p', { className: 'asm-note', textContent: 'Each hinge is a servo by default. A round part turning on its axle is found as a wheel (a motor). Choose “Free” for a hinge with no motor, like a passive wheel.' }),
     el('h4', { textContent: 'Controller' }), field('Runs', whichSel), code, el('div', { className: 'asm-row' }, applyBtn, restoreBtn), errBox, logBox,
     el('p', { className: 'asm-note', textContent: 'An estimate: rigid parts shaped from your 3D models, the masses you gave, a typical 9 g servo (0.18 N·m, 500°/s) and a hobby gear motor, friction 1.0 on a flat floor, and no wiring or battery limits yet. Parts push on each other and on the floor, and each servo stops hard at the ends of its range. Your sketch runs as code in this page, so only run sketches you trust.' }));
-  const saved = store.get(SKETCH_KEY); let mine = saved && saved.includes('loop') ? saved : STARTER_ROBOT_SKETCH, which = store.get(WHICH_KEY) === 'mine' ? 'mine' : 'starter';
-  const showCode = () => { whichSel.value = which; code.value = which === 'mine' ? mine : STARTER_ROBOT_SKETCH; code.scrollTop = 0; code.readOnly = which !== 'mine'; applyBtn.textContent = which === 'mine' ? 'Run this sketch' : 'Drop it again'; restoreBtn.hidden = which !== 'mine'; };
+  const saved = store.get(SKETCH_KEY); let mine = saved && saved.includes('loop') ? saved : STARTER_ROBOT_SKETCH, which = store.get(WHICH_KEY) === 'mine' ? 'mine' : (store.get(WHICH_KEY) === 'circuit' && circuitServos ? 'circuit' : 'starter');
+  const showCode = () => { whichSel.value = which; code.value = which === 'mine' ? mine : which === 'circuit' ? CIRCUIT_NOTE : STARTER_ROBOT_SKETCH; code.scrollTop = 0; code.readOnly = which !== 'mine'; applyBtn.textContent = which === 'mine' ? 'Run this sketch' : 'Drop it again'; restoreBtn.hidden = which !== 'mine'; };
   showCode();
   whichSel.addEventListener('change', () => { which = whichSel.value; store.set(WHICH_KEY, which); showCode(); restart(); });
   code.addEventListener('input', () => { if (which === 'mine') { mine = code.value; store.set(SKETCH_KEY, mine); } });
@@ -134,6 +135,12 @@ export function initRobotTest({ host, getAsm, getAnchor, getHull, getMesh, prepa
     return { drive: clamp(drive), turn: clamp(turn), strafe: clamp(strafe), lift: clamp(lift) };
   }
   function control() {
+    if (which === 'circuit') {   // the servos in the circuit (run it on the Circuit tab) set the angle of each servo hinge, in the order they were placed
+      const hinges = model.joints.map((j, k) => (j.mode === 'servo' && j.range ? k : -1)).filter(k => k >= 0), sv = circuitServos().filter(x => x.angle != null);
+      hinges.forEach((k, i) => { const a = sv[i]?.angle; if (a == null) return; const [lo, hi] = model.joints[k].range; sim.command(k, lo + (clamp(a, 0, 180) / 180) * (hi - lo)); });
+      if (!circuitRunning?.()) { logBox.hidden = false; logBox.textContent = 'The circuit is not running. Press Run on the Circuit tab, then come back here: the servos there move these joints.'; } else logBox.hidden = true;
+      return;
+    }
     const J = model.joints, st = { angles: J.map((_, k) => sim.angle(k)), speeds: J.map((_, k) => sim.speed(k)), imu: sim.imu(), input: input(), sliders };
     const w = ctl.tick(st, sim.t); w.forEach((v, k) => { if (v != null) sim.command(k, v); });
     if (ctl.error && errBox.hidden) { errBox.hidden = false; errBox.textContent = `Your sketch has a problem: ${ctl.error}`; }

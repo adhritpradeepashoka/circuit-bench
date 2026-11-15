@@ -409,7 +409,7 @@ export function initAiPanel(editor, code, sim = null) {
     const stopped = () => { messages.push({ id: ++seq, role: 'error', text: 'Stopped. Nothing was changed.' }); };
     try {
       const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
-      const args = { signal, instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().id, robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
+      const args = { signal, instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn()) {
