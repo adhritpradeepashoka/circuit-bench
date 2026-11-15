@@ -10,6 +10,7 @@ export class RequestError extends Error { constructor(message, status = 400) { s
 
 /** Boards the service will build for. The map is the extension point for Phase 6 (more MCU families). */
 import { R4_COMPAT_H, R4_HEADER_NAME, r4Source } from '../src/core/r4-compat.js';
+import { espCompatHeader, espSource, ESP_HEADER_NAME } from '../src/core/esp-boards.js';
 import { compatHeader, columnsOf, UNOQ_HEADER_NAME, unoqSource } from '../src/core/unoq-compat.js';
 
 export const BOARDS = {
@@ -22,6 +23,8 @@ export const BOARDS = {
   'cb:uno-q': { name: 'Arduino UNO Q (on the Uno emulation)', mcu: 'atmega328p', hexFile: 'ino.hex', real: 'arduino:avr:uno', compat: true, unoq: true },
   'cb:uno-r4-wifi': { name: 'Arduino UNO R4 WiFi (on the Uno emulation)', mcu: 'atmega328p', hexFile: 'ino.hex', real: 'arduino:avr:uno', compat: true, unoq: true },
   'cb:ventuno-q': { name: 'Arduino VENTUNO Q (on the Uno emulation)', mcu: 'atmega328p', hexFile: 'ino.hex', real: 'arduino:avr:uno', compat: true, unoq: true },
+  // Seeed XIAO ESP32-S3: converted (src/core/esp-boards.js adds the XIAO pin names, 12-bit analogRead, ledc and ESP32Servo) and built for the ATmega328P.
+  'cb:xiao-esp32s3': { name: 'Seeed XIAO ESP32-S3 (on the Uno emulation)', mcu: 'atmega328p', hexFile: 'ino.hex', real: 'arduino:avr:uno', compat: true, esp: true },
   // Raspberry Pi Pico: Earle Philhower's Arduino-Pico core + its own arm-none-eabi toolchain. The simulator loads the raw .bin at 0x10000000.
   'rp2040:rp2040:rpipico': { name: 'Raspberry Pi Pico', mcu: 'rp2040', bin: true },
 };
@@ -134,8 +137,9 @@ export function createCompiler(options = {}) {
       const sketchDir = join(root, 'sketch'), outDir = join(root, 'out');
       await mkdir(sketchDir); await mkdir(cfg.cacheDir, { recursive: true });
       // The Arduino builder needs <folder>/<folder>.ino
-      for (const f of files) await writeFile(join(sketchDir, f.name === main ? 'sketch.ino' : f.name), BOARDS[fqbn].compat && f.name === main ? (BOARDS[fqbn].unoq ? unoqSource(f.content) : r4Source(f.content)) : f.content);
+      for (const f of files) await writeFile(join(sketchDir, f.name === main ? 'sketch.ino' : f.name), BOARDS[fqbn].compat && f.name === main ? (BOARDS[fqbn].esp ? espSource(f.content) : BOARDS[fqbn].unoq ? unoqSource(f.content) : r4Source(f.content)) : f.content);
       if (BOARDS[fqbn].compat) await writeFile(join(sketchDir, R4_HEADER_NAME), R4_COMPAT_H);
+      if (BOARDS[fqbn].esp) await writeFile(join(sketchDir, ESP_HEADER_NAME), espCompatHeader());
       if (BOARDS[fqbn].unoq) await writeFile(join(sketchDir, UNOQ_HEADER_NAME), compatHeader(columnsOf(fqbn)));
       const args = ['compile', '--fqbn', BOARDS[fqbn].real || fqbn, '--warnings', 'default', '--format', 'json', '--output-dir', outDir, '--build-cache-path', cfg.cacheDir];
       if (cfg.compilerPath && !BOARDS[fqbn].bin) args.push('--build-property', `compiler.path=${cfg.compilerPath.replace(/\/?$/, '/')}`);

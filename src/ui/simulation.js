@@ -578,7 +578,7 @@ export class Simulation {
         if (!el) continue;
         const ctx = this.ctxs.find(c => c.id === part.id) || (this.ctxs.length === 1 && part.id === circuit.uno.board?.id ? this.ctxs[0] : null), live = !!ctx;
         if (el.ledPower !== live) el.ledPower = live;
-        const l = live && this.modes?.get(this.pinKey(BOARD_SPECS[part.type].ledPin, ctx)) === 'H';
+        const l = live && this.modes?.get(this.pinKey(BOARD_SPECS[part.type].ledPin, ctx)) === (BOARD_SPECS[part.type].ledActiveLow ? 'L' : 'H');
         if (el.led13 !== l) el.led13 = l;
         if (live && ctx.mcu.matrixHex !== undefined && el.matrix !== ctx.mcu.matrixHex) el.matrix = ctx.mcu.matrixHex;      // the 13 x 8 matrix the sketch draws
       }

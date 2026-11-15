@@ -3,6 +3,8 @@
 // AVR port/bit (and ADC channel, for analog inputs). Adding a board means adding an entry here, a PART_DEFS
 // entry for its drawing, and — only if it uses a new chip — a config in src/sim/chips.js.
 
+import { xiaoSpecPins, XIAO_PWM } from './esp-boards.js';
+
 const range = (n, from = 0) => Array.from({ length: n }, (_, i) => i + from);
 
 // ATmega328P (Uno, Nano): D0–7 = PORTD, D8–13 = PORTB, A0–A5 = PORTC (ADC0–5)
@@ -107,6 +109,18 @@ export const BOARD_SPECS = {
     avoid: ['0', '1', 'A4', 'A5'],
     pinOhms: 40, pinMaxA: 0.02, pinRatingText: 'VENTUNO Q pin limit: 3.3 V logic, keep to a few mA (20 mA at the very most) — use a transistor for anything bigger',
     aiNote: 'Write normal VENTUNO Q code (the Arduino side, STM32H5F5). It is converted to run in the simulator. All logic and the ADC are 3.3 V: never put 5 V on a pin. The Uno header pins (D0–D13, A0–A5) are simulated; the 40-pin HAT header and Qwiic I²C (shared with A4/A5 here) can be wired, but GPIO on the HAT header is not driven by the simulator. PWM on 3, 5, 6, 9, 10, 11 (8-bit). Arduino_LED_Matrix works (13 x 8): matrix.begin(); matrix.renderBitmap(byte[8][13], 8, 13); matrix.loadFrame(uint32_t[4]). Monitor is the serial monitor. In the simulator int is 16-bit and RAM is 2 KB.',
+  },
+  // Seeed XIAO ESP32-S3. Its Xtensa chip is not emulated: a sketch for it is converted at compile time (src/core/esp-boards.js) and runs on the AVR emulation,
+  // with 3.3 V logic and a 12-bit analogRead. Each of its 11 pads is an emulated pin; D0 to D5 can read analog, D8 to D10 do PWM, D6 and D7 are the UART (Serial1), D4 and D5 are the I²C pins.
+  'xiao-esp32s3': {
+    uarts: [{ name: 'Serial1', tx: 'D6', rx: 'D7' }],
+    name: 'Seeed XIAO ESP32-S3', chip: 'atmega328p', emulation: 'uno-q', fqbn: 'cb:xiao-esp32s3', pins: xiaoSpecPins(), ledPin: 'LED', ledActiveLow: true,
+    i2c: { sda: 'D4', scl: 'D5' }, ram: 2048, flash: 32256,
+    chipName: 'ESP32-S3 (emulated on an ATmega328P core)', logic: 3.3, adcBits: 12, pwm: XIAO_PWM, pwmPrefer: ['D10', 'D8', 'D9'],
+    avoid: ['D4', 'D5', 'D6', 'D7'],
+    pinOhms: 40, pinMaxA: 0.02, pinRatingText: 'XIAO ESP32-S3 pin limit: 3.3 V logic, about 20 mA per pin at the very most (use a transistor for a motor)',
+    rails: { gnd: 'GND', v5: '5V', v33: '3V3' },
+    aiNote: 'Write normal Seeed XIAO ESP32-S3 Arduino code (it is converted to run in the simulator). Pins are D0 to D10 (D0 = GPIO1 ... D10 = GPIO9); LED_BUILTIN is the orange user LED and is ON when LOW. All logic and the ADC are 3.3 V: never put 5 V on a pin. analogRead returns 0 to 4095, and only D0 to D5 can read analog here. PWM: ledcAttach(pin, freq, bits) then ledcWrite(pin, duty), on D8 to D10. Serial is the USB serial monitor and Serial1 is D6 (TX) / D7 (RX), the same UART here. Servos: #include <ESP32Servo.h>, Servo s; s.attach(D8). I²C is D4 (SDA) and D5 (SCL). Wi-Fi, Bluetooth, the camera and FreeRTOS tasks do not run in the simulator; int is 16-bit here (use long for big sums).',
   },
   'raspberry-pi-pico': {
     uarts: [{ name: 'Serial1', tx: '0', rx: '1' }, { name: 'Serial2', tx: '8', rx: '9' }],

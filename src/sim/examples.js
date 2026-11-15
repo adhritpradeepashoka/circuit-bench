@@ -224,6 +224,40 @@ void loop() {
   delay(2000);
 }
 ` },
+  'xiao-servo': { name: 'XIAO ESP32-S3: an analog signal moves a servo', board: 'xiao-esp32s3', code: `// Seeed XIAO ESP32-S3. A knob (or a BioAmp's output) on D0 sets the angle of a servo on D8.
+// Wire: knob middle pin -> D0, its ends to 3V3 and GND. Servo signal -> D8, red -> 5V, brown -> GND.
+#include <ESP32Servo.h>
+
+Servo arm;
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  arm.setPeriodHertz(50);
+  arm.attach(D8, 500, 2400);
+}
+
+void loop() {
+  int raw = analogRead(D0);                 // 0 to 4095 on the ESP32-S3
+  int angle = map(raw, 0, 4095, 0, 180);
+  arm.write(angle);
+  digitalWrite(LED_BUILTIN, angle > 90 ? LOW : HIGH);   // the orange LED is ON when the pin is LOW
+  Serial.println(angle);
+  delay(20);
+}
+` },
+  'xiao-blink': { name: 'XIAO ESP32-S3: blink the user LED', board: 'xiao-esp32s3', code: `// The orange user LED on the XIAO ESP32-S3 is ON when its pin is LOW.
+void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(500);
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(500);
+}
+` },
   'unoq-matrix': { name: 'UNO Q / VENTUNO Q: LED matrix heartbeat', board: 'arduino-uno-q', code: `// Draws a heart on the 13 x 8 LED matrix and makes it beat. Runs on the Arduino UNO Q and VENTUNO Q (simulated STM32 side).
 #include <Arduino_RouterBridge.h>
 #include <Arduino_LED_Matrix.h>

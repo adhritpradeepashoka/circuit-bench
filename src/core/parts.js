@@ -1,6 +1,7 @@
 import { seatOnArt, artSize } from './board-art-pins.js';
 import { WOKWI_PINS } from './pins.generated.js';
 import { buildBreadboard, breadboardSVG } from './breadboard.js';
+import { XIAO_S3 } from './esp-boards.js';
 import { UNOQ_PINS, UNOQ_GROUPS, VENTUNO_PINS, VENTUNO_GROUPS } from './ai-boards.js';
 
 const MM = 96 / 25.4; // CSS px per mm — @wokwi/elements draw everything in mm-sized SVGs
@@ -46,6 +47,17 @@ const picoPins = () => {
   const x0 = (PICO_W - 7 * PICO_PITCH) / 2, y0 = (PICO_H - 19 * PICO_PITCH) / 2;
   return [...PICO_LEFT.map((id, i) => ({ id, x: x0, y: y0 + i * PICO_PITCH })), ...PICO_RIGHT.map((id, i) => ({ id, x: x0 + 7 * PICO_PITCH, y: y0 + i * PICO_PITCH }))]
     .map(p => ({ id: p.id, label: picoLabel(p.id), x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100, kind: 'pin' }));
+};
+
+// Seeed XIAO ESP32-S3: 21 × 17.8 mm, USB-C at the top, 7 pads down each side on a 2.54 mm pitch, the two rows 15.24 mm apart (so it sits in a breadboard).
+// Left column top to bottom: D0 to D6. Right column top to bottom: 5V, GND, 3V3, D10, D9, D8, D7.
+export const XIAO_W = 17.8 * MM, XIAO_H = 21 * MM;
+const XIAO_RIGHT = ['5V', 'GND', '3V3', 'D10', 'D9', 'D8', 'D7'];
+const xiaoPins = () => {
+  const x0 = (XIAO_W - 6 * 2.54 * MM) / 2, y0 = 4.4 * MM, P = 2.54 * MM, note = Object.fromEntries(XIAO_S3.pads.map(p => [p.id, `${p.id} · ${p.note}`]));
+  const label = id => note[id] || ({ '5V': '5V (USB in / out)', GND: 'GND', '3V3': '3V3 (3.3 V out)' }[id]);
+  const left = XIAO_S3.pads.slice(0, 7).map((p, i) => ({ id: p.id, x: x0, y: y0 + i * P })), right = XIAO_RIGHT.map((id, i) => ({ id, x: x0 + 6 * P, y: y0 + i * P }));
+  return [...left, ...right].map(p => ({ id: p.id, label: label(p.id), x: Math.round(p.x * 100) / 100, y: Math.round(p.y * 100) / 100, kind: 'pin' }));
 };
 
 export const PART_DEFS = {
@@ -95,6 +107,10 @@ export const PART_DEFS = {
     w: PICO_W, h: PICO_H, pins: picoPins(),
     groups: [{ id: 'gnd', pins: ['GND.1', 'GND.2', 'GND.3', 'GND.4', 'GND.5', 'GND.6', 'GND.7', 'AGND'] }],
     insertable: true, layer: 1,
+  },
+  'xiao-esp32s3': {
+    type: 'xiao-esp32s3', name: 'Seeed XIAO ESP32-S3', category: 'Boards', tag: 'cb-xiao-s3',
+    w: XIAO_W, h: XIAO_H, pins: xiaoPins(), groups: [], insertable: true, layer: 1,
   },
   breadboard: {
     type: 'breadboard', name: 'Solderless Breadboard', category: 'Prototyping', tag: null,
@@ -215,5 +231,5 @@ export const PART_DEFS = {
 
 for (const def of Object.values(PART_DEFS)) def.pinById = new Map(def.pins.map(p => [p.id, p]));
 
-export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-r4-wifi', 'arduino-uno-q', 'arduino-ventuno-q', 'raspberry-pi-pico', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
+export const CATALOG_ORDER = ['arduino-uno', 'arduino-nano', 'arduino-mega', 'arduino-uno-r4', 'arduino-uno-r4-wifi', 'arduino-uno-q', 'arduino-ventuno-q', 'raspberry-pi-pico', 'xiao-esp32s3', 'breadboard', 'led', 'rgb-led', 'resistor', 'pushbutton', 'slide-switch', 'potentiometer', 'seven-segment', 'pir-sensor', 'ldr-module', 'ntc-sensor', 'dht', 'mpu6050', 'ssd1306', 'lcd1602', 'dc-motor', 'l298n', 'battery'];
 export const boardSVGMarkup = () => breadboardSVG(BREADBOARD);

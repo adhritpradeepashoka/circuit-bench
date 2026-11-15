@@ -18,7 +18,7 @@ const WIRE_COLOR = { v5: '#d9534f', v33: '#e8833a', vin: '#b5413d', gnd: '#2b2f3
 const SIGNAL_COLORS = ['#2e86de', '#27ae60', '#8e44ad', '#e67e22', '#16a085', '#c0392b', '#7f8c8d', '#d35400'];
 const GAP = 28, COL_GAP = 90, PAD = 70;
 
-const pinTextFor = type => n => (type === 'raspberry-pi-pico' ? (/^A\d+$/.test(n) ? `${n} (GP${26 + +n.slice(1)})` : `GP${n}`) : /^A\d+$/.test(n) ? n : `pin ${n}`);
+const pinTextFor = type => n => (type === 'xiao-esp32s3' ? n : type === 'raspberry-pi-pico' ? (/^A\d+$/.test(n) ? `${n} (GP${26 + +n.slice(1)})` : `GP${n}`) : /^A\d+$/.test(n) ? n : `pin ${n}`);
 const rotDims = p => ((((p.rot ?? p.rotate) || 0) % 180) === 90 ? { w: p.h, h: p.w } : { w: p.w, h: p.h });
 
 export function createPlanner(circuitIn, opts = {}) {
@@ -127,8 +127,8 @@ export function createPlanner(circuitIn, opts = {}) {
   const isNano = () => getBoard().type === 'arduino-nano';
   function candidates(kind, order) {
     const b = getBoard(), s = spec(), pins = Object.keys(s.pins).filter(n => !s.pins[n].internal);
-    const digital = pins.filter(n => /^\d+$/.test(n)).map(Number).sort((a, c) => a - c).map(String);
-    const analog = pins.filter(n => /^A\d+$/.test(n) && s.pins[n].adc !== undefined && !(isNano() && /^A[67]$/.test(n)));
+    const digital = pins.filter(n => /^\d+$/.test(n) || (/^D\d+$/.test(n) && s.pins[n].adc === undefined)).sort((a, c) => parseInt(a.replace(/\D/g, ''), 10) - parseInt(c.replace(/\D/g, ''), 10));      // plain numbers (Uno, Pico), or a XIAO's D6 to D10
+    const analog = pins.filter(n => (/^A\d+$/.test(n) || /^D\d+$/.test(n)) && s.pins[n].adc !== undefined && !(isNano() && /^A[67]$/.test(n)));
     const pwm = PWM_PINS[b.type] || new Set();
     if (kind === 'analog') return analog;
     if (kind === 'pwm') { const p = digital.filter(n => pwm.has(n)); const pref = s.pwmPrefer || [];      // AVR: 9 and 10 last — the Servo library takes Timer1 and with it PWM on those two

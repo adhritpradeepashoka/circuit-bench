@@ -16,6 +16,7 @@ const BLURB = {
   'arduino-uno-r4-wifi': 'UNO R3 layout · 12 × 8 LED matrix · 14-bit ADC + DAC · runs on the Uno emulation',
   'arduino-uno-q': 'Uno layout · STM32U585 sketches run in the simulator · 3.3 V · 13 × 8 LED matrix',
   'arduino-ventuno-q': '160 × 100 mm · STM32H5F5 sketches run in the simulator · 40-pin HAT header · 13 × 8 matrix',
+  'xiao-esp32s3': 'Seeed XIAO ESP32-S3 · sketches run in the simulator · 3.3 V · plugs into a breadboard',
   'arduino-nano': 'Small Uno · plugs into a breadboard',
   'arduino-mega': 'ATmega2560 · 54 digital, 16 analog pins',
   'raspberry-pi-pico': 'RP2040 · 3.3 V · runs real firmware · plugs into a breadboard',

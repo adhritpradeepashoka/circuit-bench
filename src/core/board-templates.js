@@ -76,10 +76,6 @@ const ESP_EXPANDED = [
     desc: 'A thumb-sized ESP32-C3 board with 14 pins, USB-C, a battery charger and 3.3 V logic.',
     rows: [[['D0', 'D0 (GPIO2)'], ['D1', 'D1 (GPIO3)'], ['D2', 'D2 (GPIO4)'], ['D3', 'D3 (GPIO5)'], ['D4', 'D4 (GPIO6, SDA)'], ['D5', 'D5 (GPIO7, SCL)'], ['D6', 'D6 (GPIO21, TX)']],
       [['5V', '5 V'], 'GND', ['3V3', '3.3 V'], ['D10', 'D10 (GPIO10, MOSI)'], ['D9', 'D9 (GPIO9, MISO)'], ['D8', 'D8 (GPIO8, SCK)'], ['D7', 'D7 (GPIO20, RX)']]] }),
-  board({ id: 'xiao-esp32s3', name: 'Seeed XIAO ESP32-S3', label: 'XIAO S3', color: '#1d2b22', chip: 'ESP32-S3', horiz: false,
-    desc: 'A thumb-sized ESP32-S3 board with 14 pins, USB-C, 8 MB flash and 3.3 V logic (the Sense version adds a camera).',
-    rows: [[['D0', 'D0 (GPIO1)'], ['D1', 'D1 (GPIO2)'], ['D2', 'D2 (GPIO3)'], ['D3', 'D3 (GPIO4)'], ['D4', 'D4 (GPIO5, SDA)'], ['D5', 'D5 (GPIO6, SCL)'], ['D6', 'D6 (GPIO43, TX)']],
-      [['5V', '5 V'], 'GND', ['3V3', '3.3 V'], ['D10', 'D10 (GPIO9, MOSI)'], ['D9', 'D9 (GPIO8, MISO)'], ['D8', 'D8 (GPIO7, SCK)'], ['D7', 'D7 (GPIO44, RX)']]] }),
 ];
 
 // ── Arduino, "expanded" pack ──

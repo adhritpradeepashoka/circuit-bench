@@ -41,9 +41,9 @@ export const PACKS = [
     id: 'esp-expanded',
     group: 'ESP',
     name: 'ESP boards (expanded)',
-    blurb: 'Many more: ESP32-DevKitC, ESP32-S3 DevKitC-1, ESP32-CAM, Wemos D1 Mini, ESP-01, ESP-12F, Seeed XIAO ESP32-C3 and ESP32-S3. Includes the normal pack.',
+    blurb: 'Many more: ESP32-DevKitC, ESP32-S3 DevKitC-1, ESP32-CAM, Wemos D1 Mini, ESP-01, ESP-12F, Seeed XIAO ESP32-C3 and Seeed XIAO ESP32-S3 (the XIAO S3 runs sketches in the simulator; the others are for wiring and planning). Includes the normal pack.',
     requires: ['esp-normal'],
-    types: custom(BOARD_PACK_IDS.espExpanded),
+    types: ['xiao-esp32s3', ...custom(BOARD_PACK_IDS.espExpanded)],
   },
 ];
 

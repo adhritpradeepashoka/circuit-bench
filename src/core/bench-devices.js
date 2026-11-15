@@ -14,7 +14,7 @@ export const PWM_PINS = Object.fromEntries(Object.entries(BOARD_SPECS).map(([typ
 const MAX_HOPS = 2;
 
 /** Short, kid-friendly name of a pin: "D13", "A0". */
-export const pinLabel = pin => (pin ? (/^A\d+$/.test(pin.name) ? pin.name : `D${pin.name}`) : '');
+export const pinLabel = pin => (pin ? (/^[AD]\d+$/.test(pin.name) ? pin.name : `D${pin.name}`) : '');
 
 export function describeBench(parts, circuit) {
   const board = mainBoard(parts);

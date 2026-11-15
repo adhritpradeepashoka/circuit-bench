@@ -138,6 +138,48 @@ class PiPico extends CbElement {
   }
 }
 
+/** Seeed XIAO ESP32-S3: black board, USB-C at the top, BOOT and RESET buttons beside it, the orange user LED (GPIO21, on when LOW) and the red charge LED,
+ *  the silver ESP32-S3 shield, the antenna connector at the bottom, 14 castellated pads with their names printed beside them. */
+export const XIAO_PX_W = 17.8 * 96 / 25.4, XIAO_PX_H = 21 * 96 / 25.4;
+class XiaoS3 extends CbElement {
+  constructor() { super(); this._led = false; this._power = false; }
+  get led13() { return this._led; }
+  set led13(v) { v = !!v; if (v === this._led) return; this._led = v; this.update(); }
+  get ledPower() { return this._power; }
+  set ledPower(v) { v = !!v; if (v === this._power) return; this._power = v; this.update(); }
+  markup() {
+    const W = XIAO_PX_W, H = XIAO_PX_H, P = 2.54 * 96 / 25.4, x0 = (W - 6 * P) / 2, y0 = 4.4 * 96 / 25.4, cx = W / 2;
+    const L = ['D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6'], R = ['5V', 'GND', '3V3', 'D10', 'D9', 'D8', 'D7'];
+    let pads = '', names = '';
+    const fs = 4.6;
+    L.forEach((t, i) => { const y = y0 + i * P; pads += `<rect x="0" y="${(y - 2.2).toFixed(1)}" width="${(x0 + 2.6).toFixed(1)}" height="4.4" rx="1" fill="#d9b04a"/><circle cx="${x0.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" fill="#2a2a2a"/>`; names += `<text x="${(x0 + 5).toFixed(1)}" y="${(y + 1.6).toFixed(1)}" font-size="${fs}" font-family="sans-serif" font-weight="700" fill="#e9ecef">${t}</text>`; });
+    R.forEach((t, i) => { const y = y0 + i * P, x = x0 + 6 * P; pads += `<rect x="${(x - 2.6).toFixed(1)}" y="${(y - 2.2).toFixed(1)}" width="${(W - x + 2.6).toFixed(1)}" height="4.4" rx="1" fill="#d9b04a"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="1.5" fill="#2a2a2a"/>`; names += `<text x="${(x - 5).toFixed(1)}" y="${(y + 1.6).toFixed(1)}" font-size="${fs}" font-family="sans-serif" font-weight="700" fill="#e9ecef" text-anchor="end">${t}</text>`; });
+    return `<svg xmlns="${svgNS}" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
+      <rect x="0.4" y="0.4" width="${W - 0.8}" height="${H - 0.8}" rx="2.5" fill="#17191d" stroke="#050607" stroke-width=".8"/>
+      ${pads}
+      <rect x="${cx - 17}" y="0" width="34" height="11.5" rx="2" fill="#c9ced3" stroke="#7b848c" stroke-width=".7"/><rect x="${cx - 12}" y="2.6" width="24" height="3.6" rx="1.8" fill="#23272c"/>
+      <rect x="${cx - 14}" y="14.5" width="9" height="7" rx="1" fill="#9aa1a8" stroke="#5d646a" stroke-width=".5"/><rect x="${cx - 12}" y="16" width="5" height="4" rx=".8" fill="#2b2f34"/>
+      <text x="${cx - 9.5}" y="26" font-size="4.2" font-family="sans-serif" font-weight="700" fill="#e9ecef" text-anchor="middle">B</text>
+      <rect x="${cx + 5}" y="14.5" width="9" height="7" rx="1" fill="#9aa1a8" stroke="#5d646a" stroke-width=".5"/><rect x="${cx + 7}" y="16" width="5" height="4" rx=".8" fill="#2b2f34"/>
+      <text x="${cx + 9.5}" y="26" font-size="4.2" font-family="sans-serif" font-weight="700" fill="#e9ecef" text-anchor="middle">R</text>
+      <circle class="led" cx="${cx - 3.2}" cy="31.5" r="1.9" fill="#4a3208"/>
+      <circle class="pwr" cx="${cx + 3.2}" cy="31.5" r="1.9" fill="#3b1111"/>
+      <rect x="${cx - 14}" y="36.5" width="28" height="30" rx="1.5" fill="#bfc5ca" stroke="#838b92" stroke-width=".7"/>
+      <rect x="${cx - 14}" y="36.5" width="28" height="4" fill="#aab1b7"/>
+      <text x="${cx}" y="53" font-size="5.2" font-family="sans-serif" font-weight="800" fill="#3a4147" text-anchor="middle">ESP32-S3</text>
+      <text x="${cx}" y="60" font-size="3.8" font-family="sans-serif" fill="#4d555c" text-anchor="middle">XIAO</text>
+      <rect x="${cx - 4}" y="69" width="8" height="5.5" rx=".8" fill="#2a2e33" stroke="#0b0c0d" stroke-width=".4"/><circle cx="${cx}" cy="71.7" r="1.6" fill="#8d959c"/>
+      <text x="${cx}" y="${H - 1.6}" font-size="3.6" font-family="sans-serif" fill="#7f8890" text-anchor="middle">Seeed Studio</text>
+      ${names}
+    </svg>`;
+  }
+  update() {
+    const led = this.querySelector('.led'), pwr = this.querySelector('.pwr');
+    if (led) led.setAttribute('fill', this._led ? '#ffb02e' : '#4a3208');
+    if (pwr) pwr.setAttribute('fill', this._power ? '#ff4d4d' : '#3b1111');
+  }
+}
+
 /** Arduino UNO R4 Minima: same header positions as the R3 (shields and jumper wires fit alike), but a USB-C port, the square Renesas RA4M1 and the R4's teal board. */
 class UnoR4 extends CbElement {
   constructor() { super(); this._led = false; this._power = false; }
@@ -199,7 +241,7 @@ class Battery extends CbElement {
   update() { const t = this.querySelector('.v'); if (t) t.textContent = `${+this._volts.toFixed(1)}V`; }
 }
 
-for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico]]) {
+for (const [tag, cls] of [['cb-dc-motor', DcMotor], ['cb-l298n', L298n], ['cb-battery', Battery], ['cb-pi-pico', PiPico], ['cb-xiao-s3', XiaoS3]]) {
   if (globalThis.customElements && !customElements.get(tag)) customElements.define(tag, cls);
 }
 
