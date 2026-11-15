@@ -164,7 +164,7 @@ footer .wrap { display: flex; gap: 20px; flex-wrap: wrap; align-items: center; }
 
 <section class="final"><div class="wrap reveal"><h2>Your bench is ready.</h2><p>Open CircuitBench and build something. It's free to start.</p><a class="btn go" href="/app">Open the lab →</a></div></section>
 
-<footer><div class="wrap"><span>© CircuitBench</span><a href="/blog">Blog</a><a href="/app">Open the lab</a><span class="sp">Built by a student, for anyone who wants to make things.</span></div></footer>
+<footer><div class="wrap"><span>© CircuitBench</span><a href="/blog">Blog</a><a href="/app">Open the lab</a><a href="/privacy">Privacy</a><span class="sp">Built by a student, for anyone who wants to make things.</span></div></footer>
 <script>
 const io = 'IntersectionObserver' in window ? new IntersectionObserver(es => es.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { threshold: .12 }) : null;
 document.querySelectorAll('.reveal').forEach(el => io ? io.observe(el) : el.classList.add('in'));

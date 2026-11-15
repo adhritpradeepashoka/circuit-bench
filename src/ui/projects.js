@@ -159,7 +159,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     show(theirs); editor.status(`“${theirs.name}” was updated in another tab — showing the latest.`);
   });
 
-  async function create({ name, workspace = DEFAULT_WORKSPACE, data = null, board } = {}) {
+  async function create({ name, workspace = DEFAULT_WORKSPACE, data = null, board, before = null } = {}) {
     await saveNow();
     const taken = (await store.list()).map(m => m.name);
     const ws = getWorkspace(workspace), fresh = !data;
@@ -168,6 +168,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     const p = newProject({ name: uniqueName(cleanName(name), taken), workspace, data });
     if (!data) { p.data = null; if (board) p.board = board; }
     await store.save(p);
+    if (before) await before(p.id);      // (a project file's 3D build goes in before the project opens)
     current = null;                  // open() should not re-save the project we're leaving twice
     await open(p.id);
     if (!data) {
@@ -364,6 +365,13 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     /** Called with the project whenever a different one is on screen (also once at start). */
     onSwitch(fn) { switchListeners.push(fn); if (current) fn(current); },
     /** Bring in a project file as a new project (rather than overwriting the open one). */
-    importFile: async (data, name) => { fromProjectFile(data); return create({ name: name || 'Imported project', data }); },   // validate first: a bad file must not leave an empty project behind
+    importFile: async (file, name, { before = null } = {}) => {
+      fromProjectFile(file); const { project: meta, assembly: _a, ...data } = file, ws = meta && WORKSPACES[meta.workspace] ? meta.workspace : DEFAULT_WORKSPACE;
+      const p = await create({ name: (typeof meta?.name === 'string' && meta.name) || name || 'Imported project', workspace: ws, data, before });
+      if (meta?.robotType && current) { current = { ...current, robotType: cleanRobotType(meta.robotType) }; setRobotType(current.robotType); await saveNow(); }
+      return p;
+    },
+    /** The whole open project as one file: circuit, code, trained model, which workspace it is, what kind of robot. (The 3D build is added by the caller.) */
+    exportFile: () => ({ ...workingData(), ...(current ? { project: { name: current.name, workspace: current.workspace, ...(current.robotType ? { robotType: current.robotType } : {}) } } : {}) }),   // validate first: a bad file must not leave an empty project behind
   };
 }

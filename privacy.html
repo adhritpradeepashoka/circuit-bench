@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy · CircuitBench</title>
+<meta name="description" content="What CircuitBench keeps about you, where it is kept, and how to remove it.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314191c'/%3E%3Crect x='7' y='9' width='3.5' height='14' fill='%23c9853c'/%3E%3Crect x='14.2' y='9' width='3.5' height='14' fill='%23d64b3d'/%3E%3Crect x='21.5' y='9' width='3.5' height='14' fill='%23e9c46a'/%3E%3C/svg%3E">
+<style>
+:root { --ink:#0f1518; --text:#e9efec; --muted:#9fb0a8; --paper:#f6f8f5; --body:#26322d; --soft:#5d6c65; --green:#2fd17f; --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+* { box-sizing: border-box; }
+body { margin: 0; font-family: var(--font); color: var(--body); background: var(--paper); line-height: 1.6; -webkit-font-smoothing: antialiased; }
+a { color: #1a7f4e; }
+nav { background: var(--ink); border-bottom: 1px solid rgba(255,255,255,.07); }
+nav .wrap { display: flex; align-items: center; gap: 22px; height: 62px; }
+.wrap { width: min(780px, 100% - 40px); margin: 0 auto; }
+.logo { color: #fff; font-weight: 800; font-size: 18px; text-decoration: none; margin-right: auto; }
+nav a.l { color: var(--muted); text-decoration: none; font-size: 14.5px; } nav a.l:hover { color: #fff; }
+main { padding: 44px 0 70px; }
+h1 { font-size: 34px; letter-spacing: -.02em; margin: 0 0 6px; color: var(--ink); }
+h2 { font-size: 20px; margin: 34px 0 8px; color: var(--ink); }
+.when { color: var(--soft); font-size: 14px; margin: 0 0 22px; }
+.short { background: #fff; border: 1px solid #dfe6e1; border-left: 4px solid var(--green); border-radius: 10px; padding: 14px 18px; }
+.short p { margin: 6px 0; }
+ul { padding-left: 22px; } li { margin: 5px 0; }
+footer { background: #0b1013; color: #8a9a93; padding: 28px 0; font-size: 14px; } footer a { color: inherit; text-decoration: none; margin-right: 18px; } footer a:hover { color: #fff; }
+</style>
+</head>
+<body>
+<nav><div class="wrap"><a class="logo" href="/?home">CircuitBench</a><a class="l" href="/blog">Blog</a><a class="l" href="/app">Open the lab</a></div></nav>
+<main><div class="wrap">
+<h1>Privacy</h1>
+<p class="when">Last updated 15 November 2026</p>
+
+<div class="short">
+<p><b>The short version.</b></p>
+<p>You can use CircuitBench without an account. Then your projects stay in your own browser.</p>
+<p>If you sign in with Google, we keep your name, email and profile picture, and your projects, so they follow you to other devices.</p>
+<p>We show no adverts, we use no tracking or analytics tools, and we do not sell or share your details.</p>
+</div>
+
+<h2>If you do not sign in</h2>
+<ul>
+<li>Your projects, settings, imported 3D models and any AI keys you add are saved in your browser on your device. Clearing the browser's site data removes them.</li>
+<li>When you press Run, your sketch is sent to our server to be compiled into a program for the board. The result is kept in a short-lived cache so the same sketch compiles faster next time. It is not linked to you.</li>
+<li>If you send feedback, we keep the text you wrote and which workspace you were in.</li>
+</ul>
+
+<h2>If you sign in with Google</h2>
+<p>Google tells us who you are. We never see your Google password. We keep:</p>
+<ul>
+<li>your name, email address, profile picture and Google account ID;</li>
+<li>when you first signed in and when you were last active;</li>
+<li>your role (for example free or beta) and whether you chose single user, teacher or student;</li>
+<li>your projects, so they sync between devices;</li>
+<li>your AI keys, only if you add any. They are encrypted before they are stored and are only ever sent back to you;</li>
+<li>your email with any feedback you send, so we can reply.</li>
+</ul>
+
+<h2>Classes</h2>
+<ul>
+<li>If you join a class, its teacher can see your name, email, profile picture, the date you joined, your progress, and the work you hand in.</li>
+<li>Your other projects stay yours. A teacher sees only what you hand in to their class.</li>
+<li>A teacher can switch features such as AI and the Community off for a class.</li>
+</ul>
+
+<h2>Things other people can see</h2>
+<ul>
+<li>Community posts and comments show your name and profile picture to everyone.</li>
+<li>A project is public only if you choose to share it to the gallery. Shared projects do not show your email.</li>
+</ul>
+
+<h2>AI features</h2>
+<ul>
+<li>The small built-in AI runs in your browser. Nothing you type to it leaves your device.</li>
+<li>If you use an online AI provider, with your own key or the included AI, your request and the circuit and code it needs are sent to that provider (for example Google Gemini, Groq, NVIDIA, Meta or OpenRouter) and handled under that provider's own terms.</li>
+<li>When the part maker looks for a photo of a part, our server searches the web for the part's name.</li>
+</ul>
+
+<h2>Children and students</h2>
+<ul>
+<li>We do not ask for your age, address, phone number or school.</li>
+<li>If you are under 18, ask a parent, guardian or teacher before you sign in.</li>
+<li>Do not put personal details such as your full name, address or phone number in project names, posts, feedback or code.</li>
+</ul>
+
+<h2>Where it is kept</h2>
+<p>The site runs on Render and the database is on Supabase. Sign-in is by Google. These companies process the data for us so the site can work. We do not give it to anyone else.</p>
+
+<h2>Seeing or removing your data</h2>
+<ul>
+<li>You can delete any project from My projects, and download a project as a file from the File menu.</li>
+<li>You can remove saved AI keys in Settings.</li>
+<li>To have your account and everything linked to it removed, or to ask what we hold about you, use the Feedback button in the lab while signed in. We will do it and confirm.</li>
+</ul>
+
+<h2>Changes</h2>
+<p>If this page changes in a way that matters, we will say so on the blog and update the date at the top.</p>
+</div></main>
+<footer><div class="wrap"><a href="/?home">© CircuitBench</a><a href="/blog">Blog</a><a href="/app">Open the lab</a></div></footer>
+</body>
+</html>

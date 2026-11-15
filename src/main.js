@@ -30,7 +30,8 @@ import { initAccount } from './ui/account.js';
 import { importPcbFile } from './ui/pcb-import.js';
 import { initWorkspaces } from './ui/workspaces.js';
 import { initVisualizer } from './ui/visualizer.js';
-import { initAssembly } from './ui/assembly.js';
+import { initFeedback } from './ui/feedback.js';
+import { initAssembly, exportRobotBundle, importRobotBundle } from './ui/assembly.js';
 import { initMl } from './ui/ml.js';
 import { tidyTabs } from './ui/view-groups.js';
 import { loadSavedWorkspaces } from './core/workspaces.js';
@@ -151,14 +152,16 @@ const setMenu = open => { menu.hidden = !open; $('exportBtn').setAttribute('aria
 $('exportBtn').onclick = e => { e.stopPropagation(); setMenu(menu.hidden); };
 document.addEventListener('click', e => { if (!e.target.closest('.project-menu')) setMenu(false); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
-$('exportJson').onclick = () => {
+initFeedback({ status: t => editor.status(t) });
+const wholeProject = async () => { const f = projects.exportFile(), b = projects.current ? await exportRobotBundle(projects.current.id).catch(() => null) : null; return JSON.stringify({ ...f, ...(b ? { assembly: b } : {}) }, null, 2); };
+$('exportJson').onclick = async () => {
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([JSON.stringify({ ...editor.exportProject(), ...code.exportState() }, null, 2)], { type: 'application/json' }));
+  a.href = URL.createObjectURL(new Blob([await wholeProject()], { type: 'application/json' }));
   a.download = `${(projects.current?.name || 'circuitbench-project').replace(/[^\w\- ]+/g, '').trim() || 'circuitbench-project'}.json`; a.click(); URL.revokeObjectURL(a.href);
   setMenu(false); editor.status('Project downloaded');
 };
 $('copyJson').onclick = async () => {
-  try { await navigator.clipboard.writeText(JSON.stringify({ ...editor.exportProject(), ...code.exportState() }, null, 2)); editor.status('Project JSON copied to clipboard'); }
+  try { await navigator.clipboard.writeText(JSON.stringify(projects.exportFile(), null, 2)); editor.status('Project JSON copied to clipboard'); }
   catch { editor.status('Clipboard is not available in this browser context'); }
   setMenu(false);
 };
@@ -166,7 +169,7 @@ $('importJson').onclick = () => { setMenu(false); $('importFile').click(); };
 $('importFile').onchange = async e => {
   const file = e.target.files[0]; e.target.value = '';
   if (!file) return;
-  try { const data = JSON.parse(await file.text()); await projects.importFile(data, file.name.replace(/\.json$/i, '')); }
+  try { const data = JSON.parse(await file.text()); await projects.importFile(data, file.name.replace(/\.json$/i, ''), { before: id => importRobotBundle(id, data.assembly) }); }
   catch (err) { editor.status(`Could not open that file: ${err.message}`); }
 };
 $('importPcb').onclick = () => { setMenu(false); $('importPcbFile').click(); };

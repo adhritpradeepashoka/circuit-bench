@@ -43,6 +43,31 @@ export const libraryParts = () => {
 };
 const saveLibrary = list => { try { localStorage.setItem(LIB_KEY, JSON.stringify(list)); memLib = null; } catch { memLib = list; } };
 
+/* ── a project file carries its 3D build: the scene, the imported parts it uses and their model files ── */
+const SCENE_OF = id => `circuitbench:robot-scene:${id}`, BUNDLE_MAX = 80 * 1024 * 1024;
+const toB64 = buf => { const u = buf instanceof ArrayBuffer ? new Uint8Array(buf) : new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength); let s = ''; for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+const fromB64 = str => { const s = atob(str), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return u.buffer; };
+export async function exportRobotBundle(projectId) {
+  let scene = null; try { scene = JSON.parse(localStorage.getItem(SCENE_OF(projectId)) || 'null'); } catch { /* none */ }
+  if (!scene?.parts?.length) return null;
+  const used = new Set(scene.parts.map(p => p.part)), parts = libraryParts().filter(p => used.has(p.id)), meshes = {};
+  for (const p of parts) { if (!p.model?.file) continue; const k = `${p.id}/${p.model.file}`, buf = await getMesh(k); if (buf) meshes[k] = toB64(buf); }
+  return { scene, parts, meshes };
+}
+/** Puts a bundle from a project file under a (new) project: parts you do not already have join your library, with their models. Data only, validated. */
+export async function importRobotBundle(projectId, b) {
+  if (!b || typeof b !== 'object' || !Array.isArray(b.scene?.parts)) return false;
+  const have = libraryParts(), ids = new Set(have.map(p => p.id)), add = []; let bytes = 0;
+  for (const raw of Array.isArray(b.parts) ? b.parts.slice(0, 200) : []) {
+    const v = validateRobotPart(raw); if (!v.ok || ids.has(v.part.id)) continue;
+    const k = v.part.model?.file ? `${v.part.id}/${v.part.model.file}` : null, m = k && typeof b.meshes?.[k] === 'string' ? b.meshes[k] : null;
+    if (k && !m) continue; if (m) { bytes += m.length * 0.75; if (bytes > BUNDLE_MAX) break; try { await putMesh(k, fromB64(m)); } catch { continue; } }
+    add.push(v.part); ids.add(v.part.id);
+  }
+  if (add.length) saveLibrary([...have, ...add]);
+  try { localStorage.setItem(SCENE_OF(projectId), JSON.stringify(b.scene)); return true; } catch { return false; }
+}
+
 export function initAssembly({ editor, projects = null, circuitServos = null, circuitRunning = null }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar');
   const tabs = el('div', { className: 'view-toggle robot-tabs', role: 'group', ariaLabel: 'Robot views', hidden: true });
