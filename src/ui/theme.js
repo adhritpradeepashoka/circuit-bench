@@ -6,6 +6,7 @@ export const THEMES = [
   { id: 'classic', label: 'Classic', note: 'The standard dark bar and light bench.' },
   { id: 'kids', label: 'Kids', note: 'Bright colours, rounder and bigger buttons, friendlier look.' },
   { id: 'hacker', label: 'Hacker', note: 'Black screen, green terminal text, monospace everything.' },
+  { id: 'forge', label: 'Forge', note: 'Near-black violet with a lavender accent, pill buttons and a technical, editorial type style.' },
   { id: 'techno', label: 'Techno', note: 'Deep purple with neon cyan and magenta.' },
   { id: 'contrast', label: 'High contrast', note: 'Strong black and white, easier to read.' },
   { id: 'custom', label: 'Custom', note: 'Pick your own colours and font.' },

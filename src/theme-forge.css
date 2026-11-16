@@ -1,0 +1,47 @@
+/* Forge theme: near-black violet with a lavender accent, Turret Road headings, IBM Plex Sans text, IBM Plex Mono labels and pill buttons.
+   Fonts come from the @fontsource packages (bundled, loaded only when the theme is used), so nothing is fetched from another site. */
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/turret-road/400.css';
+@import '@fontsource/turret-road/800.css';
+
+:root[data-theme="forge"] {
+  --ink: #0b0a12; --ink-2: #16151f; --ink-text: #f4f4f8; --ink-muted: #9b9aa8;
+  --mat: #0a0a0f; --mat-line: rgba(184, 151, 248, .07); --mat-major: rgba(184, 151, 248, .16);
+  --paper: #0d0d12; --surface: #14131c; --line: #2a2838; --text: #f4f4f8; --muted: #a09fb0;
+  --blue: #b897f8; --blue-soft: #231c3a; --green: #5fd7a0; --red: #ff6b7d; --amber: #f2b84b; --amber-soft: #2b2208;
+  --on-blue: #0b0a12;
+  --ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --display: "Turret Road", "Archivo", "IBM Plex Sans", system-ui, sans-serif;
+  color-scheme: dark;
+}
+/* headings */
+:root[data-theme="forge"] h1, :root[data-theme="forge"] h2, :root[data-theme="forge"] h3,
+:root[data-theme="forge"] .modal-head h2, :root[data-theme="forge"] .start-h { font-family: var(--display); font-weight: 800; letter-spacing: 0; }
+:root[data-theme="forge"] h4, :root[data-theme="forge"] .set-sec h3 { font-family: var(--mono); font-weight: 400; font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--blue); }
+/* the top bar and tool rows: dark glass with a hairline, labels in mono caps */
+:root[data-theme="forge"] .topbar { background: rgba(11, 10, 18, .92); border-bottom: 1px solid var(--line); box-shadow: none; }
+:root[data-theme="forge"] .toolbar, :root[data-theme="forge"] .side { background: var(--surface); border-color: var(--line); box-shadow: none; }
+:root[data-theme="forge"] .modal-card, :root[data-theme="forge"] .menu, :root[data-theme="forge"] .sim-tray, :root[data-theme="forge"] .hint-card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 70px rgba(0, 0, 0, .6); }
+/* pill buttons: ghost by default, lavender fill for the main action */
+:root[data-theme="forge"] .topbar button, :root[data-theme="forge"] .top-btn, :root[data-theme="forge"] .proj-act, :root[data-theme="forge"] .asm-btn, :root[data-theme="forge"] .cls-btn {
+  border-radius: 999px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); color: var(--text); font-weight: 600;
+}
+:root[data-theme="forge"] .topbar button:hover, :root[data-theme="forge"] .top-btn:hover, :root[data-theme="forge"] .proj-act:hover, :root[data-theme="forge"] .asm-btn:hover { background: rgba(184, 151, 248, .12); border-color: var(--blue); }
+:root[data-theme="forge"] .topbar .run, :root[data-theme="forge"] .run, :root[data-theme="forge"] .cls-btn.primary, :root[data-theme="forge"] .fb-send { border-radius: 999px; background: var(--blue); border-color: var(--blue); color: var(--on-blue); box-shadow: 0 0 22px rgba(184, 151, 248, .28); }
+:root[data-theme="forge"] .tool { border-radius: 12px; }
+:root[data-theme="forge"] .view-toggle button.on { background: var(--blue); color: var(--on-blue); border-radius: 999px; }
+:root[data-theme="forge"] .view-toggle button.idle.on { background: var(--surface); color: inherit; }
+:root[data-theme="forge"] input, :root[data-theme="forge"] select, :root[data-theme="forge"] textarea { background: #0f0e16; color: var(--text); border-color: var(--line); }
+:root[data-theme="forge"] :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+:root[data-theme="forge"] a { color: var(--blue); }
+.sw-forge { background: linear-gradient(135deg, #0d0d12 55%, #b897f8 55%); }
+
+:root[data-theme="forge"] .topbar .run.running { background: var(--red); border-color: var(--red); box-shadow: none; }
+:root[data-theme="forge"] .hint-card { background: rgba(20, 19, 28, .96); color: var(--text); }
+:root[data-theme="forge"] .hint-card, :root[data-theme="forge"] .hint-card p, :root[data-theme="forge"] .hint-card span { color: var(--text); }
+:root[data-theme="forge"] .top-search, :root[data-theme="forge"] .proj-search { background: rgba(255, 255, 255, .04); border-color: var(--line); border-radius: 999px; }
+:root[data-theme="forge"] .top-search input, :root[data-theme="forge"] .proj-search input { background: transparent; border: 0; }
+:root[data-theme="forge"] .start-hero, :root[data-theme="forge"] .home-hero { background: linear-gradient(135deg, #1a1530, #0f0e18 70%); border: 1px solid var(--line); }

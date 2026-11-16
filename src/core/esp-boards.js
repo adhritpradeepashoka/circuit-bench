@@ -81,7 +81,7 @@ inline void ledcDetach(uint8_t) {}
 inline void ledcWrite(uint8_t pin, uint32_t duty) {
   uint8_t bits = pin < 64 && cb_ledc_bits[pin] ? cb_ledc_bits[pin] : 8; long top = (1L << bits) - 1;
   if ((long)duty > top) duty = (uint32_t)top;
-  ::analogWrite(cb_pin(pin), (int)((long)duty * 255L / top));
+  cb_r4_analogWrite(cb_pin(pin), (int)((long)duty * 255L / top));   // (analogWrite is a macro here that maps the pin once already)
 }
 
 // ESP32Servo: the same Servo class, with the XIAO's pin numbers

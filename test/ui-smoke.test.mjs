@@ -2046,7 +2046,7 @@ test('ui: Settings dialog — opens from the top bar, themes apply and persist, 
   assert.equal(modal.hidden, false);
   assert.ok(modal.contains(doc.getElementById('aiKeyRow')), 'the key form is in Settings, not the chat');
   const themes = [...doc.querySelectorAll('#themeList [data-theme]')].map(b => b.dataset.theme);
-  assert.deepEqual(themes, ['classic', 'kids', 'hacker', 'techno', 'contrast', 'custom']);
+  assert.deepEqual(themes, ['classic', 'kids', 'hacker', 'forge', 'techno', 'contrast', 'custom']);
   doc.querySelector('#themeList [data-theme="hacker"]').click();
   assert.equal(doc.documentElement.getAttribute('data-theme'), 'hacker');
   assert.equal(w.localStorage.getItem('virtual-lab:theme'), 'hacker');

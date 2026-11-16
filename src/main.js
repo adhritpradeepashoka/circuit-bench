@@ -1,5 +1,6 @@
 import '@wokwi/elements';
 import './styles.css';
+import './theme-forge.css';
 import { Editor } from './ui/editor.js';
 import { initSidebar } from './ui/sidebar.js';
 import { Simulation } from './ui/simulation.js';
