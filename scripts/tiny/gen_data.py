@@ -282,6 +282,23 @@ def gen_one(rng, held):
     if kind == 'defer': return {'request': rng.choice(DEFER_HO if held else DEFER), 'state': make_state(rng)[1], 'program': 'defer'}
     return {'request': rng.choice(OFF_HO if held else OFF), 'state': make_state(rng)[1], 'program': 'off'}
 
+# ───────── everyday noise, TRAIN ONLY: the way real people pad, hedge and shorten a request. It never changes what is being asked. ─────────
+FILL_PRE = ['hey', 'ok', 'okay so', 'um', 'so', 'hmm', 'alright', 'right', 'yo', 'listen', 'hi', 'hey can you', 'i was thinking', 'actually', 'ok now', 'next', 'and now', 'also', 'one thing', 'quick one', 'oh and', 'hold on', 'sorry', 'ok so basically', 'wait', 'now']
+FILL_POST = ['thanks', 'thank you', 'please', 'pls', 'ok', 'thx', 'cheers', 'that would be great', 'if thats ok', 'dont worry about the rest', 'thats it', 'for now', 'okay']
+SWAPS = [('can you ', ['could you ', 'would you ', 'can u ', 'will you ']), ('i want ', ['i wanna ', 'i d like ', 'i would like ', 'i need ']), ('please ', ['pls ', 'kindly ', '']), (' a ', [' one ', ' a single ', ' an ']),
+         ('make it ', ['can you make it ', 'make it so its ', 'lets make it ']), (' the ', [' my ', ' this ', ' that ']), ('lets ', ['let us ', 'we should ', 'how about we ']), ('add ', ['add in ', 'add on ', 'add a new '])]
+def noisy(r, rng):
+    if rng.random() < 0.30: r = rng.choice(FILL_PRE) + ' ' + r
+    if rng.random() < 0.20: r = r + ' ' + rng.choice(FILL_POST)
+    if rng.random() < 0.35:
+        a, bs = rng.choice(SWAPS)
+        if a in f' {r} ': r = (' ' + r + ' ').replace(a, rng.choice(bs), 1).strip()
+    if rng.random() < 0.12:
+        w = r.split(' '); drop = [i for i, x in enumerate(w) if x in ('the', 'a', 'an', 'to', 'me', 'it', 'my', 'please')]
+        if drop and len(w) > 3: w.pop(rng.choice(drop)); r = ' '.join(w)
+    if rng.random() < 0.05: r = r.replace(' ', '  ', 1)
+    return r.replace('  ', ' ').strip()
+
 OUT = sys.argv[4] if len(sys.argv) > 4 else '/tmp/tiny'
 
 def main():
@@ -290,6 +307,7 @@ def main():
     def norm(ex, aug):
         r = ex['request'].lower()
         r = r.replace('  ', ' ').strip()
+        if aug and rng.random() < 0.55: r = noisy(r, rng)
         if aug and rng.random() < 0.35: r = typo(r, rng)
         if aug and rng.random() < 0.15: r = r.replace(' the ', ' ').replace(' a ', ' ')
         return {'request': r, 'state': ex['state'], 'program': ex['program']}

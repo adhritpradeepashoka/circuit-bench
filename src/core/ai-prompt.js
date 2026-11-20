@@ -144,7 +144,18 @@ export const ROBOTICS_NOTES = `This student is in CircuitBench's ROBOTICS worksp
 - Robots with servos and wheels: the joints in the Assembly are what the Test tab moves (a hinge becomes a servo; a round, thin part spinning about a hinge becomes a wheel). Real servos and motors still have to be powered and driven by some controller in the circuit if the student wants a faithful build, so suggest one in "explanation" rather than silently adding it.
 - If something the student asks for belongs in another tab, say which tab in "explanation" instead of faking it here.`;
 
-export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null, workspace = null, robotType = null }) {
+/** A project that mixes workspaces (e.g. Robotics + Bioelectronics): how its parts talk to each other. `mix` is the workspace id, like "mix-robotics-bioelectronics". */
+export function mixNotes(mix) {
+  if (!/^mix-[a-z-]+$/.test(String(mix || ''))) return '';
+  const has = k => String(mix).includes(k), out = [`THIS PROJECT MIXES WORKSPACES (${String(mix).slice(4).split('-').join(' + ')}). Everything works in tandem, so build the whole chain, not one piece of it.`];
+  if (has('robotics')) out.push('- The circuit drives the 3D robot. In the Test tab, controller "My circuit": the nth servo placed in the Circuit tab moves the nth servo hinge of the Assembly (the order the servos were PLACED), and the sketch\'s servo.write(0..180) maps to the low..high end of that hinge\'s range. So a servo needs a board and a sketch: this OVERRIDES the robotics note about not adding an Arduino: add one (or use the board that is there) whenever a sketch has to drive a servo. Place servos in the order of the joints (shoulder first, then elbow, then wrist) and attach them in setup() with the Servo library. The circuit has to be running for the robot to move.');
+  if (has('bioelectronics')) out.push('- A biosignal chain is: the BODY signal source (its pick is ECG, EMG, EEG or EOG) to the BioAmp EXG Pill (IN+, IN-, REF; power it from the board 5V and GND) to an analog pin (OUT to A0). The sketch reads analogRead(A0), turns the signal into a number (for EMG: a rectified, smoothed envelope, then a threshold) and uses it to decide an action such as a servo angle.');
+  if (has('ai')) out.push('- A model trained in the Train tab is exported as a C array and pasted into the sketch between the CircuitBench model markers; the sketch feeds it the sensor readings and acts on its answer. Do not rewrite the marked block.');
+  out.push('- Say in "explanation" how the signal flows end to end (sensor, amplifier, pin, sketch, servo, joint) so the student can follow it.');
+  return `\n\n${out.join('\n')}\n`;
+}
+
+export function buildPrompt({ instruction, circuit, code, context, history, compact = false, assembly = null, workspace = null, robotType = null, mix = '' }) {
   if (assembly) return buildAssemblyPrompt({ instruction, assembly, history, workspace, robotType });
   const past = describeHistory(history);
   const historyBlock = past
@@ -167,7 +178,7 @@ export function buildPrompt({ instruction, circuit, code, context, history, comp
 
   const board = BOARD_SPECS[parts.find(p => BOARD_SPECS[p.type])?.type] || BOARD_SPECS[DEFAULT_BOARD];
   const boardCount = parts.filter(p => BOARD_SPECS[p.type]).length;
-  const typeNotes = workspace === 'robotics' ? robotTypeNotes(robotType) : '', robotBlock = workspace === 'robotics' ? `\n\n${ROBOTICS_NOTES}\n${typeNotes ? `\n${typeNotes}\n` : ''}` : '';
+  const typeNotes = workspace === 'robotics' ? robotTypeNotes(robotType) : '', robotBlock = (workspace === 'robotics' ? `\n\n${ROBOTICS_NOTES}\n${typeNotes ? `\n${typeNotes}\n` : ''}` : '') + mixNotes(mix);
   // The short prompt (free hosted AI, on-device model) lists only the parts it might need. In the robotics workspace that has to include the parts for this kind of robot, or it has never heard of a servo or a motor driver.
   const robotParts = workspace === 'robotics' ? [...(circuitPartsFor(robotType, t => !!PART_DEFS[t]) || ROBOTICS_STARTERS.filter(t => PART_DEFS[t]))] : [];
   return `You are editing a LIVE circuit and its Arduino (C/C++, arduino-cli) firmware inside a browser simulator called CircuitBench, for a student.${robotBlock}
