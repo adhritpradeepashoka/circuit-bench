@@ -5,7 +5,7 @@ import json, math, random, struct, sys, time, collections
 import torch, torch.nn as nn, torch.nn.functional as F
 
 DATA, OUT = sys.argv[1], sys.argv[2]; MINUTES = float(sys.argv[3]) if len(sys.argv) > 3 else 30
-torch.manual_seed(0); random.seed(0); torch.set_num_threads(2)
+torch.manual_seed(0); random.seed(0); torch.set_num_threads(int(__import__('os').environ.get('TINY_THREADS', 2)))
 load = lambda n: [json.loads(l) for l in open(f'{DATA}/{n}.jsonl')]
 train, val, held = load('train'), load('val'), load('heldout')
 src_of = lambda x: f"{x['request']} | {x['state']}"
@@ -62,7 +62,8 @@ tr = [tens(x) for x in train]
 print('max src/tgt', max(len(s) for s, _ in tr), max(len(t) for _, t in tr), 'avg', sum(len(s) for s, _ in tr) / len(tr), sum(len(t) for _, t in tr) / len(tr))
 
 # ── model ──
-D, H, FF, NE, ND = 128, 4, 384, 3, 3
+import os as _os
+D, H, FF, NE, ND = (int(_os.environ.get(k, d)) for k, d in (('TINY_D', 128), ('TINY_H', 4), ('TINY_FF', 384), ('TINY_NE', 3), ('TINY_ND', 3)))   # size: TINY_D=256 TINY_H=8 TINY_FF=768 TINY_NE=6 TINY_ND=6 is the 'large' one
 class MHA(nn.Module):
     def __init__(s): super().__init__(); s.q, s.k, s.v, s.o = (nn.Linear(D, D) for _ in range(4))
     def forward(s, x, mem, mask):
