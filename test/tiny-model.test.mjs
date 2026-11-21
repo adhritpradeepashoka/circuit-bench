@@ -77,3 +77,9 @@ test('router with the real models: plain requests stay on the small one, and the
   assert.equal(r.engine, 'small');
   for (const q of ['remove resistor-1']) { const c = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }, { id: q.split(' ')[1], type: q.split(' ')[1].replace(/-\d+$/, ''), x: 50, y: 50 }], wires: [] }; const v = await understandRouted({ small, large: async () => large }, q, c); assert.ok(v && v.engine === 'small' && /^del /.test(v.program), `${q}: ${v && v.program}`); }
 });
+
+import { looksRelevant } from '../src/core/relevance.js';
+test('relevance: bioelectronics words and part names count as being about the bench; small talk does not', () => {
+  for (const q of ['It has to be controlled by input from the Bioamp EXG pill', 'move the arm when my biceps flex', 'use the muscle candy board', 'the emg signal is too noisy']) assert.ok(looksRelevant(q), q);
+  for (const q of ['what is the capital of france', 'tell me a joke', 'hello', 'whats the news', 'who made you']) assert.ok(!looksRelevant(q), q);
+});
