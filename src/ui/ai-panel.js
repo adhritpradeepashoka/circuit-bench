@@ -218,8 +218,8 @@ export function initAiPanel(editor, code, sim = null) {
     const cur = tinyOn() ? TINY_PROVIDER : hostedOn() ? 'hosted' : localOn() ? LOCAL_PROVIDER : getStoredProvider();
     const tinyOpt = () => { const o = document.createElement('option'); o.value = TINY_PROVIDER; o.textContent = 'CircuitBench tiny model (instant, no GPU)'; o.selected = cur === TINY_PROVIDER; return o; };
     const hostedOpt = () => { const o = document.createElement('option'); o.value = 'hosted'; o.textContent = 'Included with your account'; o.selected = cur === 'hosted'; return o; };
-    const localOpt = () => { const o = document.createElement('option'); o.value = LOCAL_PROVIDER; o.textContent = 'On this device (free, no key)'; o.selected = cur === LOCAL_PROVIDER; return o; };
-    select.replaceChildren(...(hasHostedAi() ? [hostedOpt()] : []), tinyOpt(), ...(webgpuAvailable() ? [localOpt()] : []), ...PROVIDER_IDS.map(id => { const o = document.createElement('option'); o.value = id; o.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ' (no key)'}`; o.selected = id === cur; return o; }));
+    const localOpt = () => { const o = document.createElement('option'); o.value = LOCAL_PROVIDER; o.textContent = 'On this device (WebGPU, big download, slow; needs a recent GPU)'; o.selected = cur === LOCAL_PROVIDER; return o; };
+    select.replaceChildren(...(hasHostedAi() ? [hostedOpt()] : []), tinyOpt(), ...PROVIDER_IDS.map(id => { const o = document.createElement('option'); o.value = id; o.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ' (no key)'}`; o.selected = id === cur; return o; }), ...(webgpuAvailable() ? [localOpt()] : []));
   }
   select.addEventListener('change', () => {
     if (select.value === 'hosted') { setPref('h'); keyInput.value = ''; picking = false; setStatus('Using the AI included with your account.'); refreshKeyUi(); return; }
@@ -237,16 +237,16 @@ export function initAiPanel(editor, code, sim = null) {
     const cur = getStoredProvider(), info = PROVIDER_INFO[cur];
     $('aiGetKey').href = info.keyUrl; $('aiGetKey').textContent = `Get a ${info.label} key ↗`;
     const hostedTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = 'hosted'; b.id = 'aiProvider-hosted'; b.classList.toggle('on', isHosted); b.textContent = 'Included'; b.title = 'Free with your account — no key needed'; return b; };
-    const localTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = LOCAL_PROVIDER; b.id = `aiProvider-${LOCAL_PROVIDER}`; b.classList.toggle('on', localOn()); b.textContent = 'On this device'; b.title = 'Runs in your browser — no key, nothing leaves your computer'; return b; };
+    const localTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = LOCAL_PROVIDER; b.id = `aiProvider-${LOCAL_PROVIDER}`; b.classList.toggle('on', localOn()); b.textContent = 'On this device (slow)'; b.title = 'Runs in your browser — no key, nothing leaves your computer'; return b; };
     const tinyTab = () => { const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = TINY_PROVIDER; b.id = `aiProvider-${TINY_PROVIDER}`; b.classList.toggle('on', isTiny); b.textContent = 'Tiny model'; b.title = 'CircuitBench’s own 2.5 MB model — instant, works offline, no graphics card or key needed'; return b; };
-    tabsEl.replaceChildren(...(hasHostedAi() ? [hostedTab()] : []), tinyTab(), ...(webgpuAvailable() ? [localTab()] : []), ...PROVIDER_IDS.map(id => {
+    tabsEl.replaceChildren(...(hasHostedAi() ? [hostedTab()] : []), tinyTab(), ...PROVIDER_IDS.map(id => {
       const b = document.createElement('button');
       b.type = 'button'; b.setAttribute('role', 'tab'); b.dataset.provider = id; b.id = `aiProvider-${id}`;
       b.classList.toggle('on', !isLocal && id === cur); b.classList.toggle('has-key', !!getStoredKey(id));
       b.textContent = `${PROVIDER_INFO[id].label}${getStoredKey(id) ? ' ✓' : ''}`;
       b.title = getStoredKey(id) ? `${PROVIDER_INFO[id].label} — key saved, click to use it` : `${PROVIDER_INFO[id].label} — needs a key`;
       return b;
-    }));
+    }), ...(webgpuAvailable() ? [localTab()] : []));
     providerHint.replaceChildren();
     if (isTiny) { providerHint.append('CircuitBench’s own tiny model (about 2.5 MB, trained only on this bench): it runs in your browser in milliseconds with no graphics card, no key and no download. It handles plain requests — add, move, wire, change values — but not long sketches; for those, pick another AI above.'); return; }
     if (isHosted) { providerHint.append('CircuitBench’s own AI, free with your account — no key and nothing to download. Switch to another option above any time.'); return; }
