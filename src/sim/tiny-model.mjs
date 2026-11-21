@@ -3,7 +3,7 @@
 // It writes "bench language" (src/core/bench-lang.js), which is validated before anything reaches the board.
 import { runForCircuit, stateString } from '../core/bench-lang.js';
 
-const MODEL_URL = '/tiny-model.json', BIN_URL = '/tiny-model.bin';
+const MODEL_URL = '/tiny-model.json', BIN_URL = '/tiny-model.bin', LARGE_MODEL_URL = '/tiny-model-large.json', LARGE_BIN_URL = '/tiny-model-large.bin';
 
 /* ── tokenizer: the same word-level BPE the trainer used ── */
 const asciiOnly = s => [...String(s)].map(c => (c.charCodeAt(0) >= 32 && c.charCodeAt(0) < 127 ? c : '?')).join('');
@@ -107,11 +107,43 @@ export function understand(model, instruction, circuit, { minConfidence = 0.9 } 
 }
 
 let loading = null;
-/** Fetch and build the model once (about 2.5 MB). */
-export function loadTiny({ fetchImpl = globalThis.fetch, manifestUrl = MODEL_URL, binUrl = BIN_URL } = {}) {
-  loading ||= (async () => {
+/** Fetch and build a model. The small one is built once and shared (about 2.5 MB); `share: false` always fetches (the larger one keeps its own cache). */
+export function loadTiny({ fetchImpl = globalThis.fetch, manifestUrl = MODEL_URL, binUrl = BIN_URL, share = true } = {}) {
+  if (share && loading) return loading;
+  const run = (async () => {
     const [m, b] = await Promise.all([fetchImpl(manifestUrl).then(r => { if (!r.ok) throw new Error('model not found'); return r.json(); }), fetchImpl(binUrl).then(r => { if (!r.ok) throw new Error('model not found'); return r.arrayBuffer(); })]);
     return createTiny(m, b);
-  })().catch(e => { loading = null; throw e; });
+  })();
+  if (!share) return run;
+  loading = run.catch(e => { loading = null; throw e; });
   return loading;
+}
+
+let loadingLarge = null;
+/** The larger model (about 13 MB, 6.5M parameters): fetched only the first time the small one is unsure. */
+export function loadTinyLarge(opts = {}) { return (loadingLarge ||= loadTiny({ ...opts, manifestUrl: LARGE_MODEL_URL, binUrl: LARGE_BIN_URL, share: false }).catch(e => { loadingLarge = null; throw e; })); }
+
+/**
+ * One front end, two engines. The small model (45 ms) answers when it is sure (handOver). Otherwise the larger model (230 ms, better at padded and
+ * loosely worded requests) gets the request; if it is unsure too, or is not downloaded yet, the answer is null and the request goes to the chosen AI.
+ * Chosen by measuring both on held-out requests: with handOver 0.95 it gets more right than the small model alone at the same wrong-answer rate.
+ * @param {{small:object, large?:()=>Promise<object>|object|null}} engines  large() may return null while the file is still coming
+ */
+export async function understandRouted(engines, instruction, circuit, { handOver = 0.95, minConfidence = 0.9 } = {}) {
+  const req = String(instruction || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!req || req.length > 220) return null;
+  const input = `${req} | ${stateString(circuit)}`, finish = (model, engine) => {
+    const out = model.translate(input);
+    return { out, engine };
+  };
+  const first = finish(engines.small, 'small');
+  let pick = first.out.minProb >= handOver ? first : null;
+  if (!pick && engines.large) {
+    let big = null; try { big = await engines.large(); } catch { /* optional */ }
+    if (big) { const second = finish(big, 'large'); if (second.out.minProb >= minConfidence) pick = second; }
+  }
+  if (!pick) return null;
+  const r = runForCircuit(pick.out.text, circuit);
+  if (!r || r.kind === 'defer') return null;
+  return { ...r, program: pick.out.text, confidence: pick.out.minProb, engine: pick.engine };
 }

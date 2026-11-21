@@ -48,3 +48,32 @@ test('"make a <part> circuit" scans the bench, adds what is missing and wires on
   const two = recipeEdit('make an mpu and oled circuit', { parts: [], wires: [] });
   assert.equal(two.actions.filter(a => a.op === 'add_part').length, 3, 'one board, two parts');
 });
+
+/* ── the router: small first, the larger model when the small one is unsure ── */
+import { understandRouted } from '../src/sim/tiny-model.mjs';
+const fake = (text, minProb) => ({ translate: () => ({ text, minProb }) });
+const bench = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }], wires: [] };
+test('router: a sure small model answers alone and the larger one is never asked', async () => {
+  let asked = 0;
+  const r = await understandRouted({ small: fake('add led', 0.99), large: async () => { asked++; return fake('add resistor', 1); } }, 'add an led', bench);
+  assert.equal(r.engine, 'small'); assert.equal(asked, 0); assert.equal(r.program, 'add led');
+});
+test('router: an unsure small model hands over to the larger one', async () => {
+  const r = await understandRouted({ small: fake('add resistor', 0.6), large: async () => fake('add led', 0.97) }, 'hey um add an led thanks', bench);
+  assert.equal(r.engine, 'large'); assert.equal(r.program, 'add led');
+});
+test('router: both unsure, or the larger model not here yet, or a broken download, means null (the chosen AI answers)', async () => {
+  assert.equal(await understandRouted({ small: fake('add led', 0.6), large: async () => fake('add led', 0.7) }, 'something odd', bench), null);
+  assert.equal(await understandRouted({ small: fake('add led', 0.6), large: async () => null }, 'something odd', bench), null);
+  assert.equal(await understandRouted({ small: fake('add led', 0.6), large: async () => { throw new Error('offline'); } }, 'something odd', bench), null);
+  assert.equal(await understandRouted({ small: fake('add led', 0.6) }, 'something odd', bench), null);
+  assert.equal(await understandRouted({ small: fake('defer', 0.99) }, 'help me', bench), null);
+});
+test('router with the real models: plain requests stay on the small one, and the larger file is a valid model of the same format', async () => {
+  const load = f => { const b = readFileSync(new URL(`../public/${f}.bin`, import.meta.url)), man = JSON.parse(readFileSync(new URL(`../public/${f}.json`, import.meta.url), 'utf8')); return createTiny(man, b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
+  const small = load('tiny-model'), large = load('tiny-model-large');
+  assert.ok(large.config.D > small.config.D);
+  const r = await understandRouted({ small, large: async () => large }, 'add an led', { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }], wires: [] });
+  assert.equal(r.engine, 'small');
+  for (const q of ['remove resistor-1']) { const c = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }, { id: q.split(' ')[1], type: q.split(' ')[1].replace(/-\d+$/, ''), x: 50, y: 50 }], wires: [] }; const v = await understandRouted({ small, large: async () => large }, q, c); assert.ok(v && v.engine === 'small' && /^del /.test(v.program), `${q}: ${v && v.program}`); }
+});

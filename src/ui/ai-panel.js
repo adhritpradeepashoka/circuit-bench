@@ -6,7 +6,7 @@
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
 import { getRobotType } from '../core/robot-context.js';
-import { loadTiny, understand } from '../sim/tiny-model.mjs';
+import { loadTiny, loadTinyLarge, understandRouted } from '../sim/tiny-model.mjs';
 import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
 import { quickEdit } from '../core/quick-edits.js';
 import { quickAssembly } from '../core/quick-assembly.js';
@@ -371,7 +371,9 @@ export function initAiPanel(editor, code, sim = null) {
     if (!quick && !in3d && !globalThis.VLAB_NO_TINY) {
       try {
         const t0 = Date.now(), tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
-        const u = understand(tiny, text, editor.exportProject());
+        // The larger model is only fetched when the small one is unsure; if it is not here yet, wait a few seconds for it, else the chosen AI answers and it is ready next time.
+        const big = () => Promise.race([loadTinyLarge(), new Promise(r => setTimeout(() => r(null), 6000))]);
+        const u = await understandRouted({ small: tiny, large: big }, text, editor.exportProject());
         if (u) quick = u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation } : u;
         tinyMs = Date.now() - t0; if (quick) quick.viaModel = true;
       } catch { /* the model is optional: no file, still loading, or an old browser — carry on */ }
