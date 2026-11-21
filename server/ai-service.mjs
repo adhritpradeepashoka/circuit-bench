@@ -22,6 +22,8 @@ import { validatePartSpec } from '../src/core/custom-parts.js';
 import { findPhoto } from './part-photo.mjs';
 import { cleanRobotType } from '../src/core/robot-types.js';
 import { LIMITS, buildPrompt, parseReply, matchJsonFence, extractJsonText, tryParseJson, describeContext, describeHistory, buildPartPrompt, buildPhotoLookupPrompt, buildBrainPrompt } from '../src/core/ai-prompt.js';
+import { checkPart } from '../src/core/part-agent.js';
+import { validatePartSpec as checkSpecShape } from '../src/core/custom-parts.js';
 export { describeContext, describeHistory, buildPartPrompt };
 
 function statusFor(httpStatus, message) {
@@ -188,16 +190,26 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
   }
 
   /** Describe a part in words → a validated part spec, drawn from its real photo when one can be found (a few repair rounds if the answer doesn't validate). */
-  async function createPart({ description, userKey, provider = 'gemini', model, workspace = '', refine = null, photoUrl = '', brain = false }) {
+  /** Remembered parts the browser sends along as examples: at most three, each re-validated here, never trusted as sent. */
+  const cleanExamples = list => (Array.isArray(list) ? list : []).slice(0, 3).flatMap(e => {
+    if (!e || typeof e.request !== 'string' || !e.spec || typeof e.spec !== 'object') return [];
+    const v = checkSpecShape({ package: 'module', breadboard: true, color: '#2b6cb0', textColor: '#ffffff', ...e.spec, pins: (e.spec.pins || []).map(p => ({ side: 'bottom', ...p })) });
+    return v.ok ? [{ request: e.request.slice(0, 200), spec: { name: v.spec.name, label: v.spec.label, description: String(v.spec.description || '').slice(0, 200), pins: v.spec.pins.map(p => ({ id: p.id, label: p.label })), behaviour: v.spec.behaviour } }] : [];
+  });
+
+  async function createPart({ description, userKey, provider = 'gemini', model, workspace = '', refine = null, photoUrl = '', brain = false, examples = [] }) {
+    examples = cleanExamples(examples);
     if (!description || !String(description).trim()) throw new RequestError('Describe the part you want to make.');
     const p = needKey(userKey, provider);
     if (brain) {                                          // the small job: name, pins and behaviour — fits free tiers; the drawing is a separate request
       let problems = null;
       for (let attempt = 0; attempt < 2; attempt++) {
-        const r = await ask(p, userKey, buildBrainPrompt(description, problems), { search: false, model, maxTokens: 1200 });
+        const r = await ask(p, userKey, buildBrainPrompt(description, problems, examples), { search: false, model, maxTokens: 1200 });
         const json = extractJsonText(r.text), raw = json ? tryParseJson(json) : null;
         if (!raw) { problems = ['The reply was not a complete JSON object.']; continue; }
         const v = validatePartSpec(raw);
+        const bad = v.ok && attempt === 0 ? checkPart(v.spec, { description: String(description), note: String(raw.note || '') }) : [];
+        if (bad.length) { problems = bad; continue; }
         if (v.ok) return { ok: true, brain: true, spec: v.spec, note: String(raw.note || '').slice(0, 200), sources: [], meta: r.meta };
         problems = v.errors;
       }
@@ -207,7 +219,7 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
     let problems = null, fallback = null, useImage = !!look.photo;
     for (let attempt = 0; attempt < 3; attempt++) {
       let r;
-      const prompt = buildPartPrompt(description, problems, { facts: look.facts, photo: useImage ? look.photo : null, refine, workspace });
+      const prompt = buildPartPrompt(description, problems, { facts: look.facts, photo: useImage ? look.photo : null, refine, workspace, examples });
       try { r = await ask(p, userKey, prompt, { search: !look.facts, model, maxTokens: 8000, image: useImage ? look.photo : null }); }
       catch (err) { if (useImage) { useImage = false; attempt--; continue; } throw err; }      // this model can't see pictures: draw from the facts alone
       const { text, sources, searched, meta } = r;
@@ -221,8 +233,9 @@ export function createAiService({ photoFetch = undefined, fetchImpl = globalThis
         continue;
       }
       const v = validatePartSpec(raw, { strict: true });
-      if (v.ok) return out({ spec: v.spec, note: String(raw.note || '').slice(0, 300) });
-      problems = v.errors;
+      const bad = v.ok && !refine ? checkPart(v.spec, { description: String(description), facts: look.facts, note: String(raw.note || '') }) : [];
+      if (v.ok && (!bad.length || attempt === 2)) return out({ spec: v.spec, note: `${String(raw.note || '').slice(0, 260)}${bad.length ? ` (Not fully verified: ${bad.join(' ').slice(0, 160)})` : ''}`.trim() });
+      problems = v.ok ? bad : v.errors;
       const loose = validatePartSpec(raw);                       // usable even if not to scale / not detailed enough: keep the latest as a fallback
       if (loose.ok) fallback = out({ spec: loose.spec, note: `${String(raw.note || '').slice(0, 200)} (Drawn approximately: ${problems.join(' ').slice(0, 120)})`.trim() });
     }

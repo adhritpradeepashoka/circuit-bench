@@ -1,5 +1,6 @@
 // The prompt a model is given and how its answer is read: pure functions, shared by the server (hosted models) and the
 // browser (WebLLM, on the student's own device), so every provider sees the same instructions and returns the same shape.
+import { PART_AGENT_ROLE, describeExamples } from './part-agent.js';
 import { BOARD_SPECS, DEFAULT_BOARD } from './boards.js';
 import { describeCatalog } from './ai-actions.js';
 import { PART_DEFS } from './parts.js';
@@ -299,10 +300,12 @@ Leave a field out rather than guess it.`;
 }
 
 /** The prompt that turns a student's description into a part spec (see src/core/custom-parts.js). Data only — never code. */
-export function buildPartPrompt(description, problems = null, { facts = null, photo = null, refine = null, workspace = '' } = {}) {
+export function buildPartPrompt(description, problems = null, { facts = null, photo = null, refine = null, workspace = '', examples = [] } = {}) {
   const kinds = Object.entries(BEHAVIOURS).map(([k, b]) => `  - "${k}": ${b.label}. ${b.note}${b.roles.length ? ` Roles (each must name one of the part's pin ids): ${b.roles.join(', ')}.` : ''}${b.optional ? ` Optional roles: ${b.optional.join(', ')}.` : ''}${b.lists ? ` Also needs ${Object.entries(b.lists).map(([l, d]) => `"${l}": [pin ids — ${d}]`).join(' and ')} in the behaviour object.` : ''}${b.params ? ` Numbers to set in the behaviour object: ${b.params.map(p => (p.options ? `"${p.key}" (${p.options.map(([v]) => `"${v}"`).join(' | ')}, default "${p.def}")` : `"${p.key}" (${p.label}${p.unit ? `, ${p.unit}` : ''}; ${p.min}–${p.max}, default ${p.def})`)).join('; ')}.` : ''}`).join('\n');
-  return `You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data.
+  return `${PART_AGENT_ROLE}
 
+You design a component for CircuitBench, a browser electronics simulator for students. The student describes a part; you reply with its definition as data.
+${describeExamples(examples)}
 HOW TO READ THE REQUEST
 The student writes in plain language, not in datasheet terms. Work out what real part they mean:
   - A named part ("INA128", "SG90 servo", "BioAmp EXG Pill"): look it up on the web and use its ACTUAL pinout — the real pin names, in the real order, from the datasheet — and its real behaviour. Do not work from memory if you can check. Getting the pin names and order right matters more than anything else here, because the student will wire it up by those names.
@@ -423,11 +426,13 @@ Use the "In space" numbers: they are the real sizes, world positions, free holes
 
 /** A SMALL prompt (about 2,500 characters) for the "brain" of a part: name, pins and behaviour only — no drawing. It fits free tiers and the
  *  on-device model; the picture is asked for separately (see createPartSplit in src/sim/ai-client.mjs). */
-export function buildBrainPrompt(description, problems = null) {
+export function buildBrainPrompt(description, problems = null, examples = []) {
   const kinds = Object.entries(BEHAVIOURS).filter(([k]) => !['logic', 'slime-mold', 'keypad', 'switch-bank', 'led-array', 'mux'].includes(k))
     .map(([k, b]) => `${k}: ${b.roles.join(', ') || '-'}${b.optional?.length ? ` (+ ${b.optional.join(', ')})` : ''}`).join('\n');
-  return `Define an electronics part for a student simulator. Reply with ONE fenced json block and nothing else.
+  return `${PART_AGENT_ROLE}
 
+Define an electronics part for a student simulator. Reply with ONE fenced json block and nothing else.
+${describeExamples(examples)}
 Part wanted: ${String(description).slice(0, 600)}
 
 Pick the real part's ACTUAL pin names (datasheet order) and the closest behaviour kind. Each kind needs "roles" mapping its role names to your pin ids.

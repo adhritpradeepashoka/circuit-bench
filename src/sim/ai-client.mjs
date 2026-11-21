@@ -3,6 +3,7 @@
 import { getToken } from './session.mjs';
 import { matchTemplate, heuristicSpec } from '../core/part-match.js';
 import { validatePartSpec, BEHAVIOURS } from '../core/custom-parts.js';
+import { matchLearned, examplesFor } from '../core/learned-parts.js';
 const KEY_STORAGE = 'virtual-lab:ai-key';              // before there were several providers: one key for whichever was selected
 const PROVIDER_STORAGE = 'virtual-lab:ai-provider';
 const MODEL_STORAGE = 'virtual-lab:ai-model:';
@@ -48,11 +49,11 @@ function aiEndpoint(loc = globalThis.location, win = globalThis, path = '/api/ai
 }
 
 /** Describe a part → { ok, spec, note } (a validated part spec), or { ok:false, error, needsKey? }. */
-async function createPartOnce({ description, workspace = '', refine = null, photoUrl = '', provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false, brain = false } = {}) {
+async function createPartOnce({ description, workspace = '', refine = null, photoUrl = '', provider = getStoredProvider(), userKey = getStoredKey(provider), model = getStoredModel(provider), fetchImpl = globalThis.fetch, endpoint = aiEndpoint(globalThis.location, globalThis, '/api/ai/create-part'), signal, hosted = false, brain = false, examples = [] } = {}) {
   if (!userKey && !hosted) return { ok: false, needsKey: true, error: 'Add a free AI key first (open ✨ Ask AI → Settings) — then describe your part again.' };
   if (!endpoint) return { ok: false, error: 'This page was opened from a file, so there is no server to ask.' };
   let res;
-  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { description, workspace, refine, photoUrl, brain, hosted: true } : { description, workspace, refine, photoUrl, brain, userKey, provider, model }), signal }); }
+  try { res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(hosted && getToken() ? { authorization: `Bearer ${getToken()}` } : {}) }, body: JSON.stringify(hosted ? { description, workspace, refine, photoUrl, brain, examples, hosted: true } : { description, workspace, refine, photoUrl, brain, examples, userKey, provider, model }), signal }); }
   catch (err) { if (err?.name === 'AbortError') throw err; return { ok: false, error: `Could not reach ${endpoint}.` }; }
   let body = null; try { body = await res.json(); } catch { /* ignore */ }
   return body || { ok: false, error: noReply(res.status) };
@@ -107,10 +108,16 @@ export async function generateCode({ instruction, circuit, code, context = null,
  *   3. the "picture" (a detailed drawing — the BIG request) from the providers that can take it, started as soon as the brain is back and
  *      merged into it when it arrives. If it never arrives you keep the brain's part with its generic board.
  *  onPartial(res) is called as soon as there is a usable part; the returned promise resolves with the final one. */
-export async function createPartSplit({ description, templates = [], local = null, onProgress, onPartial, drawMs = 110_000, signal, ...rest } = {}) {
+export async function createPartSplit({ description, templates = [], learned = [], local = null, onProgress, onPartial, drawMs = 110_000, signal, ...rest } = {}) {
   const note = msg => onProgress?.(msg);
   const text = String(description || '').trim();
   if (!text) return { ok: false, error: 'Describe the part first.' };
+  const mine = matchLearned(text, learned);
+  if (mine) {
+    const { id, group, aka, learned: _l, ...raw } = mine, v = validatePartSpec(raw);
+    if (v.ok) return { ok: true, spec: v.spec, source: 'learned', note: `You made "${mine.name}" before and approved it, so here it is again. Instant, no AI needed.`, meta: { provider: 'Your approved parts', model: 'remembered', ms: 0 } };
+  }
+  rest.examples = examplesFor(text, learned);
   const hit = matchTemplate(text, templates);
   if (hit) {
     const { id, group, ...raw } = hit, v = validatePartSpec(raw);

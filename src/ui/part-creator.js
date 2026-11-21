@@ -2,6 +2,8 @@
 // AI, which fills in the same form. Either way the result is a declarative spec checked by validatePartSpec()
 // (src/core/custom-parts.js): it can only describe a part, never run code. Saved parts live in "My parts"
 // (this browser) and travel inside any project that uses them.
+import { learnPart, learnedTemplates } from '../core/learned-parts.js';
+import { learningOn } from '../core/learned-store.js';
 import { BEHAVIOURS, PACKAGES, PHOTO_MAX_CHARS, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
 import { FUNCTIONS } from '../core/expr.js';
 import { PART_DEFS } from '../core/parts.js';
@@ -310,6 +312,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     if (!v.ok) return;
     const spec = v.spec;
     registerCustomPart(spec);
+    if (!editing && learningOn()) learnPart($('pcDescribe').value.trim() || spec.name, spec);        // an approved part is remembered: asking for it again is instant
     const lib = loadLibrary().filter(s => s.id !== spec.id); lib.push(spec); saveLibrary(lib);
     editor.emit('catalog');
     if (editing) { editor.refreshPartType(spec.id); editor.status(`Updated “${spec.name}” everywhere it's used`); }
@@ -357,7 +360,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       if (!refine && !opts.photoUrl && createPart === defaultCreatePart) {      // a fresh part: template → brain (small) + picture (big), combined
         const [{ TEMPLATES }, web] = await Promise.all([import('../core/part-templates.js'), import('../sim/webllm.mjs')]);
         const onDevice = (() => { try { return localStorage.getItem('virtual-lab:ai-local') === '1'; } catch { return false; } })() && web.webgpuAvailable();
-        res = await createPartSplit({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, signal: aiBusy.signal, templates: TEMPLATES, local: onDevice ? d => web.brainLocal({ description: d, onProgress: p => { status.textContent = `Loading the on-device model… ${Math.round((p?.progress || 0) * 100)}%`; } }) : null,
+        res = await createPartSplit({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, signal: aiBusy.signal, templates: TEMPLATES, learned: learnedTemplates(), local: onDevice ? d => web.brainLocal({ description: d, onProgress: p => { status.textContent = `Loading the on-device model… ${Math.round((p?.progress || 0) * 100)}%`; } }) : null,
           onProgress: msg => { status.textContent = msg; },
           onPartial: r => { draft = { ...clone(r.spec), id: editing || draft.id }; paintForm(); $('pcFix').hidden = false; status.textContent = 'Pins and behaviour are ready — drawing it in detail (you can already save this)…'; } });
       } else res = await createPart({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal, onProgress: progress });

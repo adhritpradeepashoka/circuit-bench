@@ -16,7 +16,7 @@ export function rankTemplates(description, templates) {
   if (!ws.length) return [];
   const out = [];
   for (const t of templates) {
-    const names = words(`${t.id} ${t.name} ${t.label}`), nameSet = expand(names), head = squash(`${t.label}`), idSq = squash(t.id.replace(/^custom-/, ''));
+    const names = t.aka ? [...new Set(words(`${t.id} ${t.name} ${t.label} ${t.aka}`))] : words(`${t.id} ${t.name} ${t.label}`), nameSet = expand(names), head = squash(`${t.label}`), idSq = squash(t.id.replace(/^custom-/, ''));
     let score = 0;
     // a part number written anywhere in the text (ky040, 1n4007, 2n2222, sg90, lm358…) is the strongest signal
     for (const tok of new Set([...names, head])) if (tok.length >= 4 && /\d/.test(tok) && flat.includes(tok.replace(/[^a-z0-9]/g, ''))) score = Math.max(score, 0.95);
