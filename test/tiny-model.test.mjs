@@ -83,3 +83,12 @@ test('relevance: bioelectronics words and part names count as being about the be
   for (const q of ['It has to be controlled by input from the Bioamp EXG pill', 'move the arm when my biceps flex', 'use the muscle candy board', 'the emg signal is too noisy']) assert.ok(looksRelevant(q), q);
   for (const q of ['what is the capital of france', 'tell me a joke', 'hello', 'whats the news', 'who made you']) assert.ok(!looksRelevant(q), q);
 });
+
+import { asksWhoMadeYou, ORIGIN_STORY } from '../src/core/origin-story.js';
+test('"who made you" gets the origin story (about a thousand words, no dashes); other questions about making things do not', () => {
+  for (const q of ['who made you', 'Who created you?', 'who is your creator', 'who built this app', 'where did you come from']) assert.ok(asksWhoMadeYou(q), q);
+  for (const q of ['who made the led', 'who made this circuit', 'what is the capital of france', 'who are you', 'make an led']) assert.ok(!asksWhoMadeYou(q), q);
+  const words = ORIGIN_STORY.split(/\s+/).length; assert.ok(words > 800 && words < 1200, `${words} words`);
+  assert.ok(!/[–—]/.test(ORIGIN_STORY));
+  assert.ok(!looksRelevant('who made you'));        // it is handled before the relevance gate; everything else small-talk stays refused
+});

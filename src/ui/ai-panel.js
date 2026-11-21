@@ -8,6 +8,7 @@
 import { getRobotType } from '../core/robot-context.js';
 import { loadTiny, loadTinyLarge, understandRouted } from '../sim/tiny-model.mjs';
 import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
+import { asksWhoMadeYou, ORIGIN_STORY } from '../core/origin-story.js';
 import { quickEdit } from '../core/quick-edits.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { quickDrone } from '../core/quick-drone.js';
@@ -367,6 +368,11 @@ export function initAiPanel(editor, code, sim = null) {
     // Tier 1: plainly worded edits are answered instantly by rules. Tier 2: the CircuitBench tiny model (2.5 MB, in-page, no GPU) understands
     // looser wording and politely declines what is outside the bench. Anything either is unsure about goes on to the chosen AI.
     const asmApi = window.__vlab?.assembly?.ai, in3d = !!asmApi?.active?.();
+    if (asksWhoMadeYou(text)) {                               // the one small talk the assistant answers: its origin story
+      messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
+      messages.push({ id: ++seq, role: 'assistant', text: ORIGIN_STORY });
+      saveChat(); render(); return;
+    }
     let quick = in3d ? null : quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(text, editor.exportProject()), tinyMs = 0;
     if (!quick && !in3d && !globalThis.VLAB_NO_TINY) {
       try {
