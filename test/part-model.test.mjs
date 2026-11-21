@@ -79,3 +79,16 @@ test('plain values are read by rule, exactly', async () => {
   assert.equal(valuePart('an LM35'), null);
   assert.equal(ask('a 22k resistor').spec.behaviour.ohms, 22000);
 });
+
+test('found in the browser: a template must not swallow a number the student gave; the longest part number wins; "motor driver" is not a motor', async () => {
+  const { matchTemplate, heuristicSpec } = await import('../src/core/part-match.js');
+  assert.equal(matchTemplate('esp32 cam', TEMPLATES)?.id, 'esp32-cam');
+  assert.equal(matchTemplate('esp32', TEMPLATES), null, 'a bare esp32 fits several boards');
+  assert.equal(heuristicSpec('a motor driver').behaviour.kind, 'hbridge');
+  const never = async () => { throw new Error('no network'); };
+  const r = await createPartSplit({ description: 'ina128 with gain 500', templates: TEMPLATES, device: async d => partFromModel(model, d, { templates: TEMPLATES }), fetchImpl: never, endpoint: '/x' });
+  assert.equal(r.source, 'on-device'); assert.equal(r.spec.behaviour.gain, 500, 'the 500 is applied, not dropped for the built-in gain 100');
+  assert.equal(r.spec.package, TEMPLATES.find(t => t.id === 'inamp-ina128').package, 'and it keeps the template drawing');
+  const plain = await createPartSplit({ description: 'ina128', templates: TEMPLATES, fetchImpl: never, endpoint: '/x' });
+  assert.equal(plain.source, 'template');
+});

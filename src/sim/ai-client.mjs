@@ -3,6 +3,7 @@
 import { getToken } from './session.mjs';
 import { matchTemplate, heuristicSpec } from '../core/part-match.js';
 import { validatePartSpec, BEHAVIOURS } from '../core/custom-parts.js';
+import { checkPart } from '../core/part-agent.js';
 import { matchLearned, examplesFor } from '../core/learned-parts.js';
 const KEY_STORAGE = 'virtual-lab:ai-key';              // before there were several providers: one key for whichever was selected
 const PROVIDER_STORAGE = 'virtual-lab:ai-provider';
@@ -121,7 +122,7 @@ export async function createPartSplit({ description, templates = [], learned = [
   const hit = matchTemplate(text, templates);
   if (hit) {
     const { id, group, ...raw } = hit, v = validatePartSpec(raw);
-    if (v.ok) return { ok: true, spec: v.spec, source: 'template', note: `This is the built-in "${hit.name}" template — instant, no AI needed.`, meta: { provider: 'Templates', model: 'built-in', ms: 0 } };
+    if (v.ok && !checkPart(v.spec, { description: text }).length) return { ok: true, spec: v.spec, source: 'template', note: `This is the built-in "${hit.name}" template — instant, no AI needed.`, meta: { provider: 'Templates', model: 'built-in', ms: 0 } };
   }
   if (device) {                                    // the Part Maker's own small model, on the CPU: instant when it is sure, silent when it is not
     note('Asking the Part Maker model on this device…');

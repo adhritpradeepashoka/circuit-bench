@@ -36,7 +36,7 @@ export function checkPart(spec, { description = '', facts = null, note = '' } = 
     if (off(sa, fa) || off(sb, fb)) problems.push(`The real part is about ${fa} x ${fb} mm but the drawing is ${sa} x ${sb} mm.`);
   }
   if (spec?.behaviour?.kind === 'none' && guessKind(description) !== 'analog-sensor' && /\b(led|servo|motor|relay|button|switch|resistor|diode|transistor|mosfet|regulator|buzzer|potentiometer|op-?amp|capacitor|inductor|encoder|stepper|ultrasonic)\b/i.test(description)) problems.push(`The request names a part the simulator can model, so the behaviour should not be "none".`);
-  const skip = partNumberDigits(description), have = `${JSON.stringify(spec?.behaviour || {})} ${spec?.note || ''} ${note} ${spec?.description || ''}`.toLowerCase();
+  const skip = partNumberDigits(description), have = `${JSON.stringify(spec?.behaviour || {})} ${spec?.note || ''} ${note} ${spec?.description || ''} ${spec?.name || ''} ${spec?.label || ''}`.toLowerCase();
   const dropped = nums(description).filter(n => !skip.has(n) && !have.includes(n));
   if (dropped.length) problems.push(`The student gave ${dropped.slice(0, 4).join(', ')} but it appears nowhere in the part: apply it to a behaviour number, or write it in "note".`);
   return problems;

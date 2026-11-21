@@ -9,7 +9,7 @@ import { checkPart } from '../core/part-agent.js';
 const asc = s => String(s).replace(/Ω/g, 'ohm').replace(/[µμ]/g, 'u').replace(/[^\x20-\x7e]/g, '').toLowerCase().trim();
 const sq = s => asc(s).replace(/[^a-z0-9]/g, '');
 /** The answer must be about something the student actually wrote: a word (or the whole request) shows up in the part's name or label. A bare "12v" never gets a gas sensor. */
-const mentions = (text, spec) => { const hay = sq(`${spec.name} ${spec.label}`), whole = sq(text); return (whole.length >= 3 && hay.includes(whole)) || text.split(/[^a-z0-9.+]+/).some(w => w.length >= 3 && /[a-z]/.test(w) && hay.includes(sq(w))); };
+const mentions = (text, spec) => { const hay = sq(`${spec.name} ${spec.label}`), whole = sq(text); return (whole.length >= 3 && hay.includes(whole)) || text.split(/[^a-z0-9.+]+/).some(w => w.length >= 3 && /[a-z]{3}/.test(w) && hay.includes(sq(w))); };
 
 /* Plain values ("22k resistor", "100nF capacitor", "10 mH inductor", "5.1v zener") are read by rule, exactly, before any model: arithmetic is not what a small network is for. */
 const NUM = '(\\d+(?:\\.\\d+)?)';

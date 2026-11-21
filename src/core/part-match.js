@@ -19,8 +19,8 @@ export function rankTemplates(description, templates) {
     const names = t.aka ? [...new Set(words(`${t.id} ${t.name} ${t.label} ${t.aka}`))] : words(`${t.id} ${t.name} ${t.label}`), nameSet = expand(names), head = squash(`${t.label}`), idSq = squash(t.id.replace(/^custom-/, ''));
     let score = 0;
     // a part number written anywhere in the text (ky040, 1n4007, 2n2222, sg90, lm358…) is the strongest signal
-    for (const tok of new Set([...names, head])) if (tok.length >= 4 && /\d/.test(tok) && flat.includes(tok.replace(/[^a-z0-9]/g, ''))) score = Math.max(score, 0.95);
-    if (idSq.length >= 5 && /\d/.test(idSq) && flat.includes(idSq)) score = Math.max(score, 0.95);
+    for (const tok of new Set([...names, head])) if (tok.length >= 4 && /\d/.test(tok) && flat.includes(tok.replace(/[^a-z0-9]/g, ''))) score = Math.max(score, 0.95 + Math.min(tok.length, 20) * 0.0004);      // the longest part number named wins: "esp32 cam" is the ESP32-CAM, not any board with "esp32" in its name
+    if (idSq.length >= 5 && /\d/.test(idSq) && flat.includes(idSq)) score = Math.max(score, 0.95 + Math.min(idSq.length, 20) * 0.0004);
     const hit = ws.filter(w => nameSet.has(w)).length, total = Math.max(names.length, 1);
     const cover = hit / Math.min(ws.length + 0.0001, total + 1);                               // how much of what they said the template's name accounts for
     const share = hit / total;                                                                   // how much of the template's name they said
@@ -35,12 +35,13 @@ export function rankTemplates(description, templates) {
 export function matchTemplate(description, templates) {
   const r = rankTemplates(description, templates), best = r[0], next = r[1];
   if (!best || best.score < 0.62) return null;
-  if (next && next.score > best.score - 0.08 && best.score < 0.9) return null;               // two equally good guesses: don't pick for them
+  if (next && next.score > best.score - 0.08 && best.score < 0.9) return null;
+  if (next && next.score >= best.score - 0.0005) return null;                                   // an exact tie (a bare "esp32" fits three boards): do not pick for them               // two equally good guesses: don't pick for them
   return best.template;
 }
 
 const KIND_WORDS = [
-  ['ultrasonic', /ultrason|sonar|hc-?sr04|distance sensor/], ['servo', /servo|sg90|mg90|rds/], ['stepper', /stepper|28byj|nema/], ['motor', /\bmotor\b|dc motor|vibrat/], ['hbridge', /h-?bridge|motor driver|l298|l293|drv8|tb6612/],
+  ['ultrasonic', /ultrason|sonar|hc-?sr04|distance sensor/], ['servo', /servo|sg90|mg90|rds/], ['stepper', /stepper|28byj|nema/], ['hbridge', /h-?bridge|motor (driver|controller|shield)|l298|l293|drv8|tb6612/], ['motor', /\bmotor\b|dc motor|vibrat/],
   ['relay', /relay/], ['buzzer', /buzzer|piezo|speaker|beeper/], ['led', /\bled\b|lamp|light bulb/], ['button', /button|push ?switch|tactile/], ['switch', /\bswitch\b|toggle|slide/],
   ['variable-resistor', /potentiometer|\bpot\b|trimmer|ldr|photoresistor|thermistor|flex|force sensor|fsr/], ['resistor', /resistor|heater/],
   ['digital-sensor', /pir|motion|hall|reed|tilt|ir (obstacle|sensor)|flame|touch|limit|digital/], ['analog-sensor', /sensor|temperature|humidity|light|gas|mq-?\d|soil|moisture|pressure|emg|ecg|eeg|pulse|load cell|microphone|sound|analog/],
