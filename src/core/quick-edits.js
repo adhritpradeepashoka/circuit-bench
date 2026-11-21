@@ -57,9 +57,23 @@ void loop() {
 }
 
 /** → { actions, code, explanation } or null when this is not something the instant assistant is sure about. */
+/** "delete the previous circuit", "clear the bench", "start over": take everything off the bench except the board(s). It is the last sentence that counts, so "No, we are using a servo. Delete the previous circuit" clears it. */
+export function clearBench(instruction, circuit = { parts: [], wires: [] }) {
+  const sentences = String(instruction || '').trim().toLowerCase().replace(/[!?]+/g, '.').split(/[.;]+/).map(x => x.replace(/^\s*(no|ok|okay|yes|so|now|please|actually|wait|sorry)[, ]+/, '').trim()).filter(Boolean);
+  const last = sentences[sentences.length - 1] || '';
+  if (!last || last.split(' ').length > 9) return null;
+  const clear = /^(please )?(delete|remove|clear|wipe|erase|scrap|trash|get rid of|throw away|dump|reset)\b.*\b(circuit|bench|board|breadboard|project|everything|all of it|all parts)\b/.test(last) || /^(please )?(start (over|again|afresh|from scratch)|clear (it )?all|delete it all|remove it all|wipe it)\b/.test(last);
+  if (!clear || /\b(led|resistor|button|motor|sensor|servo|wire)s?\b/.test(last.replace(/\bservo|motor\b(?=.*(circuit|bench))/, ''))) return null;
+  const keep = id => PART_DEFS[circuit.parts.find(p => p.id === id)?.type]?.category === 'Boards' || /^arduino|^raspberry|^uno|^xiao|^esp/.test(circuit.parts.find(p => p.id === id)?.type || '');
+  const ids = (circuit.parts || []).map(p => p.id).filter(id => !keep(id));
+  if (!ids.length) return { actions: [], code: null, explanation: 'The bench has nothing on it except the board, so there is nothing to clear.' };
+  return { actions: ids.map(id => ({ op: 'remove_part', id })), code: null, explanation: `Cleared the bench: removed ${ids.length} part${ids.length === 1 ? '' : 's'} and their wires. The board stays. What would you like to build instead?` };
+}
+
 export function quickEdit(instruction, circuit = { parts: [], wires: [] }) {
   const raw = String(instruction || '').trim();
   if (!raw || raw.length > 200) return null;
+  { const cleared = clearBench(raw, circuit); if (cleared) return cleared; }
   const t = raw.toLowerCase().replace(/[!?]+$/, '').replace(/\s+/g, ' ');
   if (/\b(why|how|what|explain|help|wrong|broken|not working|doesn'?t work|and then|then|also)\b|[;]/.test(t) || (t.match(/\band\b/g) || []).length > 1) return null;   // questions and multi-step asks go to a model
 

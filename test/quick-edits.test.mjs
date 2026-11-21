@@ -57,3 +57,14 @@ test('build-style requests are left for the tiny model instead of dropping a bar
   for (const q of ['add an led and make a circuit', 'wire up a button', 'set up an led', 'add a led and connect it']) assert.equal(quickEdit(q, { parts: [], wires: [] }), null, q);
   assert.ok(quickEdit('add an led', { parts: [], wires: [] }), 'a plain add still works instantly');
 });
+
+import { clearBench } from '../src/core/quick-edits.js';
+test('clear the bench: "delete the previous circuit" removes everything but the board, even after another sentence', () => {
+  const circuit = { parts: [{ id: 'uno-1', type: 'arduino-uno' }, { id: 'bb-1', type: 'breadboard' }, { id: 'led-1', type: 'led' }, { id: 'resistor-1', type: 'resistor' }], wires: [] };
+  for (const q of ['No, we are using a servo heavy motor. Delete the previous circuit', 'clear the bench', 'start over', 'remove the whole circuit please', 'wipe everything']) {
+    const r = clearBench(q, circuit); assert.ok(r, q); assert.deepEqual(r.actions.map(a => a.id).sort(), ['bb-1', 'led-1', 'resistor-1']);
+  }
+  assert.equal(clearBench('delete the led', circuit), null);
+  assert.equal(clearBench('add a servo to the circuit', circuit), null);
+  assert.match(clearBench('clear the bench', { parts: [{ id: 'uno-1', type: 'arduino-uno' }], wires: [] }).explanation, /nothing to clear/);
+});
