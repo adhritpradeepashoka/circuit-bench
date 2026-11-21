@@ -108,7 +108,7 @@ export async function generateCode({ instruction, circuit, code, context = null,
  *   3. the "picture" (a detailed drawing — the BIG request) from the providers that can take it, started as soon as the brain is back and
  *      merged into it when it arrives. If it never arrives you keep the brain's part with its generic board.
  *  onPartial(res) is called as soon as there is a usable part; the returned promise resolves with the final one. */
-export async function createPartSplit({ description, templates = [], learned = [], local = null, onProgress, onPartial, drawMs = 110_000, signal, ...rest } = {}) {
+export async function createPartSplit({ description, templates = [], learned = [], device = null, local = null, onProgress, onPartial, drawMs = 110_000, signal, ...rest } = {}) {
   const note = msg => onProgress?.(msg);
   const text = String(description || '').trim();
   if (!text) return { ok: false, error: 'Describe the part first.' };
@@ -122,6 +122,11 @@ export async function createPartSplit({ description, templates = [], learned = [
   if (hit) {
     const { id, group, ...raw } = hit, v = validatePartSpec(raw);
     if (v.ok) return { ok: true, spec: v.spec, source: 'template', note: `This is the built-in "${hit.name}" template — instant, no AI needed.`, meta: { provider: 'Templates', model: 'built-in', ms: 0 } };
+  }
+  if (device) {                                    // the Part Maker's own small model, on the CPU: instant when it is sure, silent when it is not
+    note('Asking the Part Maker model on this device…');
+    const d = await Promise.resolve().then(() => device(text)).catch(() => null);
+    if (d?.ok) return d;
   }
   // ── the brain
   let brain = null; const why = [];

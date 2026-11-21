@@ -8,7 +8,7 @@ DATA, OUT = sys.argv[1], sys.argv[2]; MINUTES = float(sys.argv[3]) if len(sys.ar
 torch.manual_seed(0); random.seed(0); torch.set_num_threads(int(__import__('os').environ.get('TINY_THREADS', 2)))
 load = lambda n: [json.loads(l) for l in open(f'{DATA}/{n}.jsonl')]
 train, val, held = load('train'), load('val'), load('heldout')
-src_of = lambda x: f"{x['request']} | {x['state']}"
+src_of = lambda x: f"{x['request']} | {x['state']}" if x.get('state') else x['request']
 ascii_only = lambda s: ''.join(c if 32 <= ord(c) < 127 else '?' for c in s)
 
 # ── BPE (word-level, '▁' marks a word start); the JS side implements the same encode() ──
@@ -54,7 +54,7 @@ enc = lambda text: [stoi.get(p, 3) for p in pieces(text)]
 def dec(ids): return ''.join(vocab_syms[i] for i in ids if i > 3).replace('▁', ' ').strip()
 print('vocab', len(vocab_syms), 'merges', len(merges))
 
-MAXIN, MAXOUT = 112, 56
+MAXIN, MAXOUT = int(__import__('os').environ.get('TINY_MAXIN', 112)), int(__import__('os').environ.get('TINY_MAXOUT', 56))
 def tens(ex):
     s = enc(src_of(ex))[:MAXIN]; t = [1] + enc(ex['program'])[:MAXOUT - 2] + [2]
     return s, t
@@ -141,7 +141,7 @@ import os; os.makedirs(OUT, exist_ok=True)
 tensors, blob, off = [], bytearray(), 0
 for name, p in model.state_dict().items():
     a = p.detach().float().numpy().astype('float16').tobytes(); tensors.append({'name': name, 'shape': list(p.shape), 'offset': off, 'bytes': len(a)}); blob += a; off += len(a)
-open(f'{OUT}/tiny-model.bin', 'wb').write(blob)
-json.dump({'config': {'D': D, 'H': H, 'FF': FF, 'NE': NE, 'ND': ND, 'maxIn': MAXIN, 'maxOut': MAXOUT}, 'vocab': vocab_syms, 'merges': [list(m) for m in merges], 'tensors': tensors, 'metrics': {'val': va, 'heldout': ha}}, open(f'{OUT}/tiny-model.json', 'w'))
+open(f"{OUT}/{__import__('os').environ.get('TINY_NAME', 'tiny-model')}.bin", 'wb').write(blob)
+json.dump({'config': {'D': D, 'H': H, 'FF': FF, 'NE': NE, 'ND': ND, 'maxIn': MAXIN, 'maxOut': MAXOUT}, 'vocab': vocab_syms, 'merges': [list(m) for m in merges], 'tensors': tensors, 'metrics': {'val': va, 'heldout': ha}}, open(f"{OUT}/{__import__('os').environ.get('TINY_NAME', 'tiny-model')}.json", 'w'))
 torch.save(model.state_dict(), f'{OUT}/tiny.pt')
 print('exported', len(blob) / 1e6, 'MB')

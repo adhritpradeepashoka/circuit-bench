@@ -1,0 +1,702 @@
+[
+ {
+  "id": "sw-spst",
+  "name": "Toggle switch (on / off)",
+  "label": "SW",
+  "kind": "switch",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {}
+ },
+ {
+  "id": "sw-spdt",
+  "name": "Slide switch (SPDT)",
+  "label": "SPDT",
+  "kind": "switch",
+  "pins": [
+   "COM",
+   "T1",
+   "T2"
+  ],
+  "params": {}
+ },
+ {
+  "id": "sw-reed",
+  "name": "Reed / tilt switch",
+  "label": "REED",
+  "kind": "switch",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {}
+ },
+ {
+  "id": "pot-trimmer",
+  "name": "Trimmer potentiometer 10 kohm",
+  "label": "POT",
+  "kind": "variable-resistor",
+  "pins": [
+   "LO",
+   "W",
+   "HI"
+  ],
+  "params": {
+   "ohms": 10000
+  }
+ },
+ {
+  "id": "fsr",
+  "name": "Force sensor (FSR)",
+  "label": "FSR",
+  "kind": "variable-resistor",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {
+   "ohms": 100000,
+   "min": 300
+  }
+ },
+ {
+  "id": "flex",
+  "name": "Flex sensor",
+  "label": "FLEX",
+  "kind": "variable-resistor",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {
+   "ohms": 40000,
+   "min": 10000
+  }
+ },
+ {
+  "id": "soil",
+  "name": "Soil moisture probe",
+  "label": "SOIL",
+  "kind": "variable-resistor",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {
+   "ohms": 200000,
+   "min": 2000
+  }
+ },
+ {
+  "id": "d-1n4007",
+  "name": "Diode 1N4007",
+  "label": "1N4007",
+  "kind": "diode",
+  "pins": [
+   "A",
+   "K"
+  ],
+  "params": {
+   "vf": 0.7,
+   "imax": 1000
+  }
+ },
+ {
+  "id": "d-1n4148",
+  "name": "Signal diode 1N4148",
+  "label": "1N4148",
+  "kind": "diode",
+  "pins": [
+   "A",
+   "K"
+  ],
+  "params": {
+   "vf": 0.7,
+   "imax": 200
+  }
+ },
+ {
+  "id": "d-schottky",
+  "name": "Schottky diode 1N5819",
+  "label": "1N5819",
+  "kind": "diode",
+  "pins": [
+   "A",
+   "K"
+  ],
+  "params": {
+   "vf": 0.3,
+   "imax": 1000
+  }
+ },
+ {
+  "id": "d-zener",
+  "name": "Zener diode 5.1 V",
+  "label": "ZENER",
+  "kind": "diode",
+  "pins": [
+   "A",
+   "K"
+  ],
+  "params": {
+   "vf": 0.7,
+   "vz": 5.1,
+   "imax": 500
+  }
+ },
+ {
+  "id": "opamp-lm358",
+  "name": "Op-amp (LM358-style)",
+  "label": "LM358",
+  "kind": "opamp",
+  "pins": [
+   "IN+",
+   "IN-",
+   "OUT",
+   "V+",
+   "V-"
+  ],
+  "params": {}
+ },
+ {
+  "id": "opamp-rr",
+  "name": "Op-amp rail-to-rail (MCP6001)",
+  "label": "MCP6001",
+  "kind": "opamp",
+  "pins": [
+   "IN+",
+   "IN-",
+   "OUT",
+   "V+",
+   "V-"
+  ],
+  "params": {}
+ },
+ {
+  "id": "opamp-tl07x",
+  "name": "Op-amp TL072 (JFET input, dual supply)",
+  "label": "TL072",
+  "kind": "opamp",
+  "pins": [
+   "IN+",
+   "IN-",
+   "OUT",
+   "V+",
+   "V-"
+  ],
+  "params": {}
+ },
+ {
+  "id": "opamp-op07",
+  "name": "Op-amp OP07 (precision)",
+  "label": "OP07",
+  "kind": "opamp",
+  "pins": [
+   "IN+",
+   "IN-",
+   "OUT",
+   "V+",
+   "V-"
+  ],
+  "params": {}
+ },
+ {
+  "id": "opamp-741",
+  "name": "Op-amp LM741 (classic)",
+  "label": "LM741",
+  "kind": "opamp",
+  "pins": [
+   "IN+",
+   "IN-",
+   "OUT",
+   "V+",
+   "V-"
+  ],
+  "params": {}
+ },
+ {
+  "id": "inamp-ina128",
+  "name": "Instrumentation amp INA128 (gain 100)",
+  "label": "INA128",
+  "kind": "inamp",
+  "pins": [
+   "IN+",
+   "IN-",
+   "OUT",
+   "REF",
+   "V+",
+   "V-"
+  ],
+  "params": {
+   "gain": 100
+  }
+ },
+ {
+  "id": "bmotor-cw",
+  "name": "Coreless motor 8520, clockwise (red + blue wires)",
+  "label": "MOTOR CW",
+  "kind": "motor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 2.5
+  }
+ },
+ {
+  "id": "bmotor-ccw",
+  "name": "Coreless motor 8520, counter-clockwise (black + white wires)",
+  "label": "MOTOR CCW",
+  "kind": "motor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 2.5
+  }
+ },
+ {
+  "id": "q-ao3400",
+  "name": "N-MOSFET AO3400 (logic level, tiny)",
+  "label": "AO3400",
+  "kind": "nmos",
+  "pins": [
+   "G",
+   "D",
+   "S"
+  ],
+  "params": {
+   "vth": 1.2,
+   "rds": 0.04,
+   "imax": 5700
+  }
+ },
+ {
+  "id": "bioamp-exg-pill",
+  "name": "BioAmp EXG Pill",
+  "label": "EXG Pill",
+  "kind": "inamp",
+  "pins": [
+   "OUT",
+   "VCC",
+   "GND",
+   "IN+",
+   "IN-",
+   "REF"
+  ],
+  "params": {
+   "gain": 1000
+  }
+ },
+ {
+  "id": "q-2n2222",
+  "name": "NPN transistor 2N2222",
+  "label": "2N2222",
+  "kind": "npn",
+  "pins": [
+   "E",
+   "B",
+   "C"
+  ],
+  "params": {
+   "beta": 100,
+   "imax": 600
+  }
+ },
+ {
+  "id": "q-bc547",
+  "name": "NPN transistor BC547",
+  "label": "BC547",
+  "kind": "npn",
+  "pins": [
+   "C",
+   "B",
+   "E"
+  ],
+  "params": {
+   "beta": 200,
+   "imax": 100
+  }
+ },
+ {
+  "id": "q-2n2907",
+  "name": "PNP transistor 2N2907",
+  "label": "2N2907",
+  "kind": "pnp",
+  "pins": [
+   "E",
+   "B",
+   "C"
+  ],
+  "params": {
+   "beta": 100,
+   "imax": 600
+  }
+ },
+ {
+  "id": "q-irlz44n",
+  "name": "N-MOSFET IRLZ44N (logic level)",
+  "label": "IRLZ44N",
+  "kind": "nmos",
+  "pins": [
+   "G",
+   "D",
+   "S"
+  ],
+  "params": {
+   "vth": 2,
+   "rds": 0.022,
+   "imax": 47000
+  }
+ },
+ {
+  "id": "q-irf540",
+  "name": "N-MOSFET IRF540N (needs 10 V gate)",
+  "label": "IRF540N",
+  "kind": "nmos",
+  "pins": [
+   "G",
+   "D",
+   "S"
+  ],
+  "params": {
+   "vth": 5.5,
+   "rds": 0.044,
+   "imax": 33000
+  }
+ },
+ {
+  "id": "q-irf9540",
+  "name": "P-MOSFET IRF9540",
+  "label": "IRF9540",
+  "kind": "pmos",
+  "pins": [
+   "G",
+   "D",
+   "S"
+  ],
+  "params": {
+   "vth": 4.5,
+   "rds": 0.2,
+   "imax": 19000
+  }
+ },
+ {
+  "id": "reg-7805",
+  "name": "Voltage regulator 7805",
+  "label": "7805",
+  "kind": "regulator",
+  "pins": [
+   "IN",
+   "GND",
+   "OUT"
+  ],
+  "params": {
+   "imax": 1500,
+   "vout": 5,
+   "drop": 2,
+   "mode": "linear"
+  }
+ },
+ {
+  "id": "reg-1117",
+  "name": "Regulator AMS1117-3.3",
+  "label": "1117-3.3",
+  "kind": "regulator",
+  "pins": [
+   "GND",
+   "OUT",
+   "IN"
+  ],
+  "params": {
+   "imax": 800,
+   "vout": 3.3,
+   "drop": 1.1,
+   "mode": "linear"
+  }
+ },
+ {
+  "id": "reg-buck",
+  "name": "Buck converter module (to 5 V)",
+  "label": "BUCK 5V",
+  "kind": "regulator",
+  "pins": [
+   "VIN",
+   "GND",
+   "VOUT"
+  ],
+  "params": {
+   "imax": 3000,
+   "vout": 5,
+   "drop": 0,
+   "mode": "switching"
+  }
+ },
+ {
+  "id": "relay-5v",
+  "name": "Relay (5 V coil)",
+  "label": "RELAY",
+  "kind": "relay",
+  "pins": [
+   "C+",
+   "C-",
+   "COM",
+   "NO",
+   "NC"
+  ],
+  "params": {
+   "ohms": 70,
+   "pick": 3.5
+  }
+ },
+ {
+  "id": "relay-12v",
+  "name": "Relay (12 V coil)",
+  "label": "RELAY 12V",
+  "kind": "relay",
+  "pins": [
+   "C+",
+   "C-",
+   "COM",
+   "NO",
+   "NC"
+  ],
+  "params": {
+   "ohms": 400,
+   "pick": 8
+  }
+ },
+ {
+  "id": "cap-100n",
+  "name": "Ceramic capacitor 100 nF",
+  "label": "100nF",
+  "kind": "capacitor",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {
+   "uF": 0.1
+  }
+ },
+ {
+  "id": "cap-100u",
+  "name": "Electrolytic capacitor 100 uF",
+  "label": "100uF",
+  "kind": "capacitor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "uF": 100
+  }
+ },
+ {
+  "id": "cap-1000u",
+  "name": "Electrolytic capacitor 1000 uF",
+  "label": "1000uF",
+  "kind": "capacitor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "uF": 1000
+  }
+ },
+ {
+  "id": "ind-10mh",
+  "name": "Inductor 10 mH",
+  "label": "10mH",
+  "kind": "inductor",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {
+   "mH": 10,
+   "rs": 5
+  }
+ },
+ {
+  "id": "solenoid",
+  "name": "Solenoid (12 V)",
+  "label": "SOLENOID",
+  "kind": "inductor",
+  "pins": [
+   "1",
+   "2"
+  ],
+  "params": {
+   "mH": 80,
+   "rs": 24
+  }
+ },
+ {
+  "id": "buzzer-active",
+  "name": "Active buzzer",
+  "label": "BUZZER",
+  "kind": "buzzer",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 150,
+   "mode": "active",
+   "vmin": 2
+  }
+ },
+ {
+  "id": "buzzer-passive",
+  "name": "Passive buzzer / piezo",
+  "label": "PIEZO",
+  "kind": "buzzer",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 100,
+   "mode": "passive",
+   "vmin": 1
+  }
+ },
+ {
+  "id": "speaker",
+  "name": "Speaker 8 ohm",
+  "label": "SPEAKER",
+  "kind": "buzzer",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 8,
+   "mode": "passive",
+   "vmin": 0.3
+  }
+ },
+ {
+  "id": "fan",
+  "name": "DC fan 5 V",
+  "label": "FAN",
+  "kind": "motor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 50
+  }
+ },
+ {
+  "id": "vibe",
+  "name": "Vibration motor",
+  "label": "VIBE",
+  "kind": "motor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 40
+  }
+ },
+ {
+  "id": "pump",
+  "name": "Water pump 6 V",
+  "label": "PUMP",
+  "kind": "motor",
+  "pins": [
+   "+",
+   "-"
+  ],
+  "params": {
+   "ohms": 15
+  }
+ },
+ {
+  "id": "servo-sg90",
+  "name": "Servo SG90",
+  "label": "SG90",
+  "kind": "servo",
+  "pins": [
+   "GND",
+   "VCC",
+   "SIG"
+  ],
+  "params": {
+   "range": 180,
+   "minUs": 544,
+   "maxUs": 2400
+  }
+ },
+ {
+  "id": "hcsr04",
+  "name": "Ultrasonic sensor HC-SR04",
+  "label": "HC-SR04",
+  "kind": "ultrasonic",
+  "pins": [
+   "VCC",
+   "TRIG",
+   "ECHO",
+   "GND"
+  ],
+  "params": {}
+ },
+ {
+  "id": "ky040",
+  "name": "Rotary encoder KY-040",
+  "label": "KY-040",
+  "kind": "encoder",
+  "pins": [
+   "CLK",
+   "DT",
+   "SW",
+   "GND"
+  ],
+  "params": {}
+ },
+ {
+  "id": "ir-dist",
+  "name": "Distance sensor (analog)",
+  "label": "IR DIST",
+  "kind": "analog-sensor",
+  "pins": [
+   "VCC",
+   "GND",
+   "OUT"
+  ],
+  "params": {}
+ },
+ {
+  "id": "sound",
+  "name": "Sound sensor (analog)",
+  "label": "KY-038",
+  "kind": "analog-sensor",
+  "pins": [
+   "VCC",
+   "GND",
+   "AO"
+  ],
+  "params": {}
+ },
+ {
+  "id": "hall",
+  "name": "Hall / magnet sensor",
+  "label": "HALL",
+  "kind": "digital-sensor",
+  "pins": [
+   "VCC",
+   "GND",
+   "OUT"
+  ],
+  "params": {}
+ }
+]

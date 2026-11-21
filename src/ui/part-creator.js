@@ -2,6 +2,7 @@
 // AI, which fills in the same form. Either way the result is a declarative spec checked by validatePartSpec()
 // (src/core/custom-parts.js): it can only describe a part, never run code. Saved parts live in "My parts"
 // (this browser) and travel inside any project that uses them.
+import { loadPartModel, partFromModel } from '../sim/part-model.mjs';
 import { learnPart, learnedTemplates } from '../core/learned-parts.js';
 import { learningOn } from '../core/learned-store.js';
 import { BEHAVIOURS, PACKAGES, PHOTO_MAX_CHARS, validatePartSpec, registerCustomPart, customTypes, newCustomId } from '../core/custom-parts.js';
@@ -14,6 +15,15 @@ import { createPart as defaultCreatePart, createPartSplit, getStoredKey, setStor
 const LIBRARY = 'circuitbench:my-parts';
 const clone = o => JSON.parse(JSON.stringify(o));
 const SIDES = [['left', 'Left'], ['right', 'Right'], ['top', 'Top'], ['bottom', 'Bottom']];
+
+const DEVICE_PREF = 'virtual-lab:part-device';
+const deviceFirst = () => { try { return localStorage.getItem(DEVICE_PREF) !== '0'; } catch { return true; } };
+/** The Part Maker model: waits a few seconds for the 4 MB file the first time, then it is instant; any failure is just 'not sure'. */
+async function deviceModel(description, templates) {
+  if (globalThis.VLAB_NO_TINY || !deviceFirst()) return null;
+  const m = await Promise.race([loadPartModel(), new Promise(r => setTimeout(() => r(null), 5000))]).catch(() => null);
+  return m ? partFromModel(m, description, { templates }) : null;
+}
 
 export function loadLibrary(storage = globalThis.localStorage) {
   try { const v = JSON.parse(storage.getItem(LIBRARY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
@@ -344,6 +354,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
   provModel.addEventListener('change', () => setStoredModel(provModel.value.trim()));
   provKey.addEventListener('input', () => { const v = provKey.value.trim(); if (/^[\w.-]{20,}$/.test(v)) { setStoredKey(v); paintProvider(); $('pcAiStatus').textContent = `${PROVIDER_INFO[getStoredProvider()].label} key saved — only in this browser.`; $('pcAiStatus').className = 'pc-ai-status'; } });
   paintProvider();
+  { const cb = $('pcDevice'); if (cb) { cb.checked = deviceFirst(); cb.addEventListener('change', () => { try { localStorage.setItem(DEVICE_PREF, cb.checked ? '1' : '0'); } catch { /* ignore */ } }); } }
 
   let lastPhoto = null;
   async function askAi(opts = {}) {
@@ -360,7 +371,7 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
       if (!refine && !opts.photoUrl && createPart === defaultCreatePart) {      // a fresh part: template → brain (small) + picture (big), combined
         const [{ TEMPLATES }, web] = await Promise.all([import('../core/part-templates.js'), import('../sim/webllm.mjs')]);
         const onDevice = (() => { try { return localStorage.getItem('virtual-lab:ai-local') === '1'; } catch { return false; } })() && web.webgpuAvailable();
-        res = await createPartSplit({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, signal: aiBusy.signal, templates: TEMPLATES, learned: learnedTemplates(), local: onDevice ? d => web.brainLocal({ description: d, onProgress: p => { status.textContent = `Loading the on-device model… ${Math.round((p?.progress || 0) * 100)}%`; } }) : null,
+        res = await createPartSplit({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, signal: aiBusy.signal, templates: TEMPLATES, learned: learnedTemplates(), device: d => deviceModel(d, TEMPLATES), local: onDevice ? d => web.brainLocal({ description: d, onProgress: p => { status.textContent = `Loading the on-device model… ${Math.round((p?.progress || 0) * 100)}%`; } }) : null,
           onProgress: msg => { status.textContent = msg; },
           onPartial: r => { draft = { ...clone(r.spec), id: editing || draft.id }; paintForm(); $('pcFix').hidden = false; status.textContent = 'Pins and behaviour are ready — drawing it in detail (you can already save this)…'; } });
       } else res = await createPart({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, refine, photoUrl: opts.photoUrl || '', signal: aiBusy.signal, onProgress: progress });
