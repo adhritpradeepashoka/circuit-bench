@@ -292,7 +292,7 @@ export function initAiPanel(editor, code, sim = null) {
   $('aiOpenSettings').addEventListener('click', openSettings);
   window.addEventListener('cb-session', () => { refreshKeyUi(); });
   probeWebGPU().then(() => refreshKeyUi());
-  if (!globalThis.VLAB_NO_TINY) setTimeout(() => loadTiny().catch(() => {}), 1500);      // fetch the tiny model (2.5 MB) in the background so the first answer is instant      // no usable GPU adapter → stop defaulting to the on-device model
+  if (!globalThis.VLAB_NO_TINY) setTimeout(() => loadTiny().then(() => setTimeout(() => loadTinyLarge().catch(() => {}), 2500)).catch(() => {}), 1500);      // then the larger one (13 MB) a few seconds later, so it is ready before it is needed      // fetch the tiny model (2.5 MB) in the background so the first answer is instant      // no usable GPU adapter → stop defaulting to the on-device model
 
   /* ── composer ────────────────────────── */
   const autosize = () => { promptEl.style.height = 'auto'; promptEl.style.height = `${Math.min(promptEl.scrollHeight || 0, 150)}px`; };
