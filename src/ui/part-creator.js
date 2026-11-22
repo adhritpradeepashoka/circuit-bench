@@ -28,12 +28,12 @@ async function deviceModel(description, templates) {
 export function loadLibrary(storage = globalThis.localStorage) {
   try { const v = JSON.parse(storage.getItem(LIBRARY) || '[]'); return Array.isArray(v) ? v : []; } catch { return []; }
 }
-function saveLibrary(list, storage = globalThis.localStorage) { try { storage.setItem(LIBRARY, JSON.stringify(list)); } catch { /* full / blocked */ } }
+function saveLibrary(list, storage = globalThis.localStorage) { try { storage.setItem(LIBRARY, JSON.stringify(list)); return true; } catch { return false; /* full / blocked */ } }
 
 /** Put a finished spec in My parts (this browser) and in the live catalogue. Used by the PCB importer. */
 export function addToLibrary(spec) {
   registerCustomPart(spec);
-  saveLibrary(loadLibrary().filter(s => s.id !== spec.id).concat([spec]));
+  return saveLibrary(loadLibrary().filter(s => s.id !== spec.id).concat([spec]));
 }
 
 const blank = () => ({

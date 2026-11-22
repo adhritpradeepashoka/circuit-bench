@@ -505,22 +505,43 @@ function spriteSVG(spec, w, h, pins) {
   }
   return '';
 }
-/** An imported KiCad board, drawn at true size: the outline, the copper tracks, the pads (square SMD electrodes, round header holes) and a pin lead on each connection point. */
+/**
+ * An imported KiCad board, drawn at true size like the real thing: the board, copper pours, tracks on each side
+ * (front warm, back blue, inner layers dim), vias, pads (turned the way the file turns them), silkscreen and reference
+ * names, and a ring on every connection point. Tracks of one side and width share one <path>, so a board with tens of
+ * thousands of them still draws and drags smoothly.
+ */
 function boardSVG(spec, w, h, pins) {
-  const S = 96 / 25.4, m = 6, b = spec.board, X = v => +(v * S + m).toFixed(2);
+  const S = 96 / 25.4, m = 6, b = spec.board, X = v => +(v * S + m).toFixed(1);
+  const COPPER = ['#d9a441', '#4f8fd6', '#8a8f6a'], POUR = ['#d9a441', '#4f8fd6', '#8a8f6a'];
   const body = b.shape === 'circle'
-    ? `<circle cx="${X(b.cx)}" cy="${X(b.cy)}" r="${+(b.r * S).toFixed(2)}" fill="${spec.color}" fill-opacity=".16" stroke="${spec.color}" stroke-width="1.6"/>`
-    : `<rect x="${m}" y="${m}" width="${+(b.w * S).toFixed(2)}" height="${+(b.h * S).toFixed(2)}" rx="3" fill="${spec.color}" fill-opacity=".16" stroke="${spec.color}" stroke-width="1.6"/>`;
-  const tracks = b.tracks.map(t => `<line x1="${X(t.x1)}" y1="${X(t.y1)}" x2="${X(t.x2)}" y2="${X(t.y2)}" stroke="#c9a227" stroke-width="${Math.max(1, +(t.w * S).toFixed(2))}" stroke-linecap="round"/>`).join('');
+    ? `<circle cx="${X(b.cx)}" cy="${X(b.cy)}" r="${+(b.r * S).toFixed(2)}" fill="${spec.color}" fill-opacity=".22" stroke="${spec.color}" stroke-width="1.6"/>`
+    : `<rect x="${m}" y="${m}" width="${+(b.w * S).toFixed(2)}" height="${+(b.h * S).toFixed(2)}" rx="3" fill="${spec.color}" fill-opacity=".22" stroke="${spec.color}" stroke-width="1.6"/>`;
+  const zones = (b.zones || []).slice().sort((a, c) => (c.l === 1) - (a.l === 1)).map(z => {      // back pours first, so the front sits on top
+    let d = ''; for (let i = 0; i + 1 < z.p.length; i += 2) d += (i ? 'L' : 'M') + X(z.p[i]) + ' ' + X(z.p[i + 1]).toString();
+    return `<path d="${d}Z" fill="${POUR[z.l]}" fill-opacity="${z.f ? 0.28 : 0.06}" stroke="${POUR[z.l]}" stroke-width=".5" stroke-opacity=".5"/>`;
+  }).join('');
+  const buckets = new Map();
+  for (const t of b.tracks || []) { const k = `${t[5]}|${Math.max(1, +(t[4] * S).toFixed(1))}`; (buckets.get(k) || buckets.set(k, []).get(k)).push(t); }
+  const tracks = [...buckets.entries()].sort((a, c) => ({ 2: 0, 1: 1, 0: 2 })[a[0][0]] - ({ 2: 0, 1: 1, 0: 2 })[c[0][0]]).map(([k, list]) => {
+    const [l, sw] = k.split('|');
+    return `<path d="${list.map(t => `M${X(t[0])} ${X(t[1])}L${X(t[2])} ${X(t[3])}`).join('')}" fill="none" stroke="${COPPER[+l]}" stroke-width="${sw}" stroke-linecap="round" stroke-opacity="${l === '2' ? 0.55 : 0.95}"/>`;
+  }).join('');
+  const vias = (b.vias || []).map(v => `<circle cx="${X(v[0])}" cy="${X(v[1])}" r="${+(v[2] * S / 2).toFixed(2)}" fill="#cfd3d6" stroke="#6b7076" stroke-width=".4"/><circle cx="${X(v[0])}" cy="${X(v[1])}" r="${+((v[3] || v[2] * 0.5) * S / 2).toFixed(2)}" fill="#14201a"/>`).join('');
   const pads = b.pads.map(p => {
     const cx = X(p.x), cy = X(p.y), pw = +(p.w * S).toFixed(2), ph = +(p.h * S).toFixed(2);
-    const gold = p.hole ? '#d9b44a' : '#e0c15a';
-    const shape = p.shape === 'circle' || p.shape === 'oval' ? `<ellipse cx="${cx}" cy="${cy}" rx="${pw / 2}" ry="${ph / 2}" fill="${gold}" stroke="#8a6d1d" stroke-width=".6"/>`
-      : `<rect x="${(cx - pw / 2).toFixed(2)}" y="${(cy - ph / 2).toFixed(2)}" width="${pw}" height="${ph}" rx="${p.shape === 'roundrect' ? Math.min(pw, ph) * 0.15 : 0.6}" fill="${gold}" stroke="#8a6d1d" stroke-width=".6"/>`;
+    const gold = p.hole ? '#e3c25a' : p.side === 'B' ? '#7ba8de' : '#e0c15a', edge = p.side === 'B' && !p.hole ? '#2f5d93' : '#8a6d1d';
+    const tf = p.r ? ` transform="rotate(${-p.r} ${cx} ${cy})"` : '';
+    const shape = p.shape === 'circle' && Math.abs(pw - ph) < 0.05 ? `<circle cx="${cx}" cy="${cy}" r="${pw / 2}" fill="${gold}" stroke="${edge}" stroke-width=".5"/>`
+      : p.shape === 'circle' || p.shape === 'oval' ? `<rect x="${(cx - pw / 2).toFixed(2)}" y="${(cy - ph / 2).toFixed(2)}" width="${pw}" height="${ph}" rx="${Math.min(pw, ph) / 2}" fill="${gold}" stroke="${edge}" stroke-width=".5"${tf}/>`
+      : `<rect x="${(cx - pw / 2).toFixed(2)}" y="${(cy - ph / 2).toFixed(2)}" width="${pw}" height="${ph}" rx="${p.shape === 'roundrect' ? Math.min(pw, ph) * 0.2 : 0.4}" fill="${gold}" stroke="${edge}" stroke-width=".5"${tf}/>`;
     return shape + (p.hole ? `<circle cx="${cx}" cy="${cy}" r="${+(p.hole * S / 2).toFixed(2)}" fill="#14201a"/>` : '');
   }).join('');
-  const marks = pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.4" fill="none" stroke="#ffffff" stroke-width="1" opacity=".9"/><text x="${p.x + 5}" y="${p.y - 4}" font-size="6" font-family="monospace" fill="${spec.color}" stroke="#fff" stroke-width="2" paint-order="stroke">${esc(p.id)}</text>`).join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}${tracks}${pads}${marks}
+  const silkOf = side => { const l = (b.silk || []).filter(q => q[4] === side); return l.length ? `<path d="${l.map(q => `M${X(q[0])} ${X(q[1])}L${X(q[2])} ${X(q[3])}`).join('')}" fill="none" stroke="${side ? '#9db8e8' : '#f2f2f2'}" stroke-width="${+(0.12 * S).toFixed(2)}" stroke-linecap="round" opacity="${side ? 0.55 : 0.85}"/>` : ''; };
+  const refs = (b.texts || []).map(q => `<text x="${X(q[1])}" y="${X(q[2])}" text-anchor="middle" font-size="${Math.max(3, 1 * S).toFixed(1)}" font-family="monospace" fill="${q[3] ? '#9db8e8' : '#fff'}" opacity=".8">${esc(q[0])}</text>`).join('');
+  const few = pins.length <= 120;          // a name beside every one of hundreds of pins would hide the board; the full name is in each pin's tooltip
+  const marks = pins.map(p => `<circle cx="${p.x}" cy="${p.y}" r="3.4" fill="none" stroke="#ffffff" stroke-width="1" opacity=".9"><title>${esc(p.id)}</title></circle>` + (few ? `<text x="${p.x + 5}" y="${p.y - 4}" font-size="6" font-family="monospace" fill="${spec.color}" stroke="#fff" stroke-width="2" paint-order="stroke">${esc(p.id)}</text>` : '')).join('');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}${zones}${tracks}${vias}${pads}${silkOf(1)}${silkOf(0)}${refs}${marks}
     <text x="${w / 2}" y="${h - m - 3}" text-anchor="middle" font-size="8" font-weight="700" font-family="sans-serif" fill="${spec.color}" stroke="#fff" stroke-width="2.4" paint-order="stroke">${esc(spec.label)}</text></svg>`;
 }
 /**

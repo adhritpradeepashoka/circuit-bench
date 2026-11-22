@@ -56,9 +56,10 @@ test('KiCad 5 (legacy "module" files) imports: same pads, tracks and vias as the
   assert.equal(b.vias.length, (text.match(/\(via\s/g) || []).length);
   assert.ok(b.parts.filter(p => p.ref && p.ref !== 'REF**').length >= 60, 'references read from fp_text');
   const { spec, report } = boardToSpec(text, { name: 'PIC programmer' });
-  assert.equal(validatePartSpec(spec).ok, true); assert.equal(spec.pins.length, 64);
-  assert.match(report.notes.join(' '), /connectors \(J, P, CN/);
-  assert.ok(report.notes.some(n => /copper pour/.test(n)));
+  assert.equal(validatePartSpec(spec).ok, true); assert.equal(spec.pins.length, 116, 'every through-hole connection point is wirable (no 64 cap on boards)');
+  const bd = spec.board; assert.equal(bd.pads.length, b.pads.length, 'no pad dropped'); assert.equal(bd.tracks.length, b.tracks.length, 'no track dropped'); assert.equal(bd.vias.length, b.vias.length);
+  assert.ok(bd.zones.length >= 1 && bd.silk.length > 100 && bd.texts.length > 30, 'pours, silkscreen and reference names are kept');
+  assert.ok(bd.tracks.some(t => t[5] === 1) && bd.tracks.some(t => t[5] === 0), 'both copper sides kept');
 });
 
 test('copper-connectivity computed from positions agrees with the nets the file declares (no shorts) on real boards, front and back side', () => {
@@ -104,4 +105,20 @@ test('a big board imports in well under a second per thousand pads (was quadrati
   parts.push(')');
   const t0 = Date.now(); const r = boardToSpec(parts.join('\n')); const ms = Date.now() - t0;
   assert.ok(r.report.pins > 0); assert.ok(ms < 3000, `${ms} ms for 15 000 tracks`);
+});
+
+test('complex boards: nothing is silently dropped, ids stay unique, and the spec stays valid (video.kicad_pcb: 8 000 tracks, 660 nodes)', async () => {
+  const { existsSync, readFileSync } = await import('node:fs');
+  const f = '/tmp/pcbs/video.kicad_pcb'; if (!existsSync(f)) return;
+  const text = readFileSync(f, 'utf8'), b = readBoard(text), r = boardToSpec(text), v = validatePartSpec(r.spec);
+  assert.equal(v.ok, true, v.errors?.join(' '));
+  assert.equal(v.spec.board.tracks.length, b.tracks.length); assert.equal(v.spec.board.pads.length, b.pads.length);
+  assert.ok(v.spec.pins.length > 300);
+  assert.ok(JSON.stringify(v.spec).length < 900_000, 'stays small enough for browser storage');
+});
+
+test('pads keep their own size and turn; arcs on silkscreen are sampled', () => {
+  const t = `(kicad_pcb (version 20240108) (footprint "L:X" (layer "F.Cu") (at 10 10 90) (property "Reference" "U1") (fp_arc (start 0 -2) (mid 2 0) (end 0 2) (layer "F.SilkS") (width 0.1)) (pad "1" smd rect (at 0 0 90) (size 2.4 1.6) (layers "F.Cu"))))`;
+  const b = readBoard(t); assert.deepEqual([b.pads[0].ow, b.pads[0].oh, b.pads[0].rot], [2.4, 1.6, 90]); assert.ok(b.silk.length >= 10);
+  const out = boardToSpec(t).spec.board.pads[0]; assert.deepEqual([out.w, out.h, out.r], [2.4, 1.6, 90]);
 });

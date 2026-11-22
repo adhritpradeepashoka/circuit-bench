@@ -17,7 +17,7 @@ import { NATIVE_PARTS } from './native-parts.js';
 import { cleanArt } from './part-art.js';
 
 export const PITCH = 9.6;                       // 0.1 inch in CSS px: pins line up with breadboard holes
-const PAD = 14, MIN_W = 76, MIN_H = 56, ICON_MIN_H = 76, MAX_PINS = 64;
+const PAD = 14, MIN_W = 76, MIN_H = 56, ICON_MIN_H = 76, MAX_PINS = 64, MAX_BOARD_PINS = 400;
 const DIP_PAD = 13;
 
 /**
@@ -106,11 +106,12 @@ export function validatePartSpec(raw, { id, strict = false } = {}) {
   if (!raw || typeof raw !== 'object') return { ok: false, errors: ['A part must be an object.'] };
   const name = str(raw.name, 40);
   if (!name) errors.push('Give the part a name.');
-  const pinsIn = Array.isArray(raw.pins) ? raw.pins.slice(0, MAX_PINS + 1) : [];
+  const pinCap = raw.package === 'board' ? MAX_BOARD_PINS : MAX_PINS;
+  const pinsIn = Array.isArray(raw.pins) ? raw.pins.slice(0, pinCap + 1) : [];
   if (!pinsIn.length && raw.behaviour?.kind !== 'slime-mold') errors.push('A part needs at least one pin.');      // a slime mold is sensed by the board under it, so it has no wiring of its own
-  if (pinsIn.length > MAX_PINS) errors.push(`At most ${MAX_PINS} pins.`);
+  if (pinsIn.length > pinCap) errors.push(`At most ${pinCap} pins.`);
   const pins = [], seen = new Set();
-  for (const p of pinsIn.slice(0, MAX_PINS)) {
+  for (const p of pinsIn.slice(0, pinCap)) {
     const pid = str(p?.id ?? p?.name, 12).replace(/\s+/g, '_');
     if (!PIN_ID_RE.test(pid)) { errors.push(`Pin name "${pid || '(empty)'}" — use letters, digits, + - _ . (max 12).`); continue; }
     if (seen.has(pid.toLowerCase())) { errors.push(`Two pins are called "${pid}".`); continue; }
@@ -256,11 +257,18 @@ function cleanBoard(b) {
   const o = b && typeof b === 'object' ? b : {};
   const list = (a, max) => (Array.isArray(a) ? a.slice(0, max) : []);
   const PADSHAPES = ['rect', 'roundrect', 'circle', 'oval'];
+  const n = (v, lo, hi) => { const x = Number(v); return Number.isFinite(x) ? +Math.min(hi, Math.max(lo, x)).toFixed(2) : lo; };
+  const lay = v => (v === 1 || v === 2 ? v : 0);
   return {
     w: clampN(o.w, 1, 600), h: clampN(o.h, 1, 600), shape: o.shape === 'circle' ? 'circle' : 'rect',
     ...(o.shape === 'circle' ? { cx: clampN(o.cx, 0, 600), cy: clampN(o.cy, 0, 600), r: clampN(o.r, 1, 300) } : {}),
-    pads: list(o.pads, 400).map(p => ({ x: clampN(p?.x, 0, 600), y: clampN(p?.y, 0, 600), w: clampN(p?.w, 0.1, 100), h: clampN(p?.h, 0.1, 100), shape: PADSHAPES.includes(p?.shape) ? p.shape : 'rect', hole: clampN(p?.hole, 0, 20), pin: str(p?.pin, 12), side: p?.side === 'B' ? 'B' : 'F' })),
-    tracks: list(o.tracks, 1500).map(t => ({ x1: clampN(t?.x1, 0, 600), y1: clampN(t?.y1, 0, 600), x2: clampN(t?.x2, 0, 600), y2: clampN(t?.y2, 0, 600), w: clampN(t?.w, 0.05, 10) })),
+    pads: list(o.pads, 12000).map(p => ({ x: n(p?.x, 0, 600), y: n(p?.y, 0, 600), w: n(p?.w, 0.1, 100), h: n(p?.h, 0.1, 100), r: n(p?.r, 0, 180), shape: PADSHAPES.includes(p?.shape) ? p.shape : 'rect', hole: n(p?.hole, 0, 20), pin: str(p?.pin, 12), side: p?.side === 'B' ? 'B' : 'F' })),
+    // tracks, vias, silkscreen and pours are stored as short number lists so a big board stays small
+    tracks: list(o.tracks, 80000).map(t => Array.isArray(t) ? [n(t[0], 0, 600), n(t[1], 0, 600), n(t[2], 0, 600), n(t[3], 0, 600), n(t[4], 0.05, 10), lay(t[5])] : [n(t?.x1, 0, 600), n(t?.y1, 0, 600), n(t?.x2, 0, 600), n(t?.y2, 0, 600), n(t?.w, 0.05, 10), 0]),
+    vias: list(o.vias, 20000).map(v => [n(v?.[0], 0, 600), n(v?.[1], 0, 600), n(v?.[2], 0.1, 10), n(v?.[3], 0, 10)]),
+    zones: list(o.zones, 400).map(z => ({ l: lay(z?.l), f: z?.f ? 1 : 0, p: list(z?.p, 100000).map(v => n(v, 0, 600)) })).filter(z => z.p.length >= 6),
+    silk: list(o.silk, 40000).map(q => [n(q?.[0], 0, 600), n(q?.[1], 0, 600), n(q?.[2], 0, 600), n(q?.[3], 0, 600), q?.[4] === 1 ? 1 : 0]),
+    texts: list(o.texts, 3000).map(q => [str(q?.[0], 12), n(q?.[1], 0, 600), n(q?.[2], 0, 600), q?.[3] === 1 ? 1 : 0]),
   };
 }
 
