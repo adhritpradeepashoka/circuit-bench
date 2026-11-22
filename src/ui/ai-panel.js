@@ -10,6 +10,7 @@ import { loadTiny, loadTinyLarge, understandRouted } from '../sim/tiny-model.mjs
 import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
 import { asksWhoMadeYou, ORIGIN_STORY } from '../core/origin-story.js';
 import { quickEdit } from '../core/quick-edits.js';
+import { solveSteps, splitSteps } from '../core/compound.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { quickDrone } from '../core/quick-drone.js';
 import { recipeEdit } from '../core/recipes.js';
@@ -373,15 +374,26 @@ export function initAiPanel(editor, code, sim = null) {
       messages.push({ id: ++seq, role: 'assistant', text: ORIGIN_STORY });
       saveChat(); render(); return;
     }
-    let quick = in3d ? null : quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(text, editor.exportProject()), tinyMs = 0;
-    if (!quick && !in3d && !globalThis.VLAB_NO_TINY) {
+    // one step of a request, understood on this device: the instant rules first, then the tiny model (small, then large when unsure)
+    const modelStep = async (step, circ) => {
+      const tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
+      const big = () => Promise.race([loadTinyLarge(), new Promise(r => setTimeout(() => r(null), 6000))]);
+      const u = await understandRouted({ small: tiny, large: big }, step, circ);
+      return u ? (u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation, kind: 'off' } : { ...u, viaModel: true }) : null;
+    };
+    const solveStep = async (step, circ) => recipeEdit(step, circ, { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(step, circ) || (globalThis.VLAB_NO_TINY ? null : await modelStep(step, circ).catch(() => null));
+    let quick = in3d ? null : quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }), tinyMs = 0;
+    const multi = !quick && !in3d && !!splitSteps(text);
+    if (multi) {        // "add a servo and connect it to pin 9": step by step, all on this device. If any step is not understood the whole request goes on untouched: no half answers.
+      const t0 = Date.now();
+      try { quick = await solveSteps(text, editor.exportProject(), solveStep); } catch { quick = null; }
+      tinyMs = Date.now() - t0;
+    } else if (!quick && !in3d) quick = quickEdit(text, editor.exportProject());
+    if (!quick && !in3d && !multi && !globalThis.VLAB_NO_TINY) {
       try {
-        const t0 = Date.now(), tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
-        // The larger model is only fetched when the small one is unsure; if it is not here yet, wait a few seconds for it, else the chosen AI answers and it is ready next time.
-        const big = () => Promise.race([loadTinyLarge(), new Promise(r => setTimeout(() => r(null), 6000))]);
-        const u = await understandRouted({ small: tiny, large: big }, text, editor.exportProject());
-        if (u) quick = u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation } : u;
-        tinyMs = Date.now() - t0; if (quick) quick.viaModel = true;
+        const t0 = Date.now(), u = await modelStep(text, editor.exportProject());
+        if (u) quick = u;
+        tinyMs = Date.now() - t0;
       } catch { /* the model is optional: no file, still loading, or an old browser — carry on */ }
     }
     if (in3d && !quick) {              // plain 3D requests ("put motors on", "props on the motors") are answered instantly by rules: no model, no key
