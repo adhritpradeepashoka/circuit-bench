@@ -10,7 +10,7 @@ test('templates: clear part names match instantly, vague or ambiguous ones do no
   const id = d => matchTemplate(d, TEMPLATES)?.id;
   assert.equal(id('1N4007 diode'), 'd-1n4007'); assert.equal(id('2N2222 transistor'), 'q-2n2222'); assert.equal(id('LM358 op amp'), 'opamp-lm358');
   assert.equal(id('a rotary encoder KY-040'), 'ky040'); assert.equal(id('NAND gate'), 'gate-nand'); assert.equal(id('100uF electrolytic capacitor'), 'cap-100u');
-  assert.equal(id('a thing that glows when it is dark'), undefined); assert.equal(id('Muscle BioAmp Candy EMG board'), undefined);
+  assert.equal(id('a sensor that notices when it is dark light'), undefined); assert.equal(id('Muscle BioAmp Candy EMG board'), undefined);
 });
 
 test('keyword guess: every behaviour kind gives a valid, placeable part', () => {
@@ -47,7 +47,7 @@ test('split: a template match needs no AI; with every provider down a keyword gu
   const t = await createPartSplit({ description: '1N4007 diode', fetchImpl: never, endpoint: '/x', templates: TEMPLATES });
   assert.equal(t.source, 'template'); assert.equal(t.meta.ms, 0);
   const down = async () => ({ status: 200, json: async () => ({ ok: false, error: 'quota exceeded' }) });
-  const g = await createPartSplit({ description: 'a thing that glows when it is dark', fetchImpl: down, endpoint: '/x', templates: TEMPLATES });
+  const g = await createPartSplit({ description: 'a sensor that notices when it is dark light', fetchImpl: down, endpoint: '/x', templates: TEMPLATES });
   assert.equal(g.ok, true); assert.equal(g.source, 'guess'); assert.match(g.note, /No AI answered/);
   const local = await createPartSplit({ description: 'MQ-2 gas sensor', fetchImpl: never, endpoint: '/x', templates: TEMPLATES, local: async () => ({ ok: true, brain: true, spec: validatePartSpec(brainSpec).spec, meta: { provider: 'On this device' } }) }).catch(e => e);
   assert.ok(local.ok !== undefined);   // the on-device brain is used before any provider is asked

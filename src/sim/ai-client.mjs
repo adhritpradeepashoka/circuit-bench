@@ -1,7 +1,7 @@
 // Browser side of the AI "Generate Code" feature. v0.1 (beta) is bring-your-own-key: the key lives only
 // in this browser's localStorage and is sent with each request — CircuitBench's own server never stores it.
 import { getToken } from './session.mjs';
-import { matchTemplate, heuristicSpec } from '../core/part-match.js';
+import { matchTemplate, heuristicSpec, knownKind } from '../core/part-match.js';
 import { validatePartSpec, BEHAVIOURS } from '../core/custom-parts.js';
 import { checkPart } from '../core/part-agent.js';
 import { matchLearned, examplesFor } from '../core/learned-parts.js';
@@ -144,6 +144,7 @@ export async function createPartSplit({ description, templates = [], learned = [
     }
   }
   if (!brain) {
+    if (!knownKind(text)) return { ok: false, error: `The Part Maker doesn't know "${text.slice(0, 50)}" and no AI is connected to look it up, so it won't guess a wrong part. Add a free AI key (Settings, AI) or sign in for the included AI, or fill in the pins and behaviour below by hand.${why.length ? ` (${why.join(' · ').slice(0, 160)})` : ''}` };
     const spec = heuristicSpec(text);
     if (!spec) return { ok: false, error: `No AI could make that part right now. ${why.join(' · ')}` };
     return { ok: true, spec, source: 'guess', note: `No AI answered, so this is a plain ${BEHAVIOURS[spec.behaviour.kind]?.label || 'part'} made from your words — check the pins. (${why.join(' · ').slice(0, 220)})`, meta: { provider: 'Keywords', model: 'built-in', ms: 0 } };

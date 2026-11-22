@@ -92,3 +92,13 @@ test('found in the browser: a template must not swallow a number the student gav
   const plain = await createPartSplit({ description: 'ina128', templates: TEMPLATES, fetchImpl: never, endpoint: '/x' });
   assert.equal(plain.source, 'template');
 });
+
+test('with no AI, a part nobody knows is refused with a clear way forward instead of a wrong guess; a clear kind still gets an honest starter', async () => {
+  const never = async () => { throw new Error('no network'); };
+  for (const q of ['mpu6050', 'lets make 12v', 'xyzzy 9000']) {
+    const r = await createPartSplit({ description: q, templates: TEMPLATES, fetchImpl: never, endpoint: '/x' });
+    assert.equal(r.ok, false, q); assert.match(r.error, /won't guess a wrong part/); assert.match(r.error, /AI key/);
+  }
+  const g = await createPartSplit({ description: 'a motor driver', templates: TEMPLATES, fetchImpl: never, endpoint: '/x' });
+  assert.equal(g.ok, true); assert.equal(g.spec.behaviour.kind, 'hbridge'); assert.equal(g.source, 'guess');
+});

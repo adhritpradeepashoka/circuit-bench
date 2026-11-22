@@ -51,6 +51,8 @@ const KIND_WORDS = [
 const PIN_NAME = { a: 'A', b: 'B', vcc: 'VCC', gnd: 'GND', out: 'OUT', dout: 'DOUT', anode: 'A', cathode: 'K', common: 'COM', throw1: 'T1', throw2: 'T2', coilA: 'COIL+', coilB: 'COIL-', no: 'NO', nc: 'NC', wiper: 'W', base: 'B', collector: 'C', emitter: 'E', gate: 'G', drain: 'D', source: 'S', vin: 'VIN', signal: 'SIG', trig: 'TRIG', echo: 'ECHO', vs: 'VS', in1: 'IN1', in2: 'IN2', out1: 'OUT1', out2: 'OUT2', horz: 'HORZ', vert: 'VERT', sel: 'SEL', inp: 'IN+', inn: 'IN-', vee: 'VEE', ref: 'REF', u: 'U', v: 'V', w: 'W' };
 
 /** What kind of behaviour does this description sound like? */
+/** The kind the words clearly name, or null when nothing in them says (then a keyword guess would be a coin toss). */
+export function knownKind(description) { const t = norm(description); return (KIND_WORDS.find(([, re]) => re.test(t)) || [null])[0]; }
 export function guessKind(description) { const t = norm(description); return (KIND_WORDS.find(([, re]) => re.test(t)) || ['analog-sensor'])[0]; }
 
 const titleOf = d => { const t = String(d || '').replace(/\s+/g, ' ').trim().replace(/^(a|an|the)\s+/i, ''); return (t.charAt(0).toUpperCase() + t.slice(1)).slice(0, 40) || 'My part'; };
