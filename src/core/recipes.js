@@ -5,14 +5,15 @@ import { matchLearned, instantiate } from './learned.js';
 
 /** → { actions, code, explanation } | null */
 export function recipeEdit(instruction, circuit = { parts: [], wires: [] }, opts = {}) {
-  let r = makeCircuit(instruction, circuit, opts) || codeFor(instruction, circuit, opts);
-  if (!r && opts.learned?.length) {                // recipes the bigger AI taught us (see core/learned.js)
+  let r = null;
+  if (opts.learned?.length) {                       // a recipe the user's own AI taught this bench comes before the built-in guesses                // recipes the bigger AI taught us (see core/learned.js)
     const hit = matchLearned(instruction, opts.learned);
     if (hit) {
       r = instantiate(hit, circuit, {});
-      if (!r.ok || !r.code) r = null;            // could not build it on this bench: let the AI have the request
+      if (!r.ok || !r.code) r = null;            // could not build it on this bench: carry on below
       else if (opts.sketchIsCustom) r.explanation += ' The sketch in the editor will be replaced by this one — undo brings it back.';
     }
   }
+  r ||= makeCircuit(instruction, circuit, opts) || codeFor(instruction, circuit, opts);
   return r ? { actions: r.actions, code: r.code, explanation: r.explanation } : null;
 }

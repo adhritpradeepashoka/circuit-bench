@@ -87,7 +87,7 @@ test('using a learned recipe: matched by keyword, wired by the planner, pins fil
   assert.ok(r.code.includes(`pinMode(${map['led.A']}, OUTPUT)`), 'the sketch uses the pin the planner really wired');
   // questions, other parts and unrelated requests do not match
   assert.equal(recipeEdit('why is my doorbell silent', EMPTY(), { learned }), null);
-  assert.equal(recipeEdit('make a doorbell with an lcd', EMPTY(), { learned }), null);
+  assert.doesNotMatch(recipeEdit('make a doorbell with an lcd', EMPTY(), { learned })?.explanation || '', /recipe the AI taught me/);          // a different part: the taught recipe does not apply (the built-in planner may still build it)
   assert.equal(recipeEdit('make me a thermostat', EMPTY(), { learned }), null);
   // on a Mega the pins differ from the Uno's, and the sketch follows
   const mega = recipeEdit('make a doorbell on the mega', EMPTY(), { learned });

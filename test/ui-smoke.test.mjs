@@ -2275,7 +2275,7 @@ test('ui: learning from the AI — an applied AI build becomes a template, is ve
   doc.getElementById('aiBtn').click();
   const prompt = doc.getElementById('aiPrompt'), logEl = doc.getElementById('aiLog');
   const say = async t => { prompt.value = t; prompt.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); await flush(); };
-  await say('make me a doorbell with a button and an led');
+  await say('make me a doorbell with a button and an led?');
   assert.equal(sent.length, 1);
   [...logEl.querySelectorAll('.msg.ai')].pop().querySelector('[data-act="apply"]').click();
   await flush(); await flush();

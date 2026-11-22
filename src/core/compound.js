@@ -1,3 +1,4 @@
+import { readParts } from './hookup/names.js';
 // Multi-step requests ("add a servo and connect it to pin 9", "add a resistor and an LED", "add a button, then blink the LED") are
 // cut into steps that the instant rules or the on-device model each understand, and run one after another on a working copy of the
 // bench (so step 2 sees what step 1 added). If any step is not understood the whole request is not answered here: a half answer
@@ -78,4 +79,15 @@ export async function solveSteps(text, circuit, solve) {
     work = applyToCopy(work, r.actions);
   }
   return { actions, code, explanation: notes.join(' '), steps: steps.length, ...(viaModel ? { viaModel: true } : {}) };
+}
+
+/**
+ * A model's answer is only used when it covers every part the request names. "connect a pot to an LED and an OLED" must not come back
+ * with the pot and the OLED and no LED: a half answer goes on to a bigger AI instead.
+ */
+export function coversNamedParts(text, circuit, r) {
+  const named = readParts(String(text || '').toLowerCase()).requests.map(q => q.type).filter(t => t !== 'resistor');
+  if (!named.length || !r?.actions) return true;
+  const have = new Set([...(circuit?.parts || []).map(p => p.type), ...r.actions.filter(a => a.op === 'add_part').map(a => a.type)]);
+  return named.every(t => have.has(t));
 }

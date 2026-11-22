@@ -10,7 +10,7 @@ import { loadTiny, loadTinyLarge, understandRouted } from '../sim/tiny-model.mjs
 import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
 import { asksWhoMadeYou, ORIGIN_STORY } from '../core/origin-story.js';
 import { quickEdit } from '../core/quick-edits.js';
-import { solveSteps, splitSteps } from '../core/compound.js';
+import { solveSteps, splitSteps, coversNamedParts } from '../core/compound.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { quickDrone } from '../core/quick-drone.js';
 import { recipeEdit } from '../core/recipes.js';
@@ -379,6 +379,7 @@ export function initAiPanel(editor, code, sim = null) {
       const tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
       const big = () => Promise.race([loadTinyLarge(), new Promise(r => setTimeout(() => r(null), 6000))]);
       const u = await understandRouted({ small: tiny, large: big }, step, circ);
+      if (u && u.kind !== 'off' && !coversNamedParts(step, circ, u)) return null;          // a model answer that leaves out a named part is not an answer
       return u ? (u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation, kind: 'off' } : { ...u, viaModel: true }) : null;
     };
     const solveStep = async (step, circ) => recipeEdit(step, circ, { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(step, circ) || (globalThis.VLAB_NO_TINY ? null : await modelStep(step, circ).catch(() => null));
