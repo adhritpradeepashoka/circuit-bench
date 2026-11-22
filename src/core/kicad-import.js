@@ -53,24 +53,27 @@ const rot = (x, y, deg) => {                              // KiCad: y points dow
 export function readBoard(text) {
   const root = parseSexp(text);
   if (head(root) !== 'kicad_pcb') throw new Error('This is not a KiCad PCB file (.kicad_pcb).');
-  const pads = [], tracks = [], edge = [], vias = [], parts = [];
+  const pads = [], tracks = [], edge = [], vias = [], parts = []; let zones = 0;
   for (const el of root) {
     if (!Array.isArray(el)) continue;
     const t = head(el);
-    if (t === 'footprint') {
+    if (t === 'footprint' || t === 'module') {                       // KiCad 6+ writes (footprint …); KiCad 5 writes (module …)
       const at = kid(el, 'at'), fx = num(at?.[1]), fy = num(at?.[2]), fr = num(at?.[3]);
       const props = Object.fromEntries(kids(el, 'property').map(p => [val(p[1]), val(p[2])]));
+      for (const ft of kids(el, 'fp_text')) { const k = val(ft[1]); if (k === 'reference' && !props.Reference) props.Reference = val(ft[2]); else if (k === 'value' && !props.Value) props.Value = val(ft[2]); }      // KiCad 5, 6 and 7 keep them here, 8+ as properties
       const ref = props.Reference || '', value = props.Value || '', name = val(el[1]) || '';
       const fpLayer = val(kid(el, 'layer')?.[1]) || 'F.Cu';
       parts.push({ ref, value, name });
       for (const pd of kids(el, 'pad')) {
         const pa = kid(pd, 'at'), [dx, dy] = rot(num(pa?.[1]), num(pa?.[2]), fr);
         const size = kid(pd, 'size'), w = num(size?.[1]), h = num(size?.[2]) || w;
+        // a pad's angle in a board file is already absolute (it includes the footprint's own turn), so a footprint turned 90° with a 2.4 × 1.6 pad has it standing 1.6 wide and 2.4 tall
+        const pad_rot = num(pa?.[3]), ca = Math.abs(Math.cos(pad_rot * Math.PI / 180)), sa = Math.abs(Math.sin(pad_rot * Math.PI / 180)), ew = +(w * ca + h * sa).toFixed(3), eh = +(w * sa + h * ca).toFixed(3);
         const layers = (kid(pd, 'layers') || []).slice(1).map(val);
         const net = kid(pd, 'net');
         pads.push({
           num: String(val(pd[1])), type: val(pd[2]), shape: val(pd[3]),
-          x: fx + dx, y: fy + dy, w, h, rot: fr + num(pa?.[3]), drill: num(kid(pd, 'drill')?.[1]),
+          x: fx + dx, y: fy + dy, w: ew, h: eh, rot: pad_rot, drill: num(kid(pd, 'drill')?.[1]),
           layers, side: layers.some(l => l.startsWith('B.')) && !layers.some(l => l.startsWith('F.') || l === '*.Cu') ? 'B' : 'F',
           net: net ? String(val(net[net.length - 1]) || '') : '', ref: ref && ref !== 'REF**' ? ref : '', fp: name, fpLayer,
         });
@@ -78,6 +81,11 @@ export function readBoard(text) {
     } else if (t === 'segment') {
       const s = kid(el, 'start'), e = kid(el, 'end'), net = kid(el, 'net');
       tracks.push({ x1: num(s?.[1]), y1: num(s?.[2]), x2: num(e?.[1]), y2: num(e?.[2]), w: num(kid(el, 'width')?.[1]) || 0.25, layer: val(kid(el, 'layer')?.[1]) || 'F.Cu', net: net ? String(val(net[net.length - 1]) || '') : '' });
+    } else if (t === 'arc') {                                        // a curved track (KiCad 6+): two straight pieces through its middle point keep it connected and drawn
+      const a = kid(el, 'start'), m = kid(el, 'mid'), e = kid(el, 'end'), net = kid(el, 'net'), w = num(kid(el, 'width')?.[1]) || 0.25, layer = val(kid(el, 'layer')?.[1]) || 'F.Cu', nn = net ? String(val(net[net.length - 1]) || '') : '';
+      if (a && m && e) { tracks.push({ x1: num(a[1]), y1: num(a[2]), x2: num(m[1]), y2: num(m[2]), w, layer, net: nn }, { x1: num(m[1]), y1: num(m[2]), x2: num(e[1]), y2: num(e[2]), w, layer, net: nn }); }
+    } else if (t === 'zone') {
+      zones++;
     } else if (t === 'via') {
       const a = kid(el, 'at');
       vias.push({ x: num(a?.[1]), y: num(a?.[2]), size: num(kid(el, 'size')?.[1]) || 0.6 });
@@ -86,14 +94,22 @@ export function readBoard(text) {
       if (t === 'gr_circle') { const c = kid(el, 'center'), e = kid(el, 'end'); edge.push({ type: 'circle', x: num(c?.[1]), y: num(c?.[2]), r: Math.hypot(num(e?.[1]) - num(c?.[1]), num(e?.[2]) - num(c?.[2])) }); }
       else if (t === 'gr_rect') { const s = kid(el, 'start'), e = kid(el, 'end'); edge.push({ type: 'rect', x1: num(s?.[1]), y1: num(s?.[2]), x2: num(e?.[1]), y2: num(e?.[2]) }); }
       else if (t === 'gr_line') { const s = kid(el, 'start'), e = kid(el, 'end'); edge.push({ type: 'line', x1: num(s?.[1]), y1: num(s?.[2]), x2: num(e?.[1]), y2: num(e?.[2]) }); }
-      else if (t === 'gr_arc') { const s = kid(el, 'start'), m = kid(el, 'mid'), e = kid(el, 'end'); edge.push({ type: 'arc', pts: [s, m, e].map(p => [num(p?.[1]), num(p?.[2])]) }); }
+      else if (t === 'gr_arc') {
+        const s = kid(el, 'start'), m = kid(el, 'mid'), e = kid(el, 'end');
+        if (m) edge.push({ type: 'arc', pts: [s, m, e].map(p => [num(p?.[1]), num(p?.[2])]) });
+        else {                                                                          // KiCad 5: start = the centre, end = where the arc begins, then its sweep in degrees (tenths in very old files)
+          const cx = num(s?.[1]), cy = num(s?.[2]), ex = num(e?.[1]), ey = num(e?.[2]), ang = num(kid(el, 'angle')?.[1]), a = (ang / 2) * Math.PI / 180, dx = ex - cx, dy = ey - cy;
+          const at = k => [cx + dx * Math.cos(k) - dy * Math.sin(k), cy + dx * Math.sin(k) + dy * Math.cos(k)];
+          edge.push({ type: 'arc', pts: [[ex, ey], at(a), at(2 * a)] });
+        }
+      } else if (t === 'gr_poly') { const pts = kid(el, 'pts'); if (pts) edge.push({ type: 'arc', pts: kids(pts, 'xy').map(p => [num(p[1]), num(p[2])]) }); }
     }
   }
-  return { pads, tracks, vias, edge, parts };
+  return { pads, tracks, vias, edge, parts, zones };
 }
 
 /* ── continuity: which copper is one node ───────────────────── */
-export function groupPads(board) {
+export function groupPads(board, { useNets = true } = {}) {
   const par = new Map();
   const find = a => { if (!par.has(a)) par.set(a, a); while (par.get(a) !== a) { par.set(a, par.get(par.get(a))); a = par.get(a); } return a; };
   const join = (a, b) => par.set(find(a), find(b));
@@ -103,21 +119,25 @@ export function groupPads(board) {
     join(`t${i}a`, `t${i}b`);
     ends.push([`t${i}a`, t.x1, t.y1, t.layer], [`t${i}b`, t.x2, t.y2, t.layer]);
   });
-  vias.forEach((v, i) => { for (const e of ends) if (Math.hypot(e[1] - v.x, e[2] - v.y) <= v.size / 2 + 0.05) join(`v${i}`, e[0]); });
-  for (let i = 0; i < ends.length; i++) for (let j = i + 1; j < ends.length; j++) {
-    if (ends[i][3] === ends[j][3] && Math.hypot(ends[i][1] - ends[j][1], ends[i][2] - ends[j][2]) < 0.15) join(ends[i][0], ends[j][0]);
-  }
+  // a grid of 1 mm cells, so each query looks only at the track ends near it (a big board has 15 000 of them: comparing every pair took 12 s)
+  const CELL = 1, grid = new Map(), key = (cx, cy) => `${cx},${cy}`;
+  for (const e of ends) { const k = key(Math.floor(e[1] / CELL), Math.floor(e[2] / CELL)); (grid.get(k) || grid.set(k, []).get(k)).push(e); }
+  const near = (x, y, r, fn) => {
+    for (let cx = Math.floor((x - r) / CELL); cx <= Math.floor((x + r) / CELL); cx++) for (let cy = Math.floor((y - r) / CELL); cy <= Math.floor((y + r) / CELL); cy++) for (const e of grid.get(key(cx, cy)) || []) fn(e);
+  };
+  vias.forEach((v, i) => near(v.x, v.y, v.size / 2 + 0.05, e => { if (Math.hypot(e[1] - v.x, e[2] - v.y) <= v.size / 2 + 0.05) join(`v${i}`, e[0]); }));
+  for (const e of ends) near(e[1], e[2], 0.15, o => { if (o !== e && o[3] === e[3] && Math.hypot(e[1] - o[1], e[2] - o[2]) < 0.15) join(e[0], o[0]); });
   pads.forEach((p, k) => {
     find(`p${k}`);
     const reach = Math.max(Math.min(p.w, p.h) / 2, 0.25) + 0.05;
-    for (const e of ends) {
+    near(p.x, p.y, reach, e => {
       const onLayer = p.layers.includes(e[3]) || p.layers.includes('*.Cu');
       if (onLayer && Math.hypot(e[1] - p.x, e[2] - p.y) <= reach) join(`p${k}`, e[0]);
-    }
+    });
   });
   // pads the file itself says share a net are one node too (a board that has real net names)
   const byNet = new Map();
-  pads.forEach((p, k) => { if (p.net) { if (byNet.has(p.net)) join(`p${k}`, byNet.get(p.net)); else byNet.set(p.net, `p${k}`); } });
+  if (useNets) pads.forEach((p, k) => { if (p.net) { if (byNet.has(p.net)) join(`p${k}`, byNet.get(p.net)); else byNet.set(p.net, `p${k}`); } });
   const groups = new Map();
   pads.forEach((_, k) => { const g = find(`p${k}`); (groups.get(g) || groups.set(g, []).get(g)).push(k); });
   return [...groups.values()];
@@ -163,8 +183,11 @@ export function boardToSpec(text, { name } = {}) {
   });
   const wired = nodes.filter(n => n.header);
   if (!wired.length) notes.push('No through-hole pads were found, so every pad group is offered as a connection point.');
-  for (const nd of (wired.length ? wired : nodes)) {
-    if (pins.length >= 64) { notes.push('Only the first 64 connection points are kept.'); break; }
+  // when a board has more than 64 connection points (a whole computer board, not a breakout), the connectors come first: J, P, CN, X, H… are what a student wires to
+  const isConn = nd => nd.members.some(m => /^(J|P|JP|CN|X|H|CON|CONN|K)\d/i.test(m.ref));
+  const chosen = [...(wired.length ? wired : nodes)].sort((a, b) => Number(isConn(b)) - Number(isConn(a)));
+  for (const nd of chosen) {
+    if (pins.length >= 64) { notes.push(`This board has ${chosen.length} connection points; only 64 fit on one part, so the connectors (J, P, CN…) were kept first.`); break; }
     let id = nd.base, k = 2;
     while (used.has(id.toLowerCase())) id = `${nd.base.slice(0, 9)}_${k++}`;
     used.add(id.toLowerCase());
@@ -177,6 +200,7 @@ export function boardToSpec(text, { name } = {}) {
   board.pads.forEach((p, k) => padOut.push({ x: X(p.x), y: Y(p.y), w: +p.w.toFixed(2), h: +p.h.toFixed(2), shape: p.shape || 'rect', hole: +(p.drill || 0).toFixed(2), pin: pinOfPad.get(k) || '', side: p.side }));
   const unconnected = nodes.filter(n => !n.pin).length;
   if (unconnected) notes.push(`${unconnected} pad group${unconnected > 1 ? 's' : ''} have no through-hole pad, so they are drawn but are not connection points.`);
+  if (board.zones) notes.push(`${board.zones} copper pour${board.zones > 1 ? 's' : ''} (zones) ${board.zones > 1 ? 'are' : 'is'} not drawn; pads on the same net are still joined by their net name.`);
   const comps = board.parts.filter(p => p.ref && p.ref !== 'REF**');
   if (comps.length) notes.push(`${comps.length} component footprint${comps.length > 1 ? 's' : ''} on the board (${comps.slice(0, 6).map(c => c.ref).join(', ')}${comps.length > 6 ? '…' : ''}) are kept as part of this one board part; split-out component simulation is not done yet.`);
   const partName = String(name || board.parts.find(p => p.value && p.ref !== 'REF**')?.value || 'Imported PCB').slice(0, 40);
