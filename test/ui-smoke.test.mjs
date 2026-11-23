@@ -2395,3 +2395,16 @@ test('ui: the body dock adapts — trigger muscles with a BioAmp, the joint with
   assert.match($('bdRecognised').textContent, /^Flex arm/, `recognised: ${$('bdRecognised').textContent}`);
   subjectCore.subject.holds = []; workspaceCore.setActiveWorkspace('electronics');
 });
+
+test('ui: while another tab (Assembly, ML, Visualizer) is open the circuit underneath hears nothing — no pin tooltip, no pin highlight, no zoom', () => {
+  const { w, editor, fire, scr } = boot(), tip = w.document.getElementById('tip');
+  const uno = editor.state.parts.find(p => p.type === 'arduino-uno'), pin = editor.pinsOf(uno)[0], at = scr({ x: pin.x, y: pin.y });
+  fire('pointermove', at.x, at.y); assert.equal(tip.hidden, false, 'sanity: on the circuit tab the pin tooltip shows');
+  for (const cls of ['robot-asm', 'ml-view', 'viz-view']) {
+    w.document.body.classList.add(cls); fire('pointermove', at.x + 1, at.y);
+    assert.equal(tip.hidden, true, `${cls}: no tooltip`); assert.equal(editor.hover, null, `${cls}: no pin highlight`);
+    const z = editor.view.z; fire('wheel', at.x, at.y, w.document.getElementById('canvas'), { deltaY: -200 }); assert.equal(editor.view.z, z, `${cls}: the wheel does not zoom the hidden circuit`);
+    w.document.body.classList.remove(cls);
+  }
+  fire('pointermove', at.x, at.y); assert.equal(tip.hidden, false, 'back on the circuit tab it works again');
+});

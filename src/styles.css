@@ -1427,3 +1427,6 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .viz-view .body-dock { display: none; }
 .viz-frame { position: absolute; top: 10px; left: 10px; display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface, #fff); border: 1px solid var(--line, #d5ddd8); z-index: 2; }
 .viz-frame button { height: 24px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 12px; font-weight: 600; color: inherit; cursor: pointer; } .viz-frame button.on { background: #1d4e75; color: #fff; }
+
+/* the circuit's pin tooltip belongs to the circuit tab only */
+.robot-asm #tip, .ml-view #tip, .viz-view #tip { display: none !important; }
