@@ -1377,7 +1377,7 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .ml-val { font-family: var(--mono); font-size: 12px; text-align: right; min-width: 44px; }
 .ml-row input[type=range] { flex: 1; min-width: 120px; }
 .ai-send.stop { background: var(--red); }
-.ml-view #overlay, .ml-view #world, .ml-view #wireEditor { display: none !important; }          /* the circuit's wires and labels must not draw over the ML tabs */
+.ml-view #overlay, .ml-view #world, .ml-view #wireEditor, .viz-view #overlay, .viz-view #world, .viz-view #wireEditor { display: none !important; }          /* the circuit's wires and labels must not draw over the ML tabs */
 
 /* import from GitHub */
 .asm-gh-back { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; }

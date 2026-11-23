@@ -304,7 +304,7 @@ export function initVisualizer({ editor }) {
     const viz = v === 'viz';
     bCircuit.classList.toggle('on', !viz); bViz.classList.toggle('on', viz);
     bCircuit.setAttribute('aria-pressed', String(!viz)); bViz.setAttribute('aria-pressed', String(viz));
-    pane.hidden = !viz;
+    pane.hidden = !viz; document.body.classList.toggle('viz-view', viz);          // the circuit's wires sit above this pane: hide them while it is open
     clearInterval(timer);
     if (viz) {
       paint(); await load3d(); three?.size(); three?.mark(channels());
