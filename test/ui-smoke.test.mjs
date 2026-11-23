@@ -929,7 +929,7 @@ test('ui: the AI gets the truth — sim.snapshot() reports real pin states and L
 });
 
 test('ui: a failed compile offers "✨ Fix with AI" — it opens the AI panel and sends the compiler errors, flagged stale once edited', async () => {
-  const { w, editor, sim, code } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'test-key'));
+  const { w, editor, sim, code } = boot(fixtureCompile, win => { win.localStorage.setItem('virtual-lab:ai-key', 'test-key'); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   const doc = w.document;
   const sent = [];
   w.fetch = async (url, opts) => { sent.push({ url, body: JSON.parse(opts.body) }); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: 'void setup(){}\nvoid loop(){}\n', explanation: 'Added the missing semicolon on line 3.' }) }; };
@@ -992,7 +992,7 @@ test('ui: the sidebar is a stack of closable panes — open AI shares the column
 });
 
 test('ui: AI chat — the input clears, messages roll, each reply has its own Apply, earlier turns are sent as history, and older proposals are superseded', async () => {
-  const { w, editor, code, sim } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const { w, editor, code, sim } = boot(fixtureCompile, win => { win.localStorage.setItem('virtual-lab:ai-key', 'k'); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   const doc = w.document;
   const replies = [
     { ok: true, actions: [], code: 'void setup(){ pinMode(13, OUTPUT); }\nvoid loop(){ digitalWrite(13, HIGH); delay(250); digitalWrite(13, LOW); delay(250); }\n', explanation: 'Halved both delays so it blinks twice as fast.' },
@@ -1067,6 +1067,32 @@ test('ui: AI chat without a key shows the key setup in the pane and keeps your m
   assert.equal(sent.length, 1);
   assert.equal(sent[0].userKey, 'my-key');
   assert.match(doc.getElementById('aiLog').textContent, /Hi!/);
+});
+
+test('ui: when the tiny model cannot do a request it ASKS before using an API key (Yes / No), and never switches on its own', async () => {
+  const { w, editor, code, sim } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));          // a key is saved, no AI was chosen on purpose
+  const doc = w.document;
+  const sent = [];
+  w.fetch = async (url, opts) => { sent.push(JSON.parse(opts.body)); return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Done by the AI.' }) }; };
+  w.__lab.initAiPanel(editor, code, sim);
+  doc.getElementById('aiBtn').click();
+  const say = async t => { doc.getElementById('aiPrompt').value = t; doc.getElementById('aiGenerate').click(); await flush(); await flush(); };
+  await say('how would I smooth the bioamp exg pill signal before it moves the servo?');
+  assert.equal(sent.length, 0, 'nothing was sent to the AI');
+  const log = doc.getElementById('aiLog');
+  assert.match(log.textContent, /The tiny model doesn.t understand you\. Use API key\?/);
+  const [yes, no] = [log.querySelector('[data-ask="yes"]'), log.querySelector('[data-ask="no"]')];
+  assert.ok(yes && no, 'a Yes button and a No button');
+  assert.equal(w.localStorage.getItem('virtual-lab:ai-local'), null, 'the AI choice was not changed');
+  no.click(); await flush();
+  assert.equal(sent.length, 0, 'No: still nothing sent');
+  assert.match(log.textContent, /staying on this device/);
+  assert.equal(log.querySelector('[data-ask]'), null, 'the buttons are gone');
+  await say('how would I smooth the bioamp exg pill signal before it moves the servo?');
+  log.querySelector('[data-ask="yes"]').click(); await flush(); await flush();
+  assert.equal(sent.length, 1, 'Yes: this one request goes to the AI');
+  assert.match(log.textContent, /Done by the AI/);
+  assert.equal(w.localStorage.getItem('virtual-lab:ai-local'), null, 'and the choice is still not changed');
 });
 
 test('ui: AI providers — each keeps its own key, switching is one click, and the chosen provider and model go to the server', async () => {
@@ -1314,7 +1340,7 @@ test('ui: two tabs — each tab opens its own project, startup trusts the saved 
 });
 
 test('ui: the AI chat belongs to its project — switching projects switches conversations', async () => {
-  const { w, editor, code, sim } = boot(fixtureCompile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const { w, editor, code, sim } = boot(fixtureCompile, win => { win.localStorage.setItem('virtual-lab:ai-key', 'k'); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   w.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: null, explanation: 'Answer.' }) });
   const ai = w.__lab.initAiPanel(editor, code, sim);
   const projects = w.__lab.initProjects({ editor, code, sim });
@@ -2212,7 +2238,7 @@ test('ui: the AI’s sketch is compiled before it is shown — compile errors go
     const src = files[0].content; compileCalls.push(src);
     return /BAD/.test(src) ? { ok: false, diagnostics: [{ severity: 'error', file: 'sketch.ino', line: 2, message: "'BAD' was not declared in this scope" }], output: "sketch.ino:2:3: error: 'BAD' was not declared in this scope" } : { ok: true, diagnostics: [], output: 'ok', size: {} };
   };
-  const { w, editor, code, sim } = boot(compile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const { w, editor, code, sim } = boot(compile, win => { win.localStorage.setItem('virtual-lab:ai-key', 'k'); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   const doc = w.document, sent = [];
   const replies = [
     { ok: true, actions: [], code: 'void setup(){}\nvoid loop(){ BAD(); }\n', explanation: 'Blinks the LED.' },
@@ -2238,7 +2264,7 @@ test('ui: the AI’s sketch is compiled before it is shown — compile errors go
 test('ui: an AI that cannot fix its sketch is tried twice, then the sketch is shown with an honest warning; an unreachable compiler skips the check', async () => {
   let reachable = true, calls = 0;
   const compile = async files => { calls++; return reachable ? { ok: false, diagnostics: [{ severity: 'error', file: 'sketch.ino', line: 1, message: 'expected ‘;’' }], output: 'x' } : { ok: false, unreachable: true, diagnostics: [], output: 'down' }; };
-  const { w, editor, code, sim } = boot(compile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const { w, editor, code, sim } = boot(compile, win => { win.localStorage.setItem('virtual-lab:ai-key', 'k'); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   const doc = w.document; let asked = 0;
   w.fetch = async () => { asked++; return { ok: true, status: 200, json: async () => ({ ok: true, actions: [], code: `void setup(){ x }\nvoid loop(){}\n// ${asked}`, explanation: 'Here.' }) }; };
   w.__lab.initAiPanel(editor, code, sim);
@@ -2260,7 +2286,7 @@ test('ui: an AI that cannot fix its sketch is tried twice, then the sketch is sh
 test('ui: learning from the AI — an applied AI build becomes a template, is verified by compiling it on two boards, and the next request is built with no AI', async () => {
   const compiled = [];
   const compile = async files => { compiled.push(files[0].content); return { ok: true, diagnostics: [], output: '', hex: ':00000001FF\n', size: { flash: 1, flashMax: 2, ram: 1, ramMax: 2 } }; };
-  const { w, editor, code, sim } = boot(compile, win => win.localStorage.setItem('virtual-lab:ai-key', 'k'));
+  const { w, editor, code, sim } = boot(compile, win => { win.localStorage.setItem('virtual-lab:ai-key', 'k'); win.localStorage.setItem('virtual-lab:ai-local', '0'); });
   const doc = w.document, sent = [];
   const sketch = 'void setup() {\n  pinMode(2, INPUT_PULLUP);\n  pinMode(8, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(8, digitalRead(2) == LOW);\n  delay(8);\n}\n';
   const template = 'void setup() {\n  pinMode(@@pushbutton.1.l@@, INPUT_PULLUP);\n  pinMode(@@led.A@@, OUTPUT);\n}\nvoid loop() {\n  digitalWrite(@@led.A@@, digitalRead(@@pushbutton.1.l@@) == LOW);\n  delay(8);\n}\n';

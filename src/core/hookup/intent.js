@@ -14,7 +14,7 @@ export const PRECISE_PIN = /\b(pins?\s*[ad]?\d+|[ad]\d{1,2}\b)(?!\s*(?:ohm|k\b))
 // Plain-language asks that name a PROJECT or a BEHAVIOUR rather than saying "circuit": "a button that turns on an led and sounds a buzzer",
 // "use a pot to control the brightness of an led", "a motion alarm", "a doorbell". The planner already wires sources to actuators and writes the
 // sketch; all that was missing was recognising these as asks for it. A project word brings the parts it implies.
-const INTENT = /\b(i (?:want|need|would like)|build|make|create|design|control(?:s|ling)?|turns? on|switch(?:es)? on|sounds?|beeps?|buzz(?:es)?|shows?|displays?|follows?|reads?|lights? up|dims?|connect(?:s|ed)?|hook(?:s|ed)?|wire[sd]?|attach(?:es|ed)?|use (?:a|an|the) [^,]{1,30} to|while)\b/;
+const INTENT = /\b(i (?:want|need|would like)|build|make|create|design|control(?:s|led|ling)?|driven|triggered|turns? on|switch(?:es)? on|sounds?|beeps?|buzz(?:es)?|shows?|displays?|follows?|reads?|lights? up|dims?|connect(?:s|ed)?|hook(?:s|ed)?|wire[sd]?|attach(?:es|ed)?|use (?:a|an|the) [^,]{1,30} to|while)\b/;
 const PROJECTS = [
   [/\b(?:motion|intruder|burglar|security|pir) alarm\b|\balarm\b/, ['pir-sensor', 'buzzer', 'led']],
   [/\bdoorbell\b/, ['pushbutton', 'buzzer']],

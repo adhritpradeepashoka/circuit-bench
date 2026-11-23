@@ -111,6 +111,15 @@ export function initAiPanel(editor, code, sim = null) {
     const bubble = el('div', 'bubble');
     if (m.role === 'user') { bubble.textContent = m.text; row.append(bubble); return row; }
     bubble.append(el('p', 'msg-text', m.text || (m.role === 'error' ? 'Something went wrong.' : 'Done.')));
+    if (m.ask) {
+      const box = el('div', 'msg-actions');
+      if (m.ask.state === 'pending') {
+        const no = el('button', 'msg-discard', 'No'); no.type = 'button'; no.dataset.ask = 'no';
+        const yes = el('button', 'msg-apply', 'Yes'); yes.type = 'button'; yes.dataset.ask = 'yes';
+        box.append(yes, no); box.style.flexDirection = 'column'; box.style.alignItems = 'stretch';          // Yes above No, like the question reads
+      } else box.append(el('span', `msg-state ${m.ask.state}`, m.ask.state === 'yes' ? 'Sent to the AI' : 'Staying on this device'));
+      bubble.append(box);
+    }
     if (m.summary) bubble.append(el('p', 'ai-summary', m.summary));
     if (m.warnings?.length) {
       const ul = el('ul', `ai-warnings${m.fatal ? ' fatal' : ''}`);
@@ -155,6 +164,16 @@ export function initAiPanel(editor, code, sim = null) {
   }
 
   log.addEventListener('click', e => {
+    const ask = e.target.closest('[data-ask]');
+    if (ask) {
+      const m = messages.find(x => String(x.id) === ask.closest('.msg')?.dataset.id);
+      if (!m?.ask || m.ask.state !== 'pending' || busy) return;
+      m.ask.state = ask.dataset.ask;
+      if (m.ask.state === 'yes') { approvedAi.add(m.ask.text);
+        promptEl.value = m.ask.text; send(); }
+      else { messages.push({ id: ++seq, role: 'assistant', text: 'OK, staying on this device. Try wording it as smaller steps ("add a servo", then "connect it to pin 9"), or name the parts: "a servo controlled by the Bioamp EXG pill".' }); saveChat(); render(); }
+      return;
+    }
     const btn = e.target.closest('[data-act]'); if (!btn) return;
     const id = btn.closest('.msg')?.dataset.id, m = messages.find(x => String(x.id) === id);
     if (!m || m.state !== 'pending') return;
@@ -361,6 +380,7 @@ export function initAiPanel(editor, code, sim = null) {
     }
   }
 
+  const approvedAi = new Set();          // requests the person agreed to send to the AI after the tiny model gave up
   async function send() {
     const text = promptEl.value.trim();
     if (!text) return;
@@ -415,12 +435,15 @@ export function initAiPanel(editor, code, sim = null) {
       messages.push({ id: ++seq, role: 'assistant', text: 'The tiny model only does circuit edits. To edit the 3D scene, switch the AI to Gemini, Groq or your own key (the menu at the bottom of this chat), or the AI that comes with your account.' });
       saveChat(); render(); return;
     }
-    if (!quick && tinyOn() && (hasHostedAi() || providersWithKeys().length)) {          // too big for the tiny model but a real AI is available: hand it over (small edits still go to the tiny model first)
-      setPref(hasHostedAi() ? 'h' : false);
-      refreshKeyUi();
-      setStatus(`That needs a bigger AI, so ${hasHostedAi() ? 'the one included with your account' : PROVIDER_INFO[getStoredProvider()]?.label || 'your AI'} is taking it. Small bench edits still go to the tiny model first.`);
+    const approvedNow = approvedAi.delete(text);          // the person just said "Yes" to using the AI for exactly this request
+    if (!quick && !in3d && !approvedNow && (getPref() === null || getPref() === 't') && (hasHostedAi() || providersWithKeys().length)) {
+      // the tiny model could not do it. Never hand the request to a paid or remote AI on its own: ask first, with a Yes and a No.
+      messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
+      const viaKey = providersWithKeys().length > 0;
+      messages.push({ id: ++seq, role: 'assistant', text: `The tiny model doesn't understand you. ${viaKey ? 'Use API key?' : 'Use the AI included with your account?'}`, ask: { text, state: 'pending' } });
+      saveChat(); render(); return;
     }
-    if (!quick && tinyOn()) {          // the tiny model is the chosen AI: nothing else to hand the request to
+    if (!quick && tinyOn() && !approvedNow) {          // the tiny model is the chosen AI: nothing else to hand the request to
       messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
       messages.push({ id: ++seq, role: 'assistant', text: `The tiny model only does small bench edits — it can't write a sketch or build a whole project like that. To get one, switch the AI (the "Tiny model" tab or the menu at the bottom of this chat) to ${hasHostedAi() ? '"Included" (free with your account)' : 'an AI with your own free key (Settings → AI; Gemini and Groq both have free keys)'} and send it again. Or break it into steps the tiny model knows: "add an OLED display", "add a membrane keypad", "wire the OLED to the Uno".` });
       saveChat(); render(); return;
@@ -429,7 +452,7 @@ export function initAiPanel(editor, code, sim = null) {
     setStatus('');
     const history = chatHistory(messages);
     for (const m of messages) if (m.state === 'pending') { m.state = 'superseded'; proposals.delete(m.id); }   // an older edit no longer matches the board once you've moved on
-    messages.push({ id: ++seq, role: 'user', text });
+    if (!approvedNow) messages.push({ id: ++seq, role: 'user', text });          // (already there when the question was asked)
     promptEl.value = ''; autosize();
     busy = true; ctl = new AbortController(); const signal = ctl.signal; sendMode(true); saveChat(); render();
     const stopped = () => { messages.push({ id: ++seq, role: 'error', text: 'Stopped. Nothing was changed.' }); };
@@ -438,7 +461,7 @@ export function initAiPanel(editor, code, sim = null) {
       const args = { signal, instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, ...(activeWorkspace().mix ? { mix: activeWorkspace().id } : {}), robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
-      else if (hostedOn()) {
+      else if (hostedOn() || (approvedNow && hasHostedAi() && !providersWithKeys().length)) {
         res = await generateCode({ ...args, hosted: true, signal });
       } else if (localOn()) {
         setStatus('Starting the on-device model…');
