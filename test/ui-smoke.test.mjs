@@ -2363,3 +2363,35 @@ test('ui: a new account starts on the tiny model, and an off-topic message gets 
   const prompt = doc.getElementById('aiPrompt'); prompt.value = 'who won the cricket match'; doc.getElementById('aiGenerate').click(); await flush();
   assert.match(doc.getElementById('aiLog').textContent, /Your message was not relevant/); assert.equal(fetched, 0);
 });
+
+test('ui: the body dock adapts — trigger muscles with a BioAmp, the joint with a servo, and a gesture lab in the AI workspace (record, train, recognise)', async () => {
+  const { w, editor, sim } = boot(), { initBodyDock, mlContext, subjectCore, workspaceCore } = w.__lab;
+  const asked = []; let dock = initBodyDock({ editor, sim, ai: { askAi: (t, o) => asked.push([t, o]) } });
+  const $ = id => w.document.getElementById(id), wait = ms => new Promise(r => setTimeout(r, ms));
+  assert.ok(w.document.querySelector('.body-dock').hidden, 'no body in the circuit: no dock');
+  const file = editor.exportProject();
+  file.parts.push({ id: 'px', type: 'custom-bioamp-exg-pill', x: 900, y: 40, rotate: 0 }, { id: 'py', type: 'custom-bioamp-exg-pill', x: 900, y: 200, rotate: 0 });
+  editor.importProject(file); dock.refresh(true);
+  assert.equal(w.document.querySelector('.body-dock').hidden, false, 'a BioAmp brings the dock');
+  assert.equal(dock.context.scenario, 'monitor'); assert.ok(!$('bdWire') && !$('bdTrain'), 'only the trigger panel: no servo, no AI workspace');
+  $('bdPlace').click(); dock.refresh(true);
+  assert.equal(editor.partById('px').sp, 'bicep-R'); assert.equal(editor.partById('py').sp, 'flexor-R'); assert.ok(!$('bdPlace'), 'once placed the placement button goes');
+  $('bdHold-flexR').click(); assert.equal(subjectCore.subject.holds.join(), 'flexR'); assert.ok($('bdHold-flexR').classList.contains('on'));
+  await wait(400);
+  const vals = [...w.document.querySelectorAll('.bd-val')].map(v => parseFloat(v.textContent));
+  assert.ok(vals[0] > 0.3 && vals[1] < 0.3, `the biceps channel shows the flex, the forearm channel does not: ${vals}`);
+  $('bdRest').click(); assert.equal(subjectCore.subject.holds.length, 0);
+  // a servo: the joint panel and the wiring button appear
+  const f2 = editor.exportProject(); f2.parts.push({ id: 'sv', type: 'servo', x: 700, y: 400, rotate: 0 }); editor.importProject(f2); dock.refresh(true);
+  assert.equal(dock.context.scenario, 'exo'); $('bdWire').click(); assert.match(asked[0][0], /servo has to be controlled by the BioAmp/); assert.equal(asked[0][1].send, true);
+  // the AI workspace: a gesture lab
+  workspaceCore.setActiveWorkspace('ai'); dock.refresh(true);
+  assert.ok($('bdTrain') && $('bdRecAll'));
+  $('bdTrain').click(); assert.ok(!mlContext.getMl().model, 'cannot train before recording');
+  $('bdRecAll').click(); await wait(9500);
+  const ds = mlContext.getMl().dataset; assert.equal(ds.classes.join(), 'Rest,Flex arm,Fist'); assert.ok(ds.samples.length >= 55, `samples ${ds.samples.length}`);
+  $('bdTrain').click(); assert.ok(mlContext.getMl().model, 'trained'); assert.ok($('bdRecognised'));
+  $('bdHold-flexR').click(); await wait(900);
+  assert.match($('bdRecognised').textContent, /^Flex arm/, `recognised: ${$('bdRecognised').textContent}`);
+  subjectCore.subject.holds = []; workspaceCore.setActiveWorkspace('electronics');
+});

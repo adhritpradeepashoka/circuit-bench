@@ -8,6 +8,8 @@
 
 import { HEAD_SITES } from './head-sites.generated.js';
 import { neutralSubject, eventLevels, gazeAt, MIND_RHYTHMS } from './subject.js';
+import { BODY_SITES } from './body-model.generated.js';
+import { ecgBeat } from './ecg-beat.js';
 
 const D = Math.PI / 180;
 /** Head frame: x = right ear, y = nose, z = crown. The skull is an ellipsoid with these radii (1 unit ≈ 10 cm × 0.8). */
@@ -22,7 +24,18 @@ export function surfacePoint(theta, phi) {
 
 // group: which part of the menu the site belongs to. w: how strongly it picks up each source.
 //   a = alpha/beta brain rhythm, b = blink, h = horizontal gaze, v = vertical gaze, m = muscle
-const S = (id, name, group, theta, phi, w) => ({ id, name, group, theta, phi, w: { a: 0, b: 0, h: 0, v: 0, m: 0, ...w } });
+const S = (id, name, group, theta, phi, w) => ({ id, name, group, frame: 'head', theta, phi, w: { a: 0, b: 0, h: 0, v: 0, m: 0, ...w } });
+// Sites on the full-body model. `limb`: how strongly the site picks up each held muscle (flexR = biceps flex, fistR = forearm flexors…); `ecg`: its weight on the heartbeat.
+const B = (id, name, group, extra = {}) => ({ id, name, group, frame: 'body', w: { a: 0, b: 0, h: 0, v: 0, m: 0 }, limb: {}, ecg: 0, ...extra });
+const side = (k, S2, word) => [
+  B(`bicep-${S2}`, `${word} upper arm, front (biceps)`, 'Arm EMG', { limb: { [`flex${S2}`]: 1 } }),
+  B(`tricep-${S2}`, `${word} upper arm, back (triceps)`, 'Arm EMG', { limb: { [`flex${S2}`]: 0.22 } }),
+  B(`delt-${S2}`, `${word} shoulder (deltoid)`, 'Arm EMG', { limb: { [`flex${S2}`]: 0.25 } }),
+  B(`flexor-${S2}`, `${word} forearm, inner (flexors: make a fist)`, 'Arm EMG', { limb: { [`fist${S2}`]: 1, [`flex${S2}`]: 0.15 } }),
+  B(`extensor-${S2}`, `${word} forearm, outer (extensors)`, 'Arm EMG', { limb: { [`fist${S2}`]: 0.45, [`flex${S2}`]: 0.05 } }),
+  B(`elbow-${S2}`, `${word} elbow (bone: a good reference)`, 'Reference', { limb: { [`flex${S2}`]: 0.02 } }),
+  B(`wrist-${S2}`, `${word} wrist (bone: a good reference)`, 'Reference', { limb: { [`fist${S2}`]: 0.03 } }),
+];
 export const SITES = [
   S('Fp1', 'Fp1 (forehead, left)', 'EEG', 64, -18, { a: 0.25, b: 1, h: 0.1, m: 0.3 }), S('Fp2', 'Fp2 (forehead, right)', 'EEG', 64, 18, { a: 0.25, b: 1, h: 0.1, m: 0.3 }),
   S('F7', 'F7 (front, left temple)', 'EEG', 72, -54, { a: 0.3, b: 0.35, h: -0.35, m: 0.4 }), S('F3', 'F3 (front, left)', 'EEG', 46, -45, { a: 0.35, b: 0.4, m: 0.1 }),
@@ -38,10 +51,16 @@ export const SITES = [
   S('EMG-F', 'Forehead (frontalis muscle)', 'EMG', 62, 0, { b: 0.5, m: 1 }),
   S('EMG-ML', 'Left cheek (masseter, jaw muscle)', 'EMG', 112, -78, { m: 1 }), S('EMG-MR', 'Right cheek (masseter, jaw muscle)', 'EMG', 112, 78, { m: 1 }),
 ];
+SITES.push(...side('r', 'R', 'Right'), ...side('l', 'L', 'Left'),
+  B('ecg-RA', 'Chest, right (below the collarbone)', 'Chest ECG', { ecg: -0.45 }), B('ecg-LA', 'Chest, left (below the collarbone)', 'Chest ECG', { ecg: 0.3 }),
+  B('ecg-LL', 'Lower left abdomen', 'Chest ECG', { ecg: 0.9 }), B('ecg-V', 'Chest, over the heart', 'Chest ECG', { ecg: 0.7 }));
 export const SITE = Object.fromEntries(SITES.map(s => [s.id, s]));
 export const SITE_GROUPS = ['EEG', 'EOG', 'EMG', 'Reference'];
+/** The groups for the full-body model. The Reference group has both head sites (mastoids) and body ones (elbows, wrists); it is listed in both. */
+export const BODY_GROUPS = ['Arm EMG', 'Chest ECG', 'Reference'];
+export const FRAME_GROUPS = { head: SITE_GROUPS, body: BODY_GROUPS };
 /** Where a site is on the head scan (model units: 1 = 100 mm). Falls back to the plain ellipsoid if a site was not baked. */
-export const sitePosition = id => (HEAD_SITES[id] ? { x: HEAD_SITES[id][0], y: HEAD_SITES[id][1], z: HEAD_SITES[id][2] } : SITE[id] ? surfacePoint(SITE[id].theta, SITE[id].phi) : null);
+export const sitePosition = id => (SITE[id]?.frame === 'body' ? (BODY_SITES[id] ? { x: BODY_SITES[id][0], y: BODY_SITES[id][1], z: BODY_SITES[id][2] } : null) : HEAD_SITES[id] ? { x: HEAD_SITES[id][0], y: HEAD_SITES[id][1], z: HEAD_SITES[id][2] } : SITE[id] ? surfacePoint(SITE[id].theta, SITE[id].phi) : null);
 
 /* ── a little deterministic noise ── */
 const hash = n => { let h = Math.imul(n | 0, 0x9e3779b1) ^ 0x85ebca6b; h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d); h ^= h >>> 12; h = Math.imul(h, 0x297a2d39); h ^= h >>> 15; return ((h >>> 0) / 4294967295) * 2 - 1; };
@@ -64,23 +83,26 @@ export function sources(t, { effort = 50, subject = neutralSubject() } = {}) {
   // Muscle: bursts of broadband noise. The slider sets resting tone; the events add bursts on top.
   const emg = 0.002 * Math.max(0, Math.min(1, effort / 100)) * smooth(t, 1500, 5);
   const burst = lv => 0.0022 * Math.min(1, lv) * smooth(t, 1500, 9);
-  return { alpha, beta, theta, blink: blink + evBlink, h, v, emg, jaw: burst(lv.jaw), twitchL: burst(lv.twitchL) * 1.2, twitchR: burst(lv.twitchR) * 1.2, brow: burst(lv.brow) * 0.8 };
+  const bpm = Math.max(30, Math.min(200, subject.bpm ?? 68)), ecg = ecgBeat(((t * bpm) / 60) % 1);
+  const limb = k => burst(lv[k]) * (k.startsWith('fist') ? 0.8 : 1.2);
+  return { ecg, flexR: limb('flexR'), flexL: limb('flexL'), fistR: limb('fistR'), fistL: limb('fistL'), alpha, beta, theta, blink: blink + evBlink, h, v, emg, jaw: burst(lv.jaw), twitchL: burst(lv.twitchL) * 1.2, twitchR: burst(lv.twitchR) * 1.2, brow: burst(lv.brow) * 0.8 };
 }
 
 /** Which muscle a site sits over: jaw (masseter and temporalis), forehead (frontalis), and which side of the head it is on. */
 const JAW = { 'EMG-ML': 1, 'EMG-MR': 1, T3: 0.7, T4: 0.7, F7: 0.4, F8: 0.4 }, FORE = { 'EMG-F': 1, Fp1: 0.5, Fp2: 0.5, F3: 0.1, Fz: 0.1, F4: 0.1 };
-const sideOf = s => (Math.abs(s.phi) > 100 || s.phi === 0 ? 0 : Math.sign(s.phi));       // -1 left, +1 right, 0 middle or back
+const sideOf = s => (s.phi == null ? 0 : Math.abs(s.phi) > 100 || s.phi === 0 ? 0 : Math.sign(s.phi));       // -1 left, +1 right, 0 middle or back
 
 /** What one site picks up at time t, in volts, relative to the body's zero. */
 export function siteVoltage(id, t, opts) {
   const s = SITE[id]; if (!s) return 0;
   const x = sources(t, opts), w = s.w;
   // a little extra variety so two different sites are never identical copies: each has its own slow phase and hiss
-  const k = SITES.indexOf(s) + 1;
+  const k = SITES.indexOf(s) + 1, sk = k;
+  let limb = 0; if (s.limb) for (const k in s.limb) limb += s.limb[k] * (x[k] || 0) * (0.8 + 0.2 * Math.cos(k.length + sk));
   const brain = w.a * (x.alpha * Math.cos(k * 0.9) + x.beta + x.theta) + 0.000004 * smooth(t, 200, k) * (w.a > 0.1 ? 1 : 0.2);
   const j = JAW[id] || 0, f = FORE[id] || 0, sd = sideOf(s);
   const twitch = j * (x.twitchL * (sd < 0 ? 1 : 0.1) + x.twitchR * (sd > 0 ? 1 : 0.1));
-  return brain + w.b * x.blink + w.h * x.h + w.v * x.v + w.m * x.emg * (0.7 + 0.3 * Math.cos(k)) + j * x.jaw + twitch + f * x.brow;
+  return brain + w.b * x.blink + w.h * x.h + w.v * x.v + w.m * x.emg * (0.7 + 0.3 * Math.cos(k)) + j * x.jaw + twitch + f * x.brow + limb + (s.ecg ? s.ecg * x.ecg : 0) + (s.frame === 'body' ? 0.000003 * smooth(t, 400, k) : 0);
 }
 
 /** The signal between electrode sites `pos` and `neg` (volts). An unplaced electrode reads 0, like a loose lead. */

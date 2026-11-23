@@ -10,6 +10,7 @@ export const SIGNAL_KINDS = [
   ['sine', 'Test sine, 10 Hz (1 mV)'],
 ];
 import { SITE, siteSignal } from './body-sites.js';
+import { ecgBeat } from './ecg-beat.js';
 import { subject as liveSubject } from './subject.js';
 export const MAINS_HZ = 50;           // India (and most of the world)
 
@@ -19,16 +20,13 @@ const noise = n => { let h = Math.imul(n | 0, 0x9e3779b1) ^ 0x85ebca6b; h = Math
 /** Linearly-smoothed noise at a given rate (Hz) — band-limits the hiss a little. */
 const smoothNoise = (t, rate) => { const x = t * rate, i = Math.floor(x), f = x - i; return noise(i) * (1 - f) + noise(i + 1) * f; };
 
-/** One heartbeat: P, Q, R, S, T as Gaussians, phase 0..1 within the beat. Volts, R peak ≈ 1 mV. */
-export function ecgBeat(phase) {
-  return 0.00012 * g(phase, 0.16, 0.025) - 0.00015 * g(phase, 0.285, 0.008) + 0.001 * g(phase, 0.31, 0.011) - 0.00025 * g(phase, 0.335, 0.009) + 0.00030 * g(phase, 0.55, 0.045);
-}
+export { ecgBeat };
 
 /** The signal (volts) between the two electrodes at time t (seconds) for a signal-source part's settings. */
-export function signalAt(p, t) {
+export function signalAt(p, t, subj = liveSubject) {
   const kind = p.signal || 'ecg', scale = Math.max(0, (p.scale ?? 100) / 100);
   let v = 0;
-  if (SITE[p.sp] && SITE[p.sn]) v = siteSignal(p.sp, p.sn, t, { effort: p.effort ?? 50, subject: liveSubject });     // electrodes placed on the head model: the signal depends on where
+  if (SITE[p.sp] && SITE[p.sn]) v = siteSignal(p.sp, p.sn, t, { effort: p.effort ?? 50, subject: subj });     // electrodes placed on the head model: the signal depends on where
   else if (kind === 'ecg') {
     const period = 60 / Math.max(20, Math.min(220, p.bpm ?? 70)), ph = (t % period) / period;
     v = ecgBeat(ph) + 0.00004 * Math.sin(2 * Math.PI * 0.25 * t);               // + slow breathing sway

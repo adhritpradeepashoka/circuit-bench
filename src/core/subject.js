@@ -9,7 +9,14 @@ export const EVENT_KINDS = {
   twitchL: { dur: 0.3, label: 'Twitch left cheek' },
   twitchR: { dur: 0.3, label: 'Twitch right cheek' },
   brow: { dur: 1.2, label: 'Raise eyebrows' },
+  // the body below the head (the full-body model): a held flex of the upper arm (biceps) and a fist (forearm flexors)
+  flexR: { dur: 2.2, label: 'Flex right arm', limb: true },
+  flexL: { dur: 2.2, label: 'Flex left arm', limb: true },
+  fistR: { dur: 2.2, label: 'Fist, right hand', limb: true },
+  fistL: { dur: 2.2, label: 'Fist, left hand', limb: true },
 };
+/** The events that are held on (until released) rather than fired once. */
+export const LIMB_EVENTS = ['flexR', 'flexL', 'fistR', 'fistL'];
 export const MINDS = { relaxed: 'Relaxed, eyes closed', focused: 'Focused', drowsy: 'Drowsy' };
 /** Gaze targets as [horizontal, vertical] in units of a full glance. 'auto' = the subject glances about on its own. */
 export const GAZES = { auto: null, center: [0, 0], left: [-1, 0], right: [1, 0], up: [0, 1], down: [0, -1] };
@@ -17,19 +24,20 @@ export const GAZES = { auto: null, center: [0, 0], left: [-1, 0], right: [1, 0],
 export const MIND_RHYTHMS = { relaxed: { alpha: 1, beta: 1, theta: 0 }, focused: { alpha: 0.35, beta: 2.4, theta: 0 }, drowsy: { alpha: 0.6, beta: 0.6, theta: 1 } };
 
 /** A neutral subject: the behaviour the workbench always had (random blinks and glances, relaxed). */
-export const neutralSubject = () => ({ mind: 'relaxed', autoBlink: true, gaze: { to: 'auto', from: 'auto', t0: -1e9 }, events: [] });
+export const neutralSubject = () => ({ mind: 'relaxed', autoBlink: true, gaze: { to: 'auto', from: 'auto', t0: -1e9 }, events: [], holds: [], bpm: 68 });
 
 const smoothstep = x => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
 /** The strength (0..1) of an event at time t: quick rise, hold, quick fall. */
 export function envelope(ev, t) {
   const k = EVENT_KINDS[ev.type]; if (!k) return 0; const a = t - ev.t0; if (a < 0 || a > k.dur) return 0;
-  const rise = ev.type === 'blink' ? 0.05 : ev.type.startsWith('twitch') ? 0.04 : 0.12, fall = ev.type === 'blink' ? 0.25 : 0.2;
+  const rise = ev.type === 'blink' ? 0.05 : ev.type.startsWith('twitch') ? 0.04 : k.limb ? 0.18 : 0.12, fall = ev.type === 'blink' ? 0.25 : 0.2;
   return smoothstep(a / rise) * smoothstep((k.dur - a) / fall);
 }
 /** How much of each event is active at time t, summed over the events fired so far. */
 export function eventLevels(subject, t) {
-  const L = { blink: 0, jaw: 0, twitchL: 0, twitchR: 0, brow: 0 };
+  const L = { blink: 0, jaw: 0, twitchL: 0, twitchR: 0, brow: 0, flexR: 0, flexL: 0, fistR: 0, fistL: 0 };
   for (const ev of subject.events || []) if (ev.type in L) L[ev.type] = Math.min(1.5, L[ev.type] + envelope(ev, t));
+  for (const h of subject.holds || []) if (h in L) L[h] = Math.max(L[h], 1);       // held on: stays at full strength
   return L;
 }
 /** Where the eyes are pointing at time t: [h, v] in glance units, easing to a new target in ~0.12 s. null while the subject is in 'auto'. */
@@ -46,6 +54,8 @@ export const subject = {
   now() { return this.simNow != null ? this.simNow : performance.now() / 1000; },
   fire(type) { if (!(type in EVENT_KINDS)) return; const t = this.now(); this.events = this.events.filter(e => t - e.t0 < 12); this.events.push({ type, t0: t }); },
   look(dir) { if (!(dir in GAZES)) return; const t = this.now(); this.gaze = { from: this.gaze.to === 'auto' ? 'center' : this.gaze.to, to: dir, t0: t }; },
+  /** Hold a limb muscle on (or let go). While held it stays at full strength; the one-off buttons fire it for a couple of seconds. */
+  hold(type, on = !this.holds.includes(type)) { if (!LIMB_EVENTS.includes(type)) return; this.holds = this.holds.filter(h => h !== type); if (on) this.holds.push(type); },
   setMind(m) { if (m in MIND_RHYTHMS) this.mind = m; },
   reset() { Object.assign(this, neutralSubject()); },
 };

@@ -1403,3 +1403,27 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .fb-send { padding: 8px 20px; border-radius: 8px; border: 0; background: var(--blue); color: var(--on-blue); font-weight: 700; cursor: pointer; }
 .fb-send:disabled { opacity: .6; }
 .fb-row b { white-space: pre-wrap; font-weight: 500; overflow-wrap: anywhere; }
+
+/* ── the body dock: adapts to the project (trigger muscles, the joint, gesture lab) ── */
+.body-dock { position: absolute; top: 10px; right: 10px; width: 300px; max-height: calc(100% - 20px); z-index: 40; display: flex; flex-direction: column; background: var(--surface, #fff); border: 1px solid var(--line, #d5ddd8); border-radius: 12px; box-shadow: 0 6px 24px rgba(20, 40, 35, .16); overflow: hidden; font-size: 12.5px; }
+.body-dock[hidden] { display: none; }
+.bd-head { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 0; background: #1d4e75; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+.bd-body { overflow: auto; padding: 8px 10px 12px; display: grid; gap: 8px; align-content: start; }
+.bd-body[hidden] { display: none; }
+.bd-stage { position: relative; height: 210px; border-radius: 8px; background: var(--mat, #eef3f0); overflow: hidden; }
+.bd-view { position: absolute; inset: 0; }
+.bd-frames { display: flex; gap: 4px; margin-top: -4px; } .bd-frames button { flex: 1; height: 22px; border: 1px solid var(--line, #d5ddd8); border-radius: 6px; background: transparent; font: inherit; font-size: 11px; cursor: pointer; color: inherit; }
+.bd-sec { display: grid; gap: 6px; padding-top: 6px; border-top: 1px solid var(--line, #d5ddd8); } .bd-sec h4 { margin: 0; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: #5b6a64; }
+.bd-btns { display: flex; flex-wrap: wrap; gap: 5px; }
+.bd-btn { height: 28px; padding: 0 9px; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; background: var(--surface, #fff); font: inherit; font-weight: 600; font-size: 12px; cursor: pointer; color: inherit; }
+.bd-btn:hover:not(:disabled) { border-color: #1f7a8c; } .bd-btn.on { background: #c53a2c; border-color: #c53a2c; color: #fff; } .bd-btn.primary { background: #1d4e75; border-color: #1d4e75; color: #fff; } .bd-btn.dim:not(.on) { opacity: .55; } .bd-btn.quiet { font-weight: 500; } .bd-btn.small { height: 24px; padding: 0 7px; } .bd-btn:disabled { opacity: .4; cursor: default; }
+.bd-note { margin: 0; color: #5b6a64; line-height: 1.4; }
+.bd-meter { display: grid; grid-template-columns: 10px 1fr 90px 52px; gap: 6px; align-items: center; font-size: 11.5px; } .bd-dot { width: 9px; height: 9px; border-radius: 50%; } .bd-mname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .bd-val { text-align: right; color: #5b6a64; font-variant-numeric: tabular-nums; }
+.bd-bar { display: block; height: 7px; border-radius: 4px; background: rgba(120, 140, 130, .22); overflow: hidden; } .bd-bar i { display: block; height: 100%; width: 0; background: #c53a2c; border-radius: 4px; transition: width .1s linear; }
+.bd-chain { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; } .bd-chip { display: grid; padding: 3px 9px; border-radius: 8px; background: rgba(29, 78, 117, .09); text-align: center; } .bd-chip small { font-size: 10px; color: #5b6a64; } .bd-chip b { font-size: 14px; font-variant-numeric: tabular-nums; } .bd-arrow { color: #5b6a64; }
+.bd-gl { display: grid; gap: 4px; } .bd-grow { display: grid; grid-template-columns: 1fr 1.25fr auto auto; gap: 4px; align-items: center; } .bd-grow input, .bd-grow select { min-width: 0; height: 24px; font: inherit; font-size: 12px; border: 1px solid var(--line, #d5ddd8); border-radius: 6px; padding: 0 4px; background: var(--surface, #fff); color: inherit; }
+.bd-big { font-size: 20px; font-weight: 800; color: #1d4e75; } .bd-probs { display: grid; gap: 3px; } .bd-prob { display: grid; grid-template-columns: 84px 1fr; gap: 6px; align-items: center; font-size: 11.5px; } .bd-prob .bd-bar i { background: #1d4e75; }
+.bd-check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
+.viz-view .body-dock { display: none; }
+.viz-frame { position: absolute; top: 10px; left: 10px; display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface, #fff); border: 1px solid var(--line, #d5ddd8); z-index: 2; }
+.viz-frame button { height: 24px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 12px; font-weight: 600; color: inherit; cursor: pointer; } .viz-frame button.on { background: #1d4e75; color: #fff; }

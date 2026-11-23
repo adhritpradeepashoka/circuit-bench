@@ -7,25 +7,23 @@
 // head drawn in code is used instead. Signals are illustrative, not medical data.
 import { joinViews } from './view-groups.js';
 import { SITES, SITE, SITE_GROUPS, HEAD_RADII, surfacePoint, sitePosition, describeMontage } from '../core/body-sites.js';
+import { bodyChannels } from '../core/mix-context.js';
+import { bodyState } from './body-state.js';
 import { signalAt } from '../core/signals.js';
-import { subject as person, EVENT_KINDS, MINDS } from '../core/subject.js';
+import { subject as person, EVENT_KINDS, MINDS, LIMB_EVENTS } from '../core/subject.js';
 import { PART_DEFS } from '../core/parts.js';
 import { activeWorkspace } from '../core/workspaces.js';
 
 const headUrl = new URL('../assets/head.glb', import.meta.url).href;
-const GROUP_COLOR = { EEG: 0x7a8f86, EOG: 0xc7863a, EMG: 0xa65d8c, Reference: 0x8d9a95 };
+const GROUP_COLOR = { EEG: 0x7a8f86, EOG: 0xc7863a, EMG: 0xa65d8c, Reference: 0x8d9a95, 'Arm EMG': 0xa65d8c, 'Chest ECG': 0xc0392b };
+const ALL_GROUPS = ['EEG', 'EOG', 'EMG', 'Arm EMG', 'Chest ECG', 'Reference'];
 const REF_COLOR = '#27a560';
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
 const hue = i => (i * 47 + 8) % 360;
 const colorOf = (i, key) => (key === 'sr' ? REF_COLOR : `hsl(${hue(i)} ${key === 'sp' ? '72% 46%' : '62% 30%'})`);
 
-/** The parts that can sit on the head: body-source blocks and amplifiers that take electrode sites. */
-export function channelParts(parts) {
-  return parts.filter(p => {
-    const kind = PART_DEFS[p.type]?.spec?.behaviour?.kind;
-    return kind === 'signal-source' || (kind === 'inamp' && 'sp' in (PART_DEFS[p.type].props || {}));
-  });
-}
+/** The parts that can sit on the body: body-source blocks and amplifiers that take electrode sites. */
+export const channelParts = bodyChannels;
 
 export function initVisualizer({ editor }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar');
@@ -41,7 +39,9 @@ export function initVisualizer({ editor }) {
   const labels = el('div', { className: 'viz-labels' });
   const hoverEl = el('div', { className: 'viz-hover' });
   const credit = el('a', { className: 'viz-credit', href: 'https://www.thingiverse.com/thing:4245056', target: '_blank', rel: 'noopener', textContent: 'Head scan by celer · CC BY' });
-  stage.append(hintEl, labels, hoverEl, credit);
+  const frameBar = el('div', { className: 'viz-frame', role: 'group', ariaLabel: 'What to show' }), bHead = el('button', { type: 'button', textContent: 'Head', id: 'vizFrame-head' }), bBody = el('button', { type: 'button', textContent: 'Whole body', id: 'vizFrame-body' });
+  frameBar.append(bHead, bBody);
+  stage.append(hintEl, labels, hoverEl, credit, frameBar);
 
   const side = el('div', { className: 'viz-side' });
   for (const t of ['wheel', 'touchmove']) side.addEventListener(t, e => e.stopPropagation(), { passive: true });   // the bench underneath zooms on the wheel and would swallow the scrolling of this panel
@@ -71,8 +71,10 @@ export function initVisualizer({ editor }) {
     group('Mind', ...mindBtns), group('Eyes', ...gazeBtns, evBtn('Blink', () => person.fire('blink'), 'One blink', 'vizEv-blink')),
     el('label', { className: 'viz-check' }, autoBlink, el('span', { textContent: 'Random blinks' })),
     group('Face', ...['jaw', 'twitchL', 'twitchR', 'brow'].map(k => evBtn(EVENT_KINDS[k].label, () => person.fire(k), EVENT_KINDS[k].label, `vizEv-${k}`))),
-    el('p', { className: 'viz-note', textContent: 'Try it: put E+ and E− on the cheeks and clench the jaw; on the eye corners and look left or right; on the back of the head and switch between Relaxed and Focused. The same event barely shows at electrodes that are far from the muscle or eye involved.' }));
-  const markState = () => { for (const b of mindBtns) b.classList.toggle('on', b.dataset.mind === person.mind); for (const b of gazeBtns) b.classList.toggle('on', b.dataset.gaze === (person.gaze?.to || 'auto')); autoBlink.checked = person.autoBlink !== false; };
+    group('Arms (hold on)', ...LIMB_EVENTS.map(k => tag(evBtn(EVENT_KINDS[k].label, () => person.hold(k), `${EVENT_KINDS[k].label}: click to hold, click again to let go`, `vizHold-${k}`), 'hold', k)), evBtn('Rest', () => { person.holds = []; }, 'Let go of every held muscle', 'vizHold-rest')),
+    el('p', { className: 'viz-note', textContent: 'Try it: put E+ and E− on the biceps and elbow of the Whole body view and hold Flex right arm; put them on the cheeks and clench the jaw; on the eye corners and look left or right; on the back of the head and switch between Relaxed and Focused. The same event barely shows at electrodes that are far from the muscle or eye involved.' }));
+  const holdBtns = () => [...events.querySelectorAll('[data-hold]')];
+  const markState = () => { for (const b of holdBtns()) b.classList.toggle('on', person.holds.includes(b.dataset.hold)); for (const b of mindBtns) b.classList.toggle('on', b.dataset.mind === person.mind); for (const b of gazeBtns) b.classList.toggle('on', b.dataset.gaze === (person.gaze?.to || 'auto')); autoBlink.checked = person.autoBlink !== false; };
   markState();
   const channelsEl = el('div', { className: 'viz-channels' });
   const noChannels = el('p', { className: 'viz-note', hidden: true, textContent: 'Add a BioAmp EXG Pill (or a “Biosignal source (body)”) to the circuit — each one becomes a channel here.' });
@@ -85,6 +87,7 @@ export function initVisualizer({ editor }) {
   function siteSelect(label, groups = SITE_GROUPS) {
     const sel = el('select', { ariaLabel: label });
     sel.append(el('option', { value: '', textContent: '— not placed —' }));
+    groups = groups.flatMap(g => (g === 'EMG' ? ['EMG', 'Arm EMG'] : [g]));
     for (const g of groups) {
       const og = el('optgroup', { label: g });
       for (const s of SITES.filter(x => x.group === g)) og.append(el('option', { value: s.id, textContent: s.name }));
@@ -93,7 +96,7 @@ export function initVisualizer({ editor }) {
     return sel;
   }
 
-  let three = null, loading = null, timer = null, view = 'circuit', cards = [];
+  let three = null, loading = null, timer = null, anim = null, view = 'circuit', cards = [], pickedFrame = false;
   const channels = () => channelParts(editor.state.parts);
   const nameOf = (p, i) => `${PART_DEFS[p.type].label || PART_DEFS[p.type].name || 'Channel'} ${i + 1}`;
 
@@ -109,6 +112,7 @@ export function initVisualizer({ editor }) {
       for (const q of channels()) for (const k of ['sp', 'sn']) if (q[k] === id && !(q.id === partId && k === key)) editor.setPartProp(q.id, k, '', { commit: false });
     }
     editor.setPartProp(partId, key, id, { commit: true });
+    if (id && three && SITE[id]?.frame !== three.mode) three.setMode(SITE[id].frame);        // a site on the other model: show that model
     paint();
   }
   function placeRef(id) { for (const p of channels()) editor.setPartProp(p.id, 'sr', id, { commit: false }); editor.commit(); paint(); }
@@ -125,7 +129,7 @@ export function initVisualizer({ editor }) {
       for (const [key, label] of [['sp', 'E+'], ['sn', 'E−']]) {
         const chip = el('div', { className: 'viz-chip', textContent: `${i + 1}${label.replace('E', '')}`, title: `Drag ${label} of ${nameOf(p, i)} onto the head` });
         chip.style.background = colorOf(i, key); chip.dataset.part = p.id; chip.dataset.key = key;
-        const sel = siteSelect(`${label} site, ${nameOf(p, i)}`, ['EEG', 'EOG', 'EMG', 'Reference']);
+        const sel = siteSelect(`${label} site, ${nameOf(p, i)}`, ['EEG', 'EOG', 'EMG', 'Chest ECG', 'Reference']);
         sel.addEventListener('change', () => place(p.id, key, sel.value));
         sels[key] = sel; card.append(el('div', { className: 'viz-row' }, chip, sel));
       }
@@ -134,7 +138,7 @@ export function initVisualizer({ editor }) {
   }
 
   function paint() {
-    buildCards();
+    buildCards(); markState();
     const list = channels();
     noChannels.hidden = list.length > 0; refRow.hidden = subject.hidden = !list.length;
     for (const c of cards) { const p = editor.partById(c.id); if (!p) continue; for (const k of ['sp', 'sn']) c.sels[k].value = p[k] || ''; }
@@ -201,7 +205,8 @@ export function initVisualizer({ editor }) {
         scene.add(head);
 
         const dots = new Map(), dotGeo = new THREE.SphereGeometry(1, 14, 10), outward = new THREE.Vector3();
-        for (const s of SITES) {
+        let mode = 'head', bodyRig = null, bodyG = null, bodyLoading = null, yawB = 0.4, distB = 23, panB = 10.2;
+        for (const s of SITES.filter(x => x.frame === 'head')) {
           const m = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: GROUP_COLOR[s.group] }));
           const p = sitePosition(s.id); outward.set(p.x, p.y, p.z);
           m.position.set(p.x, p.y, p.z).add(outward.clone().normalize().multiplyScalar(0.012)); m.scale.setScalar(0.03); head.add(m); dots.set(s.id, m);
@@ -211,18 +216,30 @@ export function initVisualizer({ editor }) {
         let yaw = 0.35, pitch = 0.1, dist = 7.2, panZ = -0.2;
         const size = () => { const w = stage.clientWidth || 420, h = stage.clientHeight || 360; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
         const tmp = new THREE.Vector3();
+        // which way a body site faces (in the body's own frame): used to hide the labels of sites on the far side
+        const faces = id => (/^(tricep|extensor|elbow|wrist)/.test(id) ? [0, -1, 0] : /^delt/.test(id) ? [0, 0, 1] : [0, 1, 0]);
         const project = id => {
-          const m = dots.get(id); if (!m) return null;
-          tmp.copy(m.position).applyMatrix4(head.matrixWorld);
-          const front = tmp.clone().normalize().dot(camera.position.clone().sub(tmp).normalize()) > 0.08;
+          const m = dots.get(id); if (!m || SITE[id].frame !== mode) return null;
+          const isBody = SITE[id].frame === 'body';
+          tmp.copy(m.position).applyMatrix4((isBody ? bodyG : head).matrixWorld);
+          let front;
+          if (isBody) { const n = faces(id), c = Math.cos(yawB), sn = Math.sin(yawB), w = new THREE.Vector3(n[0] * c - n[1] * sn, n[0] * sn + n[1] * c, n[2]); front = w.dot(camera.position.clone().sub(tmp).normalize()) > -0.1; }
+          else front = tmp.clone().normalize().dot(camera.position.clone().sub(tmp).normalize()) > 0.08;
           const v = tmp.clone().project(camera);
           return { x: (v.x * 0.5 + 0.5) * (stage.clientWidth || 420), y: (-v.y * 0.5 + 0.5) * (stage.clientHeight || 360), front };
         };
         let current = [];
         const frame = () => {
-          head.rotation.set(0, 0, yaw);
-          camera.position.set(0, dist * Math.cos(pitch), dist * Math.sin(pitch) + panZ); camera.lookAt(0, 0, panZ);
-          head.updateMatrixWorld(); camera.updateMatrixWorld();
+          if (mode === 'body' && bodyG) {
+            bodyG.rotation.set(0, 0, yawB);
+            camera.position.set(0, distB * Math.cos(pitch), distB * Math.sin(pitch) + panB); camera.lookAt(0, 0, panB);
+            bodyG.updateMatrixWorld(); camera.updateMatrixWorld();
+            for (const [id, m] of dots) if (SITE[id].frame === 'body') { const q = bodyRig.sitePoint(id); if (q) m.position.set(q[0], q[1], q[2]); }
+          } else {
+            head.rotation.set(0, 0, yaw);
+            camera.position.set(0, dist * Math.cos(pitch), dist * Math.sin(pitch) + panZ); camera.lookAt(0, 0, panZ);
+            head.updateMatrixWorld(); camera.updateMatrixWorld();
+          }
           renderer.render(scene, camera);
           for (const [tkey, t] of tags) {
             const [pid, key] = tkey.split('|'), p = current.find(q => q.id === pid), id = p?.[key], pr = id ? project(id) : null;
@@ -242,7 +259,7 @@ export function initVisualizer({ editor }) {
             if (p.sr) { used.set(p.sr, used.get(p.sr) || REF_COLOR); if (i === 0) { want.add(`${p.id}|sr`); if (!tags.has(`${p.id}|sr`)) { const n = el('div', { className: 'viz-tag', textContent: 'REF' }); n.hidden = true; labels.append(n); tags.set(`${p.id}|sr`, n); } tags.get(`${p.id}|sr`).style.background = REF_COLOR; } }
           });
           for (const [k, t] of [...tags]) if (!want.has(k)) { t.remove(); tags.delete(k); }
-          for (const [id, m] of dots) { const c = used.get(id); m.material.color.set(c || GROUP_COLOR[SITE[id].group]); m.scale.setScalar(c ? 0.05 : 0.026); }
+          for (const [id, m] of dots) { const c = used.get(id), b = SITE[id].frame === 'body'; m.material.color.set(c || GROUP_COLOR[SITE[id].group]); m.scale.setScalar(b ? (c ? 0.2 : 0.11) : (c ? 0.05 : 0.026)); }
           draw();
         };
 
@@ -250,22 +267,42 @@ export function initVisualizer({ editor }) {
         let last = null;
         stage.addEventListener('pointerdown', e => { last = { x: e.clientX, y: e.clientY }; stage.setPointerCapture?.(e.pointerId); stage.classList.add('dragging'); });
         stage.addEventListener('pointermove', e => {
-          if (last) { yaw += (e.clientX - last.x) * 0.01; pitch = Math.max(-0.7, Math.min(1.3, pitch + (e.clientY - last.y) * 0.008)); last = { x: e.clientX, y: e.clientY }; draw(); return; }
+          if (last) { if (mode === 'body') yawB += (e.clientX - last.x) * 0.01; else yaw += (e.clientX - last.x) * 0.01; pitch = Math.max(-0.7, Math.min(1.3, pitch + (e.clientY - last.y) * 0.008)); last = { x: e.clientX, y: e.clientY }; draw(); return; }
           const id = siteAt(e.clientX, e.clientY); hoverEl.textContent = id ? SITE[id].name : '';
         });
         const end = () => { last = null; stage.classList.remove('dragging'); };
         stage.addEventListener('pointerup', end); stage.addEventListener('pointercancel', end);
         stage.addEventListener('pointerleave', () => { hoverEl.textContent = ''; });
-        stage.addEventListener('wheel', e => { e.preventDefault(); dist = Math.max(2.8, Math.min(9, dist + e.deltaY * 0.004)); draw(); }, { passive: false });
+        stage.addEventListener('wheel', e => { e.preventDefault(); if (mode === 'body') distB = Math.max(6, Math.min(32, distB + e.deltaY * 0.02)); else dist = Math.max(2.8, Math.min(9, dist + e.deltaY * 0.004)); draw(); }, { passive: false });
 
         const siteAt = (cx, cy) => {
           const r = stage.getBoundingClientRect(); let best = null, bd = 30;
           head.updateMatrixWorld(); camera.updateMatrixWorld();
-          for (const s of SITES) { const pr = project(s.id); if (!pr?.front) continue; const d = Math.hypot(pr.x - (cx - r.left), pr.y - (cy - r.top)); if (d < bd) { bd = d; best = s.id; } }
+          for (const s of SITES.filter(x => x.frame === mode)) { const pr = project(s.id); if (!pr?.front) continue; const d = Math.hypot(pr.x - (cx - r.left), pr.y - (cy - r.top)); if (d < bd) { bd = d; best = s.id; } }
           return best;
         };
+        /** Switch between the head scan and the whole body. The body model loads the first time. */
+        async function setMode(m) {
+          if (m === 'body' && !bodyG) {
+            if (!bodyLoading) bodyLoading = (async () => {
+              hintEl.hidden = false; hintEl.textContent = 'Loading the body…';
+              try {
+                const { loadBodyRig } = await import('./body-rig.js'); bodyRig = await loadBodyRig(THREE); bodyG = bodyRig.group; scene.add(bodyG);
+                for (const s of SITES.filter(x => x.frame === 'body')) { const mm = new THREE.Mesh(dotGeo, new THREE.MeshBasicMaterial({ color: GROUP_COLOR[s.group] })); mm.scale.setScalar(0.11); bodyG.add(mm); dots.set(s.id, mm); }
+              } catch { hintEl.textContent = 'The body model could not load; the head still works.'; bodyLoading = null; return; }
+              hintEl.hidden = true;
+            })();
+            await bodyLoading; if (!bodyG) return;
+          }
+          mode = m === 'body' && bodyG ? 'body' : 'head'; head.visible = mode === 'head'; if (bodyG) bodyG.visible = mode === 'body';
+          bHead.classList.toggle('on', mode === 'head'); bBody.classList.toggle('on', mode === 'body');
+          credit.textContent = mode === 'body' ? 'Body: MakeHuman base mesh · CC0' : 'Head scan by celer · CC BY'; credit.href = mode === 'body' ? 'https://github.com/makehumancommunity/makehuman' : 'https://www.thingiverse.com/thing:4245056';
+          mark(current); hoverEl.textContent = '';
+        }
+        /** Called ~30 times a second while the body is showing: bend the elbows and light the muscles to match what the person is doing. */
+        const tick = () => { if (mode === 'body' && bodyRig && bodyRig.setPose(bodyState.pose())) draw(); };
         stage.prepend(renderer.domElement); hintEl.hidden = true;
-        three = { mark, size, draw, siteAt, scan, turn: (y, p) => { yaw = y; pitch = p; draw(); } };
+        three = { mark, size, draw, siteAt, scan, setMode, tick, get mode() { return mode; }, turn: (y, p) => { yaw = y; pitch = p; draw(); } };
         size();
         return three;
       } catch (err) {
@@ -305,13 +342,16 @@ export function initVisualizer({ editor }) {
     bCircuit.classList.toggle('on', !viz); bViz.classList.toggle('on', viz);
     bCircuit.setAttribute('aria-pressed', String(!viz)); bViz.setAttribute('aria-pressed', String(viz));
     pane.hidden = !viz; document.body.classList.toggle('viz-view', viz);          // the circuit's wires sit above this pane: hide them while it is open
-    clearInterval(timer);
+    clearInterval(timer); clearInterval(anim);
     if (viz) {
-      paint(); await load3d(); three?.size(); three?.mark(channels());
-      timer = setInterval(drawTrace, 80);
+      paint(); await load3d(); three?.size();
+      if (three && !pickedFrame) await three.setMode(channels().some(p => [p.sp, p.sn].some(id => SITE[id]?.frame === 'body')) ? 'body' : 'head');       // open on the model the electrodes are on
+      three?.mark(channels());
+      timer = setInterval(drawTrace, 80); anim = setInterval(() => three?.tick(), 33);
     }
   }
   bCircuit.addEventListener('click', () => show('circuit')); bViz.addEventListener('click', () => show('viz'));
+  for (const [b, m] of [[bHead, 'head'], [bBody, 'body']]) b.addEventListener('click', async () => { pickedFrame = true; await load3d(); await three?.setMode(m); });
   addEventListener('resize', () => { if (view === 'viz') { three?.size(); three?.draw(); } });
 
   /** Only workspaces that ask for it (Bioelectronics) get the toggle; elsewhere the circuit editor is the only view. */
