@@ -116,7 +116,7 @@ export function initAiPanel(editor, code, sim = null) {
       if (m.ask.state === 'pending') {
         const no = el('button', 'msg-discard', 'No'); no.type = 'button'; no.dataset.ask = 'no';
         const yes = el('button', 'msg-apply', 'Yes'); yes.type = 'button'; yes.dataset.ask = 'yes';
-        box.append(yes, no); box.style.flexDirection = 'column'; box.style.alignItems = 'stretch';          // Yes above No, like the question reads
+        box.append(yes, no);          // side by side: Yes, then No
       } else box.append(el('span', `msg-state ${m.ask.state}`, m.ask.state === 'yes' ? 'Sent to the AI' : 'Staying on this device'));
       bubble.append(box);
     }
