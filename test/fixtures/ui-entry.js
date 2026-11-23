@@ -20,6 +20,7 @@ import { initSettings } from '../../src/ui/settings.js';
 import * as themeCore from '../../src/ui/theme.js';
 import * as workspaceCore from '../../src/core/workspaces.js';
 import { initBodyDock } from '../../src/ui/body-dock.js';
+import { initSplitView } from '../../src/ui/split-view.js';
 import * as mlContext from '../../src/core/ml-context.js';
 import * as subjectCore from '../../src/core/subject.js';
-window.__lab = { initBodyDock, mlContext, subjectCore, initCommunity, initSettings, themeCore, initWorkspaces, workspaceCore, Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initSettingsEditor, initPartCreator, initAiPanel, initProjects, initMpuInspector, initTour, initAccount };
+window.__lab = { initSplitView, initBodyDock, mlContext, subjectCore, initCommunity, initSettings, themeCore, initWorkspaces, workspaceCore, Editor, initSidebar, Simulation, initCode, initResistorEditor, initLedEditor, initValueEditor, initSettingsEditor, initPartCreator, initAiPanel, initProjects, initMpuInspector, initTour, initAccount };

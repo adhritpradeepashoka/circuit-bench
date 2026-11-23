@@ -35,6 +35,7 @@ import { initFeedback } from './ui/feedback.js';
 import { initAssembly, exportRobotBundle, importRobotBundle } from './ui/assembly.js';
 import { initMl } from './ui/ml.js';
 import { initBodyDock } from './ui/body-dock.js';
+import { initSplitView } from './ui/split-view.js';
 import { tidyTabs } from './ui/view-groups.js';
 import { loadSavedWorkspaces } from './core/workspaces.js';
 loadSavedWorkspaces();                  // your own and imported workspaces, and their parts, before any project opens
@@ -99,6 +100,7 @@ initVisualizer({ editor });
 const assembly = initAssembly({ editor, projects, circuitServos: () => sim.servoAngles(), circuitRunning: () => !!sim.running });
 initMl({ editor, code, sim });
 initBodyDock({ editor, sim, ai });
+initSplitView({ editor });
 tidyTabs(document.querySelector('.stage .toolbar') || document.querySelector('.toolbar'));      // a mixed project has several tab groups: one Circuit button, and they take turns
 const robotPicker = initRobotType({ editor, projects, onChosen: () => assembly.onRobotType?.() });
 projects.onSwitch(p => ai.setScope(p.id));

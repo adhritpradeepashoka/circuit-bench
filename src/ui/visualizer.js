@@ -232,12 +232,14 @@ export function initVisualizer({ editor }) {
         const frame = () => {
           if (mode === 'body' && bodyG) {
             bodyG.rotation.set(0, 0, yawB);
-            camera.position.set(0, distB * Math.cos(pitch), distB * Math.sin(pitch) + panB); camera.lookAt(0, 0, panB);
+            const wide = Math.max(1, Math.sqrt(1 / camera.aspect)), dB = distB * wide;       // a narrow pane (split view) backs the camera off so nothing is cropped
+            camera.position.set(0, dB * Math.cos(pitch), dB * Math.sin(pitch) + panB); camera.lookAt(0, 0, panB);
             bodyG.updateMatrixWorld(); camera.updateMatrixWorld();
             for (const [id, m] of dots) if (SITE[id].frame === 'body') { const q = bodyRig.sitePoint(id); if (q) m.position.set(q[0], q[1], q[2]); }
           } else {
             head.rotation.set(0, 0, yaw);
-            camera.position.set(0, dist * Math.cos(pitch), dist * Math.sin(pitch) + panZ); camera.lookAt(0, 0, panZ);
+            const dH = dist * Math.max(1, Math.sqrt(1 / camera.aspect));
+            camera.position.set(0, dH * Math.cos(pitch), dH * Math.sin(pitch) + panZ); camera.lookAt(0, 0, panZ);
             head.updateMatrixWorld(); camera.updateMatrixWorld();
           }
           renderer.render(scene, camera);

@@ -17,3 +17,9 @@ test('every full-screen pane has its hide rule (a new pane with z-index 20 must 
   const panes = [...css.matchAll(/^\.([a-z-]+-pane) \{[^}]*position: absolute; inset: 0; z-index: 20/gm)].map(m => m[1]);
   assert.deepEqual(panes.sort(), ['asm-pane', 'ml-pane', 'viz-pane']);
 });
+
+test('split view: a pane takes only its share of the canvas, and the circuit is clipped to the other share instead of hidden', () => {
+  assert.match(css, /body\.split \.asm-pane, body\.split \.ml-pane, body\.split \.viz-pane \{ inset: 0 0 0 calc\(var\(--circ/);
+  for (const c of ['robot-asm', 'ml-view', 'viz-view']) assert.match(css, new RegExp(`body\\.split\\.${c} #overlay`), `${c}: the wires are shown (clipped) in split view`);
+  assert.match(css, /clip-path: inset\(0 calc\(\(1 - var\(--circ/);
+});

@@ -2408,3 +2408,20 @@ test('ui: while another tab (Assembly, ML, Visualizer) is open the circuit under
   }
   fire('pointermove', at.x, at.y); assert.equal(tip.hidden, false, 'back on the circuit tab it works again');
 });
+
+test('ui: split view keeps the circuit alive beside an open tab — its side hears the pointer, the tab does not, and the divider resizes both', async () => {
+  const { w, editor, fire, scr } = boot(), { initSplitView } = w.__lab, canvas = w.document.getElementById('canvas'), tip = w.document.getElementById('tip');
+  w.document.querySelector('.toolbar').insertAdjacentHTML('afterbegin', '<div class="view-toggle"><button>Visualizer</button></div>');      // a project that has another tab
+  const split = initSplitView({ editor }), pane = w.document.createElement('div'); pane.className = 'viz-pane'; canvas.append(pane);
+  split.set('side'); w.document.body.classList.add('viz-view'); await new Promise(r => setTimeout(r, 60));      // the circuit re-fits into its share, so look up the pin afterwards
+  const uno = editor.state.parts.find(p => p.type === 'arduino-uno'), pin = editor.pinsOf(uno)[0], at = scr({ x: pin.x, y: pin.y });
+  assert.ok(w.document.body.classList.contains('split') && !w.document.querySelector('.split-divider').hidden, 'a tab is open in split mode: the divider shows');
+  fire('pointermove', at.x, at.y); assert.equal(tip.hidden, false, 'the circuit side still shows its pin tooltip');
+  fire('pointermove', 0, 0, w.document.body); tip.hidden = true;
+  fire('pointermove', at.x, at.y, pane); assert.equal(tip.hidden, true, 'the same spot inside the tab is the tab’s, not the circuit’s'); assert.equal(editor.hover, null);
+  const dv = w.document.querySelector('.split-divider'); dv.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }));
+  assert.ok(Math.abs(split.state.ratio - 0.53) < 1e-9, `the divider moved with the arrow key: ${split.state.ratio}`); assert.equal(canvas.style.getPropertyValue('--circ'), '0.53');
+  split.set('stack'); assert.ok(w.document.body.classList.contains('split-v'));
+  split.set('off'); assert.ok(!w.document.body.classList.contains('split') && dv.hidden);
+  w.document.body.classList.remove('viz-view');
+});

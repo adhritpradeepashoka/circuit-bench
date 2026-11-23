@@ -200,7 +200,10 @@ export class Editor {
   zoomBy(f) { const r = this.canvas.getBoundingClientRect(); this.zoomAt(f, r.width / 2, r.height / 2); }
   fit() {
     const parts = this.state.parts;
-    const cw = this.canvas.clientWidth || 900, ch = this.canvas.clientHeight || 600;
+    let cw = this.canvas.clientWidth || 900, ch = this.canvas.clientHeight || 600;
+    if (document.body.classList.contains('split') && this.otherTab({ target: this.canvas.querySelector('.asm-pane:not([hidden]), .ml-pane:not([hidden]), .viz-pane:not([hidden])') })) {       // split view: the circuit only has its own share of the canvas
+      const share = parseFloat(this.canvas.style.getPropertyValue('--circ')) || 0.5; if (document.body.classList.contains('split-v')) ch *= share; else cw *= share;
+    }
     if (!parts.length) { this.view = { x: cw / 2, y: ch / 2, z: 1 }; this.applyView(); this.renderOverlay(); return; }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of parts) { const b = partBounds(p); x0 = Math.min(x0, b.x0); y0 = Math.min(y0, b.y0); x1 = Math.max(x1, b.x1); y1 = Math.max(y1, b.y1); }
@@ -550,24 +553,24 @@ export class Editor {
   bind() {
     const c = this.canvas;
     this.bindPinch(c);
-    c.addEventListener('pointerdown', e => { if (!this.otherTab()) this.onPointerDown(e); });
-    c.addEventListener('pointermove', e => { if (this.otherTab()) { this.clearHover(); return; } this.onHover(e); });
+    c.addEventListener('pointerdown', e => { if (!this.otherTab(e)) this.onPointerDown(e); });
+    c.addEventListener('pointermove', e => { if (this.otherTab(e)) { this.clearHover(); return; } this.onHover(e); });
     c.addEventListener('pointerleave', () => this.clearHover());
     c.addEventListener('wheel', e => {
-      if (this.otherTab()) return;          // another tab is open on top: its own wheel handling, not the circuit's zoom
+      if (this.otherTab(e)) return;          // another tab is open on top: its own wheel handling, not the circuit's zoom
       e.preventDefault();
       const r = c.getBoundingClientRect();
       this.zoomAt(Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0015)), e.clientX - r.left, e.clientY - r.top);
     }, { passive: false });
-    c.addEventListener('dragover', e => { if (!this.otherTab() && e.dataTransfer?.types.includes(DRAG_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+    c.addEventListener('dragover', e => { if (!this.otherTab(e) && e.dataTransfer?.types.includes(DRAG_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
     c.addEventListener('drop', e => {
       const type = e.dataTransfer?.getData(DRAG_MIME);
-      if (this.otherTab() || !type || !PART_DEFS[type]) return;
+      if (this.otherTab(e) || !type || !PART_DEFS[type]) return;
       e.preventDefault();
       this.addPart(type, this.toWorld(e));
     });
     c.addEventListener('contextmenu', e => {
-      if (this.otherTab()) return;
+      if (this.otherTab(e)) return;
       if (this.draft) { e.preventDefault(); return; }
       if (e.target.closest?.('.part-editor')) return;
       const partEl = e.target.closest?.('.part'), part = partEl && this.partById(partEl.dataset.id);
@@ -920,8 +923,13 @@ export class Editor {
     if (key !== (this.hover && pkey(this.hover.part, this.hover.pin))) { this.hover = pin; this.renderOverlay(); }
     if (pin) this.showTip(e, pin); else this.hideTip();
   }
-  /** True while Assembly, Test, Visualizer or an ML tab is open: those panes sit inside the canvas element, and the circuit underneath must neither hear nor show anything. */
-  otherTab() { return document.body.classList.contains('robot-asm') || document.body.classList.contains('ml-view') || document.body.classList.contains('viz-view'); }
+  /** True when the circuit should ignore this event: another tab (Assembly, Test, Visualizer, ML) is open. Those panes sit inside the canvas element, and the circuit underneath must neither hear nor show anything.
+   *  In split view the circuit keeps its own side, so only events that start inside a pane (or the divider, or the body dock) are ignored. */
+  otherTab(e) {
+    const b = document.body.classList; if (!(b.contains('robot-asm') || b.contains('ml-view') || b.contains('viz-view'))) return false;
+    if (b.contains('split')) return !!e?.target?.closest?.('.asm-pane, .ml-pane, .viz-pane, .split-divider, .body-dock');
+    return true;
+  }
   clearHover() { if (this.hover) { this.hover = null; this.renderOverlay(); } this.hideTip(); }
   showTip(e, pin) {
     const c = this.getCircuit(), net = c.nets[c.netOf(pin.part, pin.pin)];
@@ -937,7 +945,7 @@ export class Editor {
 
   /* keyboard */
   onKey(e) {
-    if (this.otherTab()) return;       // the Assembly, Visualizer and ML tabs have their own keys: Delete / Ctrl+Z there must never touch the circuit underneath; the Assembly and Test tabs have their own keys: Delete / Ctrl+Z there must never touch the circuit underneath
+    if (this.otherTab(e)) return;       // the Assembly, Visualizer and ML tabs have their own keys: Delete / Ctrl+Z there must never touch the circuit underneath; the Assembly and Test tabs have their own keys: Delete / Ctrl+Z there must never touch the circuit underneath
     if (e.target.matches?.('input:not([type=color]):not([type=checkbox]):not([type=range]), select, textarea, [contenteditable]')) return;   // a colour picker or tick box is not typing
     const k = e.key.toLowerCase(), mod = e.ctrlKey || e.metaKey;
     if (mod && k === 'z') { e.preventDefault(); e.shiftKey ? this.redo() : this.undo(); }
