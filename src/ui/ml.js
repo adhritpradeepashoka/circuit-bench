@@ -42,58 +42,67 @@ export function initMl({ editor, code, sim }) {
   T.left.append(dataCard); T.right.append(trainCard);
 
   function renderData() {
-    const d = ds(), m = getMl(); dataCard.replaceChildren(el('h3', { textContent: 'Data' }));
+    const d = ds(); dataCard.replaceChildren();
     if (!d) {
-      dataCard.append(el('p', { className: 'ml-note', textContent: 'A model learns from examples: sensor readings and what each reading means. Start from a demo, or build your own dataset from the board’s pins.' }),
+      dataCard.append(el('h3', { textContent: 'Data' }), el('p', { className: 'ml-note', textContent: 'A model learns from examples: sensor readings and what each reading means. Start from a demo, or build your own dataset from the board’s pins.' }),
         row(button('Fan demo (classify)', () => setDs(demoDataset('fan'), { model: null, history: [] }), 'primary'), button('Thermistor demo (predict a number)', () => setDs(demoDataset('ntc'), { model: null, history: [] })), button('Blank: classify', () => setDs(emptyDataset('classify'), { model: null, history: [] })), button('Blank: predict a number', () => setDs(emptyDataset('regress'), { model: null, history: [] }))));
       return;
     }
-    const locked = d.samples.length > 0;
-    // features
+    const locked = d.samples.length > 0, reset = { model: null, history: [] };
+    dataCard.append(el('div', { className: 'ml-headrow' }, el('h3', { textContent: 'Data' }), el('span', { className: 'ml-count', textContent: `${d.samples.length} sample${d.samples.length === 1 ? '' : 's'}` })));
+    // inputs: one compact line each
     const feats = el('div', { className: 'ml-list' });
     d.features.forEach((f, i) => {
       const name = el('input', { value: f.name, maxLength: 24, ariaLabel: 'Feature name' }), pin = el('select', { ariaLabel: 'Board pin' }, ...PINS.map(p => el('option', { value: p, textContent: p || 'no pin', selected: (f.pin || '') === p })));
-      name.addEventListener('change', () => { const fs = d.features.map((g, j) => (j === i ? { ...g, name: name.value.trim() || g.name } : g)); setDs({ ...d, features: fs }, { model: null, history: [] }); });
+      name.addEventListener('change', () => { const fs = d.features.map((g, j) => (j === i ? { ...g, name: name.value.trim() || g.name } : g)); setDs({ ...d, features: fs }, reset); });
       pin.addEventListener('change', () => { const fs = d.features.map((g, j) => { if (j !== i) return g; const { pin: _p, ...rest } = g; return pin.value ? { ...rest, pin: pin.value } : rest; }); setDs({ ...d, features: fs }); });
-      const rm = button('✕', () => setDs({ ...d, features: d.features.filter((_, j) => j !== i) }, { model: null, history: [] }), 'icon'); rm.disabled = locked || d.features.length < 2; rm.title = locked ? 'Clear the samples to change the inputs' : 'Remove this input';
+      const rm = button('✕', () => setDs({ ...d, features: d.features.filter((_, j) => j !== i) }, reset), 'icon'); rm.disabled = locked || d.features.length < 2; rm.title = locked ? 'Clear the samples to change the inputs' : 'Remove this input';
       feats.append(row(el('span', { className: 'ml-tag', textContent: `x${i + 1}` }), name, pin, rm));
     });
-    const addF = button('+ Input', () => setDs({ ...d, features: [...d.features, { name: `x${d.features.length + 1}` }] }, { model: null, history: [] }), 'small'); addF.disabled = locked || d.features.length >= 8; addF.title = locked ? 'Clear the samples to change the inputs' : '';
-    dataCard.append(el('h4', { textContent: 'Inputs (what the board measures)' }), feats, addF);
-    // classes / target
+    const addF = button('+ Input', () => setDs({ ...d, features: [...d.features, { name: `x${d.features.length + 1}` }] }, reset), 'small'); addF.disabled = locked || d.features.length >= 8; addF.title = locked ? 'Clear the samples to change the inputs' : '';
+    dataCard.append(el('h4', { textContent: 'Inputs: what the board measures' }), feats, addF);
+
+    const add = (xs, y) => { if (!xs.length || !xs.every(x => x.every(Number.isFinite)) || !Number.isFinite(y)) { status('Fill in every value first.'); return; } setDs({ ...d, samples: [...d.samples, ...xs.map(x => ({ x, y }))] }, reset); };
+    /** Record the live reading of the pins as `n` samples (one every 100 ms) of class / target `y`: one click per sample, no label picking. */
+    const recordLive = (y, n = 1) => {
+      const first = readBoard(d); if (!first) { status(sim?.running ? 'None of the inputs has a board pin (A0–A5) set.' : 'Press Run in the Circuit tab first, so the board has readings to record.'); return; }
+      const got = [first]; if (n === 1) return add(got, y);
+      const t = setInterval(() => { const x = readBoard(d); if (x) got.push(x); if (!x || got.length >= n) { clearInterval(t); add(got, y); status(`Recorded ${got.length} samples.`); } }, 100);
+    };
+    // classes (or the target) with their own record buttons
     if (d.task === 'classify') {
       const cl = el('div', { className: 'ml-list' });
       d.classes.forEach((c, i) => {
         const name = el('input', { value: c, maxLength: 24, ariaLabel: 'Class name' });
-        name.addEventListener('change', () => setDs({ ...d, classes: d.classes.map((g, j) => (j === i ? name.value.trim() || g : g)) }, { model: null, history: [] }));
-        const n = d.samples.filter(s => s.y === i).length, rm = button('✕', () => setDs({ ...d, classes: d.classes.filter((_, j) => j !== i), samples: d.samples.filter(s => s.y !== i).map(s => ({ ...s, y: s.y > i ? s.y - 1 : s.y })) }, { model: null, history: [] }), 'icon'); rm.disabled = d.classes.length < 3; rm.title = 'Remove this class and its samples';
-        cl.append(row(el('span', { className: 'ml-dot', style: `background:${COLORS[i % COLORS.length]}` }), name, el('span', { className: 'ml-count', textContent: `${n} sample${n === 1 ? '' : 's'}` }), rm));
+        name.addEventListener('change', () => setDs({ ...d, classes: d.classes.map((g, j) => (j === i ? name.value.trim() || g : g)) }, reset));
+        const n = d.samples.filter(s => s.y === i).length, rm = button('✕', () => setDs({ ...d, classes: d.classes.filter((_, j) => j !== i), samples: d.samples.filter(s => s.y !== i).map(s => ({ ...s, y: s.y > i ? s.y - 1 : s.y })) }, reset), 'icon'); rm.disabled = d.classes.length < 3; rm.title = 'Remove this class and its samples';
+        const rec = button('● Record', () => recordLive(i), 'small primary'), rec10 = button('×10', () => recordLive(i, 10), 'small'); rec.title = 'Take one reading from the board as an example of this class'; rec10.title = 'Take 10 readings over one second';
+        cl.append(row(el('span', { className: 'ml-dot', style: `background:${COLORS[i % COLORS.length]}` }), name, el('span', { className: 'ml-count', textContent: String(n) }), rec, rec10, rm));
       });
-      const addC = button('+ Class', () => setDs({ ...d, classes: [...d.classes, `class ${d.classes.length + 1}`] }, { model: null, history: [] }), 'small'); addC.disabled = d.classes.length >= 8;
-      dataCard.append(el('h4', { textContent: 'Classes (what the model should tell apart)' }), cl, addC);
+      const addC = button('+ Class', () => setDs({ ...d, classes: [...d.classes, `class ${d.classes.length + 1}`] }, reset), 'small'); addC.disabled = d.classes.length >= 8;
+      dataCard.append(el('h4', { textContent: 'Classes: what to tell apart' }), cl, addC,
+        el('p', { className: 'ml-note', textContent: 'Run the circuit, set it up as the class looks (move a slider or knob), then press ● Record on that class.' }));
     } else {
-      const t = el('input', { value: d.target, maxLength: 24, ariaLabel: 'What to predict' }); t.addEventListener('change', () => setDs({ ...d, target: t.value.trim() || d.target }, { model: null, history: [] }));
-      dataCard.append(el('h4', { textContent: 'What to predict' }), row(t));
+      const t = el('input', { value: d.target, maxLength: 24, ariaLabel: 'What to predict' }); t.addEventListener('change', () => setDs({ ...d, target: t.value.trim() || d.target }, reset));
+      const val = el('input', { type: 'number', step: 'any', placeholder: d.target, ariaLabel: d.target, className: 'ml-num' });
+      dataCard.append(el('h4', { textContent: 'What to predict' }), row(t), el('h4', { textContent: 'Record' }), row(val, button('● Record', () => recordLive(+val.value), 'small primary'), button('×10', () => recordLive(+val.value, 10), 'small')),
+        el('p', { className: 'ml-note', textContent: `Type the real ${d.target} the board is measuring, then record.` }));
     }
-    // add a sample
+    // the rest: typed values, CSV and the table, tucked away
+    const more = el('details', { className: 'ml-more' }, el('summary', { textContent: 'More ways to add data, import / export, all samples' }));
     const vals = d.features.map(f => el('input', { type: 'number', step: 'any', placeholder: f.name, ariaLabel: f.name, className: 'ml-num' }));
     const lab = d.task === 'classify' ? el('select', { ariaLabel: 'Label' }, ...d.classes.map((c, i) => el('option', { value: i, textContent: c }))) : el('input', { type: 'number', step: 'any', placeholder: d.target, ariaLabel: d.target, className: 'ml-num' });
-    const add = (x, y) => { if (!x.every(Number.isFinite) || !Number.isFinite(y)) { status('Fill in every value first.'); return; } setDs({ ...d, samples: [...d.samples, { x, y }] }, { model: null, history: [] }); };
-    const rec = button('● Record from the board', () => { const x = readBoard(d); if (!x) { status(sim?.running ? 'None of the inputs has a board pin (A0–A5) set.' : 'Press Run in the Circuit tab first, so the board has readings to record.'); return; } add(x, d.task === 'classify' ? +lab.value : +lab.value); }, 'primary');
-    dataCard.append(el('h4', { textContent: 'Add a sample' }), row(...vals, lab), row(button('Add typed values', () => add(vals.map(v => +v.value), +lab.value)), rec),
-      el('p', { className: 'ml-note', textContent: 'Pick the label first, then record: the reading is taken from the pins you set above while the circuit is running. Move a slider or knob in the circuit between recordings.' }));
-    // csv
-    const ta = el('textarea', { className: 'ml-csv', rows: 4, placeholder: `${d.features.map(f => f.name).join(',')},${d.task === 'classify' ? 'label' : d.target}\n…`, ariaLabel: 'Paste CSV' });
-    dataCard.append(el('h4', { textContent: 'Import / export (CSV)' }), ta, row(button('Load CSV', () => { const r = parseCsv(ta.value, d.task); if (!r.dataset) { status(r.problems[0] || 'Could not read that.'); return; } setDs({ ...r.dataset, features: r.dataset.features.map((f, i) => ({ ...f, ...(d.features[i]?.pin ? { pin: d.features[i].pin } : {}) })) }, { model: null, history: [] }); status(r.problems.length ? `Loaded ${r.dataset.samples.length} rows; skipped ${r.problems.length}: ${r.problems[0]}` : `Loaded ${r.dataset.samples.length} rows.`); }), button('Put my data in the box', () => { ta.value = toCsv(d); }), button('Clear samples', () => setDs({ ...d, samples: [] }, { model: null, history: [] }), 'danger'), button('Start over', () => setDs(null, { model: null, history: [] }), 'danger')));
-    // list of recent samples
+    const ta = el('textarea', { className: 'ml-csv', rows: 3, placeholder: `${d.features.map(f => f.name).join(',')},${d.task === 'classify' ? 'label' : d.target}\n…`, ariaLabel: 'Paste CSV' });
+    more.append(el('h4', { textContent: 'Type values' }), row(...vals, lab, button('Add', () => add([vals.map(v => +v.value)], +lab.value))),
+      el('h4', { textContent: 'CSV' }), ta, row(button('Load CSV', () => { const r = parseCsv(ta.value, d.task); if (!r.dataset) { status(r.problems[0] || 'Could not read that.'); return; } setDs({ ...r.dataset, features: r.dataset.features.map((f, i) => ({ ...f, ...(d.features[i]?.pin ? { pin: d.features[i].pin } : {}) })) }, reset); status(r.problems.length ? `Loaded ${r.dataset.samples.length} rows; skipped ${r.problems.length}: ${r.problems[0]}` : `Loaded ${r.dataset.samples.length} rows.`); }), button('Put my data in the box', () => { ta.value = toCsv(d); }), button('Clear samples', () => setDs({ ...d, samples: [] }, reset), 'danger'), button('Start over', () => setDs(null, reset), 'danger')));
     if (d.samples.length) {
       const tbl = el('table', { className: 'ml-table' }), head = el('tr', {}, ...[...d.features.map(f => f.name), d.task === 'classify' ? 'label' : d.target, ''].map(h => el('th', { textContent: h })));
       tbl.append(head);
-      d.samples.slice(-60).reverse().forEach(s => { const idx = d.samples.indexOf(s), x = el('button', { type: 'button', className: 'ml-btn icon', textContent: '✕', ariaLabel: 'Delete sample' }); x.addEventListener('click', () => setDs({ ...d, samples: d.samples.filter((_, k) => k !== idx) }, { model: null, history: [] }));
+      d.samples.slice(-60).reverse().forEach(s => { const idx = d.samples.indexOf(s), x = el('button', { type: 'button', className: 'ml-btn icon', textContent: '✕', ariaLabel: 'Delete sample' }); x.addEventListener('click', () => setDs({ ...d, samples: d.samples.filter((_, k) => k !== idx) }, reset));
         tbl.append(el('tr', {}, ...s.x.map(v => el('td', { textContent: fmt(v) })), el('td', { textContent: d.task === 'classify' ? d.classes[s.y] : fmt(s.y) }), el('td', {}, x))); });
-      dataCard.append(el('h4', { textContent: `${d.samples.length} samples${d.samples.length > 60 ? ' (latest 60 shown)' : ''}` }), el('div', { className: 'ml-scroll' }, tbl));
+      more.append(el('h4', { textContent: `All samples${d.samples.length > 60 ? ' (latest 60)' : ''}` }), el('div', { className: 'ml-scroll' }, tbl));
     }
-    void m;
+    dataCard.append(more);
   }
 
   /** the current readings of the pins the inputs are tied to (null when the circuit is not running or an input has no pin) */
@@ -112,10 +121,11 @@ export function initMl({ editor, code, sim }) {
     const nm = el('input', { value: m.name, maxLength: 24, ariaLabel: 'Model name', className: 'ml-num' });
     const readHid = () => { const h = hid.value.split(/[ ,]+/).map(Number).filter(n => Number.isFinite(n) && n >= 1).slice(0, 3).map(n => Math.min(MAX_NEURONS, Math.round(n))); return h.length ? h : [8]; };
     const go = button(trainer ? 'Stop' : (m.model ? 'Train again' : 'Train'), () => (trainer ? stopTraining(true) : startTraining(readHid(), +ep.value || 150, +lr.value || 0.02)), 'primary');
-    trainCard.append(
-      el('div', { className: 'ml-form' }, el('label', {}, 'Hidden layers (neurons)', hid), el('label', {}, 'Epochs', ep), el('label', {}, 'Learning rate', lr)),
-      el('p', { className: 'ml-note', textContent: 'A small network (8 neurons, or 12 and 6) is plenty for a few sensors, and fits on a microcontroller.' }),
-      row(go, el('label', { className: 'ml-inline' }, 'Name in the sketch ', nm)), trainMsg, lossCanvas);
+    const next = m.model && !trainer ? button('Try it on live readings →', () => show('run'), 'primary') : null;
+    const settings = el('details', { className: 'ml-more' }, el('summary', { textContent: `Settings: ${m.hidden.join(' + ')} neurons, ${m.epochs} epochs` }),
+      el('div', { className: 'ml-form' }, el('label', {}, 'Hidden layers (neurons)', hid), el('label', {}, 'Epochs', ep), el('label', {}, 'Learning rate', lr), el('label', {}, 'Name in the sketch', nm)),
+      el('p', { className: 'ml-note', textContent: 'A small network (8 neurons, or 12 and 6) is plenty for a few sensors, and fits on a microcontroller.' }));
+    trainCard.append(row(go, ...(next ? [next] : [])), trainMsg, lossCanvas, settings);
     nm.addEventListener('change', () => { const v = nm.value.trim(); if (/^[A-Za-z_][A-Za-z0-9_]{0,23}$/.test(v)) updateMl({ name: v }, 'name'); else { nm.value = getMl().name; status('Use letters, digits and _ (not starting with a digit).'); } });
     drawLoss(lossCanvas, trainer ? trainer.history : m.history, d.task);
     if (!trainer) trainMsg.textContent = summary();
