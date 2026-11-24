@@ -499,6 +499,8 @@ button { cursor: pointer; }
 .account { position: relative; }
 .account-slot[hidden] { display: none; }
 .gsi-host { min-height: 32px; display: flex; align-items: center; }
+/* Google draws its button in an iframe with a light colour scheme; a dark page (Forge) would otherwise give it an opaque white backdrop */
+.gsi-host, .gsi-host iframe { color-scheme: light; background: transparent; }
 .account-btn { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 11px 0 4px; border: 1px solid #36424a; border-radius: 99px; background: var(--ink-2); color: var(--ink-text); font-weight: 600; max-width: 170px; }
 .account-btn:hover { border-color: #6fcf97; }
 .account-btn img, .account-btn i { width: 26px; height: 26px; border-radius: 50%; flex: none; }

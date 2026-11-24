@@ -267,7 +267,7 @@ export function initVisualizer({ editor }) {
 
         // turn the head: drag on empty space. Wheel zooms. Hover names the nearest site.
         let last = null;
-        stage.addEventListener('pointerdown', e => { last = { x: e.clientX, y: e.clientY }; stage.setPointerCapture?.(e.pointerId); stage.classList.add('dragging'); });
+        stage.addEventListener('pointerdown', e => { if (e.target.closest?.('.viz-frame, .viz-credit')) return; last = { x: e.clientX, y: e.clientY }; stage.setPointerCapture?.(e.pointerId); stage.classList.add('dragging'); });
         stage.addEventListener('pointermove', e => {
           if (last) { if (mode === 'body') yawB += (e.clientX - last.x) * 0.01; else yaw += (e.clientX - last.x) * 0.01; pitch = Math.max(-0.7, Math.min(1.3, pitch + (e.clientY - last.y) * 0.008)); last = { x: e.clientX, y: e.clientY }; draw(); return; }
           const id = siteAt(e.clientX, e.clientY); hoverEl.textContent = id ? SITE[id].name : '';

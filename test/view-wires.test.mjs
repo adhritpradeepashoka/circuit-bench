@@ -23,3 +23,13 @@ test('split view: a pane takes only its share of the canvas, and the circuit is 
   for (const c of ['robot-asm', 'ml-view', 'viz-view']) assert.match(css, new RegExp(`body\\.split\\.${c} #overlay`), `${c}: the wires are shown (clipped) in split view`);
   assert.match(css, /clip-path: inset\(0 calc\(\(1 - var\(--circ/);
 });
+
+// Pointer capture on mouse-down retargets the click, so a button inside the dragging stage never receives it.
+test('the Visualizer stage does not capture the pointer for its Head / Whole body buttons', () => {
+  assert.match(src('visualizer.js'), /stage\.addEventListener\('pointerdown', e => \{ if \(e\.target\.closest\?\.\('\.viz-frame/);
+});
+
+// Google's button is a light iframe; on a dark page (Forge) it gets an opaque white box unless it is told it is light.
+test('the Google sign-in button keeps a transparent backdrop on dark skins', () => {
+  assert.match(css, /\.gsi-host iframe \{ color-scheme: light/);
+});
