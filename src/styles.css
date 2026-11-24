@@ -1469,3 +1469,14 @@ body.split.body-view #wireEditor:not([hidden]) { display: flex !important; }
 .tile-chip:hover { border-color: #1d63ed; } .tile-chip.on { background: #1d63ed; border-color: #1d63ed; color: #fff; }
 body.tile [data-circuit-tab], body.tile .solo-tab, body.tile .solo-sep { display: none !important; }       /* a tab group that is only Circuit + one tab is a chip in the tray instead */
 body.tile .asm-pane, body.tile .ml-pane, body.tile .viz-pane, body.tile .body-dock { border: 1px solid var(--line, #d5ddd8); box-sizing: border-box; }
+
+/* ── stages: the one way to move around. The old tabs and layout buttons wait behind "Free layout" ── */
+.stage-bar { display: inline-flex; align-items: center; gap: 4px; margin-right: 2px; } .stage-bar[hidden], .stage-sep[hidden] { display: none; }
+.stage-btn { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px 0 6px; border: 1px solid transparent; border-radius: 15px; background: transparent; color: inherit; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.stage-btn i { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(120, 140, 130, .25); font-style: normal; font-size: 11px; font-weight: 700; }
+.stage-btn:hover { border-color: var(--line, #d5ddd8); } .stage-btn.on { background: #1d63ed; color: #fff; } .stage-btn.on i { background: rgba(255, 255, 255, .28); } .stage-btn.done:not(.on) i { background: #1f9d55; color: #fff; }
+.stage-btn + .stage-btn::before { content: ''; }
+.stage-free { height: 26px; padding: 0 10px; margin-left: 6px; border: 1px dashed var(--line, #d5ddd8); border-radius: 13px; background: transparent; color: var(--muted, #5b6a64); font: inherit; font-size: 12px; cursor: pointer; } .stage-free.on { border-style: solid; color: inherit; background: rgba(29, 99, 237, .1); }
+body.stages-on:not(.free-layout) .toolbar > .view-toggle, body.stages-on:not(.free-layout) .toolbar > .view-toggle + .sep, body.stages-on:not(.free-layout) .toolbar > .split-ctl, body.stages-on:not(.free-layout) .toolbar > .tile-tray, body.stages-on:not(.free-layout) .toolbar > .tile-tray + .sep { display: none !important; }
+.stage-hint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; max-width: min(640px, calc(100% - 24px)); padding: 10px 12px 10px 14px; background: #10243a; color: #fff; border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, .28); font-size: 13px; }
+.stage-hint[hidden] { display: none; } .stage-hint p { margin: 0; line-height: 1.4; } .stage-hint button { flex: none; height: 28px; padding: 0 12px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, .35); background: transparent; color: #fff; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; } .stage-hint .stage-hint-next { background: #1d63ed; border-color: #1d63ed; }

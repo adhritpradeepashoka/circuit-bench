@@ -37,7 +37,7 @@ export function initSplitView({ editor }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar'), anchor = document.getElementById('selectTool');
   if (!canvas || !toolbar) return null;
   const overlay = document.getElementById('overlay');
-  let state = { mode: 'off', ratio: 0.5, rr: 0.5, circ: true };
+  let state = { mode: 'off', ratio: 0.5, rr: 0.5, circ: true }, order = null;       // `order`: which pane goes where when a stage asks for a layout
   try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && MODES.some(m => m[0] === s.mode)) state = { mode: s.mode, ratio: clamp(+s.ratio || 0.5), rr: clamp(+s.rr || 0.5), circ: s.circ !== false }; } catch { /* first time */ }
   const narrow = globalThis.matchMedia?.('(max-width: 860px)');
   const group = el('div', { className: 'split-ctl', role: 'group', ariaLabel: 'Layout' }), buttons = {};
@@ -54,7 +54,7 @@ export function initSplitView({ editor }) {
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* not remembered */ } };
   const mode = () => (narrow?.matches ? 'off' : state.mode);
   const paneOpen = () => PANES.some(c => document.body.classList.contains(c));
-  const openNames = () => ORDER.filter(n => groups.get(n)?.isOpen());
+  const openNames = () => { const o = ORDER.filter(n => groups.get(n)?.isOpen()); return order ? [...order.filter(n => o.includes(n)), ...o.filter(n => !order.includes(n))] : o; };
   let queued = false;
   const relayout = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; window.dispatchEvent(new Event('resize')); }); };    // the panes (3D views, plots) re-measure themselves on resize
 
@@ -121,5 +121,14 @@ export function initSplitView({ editor }) {
   new MutationObserver(() => apply()).observe(document.body, { attributes: true, attributeFilter: ['class'] });     // a tab opened or closed
   narrow?.addEventListener?.('change', apply);
   apply();
-  return { set, get state() { return { ...state, effective: mode() }; } };
+  /** A stage asks for a layout: tiles, with the circuit on or off, the panes in this order, and the circuit's share of the width. */
+  function layout({ circ = true, panes = [], ratio } = {}) {
+    state.mode = 'tile'; state.circ = circ; order = panes.slice(); if (ratio) state.ratio = clamp(ratio); save(); apply(); requestAnimationFrame(() => editor.fit?.());
+  }
+  /** What is on screen: whether the circuit is, and each open group's current view. */
+  function current() {
+    const names = openNames(), panes = {}; for (const n of names) panes[n] = groups.get(n).view();
+    const m = mode(); return { circ: !names.length || (m === 'tile' ? state.circ : m !== 'off'), panes };
+  }
+  return { set, layout, current, get state() { return { ...state, effective: mode() }; } };
 }

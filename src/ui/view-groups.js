@@ -10,7 +10,7 @@ export const groups = new Map();
  *  `opts` (all optional): `label` for the tile tray, `open()` to open the group on its usual tab, `available()` to say whether this project has it.
  *  In tile mode groups do not send each other back to the circuit: any number of them can be open at once. */
 export function joinViews(name, getView, toCircuit, opts = {}) {
-  groups.set(name, { name, label: opts.label || name, isOpen: () => getView() !== 'circuit', close: toCircuit, open: opts.open || (() => {}), available: opts.available || (() => true) });
+  groups.set(name, { name, label: opts.label || name, view: getView, isOpen: () => getView() !== 'circuit', close: toCircuit, open: opts.open || (() => {}), available: opts.available || (() => true) });
   addEventListener(EVENT, e => { if (e.detail !== name && getView() !== 'circuit' && !tiled()) toCircuit(); });
   return () => { try { dispatchEvent(new CustomEvent(EVENT, { detail: name })); } catch { /* no window (tests) */ } };
 }

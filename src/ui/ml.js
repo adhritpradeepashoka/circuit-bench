@@ -298,7 +298,7 @@ export function initMl({ editor, code, sim }) {
 
   /* ── switching views ───────────────────────────────── */
   let lastView = 'train';
-  const claim = joinViews('ml', () => view, () => show('circuit'), { label: 'AI', open: () => show(view !== 'circuit' ? view : lastView), available: () => !!activeWorkspace().ml });
+  const claim = joinViews('ml', () => view, () => show('circuit'), { label: 'AI', open: v => show(v || (view !== 'circuit' ? view : lastView)), available: () => !!activeWorkspace().ml });
   function show(v) {
     claim();
     if (v !== 'train' && trainer) stopTraining(false);

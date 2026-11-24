@@ -2457,3 +2457,24 @@ test('ui: tiles — any tabs at once, each in its own rectangle; the circuit kee
   split.set('side'); await wait(30); assert.ok(!doc.body.classList.contains('tile')); assert.equal([dock.open, vopen].filter(Boolean).length <= 1, true, 'leaving tiles leaves one tab open');
   split.set('off'); dock.setOpen(false); vopen = false; pane.remove();
 });
+
+test('ui: the stage bar — a project gets its steps; one click puts exactly that step’s views on screen, and the old tabs wait behind Free layout', async () => {
+  const { w, editor, sim } = boot(), { initSplitView, initBodyDock, initStages, viewGroups, workspaceCore } = w.__lab, doc = w.document, canvas = doc.getElementById('canvas');
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const file = editor.exportProject(); file.parts.push({ id: 'px', type: 'custom-bioamp-exg-pill', x: 900, y: 40, rotate: 0 }); editor.importProject(file);
+  const dock = initBodyDock({ editor, sim, ai: {} }), split = initSplitView({ editor });
+  const pane = doc.createElement('div'); pane.className = 'viz-pane'; pane.hidden = true; canvas.append(pane); let vopen = false;
+  const claimViz = viewGroups.joinViews('viz', () => (vopen ? 'viz' : 'circuit'), () => { claimViz(); vopen = false; pane.hidden = true; doc.body.classList.remove('viz-view'); }, { label: 'Visualizer', open: () => { claimViz(); vopen = true; pane.hidden = false; doc.body.classList.add('viz-view'); }, available: () => true });
+  const stages = initStages({ editor, split }); await wait(30);
+  assert.equal(stages.stages.map(s => s.id).join(), 'build,electrodes,person', 'a BioAmp on the body, no AI: Build → Electrodes → Watch the person');
+  assert.equal(doc.querySelector('.stage-bar').hidden, false); assert.equal(stages.current?.id, 'build');
+  doc.getElementById('stage-person').click(); await wait(50);
+  assert.ok(dock.open && !vopen, 'the person stage opens the person'); assert.equal(stages.current?.id, 'person'); assert.ok(doc.body.classList.contains('split'), 'with the circuit beside it');
+  assert.equal(doc.getElementById('stage-person').getAttribute('aria-current'), 'step'); assert.ok(!doc.querySelector('.stage-hint').hidden, 'the first time, a short tip says what to do');
+  doc.getElementById('stage-electrodes').click(); await wait(50);
+  assert.ok(vopen && !dock.open, 'moving to another step closes the first step’s views'); assert.ok(!doc.body.classList.contains('split'), 'Electrodes is the visualizer alone');
+  doc.getElementById('stage-build').click(); await wait(50); assert.ok(!vopen && !dock.open && stages.current?.id === 'build', 'Build is the circuit alone');
+  assert.ok(doc.body.classList.contains('stages-on') && !doc.body.classList.contains('free-layout'));
+  doc.getElementById('stageFree').click(); assert.ok(doc.body.classList.contains('free-layout'), 'Free layout brings the old tabs back'); doc.getElementById('stageFree').click();
+  split.set('off'); doc.body.classList.remove('stages-on');
+});
