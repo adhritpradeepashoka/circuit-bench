@@ -1068,7 +1068,7 @@ export function initAssembly({ editor, projects = null, circuitServos = null, ci
       const ix = o.geometry.index; if (ix) for (let i = 0; i < ix.count; i++) index.push(base + ix.getX(i)); else for (let i = 0; i < a.count; i++) index.push(base + i); });
     return pos.length >= 9 ? { pos, index } : null;
   }
-  const claim = joinViews('assembly', () => view, () => show('circuit'));
+  const claim = joinViews('assembly', () => view, () => show('circuit'), { label: 'Assembly', open: () => show(view !== 'circuit' ? view : 'assembly'), available: () => !!activeWorkspace().robotics });
   async function show(v) {
     if (v !== 'circuit' && !activeWorkspace().robotics) v = 'circuit';
     claim();       // an AI / plain project has no Assembly or Test: never leave a robot pane open on it

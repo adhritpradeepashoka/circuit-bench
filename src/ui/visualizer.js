@@ -27,10 +27,10 @@ export const channelParts = bodyChannels;
 
 export function initVisualizer({ editor }) {
   const canvas = document.getElementById('canvas'), toolbar = document.querySelector('.toolbar');
-  const toggle = el('div', { className: 'view-toggle', role: 'group', ariaLabel: 'View', hidden: true });
+  const toggle = el('div', { className: 'view-toggle solo-tab', role: 'group', ariaLabel: 'View', hidden: true });
   const bCircuit = el('button', { type: 'button', textContent: 'Circuit' }), bViz = el('button', { type: 'button', textContent: 'Visualizer' });
   bCircuit.dataset.circuitTab = '1'; toggle.append(bCircuit, bViz);
-  const sepAfter = el('span', { className: 'sep', hidden: true });
+  const sepAfter = el('span', { className: 'sep solo-sep', hidden: true });
   toolbar.prepend(toggle, sepAfter);
 
   const pane = el('div', { className: 'viz-pane', hidden: true });
@@ -336,7 +336,7 @@ export function initVisualizer({ editor }) {
   channelsEl.addEventListener('pointerup', drop); channelsEl.addEventListener('pointercancel', drop);
 
   /* ── switching views ─────────────────── */
-  const claim = joinViews('viz', () => view, () => show('circuit'));
+  const claim = joinViews('viz', () => view, () => show('circuit'), { label: 'Visualizer', open: () => show('viz'), available: () => !toggle.hidden });
   async function show(v) {
     claim();
     view = v;

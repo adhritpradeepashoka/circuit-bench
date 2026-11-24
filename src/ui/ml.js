@@ -297,11 +297,12 @@ export function initMl({ editor, code, sim }) {
   }
 
   /* ── switching views ───────────────────────────────── */
-  const claim = joinViews('ml', () => view, () => show('circuit'));
+  let lastView = 'train';
+  const claim = joinViews('ml', () => view, () => show('circuit'), { label: 'AI', open: () => show(view !== 'circuit' ? view : lastView), available: () => !!activeWorkspace().ml });
   function show(v) {
     claim();
     if (v !== 'train' && trainer) stopTraining(false);
-    view = v;
+    view = v; if (v !== 'circuit') lastView = v;
     for (const [id] of VIEWS) { btn[id].classList.toggle('on', id === v); btn[id].setAttribute('aria-pressed', String(id === v)); }
     pane.hidden = v === 'circuit'; document.body.classList.toggle('ml-view', v !== 'circuit');
     for (const id of ['train', 'run', 'viz']) secs[id].hidden = id !== v;

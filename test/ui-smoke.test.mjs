@@ -2372,7 +2372,8 @@ test('ui: the body dock adapts — trigger muscles with a BioAmp, the joint with
   const file = editor.exportProject();
   file.parts.push({ id: 'px', type: 'custom-bioamp-exg-pill', x: 900, y: 40, rotate: 0 }, { id: 'py', type: 'custom-bioamp-exg-pill', x: 900, y: 200, rotate: 0 });
   editor.importProject(file); dock.refresh(true);
-  assert.equal(w.document.querySelector('.body-dock').hidden, false, 'a BioAmp brings the dock');
+  assert.equal($('bdTab').parentElement.hidden, false, 'a BioAmp brings the Person tab'); assert.equal(w.document.querySelector('.body-dock').hidden, true, 'but nothing floats over the circuit until it is opened');
+  $('bdTab').click(); assert.equal(w.document.querySelector('.body-dock').hidden, false, 'opening the tab shows the person'); assert.ok(w.document.body.classList.contains('body-view'));
   assert.equal(dock.context.scenario, 'monitor'); assert.ok(!$('bdWire') && !$('bdTrain'), 'only the trigger panel: no servo, no AI workspace');
   $('bdPlace').click(); dock.refresh(true);
   assert.equal(editor.partById('px').sp, 'bicep-R'); assert.equal(editor.partById('py').sp, 'flexor-R'); assert.ok(!$('bdPlace'), 'once placed the placement button goes');
@@ -2400,7 +2401,7 @@ test('ui: while another tab (Assembly, ML, Visualizer) is open the circuit under
   const { w, editor, fire, scr } = boot(), tip = w.document.getElementById('tip');
   const uno = editor.state.parts.find(p => p.type === 'arduino-uno'), pin = editor.pinsOf(uno)[0], at = scr({ x: pin.x, y: pin.y });
   fire('pointermove', at.x, at.y); assert.equal(tip.hidden, false, 'sanity: on the circuit tab the pin tooltip shows');
-  for (const cls of ['robot-asm', 'ml-view', 'viz-view']) {
+  for (const cls of ['robot-asm', 'ml-view', 'viz-view', 'body-view']) {
     w.document.body.classList.add(cls); fire('pointermove', at.x + 1, at.y);
     assert.equal(tip.hidden, true, `${cls}: no tooltip`); assert.equal(editor.hover, null, `${cls}: no pin highlight`);
     const z = editor.view.z; fire('wheel', at.x, at.y, w.document.getElementById('canvas'), { deltaY: -200 }); assert.equal(editor.view.z, z, `${cls}: the wheel does not zoom the hidden circuit`);
@@ -2424,4 +2425,35 @@ test('ui: split view keeps the circuit alive beside an open tab — its side hea
   split.set('stack'); assert.ok(w.document.body.classList.contains('split-v'));
   split.set('off'); assert.ok(!w.document.body.classList.contains('split') && dv.hidden);
   w.document.body.classList.remove('viz-view');
+});
+
+test('ui: tiles — any tabs at once, each in its own rectangle; the circuit keeps its tile; closing and leaving behave', async () => {
+  const { w, editor, sim } = boot(), { initSplitView, initBodyDock, viewGroups, tileRects } = w.__lab, canvas = w.document.getElementById('canvas'), doc = w.document;
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  // the pure layout: 1 tile fills, 2 split by the ratio, 3 and 4 add rows on the right / a grid
+  const J = o => JSON.stringify(o);      // the bundle lives in the jsdom realm: compare as JSON
+  assert.equal(J(tileRects(['a'], 0.5, 0.5).a), J({ x: 0, y: 0, w: 1, h: 1 })); assert.equal(J(tileRects(['a', 'b'], 0.4).b), J({ x: 0.4, y: 0, w: 0.6, h: 1 }));
+  assert.equal(J(tileRects(['a', 'b', 'c'], 0.5, 0.25).c), J({ x: 0.5, y: 0.25, w: 0.5, h: 0.75 })); assert.equal(J(tileRects(['a', 'b', 'c', 'd'], 0.5, 0.5).c), J({ x: 0, y: 0.5, w: 0.5, h: 0.5 }));
+  const file = editor.exportProject(); file.parts.push({ id: 'px', type: 'custom-bioamp-exg-pill', x: 900, y: 40, rotate: 0 }); editor.importProject(file);
+  const dock = initBodyDock({ editor, sim, ai: {} }), split = initSplitView({ editor });
+  // a stand-in for another tab group (the Visualizer)
+  const pane = doc.createElement('div'); pane.className = 'viz-pane'; pane.hidden = true; canvas.append(pane); let vopen = false;
+  const claimViz = viewGroups.joinViews('viz', () => (vopen ? 'viz' : 'circuit'), () => { claimViz(); vopen = false; pane.hidden = true; doc.body.classList.remove('viz-view'); }, { label: 'Visualizer', open: () => { claimViz(); vopen = true; pane.hidden = false; doc.body.classList.add('viz-view'); }, available: () => true });
+  split.set('side'); dock.setOpen(true); assert.equal(dock.open, true);
+  viewGroups.groups.get('viz').open(); await wait(30); assert.equal(dock.open, false, 'outside tiles, opening one tab sends the other back to the circuit');
+  split.set('tile'); await wait(30); assert.ok(doc.body.classList.contains('tile') && doc.querySelector('.tile-tray') && !doc.querySelector('.tile-tray').hidden, 'tile mode shows the tray');
+  viewGroups.groups.get('body').open(); await wait(30);
+  assert.ok(dock.open && vopen, 'in tiles both stay open'); assert.ok(doc.body.classList.contains('body-view') && doc.body.classList.contains('viz-view'));
+  assert.ok(doc.body.classList.contains('split'), 'the circuit still has its tile');
+  const vi = pane.style.inset, bi = doc.querySelector('.body-dock').style.inset; assert.ok(vi && bi && vi !== bi, `each pane has its own rectangle: ${vi} / ${bi}`);
+  assert.equal(canvas.style.getPropertyValue('--cfw'), '0.5'); assert.equal(canvas.style.getPropertyValue('--cfh'), '1', 'three tiles: the circuit is the left half, full height');
+  assert.ok(!doc.getElementById('overlay') || doc.getElementById('overlay').style.clipPath.startsWith('inset('), 'the circuit wires are cut to their tile');
+  assert.equal(doc.querySelectorAll('.split-divider:not([hidden])').length, 2, 'three tiles: a column divider and a row divider');
+  const chips = [...doc.querySelectorAll('.tile-chip')]; assert.equal(chips.map(c => c.textContent).join(), 'Circuit,Visualizer,Person'); assert.ok(chips.every(c => c.classList.contains('on')));
+  chips[0].click(); await wait(30); assert.ok(!doc.body.classList.contains('split'), 'circuit tile hidden'); assert.equal(doc.querySelector('.body-dock').style.inset === bi, false, 'the others share the whole canvas now');
+  [...doc.querySelectorAll('.tile-chip')][2].click(); await wait(30); assert.equal(dock.open, false); [...doc.querySelectorAll('.tile-chip')][1].click(); await wait(30);
+  assert.equal(vopen, false, 'closing the last tab brings the circuit back'); assert.ok(doc.body.classList.contains('split') || !doc.body.classList.contains('viz-view'));
+  [...doc.querySelectorAll('.tile-chip')][2].click(); [...doc.querySelectorAll('.tile-chip')][1]?.click(); await wait(30);
+  split.set('side'); await wait(30); assert.ok(!doc.body.classList.contains('tile')); assert.equal([dock.open, vopen].filter(Boolean).length <= 1, true, 'leaving tiles leaves one tab open');
+  split.set('off'); dock.setOpen(false); vopen = false; pane.remove();
 });

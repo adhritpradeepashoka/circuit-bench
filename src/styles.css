@@ -1377,7 +1377,7 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .ml-val { font-family: var(--mono); font-size: 12px; text-align: right; min-width: 44px; }
 .ml-row input[type=range] { flex: 1; min-width: 120px; }
 .ai-send.stop { background: var(--red); }
-.ml-view #overlay, .ml-view #world, .ml-view #wireEditor, .viz-view #overlay, .viz-view #world, .viz-view #wireEditor { display: none !important; }          /* the circuit's wires and labels must not draw over the ML tabs */
+.ml-view #overlay, .ml-view #world, .ml-view #wireEditor, .viz-view #overlay, .viz-view #world, .viz-view #wireEditor, .body-view #overlay, .body-view #world, .body-view #wireEditor { display: none !important; }          /* the circuit's wires and labels must not draw over the ML tabs */
 
 /* import from GitHub */
 .asm-gh-back { position: fixed; inset: 0; z-index: 1000; background: rgba(0,0,0,.45); display: grid; place-items: center; padding: 16px; }
@@ -1405,14 +1405,16 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .fb-row b { white-space: pre-wrap; font-weight: 500; overflow-wrap: anywhere; }
 
 /* ── the body dock: adapts to the project (trigger muscles, the joint, gesture lab) ── */
-.body-dock { position: absolute; top: 10px; right: 10px; width: 300px; max-height: calc(100% - 20px); z-index: 40; display: flex; flex-direction: column; background: var(--surface, #fff); border: 1px solid var(--line, #d5ddd8); border-radius: 12px; box-shadow: 0 6px 24px rgba(20, 40, 35, .16); overflow: hidden; font-size: 12.5px; }
+.body-dock { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--mat, #eef3f0); container-type: inline-size; overflow: hidden; font-size: 12.5px; }
 .body-dock[hidden] { display: none; }
-.bd-head { display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; border: 0; background: #1d4e75; color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-.bd-body { overflow: auto; padding: 8px 10px 12px; display: grid; gap: 8px; align-content: start; }
-.bd-body[hidden] { display: none; }
-.bd-stage { position: relative; height: 210px; border-radius: 8px; background: var(--mat, #eef3f0); overflow: hidden; }
+.bd-head { padding: 8px 14px; background: #1d4e75; color: #fff; font-weight: 700; flex: none; }
+.bd-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 370px); gap: 12px; padding: 12px; overflow: hidden; }
+.bd-left { display: flex; flex-direction: column; gap: 6px; min-height: 0; min-width: 0; }
+.bd-right { min-height: 0; overflow: auto; display: grid; gap: 8px; align-content: start; background: var(--surface, #fff); border: 1px solid var(--line, #d5ddd8); border-radius: 12px; padding: 10px 12px 14px; }
+@container (max-width: 640px) { .bd-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 0.8fr) minmax(0, 1.2fr); gap: 8px; padding: 8px; } .bd-stage { min-height: 0; } .bd-left { overflow: hidden; } }
+.bd-stage { position: relative; flex: 1; min-height: 160px; border-radius: 10px; background: #e3ebe7; overflow: hidden; }
 .bd-view { position: absolute; inset: 0; }
-.bd-frames { display: flex; gap: 4px; margin-top: -4px; } .bd-frames button { flex: 1; height: 22px; border: 1px solid var(--line, #d5ddd8); border-radius: 6px; background: transparent; font: inherit; font-size: 11px; cursor: pointer; color: inherit; }
+.bd-frames { display: flex; gap: 4px; flex: none; } .bd-frames button { flex: 1; height: 24px; border: 1px solid var(--line, #d5ddd8); border-radius: 6px; background: var(--surface, #fff); font: inherit; font-size: 11px; cursor: pointer; color: inherit; }
 .bd-sec { display: grid; gap: 6px; padding-top: 6px; border-top: 1px solid var(--line, #d5ddd8); } .bd-sec h4 { margin: 0; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: #5b6a64; }
 .bd-btns { display: flex; flex-wrap: wrap; gap: 5px; }
 .bd-btn { height: 28px; padding: 0 9px; border: 1px solid var(--line, #d5ddd8); border-radius: 8px; background: var(--surface, #fff); font: inherit; font-weight: 600; font-size: 12px; cursor: pointer; color: inherit; }
@@ -1424,12 +1426,11 @@ html[data-off~="wiring"] #robWiringToggle { display: none !important; }
 .bd-gl { display: grid; gap: 4px; } .bd-grow { display: grid; grid-template-columns: 1fr 1.25fr auto auto; gap: 4px; align-items: center; } .bd-grow input, .bd-grow select { min-width: 0; height: 24px; font: inherit; font-size: 12px; border: 1px solid var(--line, #d5ddd8); border-radius: 6px; padding: 0 4px; background: var(--surface, #fff); color: inherit; }
 .bd-big { font-size: 20px; font-weight: 800; color: #1d4e75; } .bd-probs { display: grid; gap: 3px; } .bd-prob { display: grid; grid-template-columns: 84px 1fr; gap: 6px; align-items: center; font-size: 11.5px; } .bd-prob .bd-bar i { background: #1d4e75; }
 .bd-check { display: flex; gap: 6px; align-items: center; font-size: 12px; }
-.viz-view .body-dock { display: none; }
 .viz-frame { position: absolute; top: 10px; left: 10px; display: flex; gap: 2px; padding: 2px; border-radius: 9px; background: var(--surface, #fff); border: 1px solid var(--line, #d5ddd8); z-index: 2; }
 .viz-frame button { height: 24px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 12px; font-weight: 600; color: inherit; cursor: pointer; } .viz-frame button.on { background: #1d4e75; color: #fff; }
 
 /* the circuit's pin tooltip belongs to the circuit tab only */
-body:not(.split).robot-asm #tip, body:not(.split).ml-view #tip, body:not(.split).viz-view #tip { display: none !important; }
+body:not(.split).robot-asm #tip, body:not(.split).ml-view #tip, body:not(.split).viz-view #tip, body:not(.split).body-view #tip { display: none !important; }
 
 /* ── split view: the circuit keeps its side, the open tab takes the rest ── */
 .split-ctl { display: inline-flex; gap: 2px; } .split-ctl .tool { width: 30px; }
@@ -1445,7 +1446,6 @@ body.split.robot-asm #wireEditor:not([hidden]), body.split.ml-view #wireEditor:n
 .split-divider:hover::after, .split-divider.dragging::after, .split-divider:focus-visible::after { background: #1d63ed; width: 3px; left: 3px; }
 .split-divider.v { left: 0; right: 0; top: auto; bottom: auto; width: auto; height: 9px; margin: -4px 0 0; cursor: row-resize; } .split-divider.v::after { left: 0; right: 0; top: 4px; bottom: auto; width: auto; height: 1px; } .split-divider.v:hover::after, .split-divider.v.dragging::after { height: 3px; top: 3px; width: auto; left: 0; }
 .split-divider[hidden] { display: none; }
-body.split:not(.split-v) .body-dock { right: auto; left: 10px; }
 
 /* ML tabs: denser and quicker to use */
 .ml-sec { gap: 10px; padding: 12px; } .ml-col { gap: 10px; } .ml-card { padding: 12px 14px; gap: 8px; }
@@ -1454,3 +1454,18 @@ body.split:not(.split-v) .body-dock { right: auto; left: 10px; }
 .ml-card .ml-row .ml-count { min-width: 22px; text-align: right; }
 .ml-plot { height: 150px; } .ml-plot.tall { height: 280px; }
 .ml-sec[data-sec="train"] .ml-col:last-child { position: sticky; top: 12px; }
+
+/* the Person tab shares the split rules with the other panes */
+body.split .body-dock { inset: 0 0 0 calc(var(--circ, .5) * 100%); border-left: 1px solid var(--line, #d5ddd8); }
+body.split.split-v .body-dock { inset: calc(var(--circ, .5) * 100%) 0 0 0; border-left: 0; border-top: 1px solid var(--line, #d5ddd8); }
+body.split.body-view #world, body.split.body-view #overlay { display: block !important; }
+body.split.body-view #overlay { clip-path: inset(0 calc((1 - var(--circ, .5)) * 100%) 0 0); }
+body.split.split-v.body-view #overlay { clip-path: inset(0 0 calc((1 - var(--circ, .5)) * 100%) 0); }
+body.split.body-view #wireEditor:not([hidden]) { display: flex !important; }
+
+/* tiles: every open tab has its own rectangle (set from split-view.js); the tabs' own Circuit buttons give way to the tray */
+.tile-tray { display: inline-flex; gap: 4px; align-items: center; } .tile-tray[hidden] { display: none; }
+.tile-chip { height: 26px; padding: 0 10px; border: 1px solid var(--line, #d5ddd8); border-radius: 13px; background: transparent; color: inherit; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+.tile-chip:hover { border-color: #1d63ed; } .tile-chip.on { background: #1d63ed; border-color: #1d63ed; color: #fff; }
+body.tile [data-circuit-tab], body.tile .solo-tab, body.tile .solo-sep { display: none !important; }       /* a tab group that is only Circuit + one tab is a chip in the tray instead */
+body.tile .asm-pane, body.tile .ml-pane, body.tile .viz-pane, body.tile .body-dock { border: 1px solid var(--line, #d5ddd8); box-sizing: border-box; }

@@ -1,4 +1,4 @@
-// The body dock: a panel that lives on top of every tab and adapts to what the project is. Put a BioAmp in the circuit and it offers a person you can
+// The Person tab: its own view (a tab, a split side or a tile; it never floats over the circuit) that adapts to what the project is. Put a BioAmp in the circuit and it offers a person you can
 // trigger (flex an arm, make a fist) with the live signal levels; add a servo or a robot and it shows the joint moving; add the AI workspace and it
 // becomes a gesture lab (record, train, and watch the model recognise what the person does). It reads the parts with mixContext() and rebuilds itself
 // when they change. The 3D person is body-view.js; what the simulated body is doing is core/subject.js; training is core/ml.js through core/gesture.js.
@@ -9,6 +9,7 @@ import { defaultGestures, GESTURE_ACTIONS, windowFeatures, featureNames, gesture
 import { getMl, updateMl, onMl } from '../core/ml-context.js';
 import { bodyState } from './body-state.js';
 import { SITE } from '../core/body-sites.js';
+import { joinViews } from './view-groups.js';
 
 const el = (tag, props = {}, ...kids) => { const n = Object.assign(document.createElement(tag), props); n.append(...kids); return n; };
 const hue = i => (i * 47 + 8) % 360, chColor = i => `hsl(${hue(i)} 72% 46%)`;
@@ -20,15 +21,30 @@ const loadGestures = () => { try { const g = JSON.parse(localStorage.getItem(GKE
 export function initBodyDock({ editor, sim, ai }) {
   const canvas = document.getElementById('canvas'); if (!canvas) return null;
   bodyState.servos = () => sim?.servoAngles?.() || []; bodyState.running = () => !!sim?.running;
-  const dock = el('aside', { className: 'body-dock', hidden: true, ariaLabel: 'The body' });
+  const toolbar = document.querySelector('.toolbar');
+  const dock = el('aside', { className: 'body-dock', hidden: true, ariaLabel: 'The person' });
   for (const t of ['pointerdown', 'wheel', 'touchmove', 'dblclick', 'contextmenu']) dock.addEventListener(t, e => e.stopPropagation(), { passive: t === 'wheel' || t === 'touchmove' ? true : undefined });
-  const head = el('button', { type: 'button', className: 'bd-head', ariaExpanded: 'true' }), body = el('div', { className: 'bd-body' });
+  const head = el('div', { className: 'bd-head' }), body = el('div', { className: 'bd-body' });
   dock.append(head, body); canvas.append(dock);
-  let collapsed = false, ctx = mixContext([], {}), sig = '', view = null, viewLoading = false, gestures = loadGestures(), recording = null, live = null, trainNote = '', timer = 0;
+  let open = false, ctx = mixContext([], {}), sig = '', view = null, viewLoading = false, gestures = loadGestures(), recording = null, live = null, trainNote = '', timer = 0;
   const refs = {};
 
-  head.addEventListener('click', () => { collapsed = !collapsed; paintHead(); body.hidden = collapsed; if (!collapsed) view?.resize(); });
-  const paintHead = () => { head.ariaExpanded = String(!collapsed); head.replaceChildren(el('span', { className: 'bd-title', textContent: ctx.title || 'The body' }), el('span', { className: 'bd-chev', textContent: collapsed ? '▸' : '▾' })); };
+  // the tab: only projects with a body (a BioAmp on the body) get it, and it joins the other tab groups
+  const toggle = el('div', { className: 'view-toggle solo-tab', role: 'group', ariaLabel: 'Person view', hidden: true }), sepAfter = el('span', { className: 'sep solo-sep', hidden: true });
+  const bCircuit = el('button', { type: 'button', textContent: 'Circuit' }), bPerson = el('button', { type: 'button', textContent: 'Person', id: 'bdTab', title: 'A person you can trigger, with the signals and the joint' });
+  bCircuit.dataset.circuitTab = '1'; toggle.append(bCircuit, bPerson); toolbar?.prepend(toggle, sepAfter);
+  const claim = joinViews('body', () => (open ? 'person' : 'circuit'), () => setOpen(false), { label: 'Person', open: () => setOpen(true), available: () => ctx.hasBody });
+  bCircuit.addEventListener('click', () => setOpen(false)); bPerson.addEventListener('click', () => setOpen(true));
+  function setOpen(v) {
+    v = !!v && ctx.hasBody; claim(); open = v; paintOpen(); refresh(true);
+  }
+  function paintOpen() {
+    dock.hidden = !open; document.body.classList.toggle('body-view', open);
+    bCircuit.classList.toggle('on', !open); bPerson.classList.toggle('on', open); bCircuit.setAttribute('aria-pressed', String(!open)); bPerson.setAttribute('aria-pressed', String(open));
+    toggle.hidden = sepAfter.hidden = !ctx.hasBody;
+  }
+  const paintHead = () => { head.textContent = ctx.title || 'The person'; };
+  addEventListener('resize', () => { if (open) view?.resize(); });
 
   const chs = () => ctx.channels;
   const placeRight = () => {
@@ -41,12 +57,12 @@ export function initBodyDock({ editor, sim, ai }) {
   /* ── building the panel ── */
   function build() {
     body.replaceChildren(); for (const k of Object.keys(refs)) delete refs[k];
-    const stage = el('div', { className: 'bd-stage' }); refs.stage = stage; body.append(stage);
+    const stage = el('div', { className: 'bd-stage' }); refs.stage = stage; const left = el('div', { className: 'bd-left' }), right = el('div', { className: 'bd-right' }); body.append(left, right);
     const fr = el('div', { className: 'bd-frames' }, ...[['Arm', 'arm'], ['Upper body', 'upper'], ['Whole body', 'full']].map(([l, k]) => { const b = el('button', { type: 'button', textContent: l }); b.addEventListener('click', () => view?.frame(k)); return b; }));
-    body.append(fr); ensureView();
-    if (ctx.modules.includes('body')) body.append(bodyModule());
-    if (ctx.modules.includes('arm')) body.append(armModule());
-    if (ctx.modules.includes('gesture')) body.append(gestureModule());
+    left.append(stage, fr); ensureView();
+    if (ctx.modules.includes('body')) right.append(bodyModule());
+    if (ctx.modules.includes('arm')) right.append(armModule());
+    if (ctx.modules.includes('gesture')) right.append(gestureModule());
     paintDots();
   }
   async function ensureView() {
@@ -171,20 +187,19 @@ export function initBodyDock({ editor, sim, ai }) {
     const t = person.now();
     for (const m of refs.meter || []) { const placed = m.p.sp && m.p.sn, v = placed ? windowFeatures([m.p], t, person)[0] : 0; m.bar.style.width = `${Math.min(100, (v / 1.3) * 100)}%`; m.val.textContent = placed ? `${v.toFixed(2)} mV` : '–'; }
   }
-  function frameTick() { if (dock.hidden || collapsed) return; paintMeters(); const p = bodyState.pose(); paintArm(p); paintGesture(); }
+  function frameTick() { if (!open) return; paintMeters(); const p = bodyState.pose(); paintArm(p); paintGesture(); }
 
   function refresh(force = false) {
     const parts = editor.state.parts, next = mixContext(parts, activeWorkspace());
     const s = [next.modules.join(), next.channels.map(p => `${p.id}:${p.sp || ''}:${p.sn || ''}:${p.sr || ''}`).join(), next.servos.length, gestures.map(g => g.name + g.ev).join(), getMl().model ? 1 : 0].join('|');
-    ctx = next; const show = ctx.hasBody && !document.body.classList.contains('viz-view');
-    dock.hidden = !show; dock.dataset.scenario = ctx.scenario; paintHead();
-    if (!show) { clearInterval(timer); timer = 0; return; }
+    ctx = next; if (!ctx.hasBody && open) open = false;      // the body went away (the BioAmp was deleted): leave the tab
+    paintOpen(); dock.dataset.scenario = ctx.scenario; paintHead();
+    if (!open) { clearInterval(timer); timer = 0; return; }
     if (!timer) timer = setInterval(frameTick, 110);
-    if (force || s !== sig) { sig = s; build(); body.hidden = collapsed; }
+    if (force || s !== sig) { sig = s; build(); view?.resize(); }
   }
   editor.on('change', () => refresh()); editor.on('workspace', () => refresh(true)); editor.on('catalog', () => refresh());
   onMl((_, why) => { if (why === 'load') { gestures = loadGestures(); refresh(true); } });
-  new MutationObserver(() => refresh()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   refresh(true);
-  return { refresh, get context() { return ctx; } };
+  return { refresh, setOpen, get open() { return open; }, get context() { return ctx; } };
 }

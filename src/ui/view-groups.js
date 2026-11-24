@@ -1,10 +1,17 @@
 // A mixed project (say Robotics + Bioelectronics + AI) has several groups of view tabs in the top bar: Assembly / Test, Visualizer, Train / Run model / Visualize.
 // They must behave as one set: opening a tab in one group sends the others back to the circuit, and there is one Circuit button, not three.
 const EVENT = 'cb-view-claim';
+const tiled = () => typeof document !== 'undefined' && document.body.classList.contains('tile');
 
-/** Called by each tab group. `getView()` says which view it shows now; `toCircuit()` sends it back; the returned `claim()` goes first thing in its own show(). */
-export function joinViews(name, getView, toCircuit) {
-  addEventListener(EVENT, e => { if (e.detail !== name && getView() !== 'circuit') toCircuit(); });
+/** Every tab group that has joined, by name: tile mode lists them, opens them and closes them one by one. */
+export const groups = new Map();
+
+/** Called by each tab group. `getView()` says which view it shows now; `toCircuit()` sends it back; the returned `claim()` goes first thing in its own show().
+ *  `opts` (all optional): `label` for the tile tray, `open()` to open the group on its usual tab, `available()` to say whether this project has it.
+ *  In tile mode groups do not send each other back to the circuit: any number of them can be open at once. */
+export function joinViews(name, getView, toCircuit, opts = {}) {
+  groups.set(name, { name, label: opts.label || name, isOpen: () => getView() !== 'circuit', close: toCircuit, open: opts.open || (() => {}), available: opts.available || (() => true) });
+  addEventListener(EVENT, e => { if (e.detail !== name && getView() !== 'circuit' && !tiled()) toCircuit(); });
   return () => { try { dispatchEvent(new CustomEvent(EVENT, { detail: name })); } catch { /* no window (tests) */ } };
 }
 

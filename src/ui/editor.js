@@ -201,8 +201,10 @@ export class Editor {
   fit() {
     const parts = this.state.parts;
     let cw = this.canvas.clientWidth || 900, ch = this.canvas.clientHeight || 600;
-    if (document.body.classList.contains('split') && this.otherTab({ target: this.canvas.querySelector('.asm-pane:not([hidden]), .ml-pane:not([hidden]), .viz-pane:not([hidden])') })) {       // split view: the circuit only has its own share of the canvas
-      const share = parseFloat(this.canvas.style.getPropertyValue('--circ')) || 0.5; if (document.body.classList.contains('split-v')) ch *= share; else cw *= share;
+    if (document.body.classList.contains('split') && this.otherTab({ target: this.canvas.querySelector('.asm-pane:not([hidden]), .ml-pane:not([hidden]), .viz-pane:not([hidden]), .body-dock:not([hidden])') })) {       // split view: the circuit only has its own share of the canvas
+      const st = this.canvas.style, fw = parseFloat(st.getPropertyValue('--cfw')), fh = parseFloat(st.getPropertyValue('--cfh'));
+      if (fw > 0 && fh > 0) { cw *= fw; ch *= fh; }       // split-view.js says how much of each side the circuit has (tiles can be any shape)
+      else { const share = parseFloat(st.getPropertyValue('--circ')) || 0.5; if (document.body.classList.contains('split-v')) ch *= share; else cw *= share; }
     }
     if (!parts.length) { this.view = { x: cw / 2, y: ch / 2, z: 1 }; this.applyView(); this.renderOverlay(); return; }
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -926,7 +928,7 @@ export class Editor {
   /** True when the circuit should ignore this event: another tab (Assembly, Test, Visualizer, ML) is open. Those panes sit inside the canvas element, and the circuit underneath must neither hear nor show anything.
    *  In split view the circuit keeps its own side, so only events that start inside a pane (or the divider, or the body dock) are ignored. */
   otherTab(e) {
-    const b = document.body.classList; if (!(b.contains('robot-asm') || b.contains('ml-view') || b.contains('viz-view'))) return false;
+    const b = document.body.classList; if (!(b.contains('robot-asm') || b.contains('ml-view') || b.contains('viz-view') || b.contains('body-view'))) return false;
     if (b.contains('split')) return !!e?.target?.closest?.('.asm-pane, .ml-pane, .viz-pane, .split-divider, .body-dock');
     return true;
   }
