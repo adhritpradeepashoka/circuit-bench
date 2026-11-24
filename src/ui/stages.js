@@ -26,9 +26,11 @@ export function initStages({ editor, split }) {
   const avail = () => ({ ml: !!groups.get('ml')?.available(), robotics: !!groups.get('assembly')?.available(), viz: !!groups.get('viz')?.available() });
   const done = () => { const m = getMl(); return doneStages({ samples: m.dataset?.samples.length || 0, model: !!m.model }); };
 
+  let announced;
+  const announce = id => { if (id === announced) return; announced = id; try { dispatchEvent(new CustomEvent('cb-stage', { detail: id })); } catch { /* no window (tests) */ } };       // the views adapt to the step (the person shows only what it needs)
   /** put a stage on screen */
   function activate(stage) {
-    const want = stage.panes;
+    const want = stage.panes; announce(isFree ? null : stage.id);
     if (narrow?.matches) {       // a phone-sized screen has room for one view: the stage's main one, or the circuit
       for (const [n, g] of groups) if (g.isOpen() && n !== want[0]?.[0]) g.close();
       if (want[0]) groups.get(want[0][0])?.open(want[0][1]); return paint();
@@ -42,7 +44,7 @@ export function initStages({ editor, split }) {
   /** the first time a stage opens it says what to do there, once */
   function showHint(stage, force = false) {
     if (!force && (seen.has(stage.id) || !stage.hint)) { hint.hidden = true; return; }
-    const i = stages.indexOf(stage), next = stages[i + 1];
+    const i = stages.findIndex(x => x.id === stage.id), next = stages[i + 1];
     hint.replaceChildren(el('p', {}, el('b', { textContent: `${stage.label}: ` }), stage.hint));
     const close = el('button', { type: 'button', className: 'stage-hint-x', textContent: 'Got it', ariaLabel: 'Dismiss this tip' });
     close.addEventListener('click', () => { seen.add(stage.id); store(HINTS_KEY, [...seen]); hint.hidden = true; });
@@ -51,7 +53,7 @@ export function initStages({ editor, split }) {
   }
 
   function paint() {
-    const open = split.current(), cur = matchStage(stages, open), d = done();
+    const open = split.current(), cur = matchStage(stages, open), d = done(); announce(isFree ? null : cur?.id ?? null);
     bar.hidden = sep.hidden = stages.length < 2;
     document.body.classList.toggle('stages-on', stages.length >= 2); document.body.classList.toggle('free-layout', isFree);
     free.setAttribute('aria-pressed', String(isFree)); free.classList.toggle('on', isFree);
@@ -68,6 +70,7 @@ export function initStages({ editor, split }) {
     if (s !== stages.map(x => x.id).join()) { stages = next; sig = ''; } else stages = next.map((x, i) => x);
     paint();
   }
+  addEventListener('cb-goto-stage', e => { const s = stages.find(x => x.id === e.detail); if (s) activate(s); });
   free.addEventListener('click', () => { isFree = !isFree; store(FREE_KEY, isFree); sig = ''; paint(); });
   editor.on('change', refresh); editor.on('workspace', refresh); editor.on('catalog', refresh); onMl(() => paint());
   new MutationObserver(() => paint()).observe(document.body, { attributes: true, attributeFilter: ['class'] });       // a view opened or closed (by a stage, by free layout, by the old tabs)

@@ -3,7 +3,7 @@
 import { bodyState } from './body-state.js';
 import { loadBodyRig } from './body-rig.js';
 
-const FRAMES = { arm: { t: [3.0, 0, 12.0], dist: 10.5, yaw: 0.55, pitch: 0.12 }, upper: { t: [0, 0, 11.6], dist: 17, yaw: 0.45, pitch: 0.1 }, full: { t: [0, 0, 8.8], dist: 25, yaw: 0.4, pitch: 0.08 } };
+const FRAMES = { arm: { t: [3.0, 0, 11.8], dist: 12.5, yaw: 0.55, pitch: 0.12 }, upper: { t: [0, 0, 10.6], dist: 23.5, yaw: 0.45, pitch: 0.1 }, full: { t: [0, 0, 8.6], dist: 28, yaw: 0.4, pitch: 0.08 } };
 
 export async function createBodyView(container, { frame = 'upper' } = {}) {
   const THREE = await import('three');
@@ -33,7 +33,8 @@ export async function createBodyView(container, { frame = 'upper' } = {}) {
     if (!dirty && !dots.size) return;
     rig.group.rotation.z = yaw; rig.group.updateMatrixWorld();
     for (const [id, m] of dots) { const q = rig.sitePoint(id); if (q) { m.position.set(...q).applyMatrix4(rig.group.matrixWorld); } }
-    camera.position.set(T[0], T[1] + dist * Math.cos(pitch), T[2] + dist * Math.sin(pitch)); camera.lookAt(T[0], T[1], T[2]);
+    const back = dist * Math.max(1, 1.15 / camera.aspect) ** 0.6;       // a tall, narrow viewport has to stand further back to keep the person in frame
+    camera.position.set(T[0], T[1] + back * Math.cos(pitch), T[2] + back * Math.sin(pitch)); camera.lookAt(T[0], T[1], T[2]);
     renderer.render(scene, camera); dirty = false;
   };
   let last = null;
