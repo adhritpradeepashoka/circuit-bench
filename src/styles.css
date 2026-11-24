@@ -1022,10 +1022,10 @@ body:not(.robot-asm) #robotParts { display: none; }
 .fly-msg { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); max-width: min(520px, calc(100% - 24px)); padding: 7px 14px; border-radius: 9px; background: rgba(29, 78, 117, .93); color: #fff; font-size: 13px; text-align: center; pointer-events: none; }
 .fly-msg.bad { background: rgba(176, 52, 38, .94); }
 .fly-msg[hidden] { display: none; }
-.fly-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(238, 243, 240, .92); }
+.fly-empty { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--mat-bg, var(--mat, #eef3f0)) 94%, transparent); color: var(--text); }
 .fly-empty[hidden] { display: none; }
 .fly-empty-box { max-width: 420px; text-align: center; display: flex; flex-direction: column; gap: 10px; align-items: center; }
-.fly-empty-box h3 { margin: 0; } .fly-empty-box p { margin: 0; color: #48564f; font-size: 13px; }
+:root .fly-empty .fly-empty-box h3 { margin: 0; color: var(--text); } .fly-empty-box p { margin: 0; color: var(--muted, #48564f); font-size: 13px; }
 .fly-sticks { position: absolute; left: 0; right: 0; bottom: 34px; display: flex; justify-content: space-between; padding: 0 14px; pointer-events: none; }
 .fly-stick { position: relative; width: 132px; height: 132px; border-radius: 50%; background: rgba(255, 255, 255, .55); border: 2px solid rgba(43, 58, 52, .35); touch-action: none; pointer-events: auto; cursor: grab; }
 .fly-stick::before, .fly-stick::after { content: ''; position: absolute; background: rgba(43, 58, 52, .18); }
@@ -1116,12 +1116,12 @@ body:not(.robot-asm) #robotParts { display: none; }
 /* — robot type picker: a card in the middle of the screen when a robotics project starts — */
 .rt-modal { position: fixed; inset: 0; z-index: 600; display: grid; place-items: center; background: rgba(20, 28, 24, .45); padding: 16px; }
 .rt-modal[hidden] { display: none; }
-.rt-card { background: #fff; border-radius: 16px; padding: 24px 24px 16px; width: min(640px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
-.rt-card h2 { margin: 0 0 4px; font-size: 22px; } .rt-sub { margin: 0 0 16px; color: #556; font-size: 14px; }
+.rt-card { background: var(--surface, #fff); color: var(--text, #1f282b); border-radius: 16px; padding: 24px 24px 16px; width: min(640px, 100%); max-height: 92vh; overflow: auto; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+:root .rt-card h2 { margin: 0 0 4px; font-size: 22px; color: var(--text, #1f282b); } .rt-sub { margin: 0 0 16px; color: var(--muted, #556); font-size: 14px; }
 .rt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
-.rt-choice { display: grid; gap: 4px; justify-items: start; text-align: left; padding: 14px; border: 2px solid #d5e0da; border-radius: 12px; background: #f7faf8; cursor: pointer; font: inherit; }
-.rt-choice:hover, .rt-choice:focus-visible, .rt-choice.on { border-color: #2e7d5b; background: #eaf5ef; outline: none; }
-.rt-choice b { font-size: 16px; } .rt-choice span:not(.rt-icon) { font-size: 12.5px; color: #556; } .rt-icon { font-size: 30px; line-height: 1; }
+.rt-choice { display: grid; gap: 4px; justify-items: start; text-align: left; padding: 14px; border: 2px solid var(--line, #d5e0da); border-radius: 12px; background: var(--paper, #f7faf8); color: var(--text, #1f282b); cursor: pointer; font: inherit; }
+.rt-choice:hover, .rt-choice:focus-visible, .rt-choice.on { border-color: var(--green, #2e7d5b); background: var(--blue-soft, #eaf5ef); outline: none; }
+.rt-choice b { font-size: 16px; color: var(--text, #1f282b); } .rt-choice span:not(.rt-icon) { font-size: 12.5px; color: var(--muted, #556); } .rt-icon { font-size: 30px; line-height: 1; }
 .rt-later { margin-top: 12px; }
 .robot-focus { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; padding: 6px 4px 8px; font-size: 12.5px; }
 .robot-focus > span { flex: 1 1 100%; }

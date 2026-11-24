@@ -33,3 +33,14 @@ test('the Visualizer stage does not capture the pointer for its Head / Whole bod
 test('the Google sign-in button keeps a transparent backdrop on dark skins', () => {
   assert.match(css, /\.gsi-host iframe \{ color-scheme: light/);
 });
+
+// A hard-coded light panel under a dark skin leaves its light headings and buttons unreadable: the drone's "Nothing to fly yet" panel takes the skin's colours.
+test('the drone empty state follows the skin instead of a fixed light panel', () => {
+  assert.doesNotMatch(css, /\.fly-empty \{[^}]*rgba\(238, 243, 240/);
+  assert.match(css, /\.fly-empty \{[^}]*color-mix\(in srgb, var\(--mat-bg/);
+});
+
+test('the "What do you want to make?" dialog takes the skin\'s colours', () => {
+  assert.match(css, /\.rt-card \{ background: var\(--surface/);
+  assert.match(css, /\.rt-choice b \{[^}]*color: var\(--text/);
+});

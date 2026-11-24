@@ -45,3 +45,7 @@
 :root[data-theme="forge"] .top-search, :root[data-theme="forge"] .proj-search { background: rgba(255, 255, 255, .04); border-color: var(--line); border-radius: 999px; }
 :root[data-theme="forge"] .top-search input, :root[data-theme="forge"] .proj-search input { background: transparent; border: 0; }
 :root[data-theme="forge"] .start-hero, :root[data-theme="forge"] .home-hero { background: linear-gradient(135deg, #1a1530, #0f0e18 70%); border: 1px solid var(--line); }
+
+/* the main button of a pair stays the main one: filled lavender, not another outlined pill */
+:root[data-theme="forge"] .asm-btn.primary { background: var(--blue); border-color: var(--blue); color: var(--on-blue); }
+:root[data-theme="forge"] .asm-btn.primary:hover { background: #cdb4ff; border-color: #cdb4ff; }
