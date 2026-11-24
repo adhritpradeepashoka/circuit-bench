@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveStages, matchStage, doneStages } from '../src/core/stages.js';
+import { resolveStages, matchStage, doneStages, nextStep } from '../src/core/stages.js';
 
 const ids = s => s.map(x => x.id).join();
 
@@ -32,4 +32,33 @@ test('stages: the stage on screen is found from the open views; anything else is
 test('stages: Record and Train tick off when there are samples and a model', () => {
   assert.equal([...doneStages({})].length, 0);
   assert.equal([...doneStages({ samples: 5 })].join(), 'record'); assert.equal([...doneStages({ samples: 5, model: true })].join(), 'record,train');
+});
+
+test('stages: the whole journey shows from the start; stages without their parts or data are locked, with the reason', () => {
+  const lock = S => Object.fromEntries(S.map(s => [s.id, !!s.locked]));
+  // an EMG + AI project before any amplifier is in the circuit: everything about the body is locked, nothing disappears
+  const empty = resolveStages({ hasBody: false }, { viz: true, ml: true });
+  assert.equal(ids(empty), 'build,electrodes,record,train,try');
+  assert.deepEqual(lock(empty), { build: false, electrodes: true, record: true, train: true, try: true });
+  assert.match(empty[1].locked, /BioAmp/);
+  // with an amplifier: electrodes and recording open; training waits for examples, trying for a model
+  assert.deepEqual(lock(resolveStages({ hasBody: true }, { viz: true, ml: true })), { build: false, electrodes: false, record: false, train: true, try: true });
+  assert.deepEqual(lock(resolveStages({ hasBody: true }, { viz: true, ml: true }, { samples: 30 })), { build: false, electrodes: false, record: false, train: false, try: true });
+  assert.deepEqual(lock(resolveStages({ hasBody: true }, { viz: true, ml: true }, { samples: 30, model: true })), { build: false, electrodes: false, record: false, train: false, try: false });
+  // a robot with a body in it: nothing to wait for
+  assert.deepEqual(lock(resolveStages({ hasBody: true, mover: true }, { viz: true, robotics: true })), { build: false, assemble: false, test: false, electrodes: false, person: false });
+  // an AI board with no body: Teach it is always open; looking inside needs a model
+  assert.deepEqual(lock(resolveStages({}, { ml: true })), { build: false, train: false, try: false, inside: true });
+});
+
+test('stages: the next step follows the project, and points back to Build when something has to be added', () => {
+  const S = (ctx, p) => resolveStages(ctx, { viz: true, ml: true }, p);
+  assert.equal(nextStep(S({ hasBody: false }), new Set()).id, 'build', 'no amplifier yet: add one');
+  assert.match(nextStep(S({ hasBody: false }), new Set()).why, /BioAmp/);
+  assert.equal(nextStep(S({ hasBody: true }), new Set()).id, 'electrodes');
+  assert.equal(nextStep(S({ hasBody: true }), new Set(['electrodes'])).id, 'record');
+  assert.equal(nextStep(S({ hasBody: true }, { samples: 9 }), new Set(['electrodes', 'record'])).id, 'train');
+  assert.equal(nextStep(S({ hasBody: true }, { samples: 9, model: true }), new Set(['electrodes', 'record', 'train'])).id, 'try');
+  assert.equal(nextStep(resolveStages({}, { robotics: true }), new Set()), null, 'a plain robot has no steps to nag about');
+  assert.equal([...doneStages({ placed: true })].join(), 'electrodes');
 });

@@ -1506,3 +1506,9 @@ body.stages-on:not(.free-layout) .toolbar > .view-toggle, body.stages-on:not(.fr
 .ml-sec .ml-card { background: transparent; border-color: transparent; box-shadow: none; padding-left: 4px; padding-right: 4px; }
 .ml-sec[data-sec="train"] .ml-col:last-child .ml-card, .ml-sec .ml-col:last-child .ml-card:first-child { background: var(--surface, #fff); border-color: var(--line, #d5ddd8); box-shadow: 0 6px 24px rgba(20, 40, 35, .1); border-radius: 14px; padding: 16px 18px; }
 body.tile .hint-card, body.split .hint-card, body.split-v .hint-card { display: none; }
+
+/* stages that are not ready yet say so, and the one to do next is marked */
+.stage-btn.locked { opacity: .5; cursor: help; } .stage-btn.locked i { background: transparent; box-shadow: inset 0 0 0 1px currentColor; }
+.stage-btn.next:not(.on) { box-shadow: 0 0 0 2px rgba(29, 99, 237, .55); animation: stage-next 2.4s ease-in-out 3; }
+@keyframes stage-next { 50% { box-shadow: 0 0 0 5px rgba(29, 99, 237, 0); } }
+@media (prefers-reduced-motion: reduce) { .stage-btn.next:not(.on) { animation: none; } }

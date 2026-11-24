@@ -2,7 +2,7 @@
 // (Build → Record → Train → Try it…) and one click puts exactly the views for that goal on screen. The stages come from the project (core/stages.js);
 // the layout engine underneath is split-view.js (tiles) and the views are the tab groups registered in view-groups.js.
 // "Free layout" gives the old tabs and layout buttons back for people who want to arrange things themselves.
-import { resolveStages, matchStage, doneStages } from '../core/stages.js';
+import { resolveStages, matchStage, doneStages, nextStep } from '../core/stages.js';
 import { mixContext } from '../core/mix-context.js';
 import { activeWorkspace } from '../core/workspaces.js';
 import { getMl, onMl } from '../core/ml-context.js';
@@ -24,12 +24,14 @@ export function initStages({ editor, split }) {
 
   const ctxNow = () => mixContext(editor.state.parts, activeWorkspace());
   const avail = () => ({ ml: !!groups.get('ml')?.available(), robotics: !!groups.get('assembly')?.available(), viz: !!groups.get('viz')?.available() });
-  const done = () => { const m = getMl(); return doneStages({ samples: m.dataset?.samples.length || 0, model: !!m.model }); };
+  const progress = () => { const m = getMl(); return { samples: m.dataset?.samples.length || 0, model: !!m.model }; };
+  const done = () => { const c = ctxNow(); return doneStages({ ...progress(), placed: c.hasBody && c.placed.length >= c.channels.length }); };
 
   let announced;
   const announce = id => { if (id === announced) return; announced = id; try { dispatchEvent(new CustomEvent('cb-stage', { detail: id })); } catch { /* no window (tests) */ } };       // the views adapt to the step (the person shows only what it needs)
   /** put a stage on screen */
   function activate(stage) {
+    if (stage.locked) return explain(stage);
     const want = stage.panes; announce(isFree ? null : stage.id);
     if (narrow?.matches) {       // a phone-sized screen has room for one view: the stage's main one, or the circuit
       for (const [n, g] of groups) if (g.isOpen() && n !== want[0]?.[0]) g.close();
@@ -39,6 +41,16 @@ export function initStages({ editor, split }) {
     for (const [n, g] of groups) if (g.isOpen() && !want.some(p => p[0] === n)) g.close();
     for (const [g, v] of want) groups.get(g)?.open(v);
     paint(); showHint(stage);
+  }
+
+  /** a locked stage says why, and how to get there */
+  function explain(stage) {
+    const nx = nextStep(stages, done()), go = stages.find(x => x.id === (nx?.id || 'build')) || stages[0];
+    hint.replaceChildren(el('p', {}, el('b', { textContent: `${stage.label} is not ready: ` }), stage.locked));
+    const ok = el('button', { type: 'button', textContent: 'OK' }); ok.addEventListener('click', () => { hint.hidden = true; });
+    hint.append(ok);
+    if (go && go !== stage && !go.locked) { const b = el('button', { type: 'button', className: 'stage-hint-next', textContent: `Go to ${go.label} →` }); b.addEventListener('click', () => { hint.hidden = true; activate(go); }); hint.append(b); }
+    hint.hidden = false; shownFor = '';
   }
 
   /** the first time a stage opens it says what to do there, once */
@@ -57,22 +69,22 @@ export function initStages({ editor, split }) {
     bar.hidden = sep.hidden = stages.length < 2;
     document.body.classList.toggle('stages-on', stages.length >= 2); document.body.classList.toggle('free-layout', isFree);
     free.setAttribute('aria-pressed', String(isFree)); free.classList.toggle('on', isFree);
-    const key = JSON.stringify([stages.map(s => s.id), cur?.id, [...d], isFree]); if (key === sig) return; sig = key;
+    const nx = nextStep(stages, d), key = JSON.stringify([stages.map(s => [s.id, !!s.locked]), cur?.id, [...d], isFree, nx?.id]); if (key === sig) return; sig = key;
     bar.replaceChildren(...stages.map((s, i) => {
-      const b = el('button', { type: 'button', className: `stage-btn${s === cur ? ' on' : ''}${d.has(s.id) ? ' done' : ''}`, id: `stage-${s.id}` }, el('i', { textContent: d.has(s.id) ? '✓' : String(i + 1) }), el('span', { textContent: s.label }));
-      b.setAttribute('aria-current', s === cur ? 'step' : 'false'); b.title = s.hint; b.addEventListener('click', () => activate(s)); return b;
+      const b = el('button', { type: 'button', className: `stage-btn${s === cur ? ' on' : ''}${d.has(s.id) ? ' done' : ''}${s.locked ? ' locked' : ''}${nx?.id === s.id && s !== cur ? ' next' : ''}`, id: `stage-${s.id}` }, el('i', { textContent: d.has(s.id) ? '✓' : String(i + 1) }), el('span', { textContent: s.label }));
+      b.setAttribute('aria-current', s === cur ? 'step' : 'false'); b.title = s.locked ? `${s.label}: ${s.locked}` : nx?.id === s.id ? `Next: ${nx.why}` : s.hint; if (s.locked) b.setAttribute('aria-disabled', 'true'); b.addEventListener('click', () => activate(s)); return b;
     }), free);
     if (!cur && !hint.hidden) hint.hidden = true;
   }
 
   function refresh() {
-    const next = resolveStages(ctxNow(), avail()), s = next.map(x => x.id).join();
+    const next = resolveStages(ctxNow(), avail(), progress()), s = next.map(x => x.id).join();
     if (s !== stages.map(x => x.id).join()) { stages = next; sig = ''; } else stages = next.map((x, i) => x);
     paint();
   }
   addEventListener('cb-goto-stage', e => { const s = stages.find(x => x.id === e.detail); if (s) activate(s); });
   free.addEventListener('click', () => { isFree = !isFree; store(FREE_KEY, isFree); sig = ''; paint(); });
-  editor.on('change', refresh); editor.on('workspace', refresh); editor.on('catalog', refresh); onMl(() => paint());
+  editor.on('change', refresh); editor.on('workspace', refresh); editor.on('catalog', refresh); onMl(() => refresh());
   new MutationObserver(() => paint()).observe(document.body, { attributes: true, attributeFilter: ['class'] });       // a view opened or closed (by a stage, by free layout, by the old tabs)
   // projects open on their first stage (Build) unless something else is already showing
   setTimeout(refresh, 0); refresh();
