@@ -8,6 +8,7 @@
 //   wire REF PIN REF PIN               wire uno-1 9 resistor-1 1
 //   blink PIN MS                       blink 9 500   ·   blink auto 500 (the pin the last `build led` picked)
 //   build led|button|pot|mpu6050|dht|… PIN|auto      a ready LED+resistor / button / potentiometer circuit on that pin — or on a free one (auto)
+//   build plane edf|prop              the whole fixed-wing electronics (battery, ESC, motor or EDF, flight controller, receiver, two servos), wired
 //   defer                              "this needs a bigger AI"      ·   off     "outside what CircuitBench does"
 // Commands are separated by ";". REF is a part id (led-2) or a part type (led).
 import { PART_DEFS } from './parts.js';
@@ -15,11 +16,15 @@ import { BOARD_SPECS } from './boards.js';
 import { blinkSketch } from './quick-edits.js';
 import { applyCircuitActions } from './ai-actions.js';
 import { plan } from './hookup/plan.js';
+import { quickPlane } from './quick-plane.js';
+import './custom-parts.js';          // registers the ready-made template parts (custom-plane-fc …) so `add plane-fc` finds them
 
 const COLORS = new Set(['red', 'green', 'blue', 'yellow', 'orange', 'white']);
 const BOARDS = Object.keys(BOARD_SPECS);
 const PIN = /^(A\d{1,2}|\d{1,2})$/;
 const name = t => PART_DEFS[t]?.name || t;
+/** The model says `plane-fc`; the ready-made template parts are stored as `custom-plane-fc`. */
+const realType = t => (PART_DEFS[t] ? t : PART_DEFS[`custom-${t}`] ? `custom-${t}` : null);
 
 export function parseProgram(text) {
   const cmds = String(text || '').trim().split(/\s*;\s*/).filter(Boolean).map(c => c.split(/\s+/));
@@ -42,7 +47,7 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
   const usedPins = new Set(); let autoPin = null;
   for (const w of circuit.wires || []) for (const e of [w.from, w.to]) if (e && board() && e.part === board().id) usedPins.add(String(e.pin).toUpperCase());
   const freePin = analog => { const c = analog ? ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'] : [13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2].map(String); const f = c.find(x => !usedPins.has(x)); if (f) usedPins.add(f); return f; };
-  const ids = type => parts.filter(p => p.type === type).map(p => p.id);
+  const ids = type => parts.filter(p => p.type === type || p.type === `custom-${type}`).map(p => p.id);
   const fresh = type => { let n = 1; const base = type.replace(/[^a-z0-9]/g, ''); while (parts.some(p => p.id === `${base}${n}`)) n++; return `${base}${n}`; };
   const addPart = (type, props = {}) => {
     const id = fresh(type); parts.push({ id, type });
@@ -59,7 +64,7 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
   for (const c of cmds) {
     const [op, ...a] = c;
     if (op === 'add') {
-      const type = a[0]; if (!PART_DEFS[type] || BOARDS.includes(type)) return null;
+      const type = realType(a[0]); if (!type || BOARDS.includes(type)) return null;
       let n = 1, rest = a.slice(1); if (/^x\d+$/.test(rest[0] || '')) { n = +rest[0].slice(1); rest = rest.slice(1); }
       const p = props(rest); if (n < 1 || n > 10 || !okProps(type, p)) return null;
       for (let i = 0; i < n; i++) addPart(type, p);
@@ -80,7 +85,16 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
       const pin = (String(a[0]).toLowerCase() === 'auto' ? autoPin : String(a[0]).toUpperCase()) || (a[0] === 'auto' ? '13' : ''), ms = +a[1]; if (!PIN.test(pin) || !(ms >= 10 && ms <= 60000)) return null;
       code = blinkSketch(pin, ms); said.push(`Wrote a sketch that blinks pin ${pin} every ${ms} ms`);
     } else if (op === 'build') {
-      const kind = a[0]; if (!board()) { addPart('arduino-uno'); said.push('Added an Arduino Uno'); }   // an empty bench gets an Uno first
+      const kind = a[0];
+      if (kind === 'plane') {                                   // the plane has its own flight controller: no Arduino
+        const how = String(a[1] ?? 'edf').toLowerCase(); if (!['edf', 'prop'].includes(how)) return null;
+        const now = applyCircuitActions({ parts: circuit.parts || [], wires: circuit.wires || [] }, actions);
+        const r = quickPlane(how === 'edf' ? 'build a flying wing with an edf' : 'build a plane with a propeller', { parts: now.parts, wires: now.wires });
+        if (!r?.actions?.length) return null;
+        for (const x of r.actions) { actions.push(x); if (x.op === 'add_part') parts.push({ id: x.id, type: x.type }); }
+        said.push(String(r.explanation).split(/(?<=\.)\s/)[0].replace(/\.$/, '')); continue;
+      }
+      if (!board()) { addPart('arduino-uno'); said.push('Added an Arduino Uno'); }   // an empty bench gets an Uno first
       const b = board()?.id; if (!b) return null;
       const want = String(a[1] ?? 'auto').toLowerCase();
       const planned = PART_DEFS[kind] && !BOARDS.includes(kind) && !['led', 'button', 'pot'].includes(kind), pin = planned ? null : want === 'auto' ? freePin(kind === 'pot') : want.toUpperCase();

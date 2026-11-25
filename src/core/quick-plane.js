@@ -15,6 +15,7 @@ export function quickPlane(instruction, circuit = { parts: [], wires: [] }) {
   const haveBoard = has('plane-esc').length || has('plane-fc').length;
   const wantsBuild = WORDS.test(t) && VERBS.test(t), wantsWire = /\b(wire|connect|solder|hook)\b/.test(t) && /\b(motor|edf|esc|servos?)\b/.test(t) && haveBoard;
   if (!wantsBuild && !wantsWire) return null;
+  if (wantsBuild && !wantsWire && !/\b(plane|airplane|aeroplane|fixed[- ]?wing|flying[- ]?wing|glider|circuit|electronics|wiring)\b/.test(t) && !/\b(build|make|create|set ?up|wire|design|rig)\b/.test(t)) return null;      // "add an edf" is one part, not the whole plane
   const edf = /\b(edf|ducted|jet)\b/.test(t), actions = [], id = {};
   const bx = parts.length ? Math.round(Math.max(...parts.map(p => (p.x || 0) + 220)) / 10) * 10 + 40 : 40;
   const ensure = (key, type, x, y, wantId, extra = {}) => {

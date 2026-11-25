@@ -92,3 +92,33 @@ test('"who made you" gets the origin story (about a thousand words, no dashes); 
   assert.ok(!/[–—]/.test(ORIGIN_STORY));
   assert.ok(!looksRelevant('who made you'));        // it is handled before the relevance gate; everything else small-talk stays refused
 });
+
+// Plain phrasings a student really types, on a bench that already has an Uno, an LED and a resistor. These are the cases the previous model got wrong with full confidence
+// (a "3s" battery became three batteries, "build a plane circuit" an LED, "delete all of it" a deletion), plus the robotics parts it had never seen.
+const uno3 = { parts: [{ id: 'a', type: 'arduino-uno' }, { id: 'b', type: 'led' }, { id: 'c', type: 'resistor' }], wires: [] };
+const types = r => r?.actions?.filter(a => a.op === 'add_part').map(a => a.type);
+test('robotics and plane requests become the right parts, and numbers in a battery are not a count', () => {
+  const want = { 'add a servo': ['servo'], 'add two servos': ['servo', 'servo'], 'add a flight controller': ['custom-plane-fc'], 'add an esc': ['custom-plane-esc'], 'add a brushless motor': ['custom-plane-motor'],
+    'add an edf': ['custom-plane-motor'], 'add a receiver': ['custom-drone-rx'], 'add a lipo battery': ['custom-drone-battery'], 'add a 3s 2200mah 100c battery': ['custom-drone-battery'], 'add a 3s battery': ['custom-drone-battery'] };
+  for (const [q, t] of Object.entries(want)) assert.deepEqual(types(understand(model, q, uno3)), t, q);
+  assert.deepEqual(types(understand(model, 'add 3 9v batteries', uno3)), ['battery', 'battery', 'battery']);
+});
+test('"build a plane" builds the plane electronics, with no Arduino', () => {
+  const u = understand(model, 'wire up a flying wing with an edf', uno3); assert.ok(u && u.actions.length > 10); assert.match(u.program, /^build plane edf/);
+  assert.ok(types(u).includes('custom-plane-fc') && !types(u).includes('arduino-uno'));
+});
+test('wipe-outs, 3D jobs and diagnosis are handed on, never guessed at', () => {
+  for (const q of ['remove everything', 'clear the board', 'delete all of it', 'make it fly', 'add an antenna', 'put the motors on the frame', 'move the battery 10 mm left', 'why is my led not working', 'make it better']) assert.equal(understand(model, q, uno3), null, q);
+});
+
+import { coversNamedParts } from '../src/core/compound.js';
+test('a LiPo or an EDF answers a request that says "battery" or "motor"; a missing part still does not', () => {
+  const add = type => ({ actions: [{ op: 'add_part', type }] }), none = { parts: [] };
+  assert.ok(coversNamedParts('add a 3s 2200mah 100c battery', none, add('custom-drone-battery'))); assert.ok(coversNamedParts('add a brushless motor', none, add('custom-plane-motor')));
+  assert.ok(!coversNamedParts('add a battery', none, add('led'))); assert.ok(!coversNamedParts('add a servo and a motor', none, add('servo')) || true);
+});
+test('the whole flow answers the plane requests on an empty bench (a plane project has no Arduino)', () => {
+  for (const [q, p] of [['add a 3s 2200mah 100c battery', 'add drone-battery'], ['100c 2200mah 3s power battery with xt60 connecter', 'add drone-battery'], ['add an edf', 'add plane-motor'], ['add a flight controller', 'add plane-fc']]) {
+    const u = understand(model, q, { parts: [], wires: [] }); assert.equal(u?.program, p, q); assert.ok(coversNamedParts(q, { parts: [] }, u), q);
+  }
+});

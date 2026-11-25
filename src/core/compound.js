@@ -89,5 +89,7 @@ export function coversNamedParts(text, circuit, r) {
   const named = readParts(String(text || '').toLowerCase()).requests.map(q => q.type).filter(t => t !== 'resistor');
   if (!named.length || !r?.actions) return true;
   const have = new Set([...(circuit?.parts || []).map(p => p.type), ...r.actions.filter(a => a.op === 'add_part').map(a => a.type)]);
-  return named.every(t => have.has(t));
+  // the plane parts answer to the everyday names: a LiPo is the "battery", an EDF or outrunner is the "motor"
+  const SAME = { battery: ['custom-drone-battery'], 'dc-motor': ['custom-plane-motor'], motor: ['custom-plane-motor'] };
+  return named.every(t => have.has(t) || (SAME[t] || []).some(x => have.has(x)));
 }

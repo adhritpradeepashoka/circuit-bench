@@ -22,7 +22,8 @@ const label = t => PART_DEFS[t]?.name || t;
 export function findTypes(text) {
   const out = [];
   let rest = text;
-  for (const [type, re] of NAMES) { const m = re.exec(rest); if (m && PART_DEFS[type]) { out.push({ type, index: m.index }); rest = rest.replace(re, ' '.repeat(m[0].length)); } }
+  const lipo = /\b\d\s*s\b|\bmah\b|\blipo\b|\bxt\s?60\b|\b(?:flight|drone|rc) batter/.test(rest);          // a LiPo with a cell count or capacity is not the 9 V battery part: leave it to the model
+  for (const [type, re] of NAMES) { if (type === 'battery' && lipo) continue; const m = re.exec(rest); if (m && PART_DEFS[type]) { out.push({ type, index: m.index }); rest = rest.replace(re, ' '.repeat(m[0].length)); } }
   return out.sort((a, b) => a.index - b.index).map(x => x.type);
 }
 const count = text => {

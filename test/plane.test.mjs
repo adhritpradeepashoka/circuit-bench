@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { quickPlane } from '../src/core/quick-plane.js';
 import { quickDrone } from '../src/core/quick-drone.js';
 import { planeWiring } from '../src/core/plane-wiring.js';
 import { TEMPLATES } from '../src/core/part-templates.js';
@@ -97,4 +96,13 @@ test('the Plane robot type: listed, its parts exist, and the AI is told about it
   const bad = check(without(built(), w => w.from.pin === "SIG"));
   const prompt = buildPrompt({ instruction: 'why does it not spin', circuit: { parts: [], wires: [] }, code: '', context: { plane: bad }, workspace: 'robotics', robotType: 'plane' });
   assert.match(JSON.stringify(prompt), /Plane wiring check: problems found/); assert.match(JSON.stringify(prompt), /FIXED-WING PLANE/);
+});
+
+import { findTypes } from '../src/core/quick-edits.js';
+import { quickPlane } from '../src/core/quick-plane.js';
+test('one plane part is one part: "add an edf" does not build the whole plane, and a LiPo with a spec is not the 9 V battery', () => {
+  for (const q of ['add an edf', 'add a servo and an edf', 'i need an edf']) assert.equal(quickPlane(q, { parts: [], wires: [] }), null, q);
+  for (const q of ['build a flying wing with an edf', 'wire up an edf', 'make me an edf plane']) assert.ok(quickPlane(q, { parts: [], wires: [] })?.actions.length > 10, q);
+  assert.ok(!findTypes('add a 3s 2200mah 100c battery').includes('battery')); assert.ok(!findTypes('add a lipo battery').includes('battery'));
+  assert.ok(findTypes('add a 9v battery').includes('battery') && findTypes('add 3 batteries').includes('battery'));
 });

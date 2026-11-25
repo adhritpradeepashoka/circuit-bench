@@ -270,7 +270,7 @@ export function initAiPanel(editor, code, sim = null) {
       return b;
     }), ...(webgpuAvailable() ? [localTab()] : []));
     providerHint.replaceChildren();
-    if (isTiny) { providerHint.append('CircuitBench’s own tiny model (about 2.5 MB, trained only on this bench): it runs in your browser in milliseconds with no graphics card, no key and no download. It handles plain requests — add, move, wire, change values — but not long sketches; for those, pick another AI above.'); return; }
+    if (isTiny) { providerHint.append('CircuitBench’s own tiny model (about 2.5 MB, trained only on this bench): it runs in your browser in milliseconds with no graphics card, no key and no download. It handles plain requests — add parts (servos, flight controllers, ESCs, EDFs, receivers, LiPos), change values, wire, build a whole plane circuit — but not long sketches or the 3D view; for those, pick another AI above.'); return; }
     if (isHosted) { providerHint.append('CircuitBench’s own AI, free with your account — no key and nothing to download. Switch to another option above any time.'); return; }
     if (isLocal) {
       const m = LOCAL_MODELS.find(x => x.id === getLocalModel()) || LOCAL_MODELS.find(x => x.id === DEFAULT_LOCAL_MODEL) || LOCAL_MODELS[0];

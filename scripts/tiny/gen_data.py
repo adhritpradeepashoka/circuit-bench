@@ -25,7 +25,16 @@ TYPES = {  # type → (names people use, can take counts)
   'rgb-led': ['rgb led', 'rgb', 'colour led', 'color changing led'],
   'breadboard': ['breadboard', 'solderless board'],
   'arduino-nano': ['arduino nano', 'nano'], 'arduino-mega': ['arduino mega', 'mega'],
+  # robotics / fixed wing (the circuit workspace's Plane parts): their ids on the board carry the template prefix
+  'servo': ['servo', 'servo motor', 'sg90', 'micro servo', 'elevon servo', 'hobby servo', 'control surface servo', 'mg90'],
+  'plane-fc': ['flight controller', 'fc', 'plane flight controller', 'fixed wing flight controller', 'wing flight controller', 'autopilot', 'flight computer', 'flight control board'],
+  'plane-esc': ['esc', 'speed controller', 'electronic speed controller', 'plane esc', 'motor esc', 'brushless esc', 'brushless speed controller'],
+  'plane-motor': ['brushless motor', 'edf', 'ducted fan', 'edf motor', 'outrunner', 'plane motor', 'fan motor', 'brushless outrunner', 'edf fan', 'bldc motor'],
+  'drone-battery': ['lipo', 'lipo battery', 'flight battery', 'drone battery', 'lipo pack', 'lipo cell pack', 'rc battery'],
+  'drone-rx': ['receiver', 'rx', 'radio receiver', 'elrs receiver', 'crsf receiver', 'rc receiver', 'radio rx'],
 }
+SID = {'plane-fc': 'custom-plane-fc', 'plane-esc': 'custom-plane-esc', 'plane-motor': 'custom-plane-motor', 'drone-battery': 'custom-drone-battery', 'drone-rx': 'custom-drone-rx'}   # how the board names them
+sid = lambda t: SID.get(t, t)
 COLORS = ['red', 'green', 'blue', 'yellow', 'orange', 'white']
 NUMW = {1: ['a', 'an', 'one', '1'], 2: ['two', '2', 'a couple of', 'a pair of'], 3: ['three', '3'], 4: ['four', '4'], 5: ['five', '5'], 6: ['six', '6']}
 OHM = [100, 220, 330, 470, 680, 1000, 2200, 4700, 10000, 22000, 47000, 100000]
@@ -41,10 +50,12 @@ def ohm_words(v):
 # ───────── phrasing pools: first part TRAIN, last part HELD-OUT (never trained on) ─────────
 ADD_V = ['add', 'put', 'place', 'insert', 'drop in', 'give me', 'i need', 'i want', 'get me', 'lets add', 'throw in', 'attach', 'bring in', 'can you add', 'please add', 'could you put', 'would you add', 'i would like',
          'stick in', 'whack in', 'pop in', 'include', 'set down', 'fetch me', 'chuck in', 'add in', 'i d like', 'we need', 'lets have', 'plug in', 'hook in', 'drag in', 'show me', 'create', 'make me', 'spawn', 'put in', 'add another', 'one more',
+         'load up', 'toss in', 'tack on', 'slap in', 'fit', 'mount', 'whip in', 'bring over', 'could i have', 'gimme', 'i could use', 'we want', 'add one more',
          # held-out ↓ (never trained)
          'stick on', 'pop on', 'slot in', 'plonk', 'bung in', 'summon', 'deposit']
 DEL_V = ['remove', 'delete', 'get rid of', 'take away', 'take out', 'scrap', 'erase', 'trash', 'clear', 'dump', 'please remove', 'can you delete',
          'ditch', 'bin', 'yank out', 'wipe out', 'drop', 'lose', 'unplug', 'take off', 'pull out', 'i dont need', 'i dont want', 'cut', 'discard', 'kill',
+         'nuke', 'zap', 'knock out', 'eject', 'strip out', 'we dont need', 'no more', 'i do not want',
          'rip out', 'banish', 'junk', 'axe']
 SET_V = ['set', 'change', 'make', 'turn', 'adjust', 'update', 'switch', 'can you make', 'please set', 'i want', 'lets make',
          'tweak', 'swap', 'convert', 'alter', 'modify', 'put', 'give', 'configure', 'use', 'lets use', 'edit', 'bump', 'dial',
@@ -136,6 +147,43 @@ def gen_vague(rng, held, suf):
     _, st = make_state(rng)                                   # cannot do (brightness, power off) → defer
     return fin(rng.choice(['make it brighter', 'make it dimmer', 'turn it off', 'turn it on', 'make it stronger', 'make it louder', 'fix it', 'do it again', 'undo that', 'make it better', 'that is wrong', 'try again']), st, 'defer')
 
+# ───────── robotics / fixed-wing requests, batteries with specs, wipe-out requests and 3D requests the circuit model must not guess at ─────────
+PLANE_EDF = ['build a flying wing with an edf', 'wire up an edf plane', 'set up the electronics for an edf jet', 'make a flying wing circuit', 'i want a plane with an edf', 'build me an edf plane circuit',
+             'wire a ducted fan plane', 'make the edf wiring', 'set up my flying wing', 'wire up the edf and the esc and the flight controller', 'build the plane circuit with an edf', 'make me a flying wing',
+             'wire up a 50mm edf plane', 'plane circuit with an edf please', 'edf jet electronics', 'hook up the edf plane']
+PLANE_PROP = ['build a plane with a propeller', 'wire up a propeller plane', 'set up the electronics for a fixed wing', 'make a fixed wing circuit', 'i want a plane with a prop', 'build me a plane circuit',
+              'wire up a pusher plane', 'make the plane wiring', 'set up my fixed wing', 'build the plane circuit', 'wire up an rc plane', 'make me an rc plane circuit', 'wire up the plane',
+              'plane electronics please', 'build a plane', 'set up a plane with a brushless motor and a prop']
+PLANE_HO = {'edf': ['whip up an edf plane', 'rig up a ducted fan jet'], 'prop': ['rig up a propeller plane', 'whip up a fixed wing circuit']}
+SPEC_FORMS = ['{c}s {m}mah {k}c battery', '{m}mah {c}s battery', '{c}s {m} mah lipo', '{c}s lipo', '{k}c {m}mah {c}s power battery with xt60 connector', '{m}mah {k}c {c}s battery', 'a {c}s battery',
+              '{c}s {m}mah battery', '{c}s {k}c battery', '{m}mah lipo', 'lipo {c}s {m}mah', '{c}s flight battery', 'flight battery {m}mah', '{m} mah {c}s {k}c lipo pack', 'xt60 battery {c}s', '{k}c lipo battery', '{c}s battery pack {m}mah']
+WIPE = ['remove everything', 'clear the board', 'delete everything', 'delete all of it', 'start over', 'wipe the bench', 'clear everything', 'get rid of everything', 'empty the workspace', 'reset everything', 'remove all the parts',
+        'delete all parts', 'clear all', 'trash it all', 'scrap everything', 'nuke everything', 'wipe it all', 'clean the bench', 'new project please', 'remove all of it']
+WIPE_HO = ['purge the bench', 'blank the board', 'flatten everything']
+R_DEFER = ['make it fly', 'test fly it', 'add wings', 'add an antenna', 'add a wing', 'print the airframe', 'import my stl', 'what pinout does my flight controller have', 'why wont my edf spin', 'check my plane wiring',
+           'set the servo to 90 degrees', 'make the servo sweep', 'add a fuselage', 'add a tail', 'how much thrust does a 50mm edf make', 'will my 3s battery power the edf', 'which esc should i buy',
+           'bind my receiver', 'calibrate the esc', 'how do i wire elevons', 'set up failsafe', 'flash betaflight', 'add a camera', 'add gps', 'add a propeller', 'add the airframe', 'put the motors on the frame',
+           'add props', 'join the two holes', 'move the battery 10 mm left', 'rotate the motor 90 degrees', 'put the flight controller on the standoffs', 'drop the battery on the floor', 'attach the antenna to the receiver',
+           'place the edf inside the wing', 'make the battery bigger', 'measure the gap', 'fit the battery inside', 'screw the fc to the frame', 'unjoin the servo', 'set the joint limits', 'hold the frame still']
+R_DEFER_HO = ['sort out the airframe', 'make it take off', 'stick the antenna on', 'slide the battery forward']
+
+def gen_robo(rng, held, suf):
+    def fin(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
+    k = rng.random(); _, st = make_state(rng)
+    if k < 0.30:                                    # a battery described with its specs: one LiPo part, the numbers are not a count
+        c, m, kk = rng.choice([1, 2, 3, 4, 5, 6]), rng.choice([450, 650, 850, 1000, 1300, 1500, 1800, 2200, 2600, 3000, 3300, 4000, 5000, 6000]), rng.choice([20, 25, 30, 45, 50, 60, 75, 100, 120, 150])
+        desc = rng.choice(SPEC_FORMS).format(c=c, m=m, k=kk)
+        v = rng.choice(['add', 'make', 'i need', 'get me', 'i want', 'put', 'give me', 'create', 'can you add', 'please add', 'i want to add', 'add in', 'lets add', 'need', ''])
+        det = rng.choice(['a', 'an', 'one', '']) if not desc.startswith(('a ', 'xt')) else ''
+        return fin(f'{v} {det} {desc}'.replace('  ', ' ').strip(), st, 'add drone-battery')
+    if k < 0.50:                                    # the whole plane
+        if held:
+            how = rng.choice(['edf', 'prop']); return fin(rng.choice(PLANE_HO[how]), st, f'build plane {how}')
+        if rng.random() < 0.5: return fin(rng.choice(PLANE_EDF), st, 'build plane edf')
+        return fin(rng.choice(PLANE_PROP), st, 'build plane prop')
+    if k < 0.65: return fin(rng.choice(WIPE_HO if held else WIPE), st, 'defer')
+    return fin(rng.choice(R_DEFER_HO if held else R_DEFER), st, 'defer')
+
 def typo(s, rng):
     w = s.split(' '); out = []
     for t in w:
@@ -147,14 +195,16 @@ def typo(s, rng):
 
 def make_state(rng, need=None):
     """A random board: the main board plus some parts. `need` = {type: count} that must exist."""
-    parts = [('arduino-uno', 'uno-1')]
-    if rng.random() < 0.4: parts.append(('breadboard', 'bb-1'))
+    # the main board: mostly an Uno, but also other boards, or none at all (a plane project has no Arduino, the flight controller is the board)
+    r0 = rng.random()
+    parts = [('arduino-uno', 'uno-1')] if r0 < 0.62 else [('arduino-nano', 'nano-1')] if r0 < 0.70 else [('arduino-mega', 'mega-1')] if r0 < 0.75 else [('raspberry-pi-pico', 'pico-1')] if r0 < 0.82 else [('arduino-uno-r4', 'unor4-1')] if r0 < 0.85 else []
+    if rng.random() < 0.4 and parts: parts.append(('breadboard', 'bb-1'))
     counts = {}
     for t in rng.sample(list(TYPES), rng.randint(0, 4)):
         if t not in ('arduino-nano', 'arduino-mega', 'breadboard'): counts[t] = rng.choice([1, 1, 1, 2, 3])
     for t, n in (need or {}).items(): counts[t] = max(counts.get(t, 0), n)
     for t, n in counts.items():
-        for i in range(1, n + 1): parts.append((t, f'{t}-{i}'))
+        for i in range(1, n + 1): parts.append((t, f'{sid(t)}-{i}'))
     rng.shuffle(parts)
     return parts, ' '.join(i for _, i in parts)
 
@@ -168,9 +218,10 @@ def gen_one(rng, held):
     SUF = SUFFIX + (SUFFIX_HO if held else [])
     if held:  # held-out set only uses the held-out phrasings (plus unseen combinations)
         ADD = ADD_V[-7:]; DEL = DEL_V[-4:]; SET = SET_V[-4:]; SUF = SUFFIX_HO
-    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off', 'vague'], [20, 10, 12, 7, 12, 6, 8, 5, 34])[0]
+    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off', 'vague', 'robo'], [24, 12, 12, 7, 12, 6, 8, 5, 30, 20])[0]
     suf = rng.choice(SUF)
     if kind == 'vague': return gen_vague(rng, held, suf)
+    if kind == 'robo': return gen_robo(rng, held, suf)
     def finish(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
 
     if kind == 'add':

@@ -55,3 +55,17 @@ test('build with no pin picks a free one, wires it fully, and blink auto uses th
   assert.equal(go('build pot auto').out.warnings.length, 0);
   assert.equal(go('build button').out.wires.length, 2, 'a missing pin means auto');
 });
+
+import { planeWiring } from '../src/core/plane-wiring.js';
+test('plane parts: add by short name, delete by type, and build the whole plane', () => {
+  const empty = { parts: [], wires: [] };
+  const a = go('add plane-fc; add plane-esc; add plane-motor; add drone-rx; add drone-battery; add servo x2', empty);
+  assert.deepEqual(a.out.parts.map(p => p.type), ['custom-plane-fc', 'custom-plane-esc', 'custom-plane-motor', 'custom-drone-rx', 'custom-drone-battery', 'servo', 'servo']);
+  const d = go('del drone-battery', a.out); assert.ok(!d.out.parts.some(p => p.type === 'custom-drone-battery') && d.out.parts.length === 6);
+  assert.equal(runProgram('add warp-drive', empty), null);
+  for (const how of ['edf', 'prop']) {
+    const b = go(`build plane ${how}`, empty); assert.equal(b.r.kind, 'edit'); assert.ok(!b.out.parts.some(p => p.type === 'arduino-uno'), 'a plane has its own flight controller: no Arduino');
+    const w = planeWiring({ parts: b.out.parts, wires: b.out.wires.map(x => ({ a: x.from, b: x.to })) }); assert.ok(w.present, how);
+  }
+  assert.equal(runProgram('build plane jet', empty), null);
+});
