@@ -6,6 +6,7 @@
 // The button only appears when the host provides a Google OAuth client ID (GOOGLE_CLIENT_ID → /api/config).
 
 import { getToken, getMe, setSession, clearSession, authed } from '../sim/session.mjs';
+import { holdLine } from './live-line.js';
 
 const STORE = 'circuitbench:account';
 const GIS_SRC = 'https://accounts.google.com/gsi/client';
@@ -87,25 +88,10 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
   }
   if (heartbeatMs) setInterval(refresh, heartbeatMs);
   /** Hold a line open to the server: when an admin changes this account's access the server writes to it, and the page re-reads who it is at once. */
-  let liveCtl = null;
-  async function live() {
-    if (liveCtl || !heartbeatMs || !user || !getToken() || !globalThis.ReadableStream) return;
-    const ctl = liveCtl = new AbortController();
-    try {
-      const r = await fetchImpl('/api/live', { headers: { authorization: `Bearer ${getToken()}` }, signal: ctl.signal });
-      if (!r.ok || !r.body) throw new Error('no live line');
-      const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
-      for (;;) {
-        const { done, value } = await rd.read(); if (done) break;
-        buf += dec.decode(value, { stream: true });
-        for (let i = buf.indexOf('\n\n'); i >= 0; i = buf.indexOf('\n\n')) { const chunk = buf.slice(0, i); buf = buf.slice(i + 2); if (chunk.includes('data: refresh')) refresh(); }
-      }
-    } catch { /* offline, signed out, or the server restarted: try again below */ }
-    liveCtl = null;
-    if (user && getToken()) { const t = setTimeout(live, 3000 + Math.random() * 2000); t.unref?.(); }
-  }
+  const line = holdLine({ fetchImpl, url: () => '/api/live', headers: () => ({ authorization: `Bearer ${getToken()}` }), onRefresh: () => refresh(), keep: () => !!heartbeatMs && !!user && !!getToken() });
+  const live = () => line.start();
   function signOut() {
-    user = null; liveCtl?.abort(); clearSession();
+    user = null; line.stop(); clearSession();
     try { localStorage.removeItem(STORE); } catch { /* ignore */ }
     google?.accounts.id.disableAutoSelect();
     paint(); status('Signed out');

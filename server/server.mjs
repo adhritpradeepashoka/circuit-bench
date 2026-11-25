@@ -6,6 +6,7 @@
 //   POST /api/account/kind {kind}   ·   /api/classes … (teachers: create/settings/roster/review; students: join/submit)   ·   POST /api/admin/kind
 //   GET /api/projects · GET/PUT/DELETE /api/projects/:id   (signed-in people: a cloud copy of their projects)
 //   GET/POST/DELETE /api/admin/users   (admins; the owner also manages admins)   ·   POST /api/admin/permissions {email, perms}   (limits for one account; the page is /admin)
+//   POST /api/visit {id, page} (every page, signed in or not)  ·   GET/POST /api/admin/visitors (admins: who is here without signing in; block one)  ·   /api/live?v=<id> for visitors
 //   Key sync (opt-in, encrypted): KEY_VAULT_SECRET (falls back to DATABASE_URL)
 //   Env for accounts: OWNER_EMAIL, DATABASE_URL, SESSION_SECRET, MAX_FREE_CONCURRENT, FREE_HOSTED_AI=1, HOSTED_AI_KEY/_PROVIDER/_MODEL
 // Env: PORT (8787), HOST (127.0.0.1), VLAB_CORS_ORIGIN (e.g. * — only needed when the page is served from somewhere else),
@@ -21,13 +22,16 @@ import { createClasses, createMemoryClassStore, createPgClassStore } from './cla
 import { createKeyVault, createMemoryKeyStore, createPgKeyStore } from './key-vault.mjs';
 import { createCloudProjects, createMemoryProjectStore, createPgProjectStore } from './cloud-projects.mjs';
 import { createFeedback, createMemoryFeedbackStore, createPgFeedbackStore } from './feedback.mjs';
+import { createVisitors, cleanVisitorId, createMemoryBlockStore, createPgBlockStore } from './visitors.mjs';
 import { createAccounts, createMemoryStore, createPgStore, createSessions, createGoogleVerifier, createPresence } from './accounts.mjs';
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.json': 'application/json', '.png': 'image/png', '.ico': 'image/x-icon', '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.glb': 'model/gltf-binary', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg' };
 
-export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null, community = null, classes = null, cloudProjects = null, keyVault = null, feedback = null } = {}) {
+export function createServer({ compiler = createCompiler(), ai = createAiService(), staticDir = null, log = () => {}, corsOrigin = null, publicConfig = {}, accounts = null, hostedAi = null, community = null, classes = null, cloudProjects = null, keyVault = null, feedback = null, visitors = null, trustProxyHeaders = !!(process.env.RENDER || process.env.TRUST_PROXY_HEADERS === '1') } = {}) {
   // hostedAi = { provider, key, model? }: the owner's own AI key, used only for signed-in users whose role entitles them to it.
   const bearer = req => /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1] || '';
+  /** The visitor's own address. Behind Render the socket only shows Render's proxy, so we read the header its edge sets (True-Client-IP); that header can be forged on a host with no such edge, so it is trusted only when asked for. X-Forwarded-For is never used: Render appends to it, it does not clean it. */
+  const clientIp = req => String((trustProxyHeaders && (req.headers['true-client-ip'] || req.headers['cf-connecting-ip'])) || req.socket.remoteAddress || '').trim().slice(0, 64);
   /** A student whose class turned a feature off may not use it, even by calling the API directly. */
   async function gate(req, feature, what) {
     if (!bearer(req)) return;
@@ -56,7 +60,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
     list.push(now); buckets.set(ip, list);
     return list.length > 40;
   };
-  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization', 'access-control-max-age': '600', vary: 'origin' } : {};
+  const cors = corsOrigin ? { 'access-control-allow-origin': corsOrigin, 'access-control-allow-methods': 'POST, GET, PUT, PATCH, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization, x-cb-visitor, x-cb-profile', 'access-control-max-age': '600', vary: 'origin' } : {};
   const send = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store', ...cors, ...headers }); res.end(typeof body === 'string' ? body : JSON.stringify(body)); };
 
   return http.createServer(async (req, res) => {
@@ -66,10 +70,16 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       // Public, non-secret settings the page needs at run time (e.g. the Google OAuth *client* ID, which is
       // meant to be visible). Lets them change on the host without a rebuild.
       if (url.pathname === '/api/config') return send(res, 200, { googleClientId: publicConfig.googleClientId || null, accounts: !!accounts });
+      // Someone an admin blocked, using the site without signing in: nothing that costs money or reaches other people. (Signed-in people are judged by their account instead.)
+      if (visitors && req.method !== 'OPTIONS' && url.pathname.startsWith('/api/') && !/^\/api\/(?:config|visit|live|health|me|presence)$|^\/api\/(?:auth|admin)\//.test(url.pathname)) {
+        const tok = bearer(req), acct = tok && accounts ? await accounts.auth(tok) : null;
+        const hit = acct ? null : await visitors.check(req.headers['x-cb-visitor'], clientIp(req));
+        if (hit) return send(res, 403, { ok: false, blocked: true, error: hit.note ? `An admin blocked this visitor: ${hit.note}` : 'An admin blocked this visitor.' });
+      }
       if (url.pathname === '/api/auth/google') {
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
-        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
+        if (limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
         const out = await accounts.signIn((await readJson(req, 20_000)).credential);
         if (out?.blocked) return send(res, 403, { ok: false, error: out.note ? `This account is blocked: ${out.note}` : 'This account has been blocked by an admin.' });
         return out ? send(res, 200, { ok: true, ...out }) : send(res, 401, { ok: false, error: 'Google sign-in could not be verified.' });
@@ -111,7 +121,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         await gate(req, 'community', 'the community');
         const parts = url.pathname.split('/').slice(3), tok = bearer(req), id = Number(parts[1]);
         const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
-        if (req.method !== 'GET' && limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
+        if (req.method !== 'GET' && limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
         if (parts[0] === 'posts' && !parts[1]) {
           if (req.method === 'GET') return out(await community.list(url.searchParams.get('kind'), url.searchParams.get('flair')));
           if (req.method === 'POST') return out(await community.create(tok, await readJson(req, 30_000)));
@@ -143,7 +153,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         if (!classes) return send(res, 404, { ok: false, error: 'Classes are not enabled on this server.' });
         const parts = url.pathname.split('/').slice(3), tok = bearer(req), id = parts[0];
         const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
-        if (req.method !== 'GET' && limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
+        if (req.method !== 'GET' && limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
         if (!id) { if (req.method === 'GET') return out(await classes.list(tok)); if (req.method === 'POST') return out(await classes.create(tok, await readJson(req, 2_000))); }
         else if (id === 'join' && req.method === 'POST') return out(await classes.join(tok, (await readJson(req, 1_000)).code));
         else if (id === 'demo' && req.method === 'POST') return out(await classes.demo(tok));
@@ -159,14 +169,35 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         else if (parts[1] === 'students' && req.method === 'DELETE') return out(await classes.removeStudent(tok, id, url.searchParams.get('email')));
         return send(res, 404, { ok: false, error: 'Unknown endpoint.' });
       }
+      if (url.pathname === '/api/visit') {                                       // every open page checks in (signed in or not); answers whether an admin blocked this visitor
+        if (!visitors) return send(res, 404, { ok: false, error: 'Visitors are not tracked on this server.' });
+        if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
+        const b = await readJson(req, 1_000), tok = bearer(req), acct = tok && accounts ? await accounts.auth(tok) : null;
+        const out = await visitors.beat({ id: b.id, ip: clientIp(req), ua: req.headers['user-agent'], page: b.page, email: acct?.email || '' });
+        return send(res, 200, { ok: true, blocked: out.blocked, note: out.note || '' });
+      }
       if (url.pathname === '/api/live') {                                       // a page that is open holds this request; the server writes a line when an admin changes its access
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
-        const a = await accounts.auth(bearer(req)); if (!a) return send(res, 401, { ok: false, error: 'Please sign in again.' });
+        const a = bearer(req) ? await accounts.auth(bearer(req)) : null, vid = cleanVisitorId(url.searchParams.get('v'));
+        if (!a && !(visitors && vid)) return send(res, 401, { ok: false, error: 'Please sign in again.' });
+        const write = () => res.write('data: refresh\n\n'), off = a ? accounts.watch(a.email, write) : visitors.watch(vid, write);
+        if (!off) return send(res, 503, { ok: false, error: 'Too many open pages right now.' });
         res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
         res.write('retry: 3000\n\n');
-        const off = accounts.watch(a.email, () => res.write('data: refresh\n\n')), beat = setInterval(() => res.write(': ok\n\n'), 25_000);
+        const beat = setInterval(() => res.write(': ok\n\n'), 25_000);
         req.on('close', () => { clearInterval(beat); off(); });
         return;
+      }
+      if (url.pathname === '/api/admin/visitors') {
+        if (!accounts || !visitors) return send(res, 404, { ok: false, error: 'Visitors are not tracked on this server.' });
+        const a = await accounts.auth(bearer(req));
+        if (!a || (a.role !== 'owner' && a.role !== 'admin')) return send(res, 403, { ok: false, error: 'Admins only.' });
+        if (req.method === 'GET') return send(res, 200, { ok: true, ...(await visitors.list()) });
+        if (req.method === 'POST') {
+          const b = await readJson(req, 2_000), out = await visitors.setBlock({ id: b.id, blocked: b.blocked === true, network: b.network === true, note: b.note, by: a.email, adminIp: clientIp(req) });
+          return send(res, out.ok ? 200 : out.status, out.ok ? { ok: true, visitor: out.visitor } : { ok: false, error: out.error });
+        }
+        return send(res, 405, { ok: false, error: 'Use GET or POST.' });
       }
       if (url.pathname === '/api/admin/permissions') {
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
@@ -190,7 +221,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       if (url.pathname === '/api/feedback') {
         if (!feedback) return send(res, 404, { ok: false, error: 'Feedback is not enabled on this server.' });
         const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
-        if (req.method === 'POST') { if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' }); return out(await feedback.send(bearer(req), await readJson(req, 12_000))); }
+        if (req.method === 'POST') { if (limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' }); return out(await feedback.send(bearer(req), await readJson(req, 12_000))); }
         if (req.method === 'GET') return out(await feedback.list(bearer(req)));
         if (req.method === 'DELETE') return out(await feedback.remove(bearer(req), url.searchParams.get('id')));
         return send(res, 405, { ok: false, error: 'Use GET, POST or DELETE.' });
@@ -201,7 +232,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       }
       if (url.pathname === '/api/compile') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
-        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many compile requests — wait a moment.' });
+        if (limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many compile requests — wait a moment.' });
         let raw = '', seen = 0, tooBig = false;
         for await (const chunk of req) {                      // drain the whole body so the client can read our 413 (bounded)
           seen += chunk.length;
@@ -216,7 +247,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       }
       if (url.pathname === '/api/ai/generate-code') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
-        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
+        if (limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
         let raw = '', seen = 0, tooBig = false;
         for await (const chunk of req) {
           seen += chunk.length;
@@ -232,7 +263,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       }
       if (url.pathname === '/api/ai/create-part') {
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
-        if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
+        if (limited(clientIp(req) || 'local')) return send(res, 429, { ok: false, error: 'Too many AI requests — wait a moment.' });
         let raw = '';
         for await (const chunk of req) { raw += chunk; if (raw.length > 60_000) { req.destroy(); return; } }
         let body; try { body = JSON.parse(raw); } catch { throw new RequestError('Body must be valid JSON.'); }
@@ -271,7 +302,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const compiler = createCompiler();
   const clientId = process.env.GOOGLE_CLIENT_ID || '137986291175-5s42d2u26q1029oo1v5dhged48dg79fb.apps.googleusercontent.com';
   // Accounts: DATABASE_URL (Supabase/Neon Postgres) keeps roles across deploys; without it they live in memory and reset on restart.
-  let store = createMemoryStore(), communityStore = createMemoryCommunity(), classStore = createMemoryClassStore(), projectStore = createMemoryProjectStore(), keyStore = createMemoryKeyStore(), feedbackStore = createMemoryFeedbackStore();
+  let store = createMemoryStore(), communityStore = createMemoryCommunity(), classStore = createMemoryClassStore(), projectStore = createMemoryProjectStore(), keyStore = createMemoryKeyStore(), feedbackStore = createMemoryFeedbackStore(), blockStore = createMemoryBlockStore();
   if (process.env.DATABASE_URL) {
     const { default: pg } = await import('pg');
     const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL) ? false : { rejectUnauthorized: false }, max: 4 });
@@ -279,6 +310,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const pgStore = createPgStore(pool), pgCommunity = createPgCommunity(pool), pgClasses = createPgClassStore(pool), pgProjects = createPgProjectStore(pool), pgKeys = createPgKeyStore(pool);
       await pgStore.init(); await pgCommunity.init(); await pgClasses.init(); await pgProjects.init(); await pgKeys.init();
       const pgFeedback = createPgFeedbackStore(pool); await pgFeedback.init(); feedbackStore = pgFeedback;
+      const pgBlocks = createPgBlockStore(pool); await pgBlocks.init(); blockStore = pgBlocks;
       store = pgStore; communityStore = pgCommunity; classStore = pgClasses; projectStore = pgProjects; keyStore = pgKeys;
     } catch (e) {
       // Keep the site up on a bad DATABASE_URL (wrong password, unreachable host): fall back to memory and say why.
@@ -303,7 +335,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const keyVault = createKeyVault({ accounts, store: keyStore, secret: process.env.KEY_VAULT_SECRET || process.env.DATABASE_URL || process.env.SESSION_SECRET || '' });
   if (!keyVault.enabled) console.log('[vlab] NOTE: set KEY_VAULT_SECRET (or DATABASE_URL) to let people sync their AI keys across devices');
   const feedback = createFeedback({ store: feedbackStore, accounts });
-  const server = createServer({ compiler, staticDir, feedback, accounts, hostedAi, community, classes, cloudProjects, keyVault, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
+  const visitors = createVisitors({ store: blockStore, secret: process.env.SESSION_SECRET || process.env.DATABASE_URL || undefined });
+  const server = createServer({ compiler, staticDir, feedback, visitors, accounts, hostedAi, community, classes, cloudProjects, keyVault, corsOrigin: process.env.VLAB_CORS_ORIGIN || null, publicConfig: { googleClientId: clientId }, log: m => console.log(`[vlab] ${m}`) });
   server.listen(port, host, async () => {
     const v = await compiler.version();
     console.log(`[vlab] http://${host}:${port}  ${staticDir ? '(serving dist/ + ' : '('}/api/compile)`);

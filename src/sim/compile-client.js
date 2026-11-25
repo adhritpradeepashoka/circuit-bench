@@ -1,6 +1,7 @@
 // Browser side of compiling: sends the sketch to the compile service (Arduino CLI) and returns the real build result.
 // The bundled example sketches carry prebuilt firmware (built by the same toolchain), so they run with no service at all.
 import { PREBUILT } from './prebuilt.generated.js';
+import { getVisitorId, getToken } from './session.mjs';
 
 // The bundled examples were built for the Uno; the Nano has the same chip and clock, so the same firmware runs on it.
 const PREBUILT_OK = new Set([undefined, null, 'arduino:avr:uno', 'arduino:avr:nano']);
@@ -34,7 +35,7 @@ or keep this file and point it at the service by adding  ?compiler=http://127.0.
   }
   let res;
   try {
-    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(fqbn ? { files, fqbn } : { files }), signal });
+    res = await fetchImpl(endpoint, { method: 'POST', headers: { 'content-type': 'application/json', ...(endpoint.startsWith('/') && !getToken() ? { 'x-cb-visitor': getVisitorId() } : {}) }, body: JSON.stringify(fqbn ? { files, fqbn } : { files }), signal });
   } catch (err) {
     if (err?.name === 'AbortError') throw err;
     return unreachable(`Could not reach the compile service at ${endpoint}.`);

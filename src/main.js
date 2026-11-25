@@ -38,7 +38,8 @@ import { initBodyDock } from './ui/body-dock.js';
 import { initSplitView } from './ui/split-view.js';
 import { tidyTabs } from './ui/view-groups.js';
 import { initStages } from './ui/stages.js';
-import { loadSavedWorkspaces } from './core/workspaces.js';
+import { loadSavedWorkspaces, activeWorkspace } from './core/workspaces.js';
+import { initVisitor } from './ui/visitor.js';
 loadSavedWorkspaces();                  // your own and imported workspaces, and their parts, before any project opens
 import { WOKWI_PINS } from './core/pins.generated.js';
 
@@ -108,6 +109,7 @@ const robotPicker = initRobotType({ editor, projects, onChosen: () => assembly.o
 projects.onSwitch(p => ai.setScope(p.id));
 const account = initAccount({ status: t => editor.status(t) });
 initFeatures({ blocks });
+initVisitor({ page: () => activeWorkspace().id });
 const classroom = initClassroom({ editor, code, projects, account, status: t => editor.status(t), refreshAccount: () => account.refresh() });
 const tour = initTour({ editor, sim, code, projects });
 initCommunity({ status: t => editor.status(t) });

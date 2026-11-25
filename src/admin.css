@@ -46,3 +46,12 @@ section h2 { margin: 0 0 2px; font-size: 14px; } section > p { margin: 0 0 12px;
 .locked-note { color: var(--muted); font-style: italic; }
 @media (max-width: 760px) { main { grid-template-columns: 1fr; } .people { max-height: 46vh; border-right: 0; border-bottom: 1px solid var(--line); } .detail { padding: 18px 16px 60px; } }
 @media (prefers-reduced-motion: reduce) { .switch span, .switch span::after { transition: none; } }
+
+/* visitors */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 2px; background: #e9eeeb; border-radius: 9px; }
+.mode { height: 30px; border: 0; border-radius: 7px; background: transparent; font: inherit; font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.mode.on { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.mode:focus-visible, .chip:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.facts { display: grid; grid-template-columns: 110px 1fr; gap: 8px 14px; margin: 14px 0 0; font-size: 14px; }
+.facts dt { color: var(--muted); } .facts dd { margin: 0; }
+.add[hidden] { display: none; }

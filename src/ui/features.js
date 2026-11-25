@@ -3,6 +3,7 @@
 import { getMe, profileMode } from '../sim/session.mjs';
 import { FEATURE_IDS } from '../core/classroom.js';
 import { offByAdmin, isBlocked } from '../core/permissions.js';
+import { visitorBlock } from './visitor.js';
 
 export function offFeatures(me = getMe()) {
   const admin = offByAdmin(me);                                             // limits set in the admin console always apply, in any profile
@@ -12,16 +13,18 @@ export function offFeatures(me = getMe()) {
   return [...new Set([...admin, ...FEATURE_IDS.filter(id => f[id] === false)])];
 }
 /** An admin paused this account: the page says so and nothing underneath can be used. */
-function paintBlocked(on, me) {
+function paintBlocked(on, me, visitor = null) {
   let o = document.getElementById('blockedOverlay');
   if (!on) { o?.remove(); return; }
   if (!o) {
     o = document.createElement('div'); o.id = 'blockedOverlay'; o.className = 'blocked-overlay'; o.setAttribute('role', 'alertdialog'); o.setAttribute('aria-modal', 'true'); o.setAttribute('aria-labelledby', 'blockedTitle');
     const box = document.createElement('div'); box.className = 'blocked-box';
-    const h = document.createElement('h2'); h.id = 'blockedTitle'; h.textContent = 'This account is blocked';
+    const h = document.createElement('h2'); h.id = 'blockedTitle';
     const p = document.createElement('p'); p.id = 'blockedNote';
     box.append(h, p); o.append(box); document.body.append(o);
   }
+  o.querySelector('#blockedTitle').textContent = visitor ? 'This visitor is blocked' : 'This account is blocked';
+  if (visitor) { o.querySelector('#blockedNote').textContent = visitor.note ? `An admin blocked this visitor: ${visitor.note}` : 'An admin blocked this visitor. If that is a mistake, ask them to unblock it, and this page will open again by itself.'; return; }
   o.querySelector('#blockedNote').textContent = me?.permissions?.note ? `An admin blocked this account: ${me.permissions.note}` : 'An admin blocked this account. If that is a mistake, ask them to unblock it, and this page will open again by itself.';
 }
 export function initFeatures({ blocks } = {}) {
@@ -29,8 +32,9 @@ export function initFeatures({ blocks } = {}) {
     const off = offFeatures(), root = document.documentElement;
     if (off.length) root.dataset.off = off.join(' '); else delete root.dataset.off;
     if (off.includes('code')) blocks?.setMode?.('blocks', { quiet: true });
-    paintBlocked(isBlocked(getMe()), getMe());
+    const v = visitorBlock();
+    paintBlocked(isBlocked(getMe()) || v.blocked, getMe(), isBlocked(getMe()) ? null : v);
   };
-  globalThis.addEventListener?.('cb-session', apply); apply();
+  globalThis.addEventListener?.('cb-session', apply); globalThis.addEventListener?.('cb-visitor', apply); apply();
   return { apply };
 }
