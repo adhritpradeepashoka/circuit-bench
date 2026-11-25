@@ -37,9 +37,21 @@ export function parseMotorId(text) {
 const MOUNT_WORDS = /\b(put|place|add|attach|mount|fit|install|stick|put on|set|join|connect)\b/;
 
 /** → { actions, explanation } or null when this is not something the instant assistant is sure about. */
+/** "a 2200mah 3s 100c battery", "battery 4s 1500 mah 75c 75x35x30 mm" → a battery id (any cells, capacity, C rating, and the pack's measured size if it is given), or null. Cells and capacity are both required: it never guesses them. */
+export function parseBatteryId(text) {
+  const t = String(text || '').toLowerCase();
+  if (!/\b(batter(?:y|ies)|lipo|li-?po|pack)\b/.test(t)) return null;
+  let mah = num(t, /(\d{3,5})\s*m\s*-?\s*ah\b/); if (mah == null) { const ah = num(t, /(\d(?:\.\d+)?)\s*ah\b/); if (ah != null) mah = Math.round(ah * 1000); }
+  const cells = num(t, /\b([1-6])\s*-?\s*s\b/) ?? num(t, /\b([1-6])\s*cells?\b/);
+  if (!mah || mah < 100 || mah > 10000 || !cells) return null;
+  const c = num(t, /\b(\d{2,3})\s*-?\s*c\b/), m = /(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)\s*[x×]\s*(\d+(?:\.\d+)?)/.exec(t);
+  return `battery-${cells}s-${mah}-${c && c >= 10 && c <= 200 ? c : 75}${m ? `-${+m[1]}x${+m[2]}x${+m[3]}` : ''}`;
+}
+
 export function quickAssembly(instruction, scene) {
   const t = String(instruction || '').toLowerCase().replace(/[“”"]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!t || t.length > 200 || !scene || !Array.isArray(scene.instances)) return null;
+  if (!/\?$|^(why|what|how|which)\b/.test(t)) { const bid = parseBatteryId(t); if (bid) { const bat = nextId(scene, 'battery', []), [, cells, mah, c, size] = /^battery-(\d)s-(\d+)-(\d+)(?:-(.+))?$/.exec(bid); return { actions: [{ op: 'add_part', id: bat, part: bid }], explanation: `Adding a ${cells}S ${mah} mAh ${c}C battery.${size ? ` Its size is the ${size} mm you gave.` : ' Its size is a guess from the capacity; give the length, width and height in mm (for example 115x35x25) if you know them.'} Press Apply to see it.` }; } }
   if (!MOUNT_WORDS.test(t) && !/\b(on|in place|onto)\b/.test(t)) return null;
   if (/\?$|^(why|what|how|which|can you|could you explain)\b/.test(t)) return null;
   const frames = ofKind(scene, 'frame'), motors = ofKind(scene, 'motor'), props = ofKind(scene, 'prop');

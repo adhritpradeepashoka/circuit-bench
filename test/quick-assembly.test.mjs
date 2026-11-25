@@ -55,3 +55,14 @@ test('coreless brushed motors exist as parts, fit the whoop frame and are unders
   assert.equal(parseMotorId('add 4 coreless motors'), 'motor-8520-12000');
   assert.equal(parseMotorId('716 motors'), 'motor-0716-10000');
 });
+
+import { parseBatteryId } from '../src/core/quick-assembly.js';
+test('a battery of any size is one plain request: cells, capacity, C rating and a measured size', () => {
+  assert.equal(parseBatteryId('add a 2200mah 3s 100c battery'), 'battery-3s-2200-100');
+  assert.equal(parseBatteryId('make a 3S 2200 mAh 100C lipo'), 'battery-3s-2200-100'); assert.equal(parseBatteryId('battery 4s 1.5ah'), 'battery-4s-1500-75');
+  assert.equal(parseBatteryId('3s 2200mah 100c battery 115x35x25 mm'), 'battery-3s-2200-100-115x35x25');
+  assert.equal(parseBatteryId('add a battery'), null); assert.equal(parseBatteryId('add a 2200 mah battery'), null); assert.equal(parseBatteryId('put 4 motors on'), null);
+  const q = quickAssembly('add a 2200mah 3s 100c battery', { instances: [], mates: [], catalog: [] });
+  assert.deepEqual(q.actions, [{ op: 'add_part', id: 'battery1', part: 'battery-3s-2200-100' }]); assert.match(q.explanation, /3S 2200 mAh 100C/);
+  assert.equal(quickAssembly('why is my 3s 2200mah battery hot?', { instances: [], mates: [], catalog: [] }), null);
+});
