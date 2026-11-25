@@ -9,6 +9,9 @@
 //   blink PIN MS                       blink 9 500   ·   blink auto 500 (the pin the last `build led` picked)
 //   build led|button|pot|mpu6050|dht|… PIN|auto      a ready LED+resistor / button / potentiometer circuit on that pin — or on a free one (auto)
 //   build plane edf|prop              the whole fixed-wing electronics (battery, ESC, motor or EDF, flight controller, receiver, two servos), wired
+//   rotate REF [DEG]                   turn a part (90 by default)   ·   move REF left|right|up|down [N]   ·   unwire REF [PIN] | unwire all
+//   sketch fade|sweep|tone|hello|empty [PIN]   write a ready-made sketch
+//   app NAME                           press an app button: run, stop, undo, zoomin, serial, export … (core/app-ops.js)
 //   defer                              "this needs a bigger AI"      ·   off     "outside what CircuitBench does"
 // Commands are separated by ";". REF is a part id (led-2) or a part type (led).
 import { PART_DEFS } from './parts.js';
@@ -17,6 +20,8 @@ import { blinkSketch } from './quick-edits.js';
 import { applyCircuitActions } from './ai-actions.js';
 import { plan } from './hookup/plan.js';
 import { quickPlane } from './quick-plane.js';
+import { APP_OPS } from './app-ops.js';
+import { sketchFor, SKETCH_KINDS } from './sketches.js';
 import './custom-parts.js';          // registers the ready-made template parts (custom-plane-fc …) so `add plane-fc` finds them
 
 const COLORS = new Set(['red', 'green', 'blue', 'yellow', 'orange', 'white']);
@@ -41,7 +46,9 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
   if (cmds.length === 1 && cmds[0][0] === 'off') return { kind: 'off', explanation: 'I only help with your CircuitBench circuit and sketch — try asking me to add a part, change a value or build a simple circuit.' };
 
   const parts = (circuit.parts || []).map(p => ({ id: p.id, type: p.type }));       // grows as we plan additions
-  const actions = [], said = []; let code = null;
+  const actions = [], said = []; let code = null; const appOps = [];
+  const pose = new Map((circuit.parts || []).map(p => [p.id, { x: p.x, y: p.y, rotate: +p.rotate || 0 }]));
+  const wires = (circuit.wires || []).map(w => ({ ...w }));
   const board = () => parts.find(p => BOARDS.includes(p.type));
   // pins already wired on the board, so `auto` picks a free one
   const usedPins = new Set(); let autoPin = null;
@@ -84,6 +91,29 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
     } else if (op === 'blink') {
       const pin = (String(a[0]).toLowerCase() === 'auto' ? autoPin : String(a[0]).toUpperCase()) || (a[0] === 'auto' ? '13' : ''), ms = +a[1]; if (!PIN.test(pin) || !(ms >= 10 && ms <= 60000)) return null;
       code = blinkSketch(pin, ms); said.push(`Wrote a sketch that blinks pin ${pin} every ${ms} ms`);
+    } else if (op === 'rotate') {
+      const t = refs(a[0], false); const deg = a[1] === undefined ? 90 : +a[1]; if (!t || ![45, 90, 180, 270, -90, -45].includes(deg)) return null;
+      const cur = pose.get(t[0]); if (!cur) return null;
+      const to = ((cur.rotate + deg) % 360 + 360) % 360; cur.rotate = to; actions.push({ op: 'rotate_part', id: t[0], rotate: to });
+      said.push(`Rotated ${t[0]} to ${to}°`);
+    } else if (op === 'move') {
+      const t = refs(a[0], false), dir = a[1], n = a[2] === undefined ? 1 : +a[2]; if (!t || !['left', 'right', 'up', 'down'].includes(dir) || !(n >= 1 && n <= 10)) return null;
+      const cur = pose.get(t[0]); if (!cur || !Number.isFinite(cur.x) || !Number.isFinite(cur.y)) return null;
+      cur.x += dir === 'left' ? -80 * n : dir === 'right' ? 80 * n : 0; cur.y += dir === 'up' ? -80 * n : dir === 'down' ? 80 * n : 0;
+      actions.push({ op: 'move_part', id: t[0], x: cur.x, y: cur.y }); said.push(`Moved ${t[0]} ${dir}`);
+    } else if (op === 'unwire') {
+      const all = a[0] === 'all'; const t = all ? [] : refs(a[0], false); if (!all && !t) return null;
+      const hit = wires.filter(w => all || ((w.from?.part === t[0] && (a[1] === undefined || String(w.from.pin) === a[1])) || (w.to?.part === t[0] && (a[1] === undefined || String(w.to.pin) === a[1]))));
+      if (hit.some(w => !w.id)) return null;
+      for (const w of hit) { actions.push({ op: 'remove_wire', id: w.id }); wires.splice(wires.indexOf(w), 1); }
+      said.push(hit.length ? `Removed ${hit.length} wire${hit.length === 1 ? '' : 's'}${all ? '' : ` from ${t[0]}`}` : `There are no wires on ${all ? 'the board' : t[0]}`);
+    } else if (op === 'sketch') {
+      if (!SKETCH_KINDS.includes(a[0])) return null;
+      const src = sketchFor(a[0], a[1]); if (!src) return null;
+      code = src; said.push(a[0] === 'empty' ? 'Cleared the sketch to an empty setup and loop' : `Wrote a ${a[0]} sketch${a[1] ? ` on pin ${String(a[1]).toUpperCase()}` : ''}`);
+    } else if (op === 'app') {
+      const def = a.length === 1 ? APP_OPS[a[0]] : null; if (!def) return null;
+      if (!appOps.includes(a[0])) appOps.push(a[0]); said.push(def.say);
     } else if (op === 'build') {
       const kind = a[0];
       if (kind === 'plane') {                                   // the plane has its own flight controller: no Arduino
@@ -126,7 +156,7 @@ export function runProgram(text, circuit = { parts: [], wires: [] }) {
       } else return null;
     } else return null;
   }
-  return { kind: 'edit', actions, code, explanation: `${said.join('. ')}.` };
+  return { kind: 'edit', actions, code, explanation: `${said.join('. ')}.`, ...(appOps.length ? { appOps } : {}) };
 }
 
 /* ── adapter between a real circuit and the model ─────────────────────────────────────────────
@@ -146,7 +176,7 @@ export const stateString = circuit => [...canonicalIds(circuit).toCanon.values()
 /** Run a program written in the model's numbered ids against the real circuit; the result speaks in real ids. */
 export function runForCircuit(program, circuit) {
   const { toReal, toCanon } = canonicalIds(circuit);
-  const canonical = { parts: (circuit?.parts || []).map(p => ({ ...p, id: toCanon.get(p.id) })), wires: (circuit?.wires || []).map(w => ({ from: { ...w.from, part: toCanon.get(w.from?.part) }, to: { ...w.to, part: toCanon.get(w.to?.part) } })) };
+  const canonical = { parts: (circuit?.parts || []).map(p => ({ ...p, id: toCanon.get(p.id) })), wires: (circuit?.wires || []).map(w => ({ ...(w.id ? { id: w.id } : {}), from: { ...w.from, part: toCanon.get(w.from?.part) }, to: { ...w.to, part: toCanon.get(w.to?.part) } })) };
   const r = runProgram(program, canonical);
   if (!r || r.kind !== 'edit') return r;
   const real = id => toReal.get(id) ?? id;

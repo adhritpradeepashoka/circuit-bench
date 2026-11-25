@@ -41,7 +41,7 @@ export const stepInstruction = (instruction, steps, i, doneNotes = []) =>
  * Returns {ok, actions (all, in order), code, explanation, done, failed:{i,error}|null}.
  */
 export async function runSteps({ instruction, steps, circuit, code = '', step, onStep }) {
-  let cur = { parts: circuit?.parts || [], wires: circuit?.wires || [] }, curCode = code, all = [], notes = [], failed = null, newCode = null, customParts = [];
+  let cur = { parts: circuit?.parts || [], wires: circuit?.wires || [] }, curCode = code, all = [], notes = [], failed = null, newCode = null, customParts = [], appOps = [];
   for (let i = 0; i < steps.length; i++) {
     onStep?.(i, steps.length, steps[i]);
     let r; try { r = await step(stepInstruction(instruction, steps, i, notes.slice(-6)), cur, curCode, i); } catch (err) { r = { ok: false, error: err?.message || String(err) }; }
@@ -49,8 +49,9 @@ export async function runSteps({ instruction, steps, circuit, code = '', step, o
     const acts = Array.isArray(r.actions) ? r.actions : [];
     if (acts.length) { const a = applyCircuitActions(cur, acts); cur = { ...cur, parts: a.parts, wires: a.wires }; all.push(...acts); customParts.push(...(a.newSpecs || [])); }
     if (r.code) { curCode = r.code; newCode = r.code; }
-    notes.push(`${steps[i].replace(/[.!]+$/, '')} (${acts.length ? `${acts.length} change${acts.length === 1 ? '' : 's'}` : r.code ? 'sketch written' : 'nothing to change'}).`);
+    for (const n of r.appOps || []) if (!appOps.includes(n)) appOps.push(n);
+    notes.push(`${steps[i].replace(/[.!]+$/, '')} (${acts.length ? `${acts.length} change${acts.length === 1 ? '' : 's'}` : r.code ? 'sketch written' : r.appOps?.length ? 'done in the app' : 'nothing to change'}).`);
   }
   const done = notes.length;
-  return { ok: done > 0, actions: all, code: newCode, done, total: steps.length, failed, explanation: `Built in ${done} step${done === 1 ? '' : 's'}${failed ? ` (stopped at step ${failed.i + 1} of ${steps.length}: ${failed.error})` : ''}: ${notes.join(' ')}` };
+  return { ok: done > 0, actions: all, code: newCode, done, total: steps.length, failed, ...(appOps.length ? { appOps } : {}), explanation: `Built in ${done} step${done === 1 ? '' : 's'}${failed ? ` (stopped at step ${failed.i + 1} of ${steps.length}: ${failed.error})` : ''}: ${notes.join(' ')}` };
 }

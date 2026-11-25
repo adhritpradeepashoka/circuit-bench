@@ -73,9 +73,9 @@ test('router with the real models: plain requests stay on the small one, and the
   const load = f => { const b = readFileSync(new URL(`../public/${f}.bin`, import.meta.url)), man = JSON.parse(readFileSync(new URL(`../public/${f}.json`, import.meta.url), 'utf8')); return createTiny(man, b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
   const small = load('tiny-model'), large = load('tiny-model-large');
   assert.ok(large.config.D > small.config.D);
-  const r = await understandRouted({ small, large: async () => large }, 'add an led', { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }], wires: [] });
+  const r = await understandRouted({ small, large: async () => large }, 'add a button', { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }], wires: [] });
   assert.equal(r.engine, 'small');
-  for (const q of ['remove resistor-1']) { const c = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }, { id: q.split(' ')[1], type: q.split(' ')[1].replace(/-\d+$/, ''), x: 50, y: 50 }], wires: [] }; const v = await understandRouted({ small, large: async () => large }, q, c); assert.ok(v && v.engine === 'small' && /^del /.test(v.program), `${q}: ${v && v.program}`); }
+  for (const q of ['delete the led']) { const c = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }, { id: 'led-1', type: 'led', x: 50, y: 50 }], wires: [] }; const v = await understandRouted({ small, large: async () => large }, q, c); assert.ok(v && v.engine === 'small' && /^del /.test(v.program), `${q}: ${v && v.program}`); }
 });
 
 import { looksRelevant } from '../src/core/relevance.js';
@@ -121,4 +121,13 @@ test('the whole flow answers the plane requests on an empty bench (a plane proje
   for (const [q, p] of [['add a 3s 2200mah 100c battery', 'add drone-battery'], ['100c 2200mah 3s power battery with xt60 connecter', 'add drone-battery'], ['add an edf', 'add plane-motor'], ['add a flight controller', 'add plane-fc']]) {
     const u = understand(model, q, { parts: [], wires: [] }); assert.equal(u?.program, p, q); assert.ok(coversNamedParts(q, { parts: [] }, u), q);
   }
+});
+
+test('the real models turn app requests into app commands, part moves and sketches', async () => {
+  const load = f => { const b = readFileSync(new URL(`../public/${f}.bin`, import.meta.url)), man = JSON.parse(readFileSync(new URL(`../public/${f}.json`, import.meta.url), 'utf8')); return createTiny(man, b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); };
+  const small = load('tiny-model'), large = load('tiny-model-large');
+  const c = { parts: [{ id: 'uno-1', type: 'arduino-uno', x: 0, y: 0 }, { id: 'led-1', type: 'led', x: 100, y: 100 }], wires: [] };
+  const want = { 'run my circuit please': ['app run'], 'zoom in a little': ['app zoomin'], 'open the serial monitor': ['app serial'], 'export this project': ['app export'], 'rotate the led': ['rotate led'], 'fade the led on pin 9': ['sketch fade 9'], 'undo': ['app undo'] };
+  for (const [q, [prog]] of Object.entries(want)) { const v = await understandRouted({ small, large: async () => large }, q, c); assert.ok(v, q); assert.equal(v.program, prog, q); }
+  const run = await understandRouted({ small, large: async () => large }, 'run my circuit please', c); assert.deepEqual(run.appOps, ['run']); assert.deepEqual(run.actions, []);
 });

@@ -5,6 +5,8 @@
 // running sim, Serial Monitor output) — see gatherContext below and describeContext in
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
+import { runAppOps } from './app-ops.js';
+import { looksLikeAppRequest, looksLikeQuestion } from '../core/app-intent.js';
 import { getRobotType } from '../core/robot-context.js';
 import { loadTiny, loadTinyLarge, understandRouted } from '../sim/tiny-model.mjs';
 import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
@@ -193,6 +195,7 @@ export function initAiPanel(editor, code, sim = null) {
     if (p.code) { code.source = p.code; code.open(); }
     editor.status(p.circuitEdit && p.code ? 'AI edit applied — circuit and sketch.ino both updated' : p.circuitEdit ? 'AI edit applied to the circuit' : 'AI edit applied to sketch.ino — Verify or Run to compile it');
     m.state = 'applied'; proposals.delete(m.id); saveChat(); render();
+    if (p.appOps?.length) setTimeout(() => runAppOps(p.appOps, { editor }), 50);
     if (p.learn && p.code && p.circuitEdit) learnFrom(p).catch(() => { /* learning is a bonus: it must never get in the way */ });
   }
 
@@ -270,7 +273,7 @@ export function initAiPanel(editor, code, sim = null) {
       return b;
     }), ...(webgpuAvailable() ? [localTab()] : []));
     providerHint.replaceChildren();
-    if (isTiny) { providerHint.append('CircuitBench’s own tiny model (about 2.5 MB, trained only on this bench): it runs in your browser in milliseconds with no graphics card, no key and no download. It handles plain requests — add parts (servos, flight controllers, ESCs, EDFs, receivers, LiPos), change values, wire, build a whole plane circuit — but not long sketches or the 3D view; for those, pick another AI above.'); return; }
+    if (isTiny) { providerHint.append('CircuitBench’s own tiny model (about 2.5 MB, trained only on this bench): it runs in your browser in milliseconds with no graphics card, no key and no download. It handles plain requests — add parts (servos, flight controllers, ESCs, EDFs, receivers, LiPos), change values, wire, move, rotate and unwire parts, build a whole plane circuit, write simple sketches (blink, fade, servo sweep, beep, serial hello), and press the app’s own buttons (run, stop, undo, zoom, serial monitor, export, projects, Part Maker …) — but not long sketches or the 3D view; for those, pick another AI above.'); return; }
     if (isHosted) { providerHint.append('CircuitBench’s own AI, free with your account — no key and nothing to download. Switch to another option above any time.'); return; }
     if (isLocal) {
       const m = LOCAL_MODELS.find(x => x.id === getLocalModel()) || LOCAL_MODELS.find(x => x.id === DEFAULT_LOCAL_MODEL) || LOCAL_MODELS[0];
@@ -401,17 +404,19 @@ export function initAiPanel(editor, code, sim = null) {
       const tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
       const big = () => Promise.race([loadTinyLarge(), new Promise(r => setTimeout(() => r(null), 6000))]);
       const u = await understandRouted({ small: tiny, large: big }, step, circ);
+      if (u?.appOps?.length && looksLikeQuestion(step)) return null;          // a question about a button is not a request to press it
       if (u && u.kind !== 'off' && !coversNamedParts(step, circ, u)) return null;          // a model answer that leaves out a named part is not an answer
       return u ? (u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation, kind: 'off' } : { ...u, viaModel: true }) : null;
     };
-    const solveStep = async (step, circ) => recipeEdit(step, circ, { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(step, circ) || (globalThis.VLAB_NO_TINY ? null : await modelStep(step, circ).catch(() => null));
-    let quick = in3d ? null : quickPlane(text, editor.exportProject()) || quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }), tinyMs = 0;
+    const solveStep = async (step, circ) => (looksLikeAppRequest(step) ? null : recipeEdit(step, circ, { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(step, circ)) || (globalThis.VLAB_NO_TINY ? null : await modelStep(step, circ).catch(() => null));
+    const appAsk = looksLikeAppRequest(text);      // about the app itself, not about parts: the part rules would misread it
+    let quick = in3d || appAsk ? null : quickPlane(text, editor.exportProject()) || quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }), tinyMs = 0;
     const multi = !quick && !in3d && !!splitSteps(text);
     if (multi) {        // "add a servo and connect it to pin 9": step by step, all on this device. If any step is not understood the whole request goes on untouched: no half answers.
       const t0 = Date.now();
       try { quick = await solveSteps(text, editor.exportProject(), solveStep); } catch { quick = null; }
       tinyMs = Date.now() - t0;
-    } else if (!quick && !in3d) quick = quickEdit(text, editor.exportProject());
+    } else if (!quick && !in3d && !appAsk) quick = quickEdit(text, editor.exportProject());
     if (!quick && !in3d && !multi && !globalThis.VLAB_NO_TINY) {
       try {
         const t0 = Date.now(), u = await modelStep(text, editor.exportProject());
@@ -427,7 +432,7 @@ export function initAiPanel(editor, code, sim = null) {
         if (ops.length) proposals.set(m3.id, { assemblyOps: ops }); messages.push(m3); saveChat(); render(); return;
       }
     }
-    if (!quick && tinyOn() && !looksRelevant(text)) {          // nothing about the bench in it: one plain line, no guessing
+    if (!quick && tinyOn() && !looksRelevant(text) && !appAsk) {          // nothing about the bench in it: one plain line, no guessing
       messages.push({ id: ++seq, role: 'user', text }); promptEl.value = ''; autosize();
       messages.push({ id: ++seq, role: 'assistant', text: NOT_RELEVANT });
       saveChat(); render(); return;
@@ -495,16 +500,19 @@ export function initAiPanel(editor, code, sim = null) {
       const o = outcome(circuit, res);
       if (check.failed) o.warnings = [...o.warnings, `This sketch does not compile yet (${errorLines(check.failed)[0] || 'see the compiler output'}). Apply it and press Fix with AI, or edit it.`];
       const hasEdit = !!(res.code || o.circuitEdit);
+      const appOps = Array.isArray(res.appOps) ? res.appOps.slice(0, 6) : [];
+      let appNote = '';
+      if (appOps.length && !hasEdit) { const r = runAppOps(appOps, { editor }); if (r.missing.length) appNote = ` (${r.missing.join(', ')} is not available right now.)`; }
       const summary = [];
       if (o.attempted) summary.push(o.changed ? `${res.actions.length} circuit change${res.actions.length === 1 ? '' : 's'}` : 'no circuit change actually applied');
       if (res.code) summary.push('a new sketch');
       const m = {
-        id: ++seq, role: 'assistant', text: `${res.explanation || (hasEdit ? 'Here is the change.' : 'Done.')}${check.fixed ? ` (The first version had ${check.fixed === 1 ? 'a compile error' : 'compile errors'}; I checked it with the compiler and fixed ${check.fixed === 1 ? 'it' : 'them'} before showing you.)` : ''}`,
+        id: ++seq, role: 'assistant', text: `${res.explanation || (hasEdit ? 'Here is the change.' : 'Done.')}${appNote}${check.fixed ? ` (The first version had ${check.fixed === 1 ? 'a compile error' : 'compile errors'}; I checked it with the compiler and fixed ${check.fixed === 1 ? 'it' : 'them'} before showing you.)` : ''}`,
         summary: summary.length ? `Proposes: ${summary.join(' + ')}.` : '', warnings: o.warnings, fatal: o.attempted && !o.changed,
         code: res.code || undefined, codeLines: res.code ? res.code.split('\n').length : 0, hasEdit, state: hasEdit ? 'pending' : undefined,
       };
       const benchWasEmpty = !(circuit.parts || []).some(p => !BOARD_SPECS[p.type] && p.type !== 'breadboard');
-      if (hasEdit) proposals.set(m.id, { code: res.code || null, circuitEdit: o.circuitEdit, learn: !quick && benchWasEmpty && !check.failed ? { request: text } : null });
+      if (hasEdit) proposals.set(m.id, { code: res.code || null, circuitEdit: o.circuitEdit, appOps: appOps.length ? appOps : null, learn: !quick && benchWasEmpty && !check.failed ? { request: text } : null });
       messages.push(m);
     } catch (err) {
       if (signal.aborted) stopped(); else messages.push({ id: ++seq, role: 'error', text: err?.message || 'Something went wrong.' });

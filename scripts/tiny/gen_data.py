@@ -145,7 +145,7 @@ def gen_vague(rng, held, suf):
     if r < 0.92:                                              # truly vague: needs a question back, so hand it to a bigger AI / the chooser
         _, st = make_state(rng); return fin(rng.choice(SENSORISH), st, 'defer')
     _, st = make_state(rng)                                   # cannot do (brightness, power off) → defer
-    return fin(rng.choice(['make it brighter', 'make it dimmer', 'turn it off', 'turn it on', 'make it stronger', 'make it louder', 'fix it', 'do it again', 'undo that', 'make it better', 'that is wrong', 'try again']), st, 'defer')
+    return fin(rng.choice(['make it brighter', 'make it dimmer', 'turn it off', 'turn it on', 'make it stronger', 'make it louder', 'fix it', 'do it again', 'make it better', 'that is wrong', 'try again']), st, 'defer')
 
 # ───────── robotics / fixed-wing requests, batteries with specs, wipe-out requests and 3D requests the circuit model must not guess at ─────────
 PLANE_EDF = ['build a flying wing with an edf', 'wire up an edf plane', 'set up the electronics for an edf jet', 'make a flying wing circuit', 'i want a plane with an edf', 'build me an edf plane circuit',
@@ -158,7 +158,7 @@ PLANE_HO = {'edf': ['whip up an edf plane', 'rig up a ducted fan jet'], 'prop': 
 SPEC_FORMS = ['{c}s {m}mah {k}c battery', '{m}mah {c}s battery', '{c}s {m} mah lipo', '{c}s lipo', '{k}c {m}mah {c}s power battery with xt60 connector', '{m}mah {k}c {c}s battery', 'a {c}s battery',
               '{c}s {m}mah battery', '{c}s {k}c battery', '{m}mah lipo', 'lipo {c}s {m}mah', '{c}s flight battery', 'flight battery {m}mah', '{m} mah {c}s {k}c lipo pack', 'xt60 battery {c}s', '{k}c lipo battery', '{c}s battery pack {m}mah']
 WIPE = ['remove everything', 'clear the board', 'delete everything', 'delete all of it', 'start over', 'wipe the bench', 'clear everything', 'get rid of everything', 'empty the workspace', 'reset everything', 'remove all the parts',
-        'delete all parts', 'clear all', 'trash it all', 'scrap everything', 'nuke everything', 'wipe it all', 'clean the bench', 'new project please', 'remove all of it']
+        'delete all parts', 'clear all', 'trash it all', 'scrap everything', 'nuke everything', 'wipe it all', 'clean the bench', 'remove all of it']
 WIPE_HO = ['purge the bench', 'blank the board', 'flatten everything']
 R_DEFER = ['make it fly', 'test fly it', 'add wings', 'add an antenna', 'add a wing', 'print the airframe', 'import my stl', 'what pinout does my flight controller have', 'why wont my edf spin', 'check my plane wiring',
            'set the servo to 90 degrees', 'make the servo sweep', 'add a fuselage', 'add a tail', 'how much thrust does a 50mm edf make', 'will my 3s battery power the edf', 'which esc should i buy',
@@ -183,6 +183,103 @@ def gen_robo(rng, held, suf):
         return fin(rng.choice(PLANE_PROP), st, 'build plane prop')
     if k < 0.65: return fin(rng.choice(WIPE_HO if held else WIPE), st, 'defer')
     return fin(rng.choice(R_DEFER_HO if held else R_DEFER), st, 'defer')
+
+
+# ───────── app functions: run / zoom / tabs / export / projects … (core/app-ops.js), part moves, unwiring and ready-made sketches ─────────
+# Each name: (train phrasings, held-out phrasings). The held-out ones are never trained on.
+APP = {
+ 'run': (['run it', 'run the simulation', 'start the simulation', 'press run', 'hit run', 'start it', 'play it', 'simulate it', 'run my circuit', 'start simulating', 'run the circuit', 'fire it up', 'test it', 'try it out', 'let it run', 'begin the simulation', 'run the sim', 'run the sketch', 'start the sim', 'go ahead and run it', 'can you run it', 'i want to see it run', 'run this'], ['kick off the simulation', 'set it going']),
+ 'stop': (['stop it', 'stop the simulation', 'halt it', 'stop running', 'end the simulation', 'press stop', 'stop the sim', 'cut the simulation', 'stop simulating', 'kill the simulation', 'stop the circuit', 'i want to stop it', 'stop the run'], ['bring it to a halt', 'shut the simulation down']),
+ 'pause': (['pause it', 'pause the simulation', 'freeze it', 'hold the simulation', 'pause the sim', 'press pause', 'freeze the simulation', 'pause for a second', 'pause the circuit'], ['put the simulation on hold']),
+ 'sound': (['mute it', 'unmute it', 'turn the sound off', 'turn the sound on', 'toggle the sound', 'mute the buzzer', 'sound on or off', 'switch the sound', 'mute the speaker'], ['silence it']),
+ 'undo': (['undo', 'undo that', 'undo the last change', 'go back one step', 'revert that', 'take that back', 'undo my last edit', 'undo it', 'reverse that change', 'undo the last edit', 'oops undo'], ['roll that back', 'backtrack one step']),
+ 'redo': (['redo', 'redo that', 'redo it', 'redo the last change', 'redo my edit', 'step forward again', 'redo the undo', 'oops redo'], ['redo the undone change']),
+ 'zoomin': (['zoom in', 'zoom in a bit', 'make the view bigger', 'get closer', 'zoom in please', 'magnify', 'closer view', 'enlarge the view', 'zoom closer', 'bring the view in', 'zoom in on the board'], ['move in closer']),
+ 'zoomout': (['zoom out', 'zoom out a bit', 'make the view smaller', 'pull back', 'see more of the board', 'zoom way out', 'shrink the view', 'widen the view', 'zoom out please', 'show more of the workspace'], ['back the view off']),
+ 'fit': (['fit everything', 'fit to screen', 'show everything', 'fit the view', 'zoom to fit', 'show the whole circuit', 'center everything', 'see the whole board', 'fit it all on screen', 'reset the zoom', 'fit all the parts'], ['frame it all']),
+ 'select': (['select tool', 'switch to select', 'use the select tool', 'pointer tool', 'cursor tool', 'let me move things', 'move mode', 'switch to the pointer'], ['arrow tool']),
+ 'wiretool': (['wire tool', 'draw a wire', 'let me draw wires', 'switch to the wire tool', 'wiring mode', 'start wiring', 'use the wire tool', 'i want to draw wires', 'pick the wire tool'], ['enable wiring mode']),
+ 'rotatesel': (['rotate it', 'rotate this', 'rotate the selection', 'turn the selected part', 'rotate the selected part', 'rotate what i selected', 'turn it around'], ['spin the selected one']),
+ 'duplicate': (['duplicate it', 'duplicate this', 'duplicate the selected part', 'copy and paste it', 'make a copy of it', 'clone it', 'clone the selected part', 'duplicate the selection'], ['twin it']),
+ 'code': (['show the code', 'open the sketch', 'show the sketch editor', 'hide the code', 'hide the sketch', 'open the editor', 'show me the code', 'close the code editor', 'toggle the code', 'show the arduino code', 'open the code panel', 'show the sketch'], ['reveal the sketch']),
+ 'blocks': (['switch to blocks', 'use blocks', 'block mode', 'blocks editor', 'program with blocks', 'show blocks', 'i want blocks instead', 'drag and drop coding', 'switch to block coding'], ['blocky programming']),
+ 'text': (['switch to code', 'text mode', 'use the code editor', 'write code instead', 'show the text editor', 'code mode', 'switch to text', 'i want to type code', 'typed code mode'], ['go to text code']),
+ 'compile': (['compile it', 'compile the sketch', 'verify the code', 'check the code compiles', 'build the sketch', 'verify the sketch', 'compile my code', 'check my sketch for errors', 'verify it', 'press verify'], ['run the compiler']),
+ 'output': (['show the output', 'open the output tab', 'output tab', 'show output', 'go to output', 'switch to the output'], ['bring up the output']),
+ 'serial': (['show the serial monitor', 'open the serial monitor', 'serial monitor', 'show serial', 'open serial', 'show the serial output', 'open the serial tab', 'see the serial', 'i want to see the serial prints'], ['bring up the serial monitor']),
+ 'clearserial': (['clear the serial monitor', 'clear serial', 'wipe the serial monitor', 'empty the serial monitor', 'clear the monitor', 'clear the serial output'], ['blank the serial monitor']),
+ 'newproject': (['new project', 'start a new project', 'create a new project', 'make a new project', 'open a blank project', 'fresh project', 'start fresh in a new project', 'i want a new project', 'new blank project'], ['spin up a new project']),
+ 'projects': (['show my projects', 'open my projects', 'switch project', 'list my projects', 'my projects', 'open projects', 'change project', 'go to my projects', 'switch to another project'], ['pull up my projects']),
+ 'gallery': (['show shared projects', 'open the project gallery', 'see what others made', 'community projects', 'browse shared projects', 'look at other peoples projects', 'open the gallery', 'show me projects from other people'], ['see what others built']),
+ 'export': (['export my project', 'download my project', 'save the project as a file', 'export it', 'export the circuit', 'save my project to a file', 'download the circuit file', 'give me the project file', 'export the project'], ['dump the project to a file']),
+ 'copy': (['copy the project json', 'copy my project as json', 'copy json', 'copy the circuit json', 'copy the project to the clipboard', 'copy the project'], ['grab the project json']),
+ 'import': (['import a project', 'import a file', 'import a pcb', 'load a project file', 'upload a project', 'bring in a project file', 'import json', 'open a project file', 'import my kicad board', 'import a kicad pcb'], ['load a saved project']),
+ 'packs': (['open resource packs', 'show the packs', 'more parts', 'get more boards', 'add more parts packs', 'open the parts packs', 'install a pack', 'resource packs', 'show me the parts packs', 'browse packs', 'i want more boards'], ['find more parts packs']),
+ 'community': (['open the community', 'show the blog', 'open the community page', 'show updates', 'see the discussions', 'whats new in circuitbench', 'open the circuitbench blog'], ['check the community']),
+ 'feedback': (['send feedback', 'report a bug', 'tell the team something broke', 'open the feedback form', 'i want to give feedback', 'report a problem', 'suggest a feature', 'feedback', 'report an issue'], ['let the team know about a bug']),
+ 'settings': (['open settings', 'show settings', 'change the settings', 'open the settings menu', 'go to settings', 'settings', 'change the theme', 'add an api key', 'open the api key settings'], ['bring up the settings']),
+ 'partmaker': (['open the part maker', 'create a custom part', 'i want to make my own part', 'design a part', 'create a part', 'new custom part', 'part maker', 'build my own component', 'make my own part', 'make a custom part'], ['craft my own part']),
+ 'robots': (['change the robot type', 'pick a robot type', 'choose the robot type', 'open the robot picker', 'switch the robot type', 'set the robot type', 'robot type', 'pick a robot'], ['select a robot kind']),
+}
+APP_DEFER = ['how do i run the simulation', 'why wont it run', 'what does the compile button do', 'where is the serial monitor', 'how do i export my project', 'what does undo do', 'run it at double speed', 'run it for ten minutes',
+  'export as a pdf', 'export it to kicad', 'share my project with a friend', 'publish my project', 'why is the simulation slow', 'how do i zoom', 'what is the wire tool for', 'how do i import a pcb',
+  'what is a resource pack', 'can you run the code on a real arduino', 'upload the sketch to my arduino', 'save it to google drive', 'print the circuit', 'email me the project', 'delete my account', 'sign me out',
+  'why did the compile fail', 'what is in the serial monitor', 'what is the part maker', 'is the simulation accurate', 'run it on my phone', 'record a video of the simulation']
+APP_DEFER_HO = ['how come it will not simulate', 'whats the export button for', 'send my project to a teacher', 'turn the simulation into a video']
+STEP_PHRASES = {'left': ['left', 'to the left', 'leftwards', 'a bit left'], 'right': ['right', 'to the right', 'rightwards', 'a bit right'], 'up': ['up', 'upwards', 'higher up', 'a bit up'], 'down': ['down', 'downwards', 'lower down', 'a bit down']}
+PART_FOR_MOVE = ['led', 'resistor', 'pushbutton', 'potentiometer', 'ssd1306', 'lcd1602', 'dht', 'servo', 'battery', 'dc-motor']
+
+def gen_app(rng, held, suf):
+    def fin(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
+    _, st = make_state(rng)
+    k = rng.random()
+    if k < 0.74:                                    # one app button
+        name = rng.choice(list(APP)); tr, ho = APP[name]
+        return fin(rng.choice(ho if held else tr), st, f'app {name}')
+    if k < 0.80: return fin(rng.choice(APP_DEFER_HO if held else APP_DEFER), st, 'defer')
+    if k < 0.90:                                    # move / rotate / unwire a named part
+        what = rng.choice(['move', 'move', 'rotate', 'rotate', 'unwire', 'unwire'])
+        t = rng.choice(PART_FOR_MOVE if what != 'unwire' else PART_FOR_MOVE + ['plane-fc', 'plane-esc'])
+        n = rng.choices([1, 2], [70, 30])[0]
+        parts, st = make_state(rng, {t: n}); have = sorted((i for ty, i in parts if ty == t), key=lambda i: int(i.rsplit('-', 1)[1]))
+        name = tname(t, rng)
+        if len(have) == 1: ref, who = t, f'the {name}'
+        else:
+            j = rng.randrange(len(have)); ref = have[j]; who = rng.choice([f'the {["first", "second", "third"][j] if j < 3 else str(j + 1)} {name}', have[j]])
+        if what == 'move':
+            d = rng.choice(['left', 'right', 'up', 'down']); cnt = rng.choices([1, 2, 3], [70, 18, 12])[0]
+            verb = rng.choice(['move', 'shift', 'nudge', 'push', 'slide'] + (['budge', 'scoot'] if held else []))
+            if cnt == 1: return fin(f'{verb} {who} {rng.choice(STEP_PHRASES[d])}', st, f'move {ref} {d}')
+            return fin(f'{verb} {who} {d} {cnt} steps', st, f'move {ref} {d} {cnt}')
+        if what == 'rotate':
+            deg = rng.choice([90, 90, 180, 270]); verb = rng.choice(['rotate', 'turn', 'spin'] + (['pivot'] if held else []))
+            if deg == 90 and rng.random() < 0.5: return fin(f'{verb} {who}', st, f'rotate {ref}')
+            form = rng.choice([f'{verb} {who} {deg} degrees', f'{verb} {who} by {deg}'])
+            if deg == 180 and rng.random() < 0.4: form = rng.choice([f'flip {who} around', f'turn {who} around', f'flip {who} upside down'])
+            return fin(form, st, f'rotate {ref}' if (deg == 90 and 'flip' not in form) else f'rotate {ref} {deg}')
+        verb = rng.choice(['unwire', 'disconnect', 'detach the wires from', 'cut the wires on', 'remove the wires from', 'take the wires off'] + (['sever the wires on'] if held else []))
+        return fin(f'{verb} {who}', st, f'unwire {ref}')
+    if k < 0.94:
+        verb = rng.choice(['remove all wires', 'delete every wire', 'disconnect everything', 'unwire everything', 'clear all the wires', 'take all the wires off', 'cut every wire'] + (['strip every wire'] if held else []))
+        return fin(verb, st, 'unwire all')
+    pin = rng.choice(['3', '5', '6', '9', '10', '11']); anyp = rng.choice(DIGI)             # ready-made sketches
+    kind = rng.choice(['fade', 'fade', 'sweep', 'tone', 'hello', 'empty'])
+    if kind == 'fade':
+        w = rng.choice(['fade the led on pin {p}', 'make the led on pin {p} fade', 'write a fading sketch for pin {p}', 'make the led on {p} fade in and out', 'pulse the led on pin {p} smoothly', 'breathe the led on pin {p}'] + (['dim the led up and down on pin {p}'] if held else []))
+        if rng.random() < 0.2:
+            bad = rng.choice(['2', '4', '7', '8', '12', '13']); return fin(w.format(p=bad), st, 'defer')      # not a PWM pin: it cannot fade
+        return fin(w.format(p=pin), st, f'sketch fade {pin}')
+    if kind == 'sweep':
+        w = rng.choice(['sweep the servo on pin {p}', 'make the servo on {p} sweep back and forth', 'write a servo sweep sketch for pin {p}', 'swing the servo on pin {p} from 0 to 180', 'make the servo on pin {p} wave'] + (['rock the servo on pin {p} to and fro'] if held else []))
+        return fin(w.format(p=anyp), st, f'sketch sweep {anyp}')
+    if kind == 'tone':
+        w = rng.choice(['play a beep on pin {p}', 'make the buzzer on pin {p} beep', 'write a buzzer sketch for pin {p}', 'make a rising tone on pin {p}', 'play some tones on pin {p}'] + (['sound the buzzer on pin {p}'] if held else []))
+        return fin(w.format(p=anyp), st, f'sketch tone {anyp}')
+    if kind == 'hello':
+        w = rng.choice(['print hello to the serial monitor', 'write a hello world sketch for serial', 'say hello over serial', 'print a message to serial every second', 'make the arduino say hello on the serial monitor'] + (['output a greeting over serial'] if held else []))
+        return fin(w, st, 'sketch hello')
+    w = rng.choice(['empty the sketch', 'clear the code', 'blank sketch', 'start with an empty sketch', 'erase my code', 'wipe the sketch', 'reset the sketch to empty'] + (['blank out my code'] if held else []))
+    return fin(w, st, 'sketch empty')
 
 def typo(s, rng):
     w = s.split(' '); out = []
@@ -218,10 +315,11 @@ def gen_one(rng, held):
     SUF = SUFFIX + (SUFFIX_HO if held else [])
     if held:  # held-out set only uses the held-out phrasings (plus unseen combinations)
         ADD = ADD_V[-7:]; DEL = DEL_V[-4:]; SET = SET_V[-4:]; SUF = SUFFIX_HO
-    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off', 'vague', 'robo'], [24, 12, 12, 7, 12, 6, 8, 5, 30, 20])[0]
+    kind = rng.choices(['add', 'del', 'set', 'blink', 'build', 'multi', 'defer', 'off', 'vague', 'robo', 'app'], [24, 12, 12, 7, 12, 8, 8, 5, 30, 20, 44])[0]
     suf = rng.choice(SUF)
     if kind == 'vague': return gen_vague(rng, held, suf)
     if kind == 'robo': return gen_robo(rng, held, suf)
+    if kind == 'app': return gen_app(rng, held, suf)
     def finish(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
 
     if kind == 'add':
