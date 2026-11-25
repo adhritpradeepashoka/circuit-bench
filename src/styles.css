@@ -1512,3 +1512,8 @@ body.tile .hint-card, body.split .hint-card, body.split-v .hint-card { display: 
 .stage-btn.next:not(.on) { box-shadow: 0 0 0 2px rgba(29, 99, 237, .55); animation: stage-next 2.4s ease-in-out 3; }
 @keyframes stage-next { 50% { box-shadow: 0 0 0 5px rgba(29, 99, 237, 0); } }
 @media (prefers-reduced-motion: reduce) { .stage-btn.next:not(.on) { animation: none; } }
+
+/* an admin blocked this account: a notice over everything */
+.blocked-overlay { position: fixed; inset: 0; z-index: 2000; display: grid; place-items: center; padding: 24px; background: rgba(12, 16, 20, .94); color: #f4f6f5; }
+.blocked-box { max-width: 460px; text-align: center; display: grid; gap: 10px; }
+.blocked-box h2 { margin: 0; font-size: 26px; color: #fff; } .blocked-box p { margin: 0; color: #c3cdc8; line-height: 1.5; }

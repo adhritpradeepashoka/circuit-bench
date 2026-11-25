@@ -73,6 +73,7 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
       const r = await fetchImpl('/api/auth/google', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ credential }) });
       const b = await r.json();
       if (b?.ok) { setSession(b.token, { ...b.me, hostedAiReady: false }); await refresh(); paint(); if (b.me.role !== 'user') status(`Signed in as ${user?.name || b.me.email} · ${b.me.role}`); }
+      else if (r.status === 403 && b?.error) status(b.error);
     } catch { /* offline or accounts disabled */ }
   }
   /** Re-read the role (it can change while you are signed in) and tell the server we are here. */
@@ -81,12 +82,30 @@ export function initAccount({ fetchConfig = () => fetch('/api/config').then(r =>
     try {
       const r = await authed('/api/presence', { method: 'POST', fetchImpl });
       if (r.status === 401) { clearSession(); paint(); return; }
-      const b = await r.json(); if (b?.ok) { setSession(getToken(), b.me); paint(); }
+      const b = await r.json(); if (b?.ok) { setSession(getToken(), b.me); paint(); live(); }
     } catch { /* ignore */ }
   }
   if (heartbeatMs) setInterval(refresh, heartbeatMs);
+  /** Hold a line open to the server: when an admin changes this account's access the server writes to it, and the page re-reads who it is at once. */
+  let liveCtl = null;
+  async function live() {
+    if (liveCtl || !heartbeatMs || !user || !getToken() || !globalThis.ReadableStream) return;
+    const ctl = liveCtl = new AbortController();
+    try {
+      const r = await fetchImpl('/api/live', { headers: { authorization: `Bearer ${getToken()}` }, signal: ctl.signal });
+      if (!r.ok || !r.body) throw new Error('no live line');
+      const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+      for (;;) {
+        const { done, value } = await rd.read(); if (done) break;
+        buf += dec.decode(value, { stream: true });
+        for (let i = buf.indexOf('\n\n'); i >= 0; i = buf.indexOf('\n\n')) { const chunk = buf.slice(0, i); buf = buf.slice(i + 2); if (chunk.includes('data: refresh')) refresh(); }
+      }
+    } catch { /* offline, signed out, or the server restarted: try again below */ }
+    liveCtl = null;
+    if (user && getToken()) { const t = setTimeout(live, 3000 + Math.random() * 2000); t.unref?.(); }
+  }
   function signOut() {
-    user = null; clearSession();
+    user = null; liveCtl?.abort(); clearSession();
     try { localStorage.removeItem(STORE); } catch { /* ignore */ }
     google?.accounts.id.disableAutoSelect();
     paint(); status('Signed out');

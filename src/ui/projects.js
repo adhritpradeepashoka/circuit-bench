@@ -33,9 +33,13 @@ const ago = (t, now = Date.now()) => {
   return new Date(t).toLocaleDateString();
 };
 
+import { lockedWorkspace } from '../core/permissions.js';
+import { getMe } from '../sim/session.mjs';
 export function initProjects({ editor, code, sim = null, store = createLocalStore() }) {
   const $ = id => document.getElementById(id);
   const modal = $('projectsModal'), listEl = $('projList'), nameInput = $('projNewName'), wsSelect = $('projNewWorkspace');
+  const locked = () => { const w = lockedWorkspace(getMe()); return w && WORKSPACES[w] ? w : null; };      // an admin keeps this account in one workspace
+  const visible = list => (locked() ? list.filter(m => m.workspace === locked()) : list);
   let current = null;          // the open project's record (without trusting its .data — the working copy is the truth)
   let timer = 0, suspended = false, confirmDelete = null, renaming = null;
   const getCurrentId = () => { try { return sessionStorage.getItem(TAB_KEY) || localStorage.getItem(LAST_KEY); } catch { return null; } };
@@ -46,11 +50,11 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
 
   const fillWorkspaces = () => {
     const keep = wsSelect.value;
-    wsSelect.replaceChildren(...Object.entries(WORKSPACES).map(([id, w]) => {
+    wsSelect.replaceChildren(...Object.entries(WORKSPACES).filter(([id]) => !locked() || id === locked()).map(([id, w]) => {
       const o = document.createElement('option'); o.value = id; o.disabled = !w.available;
       o.textContent = w.available ? w.name : `${w.name} — coming soon`; return o;
     }));
-    wsSelect.value = WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE;
+    wsSelect.value = locked() || (WORKSPACES[keep]?.available ? keep : DEFAULT_WORKSPACE);
     paintTiles();
   };
   // A small line icon for each kind of workspace (fixed markup, drawn here, no pictures to load)
@@ -72,11 +76,11 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
       const b = document.createElement('b'); b.textContent = 'Mix'; const s = document.createElement('span'); s.textContent = 'Combine workspaces: for example Robotics with Bioelectronics, or Robotics with an AI board';
       t.append(wsIcon('mix'), b, s); t.addEventListener('click', () => { mixOn = true; if (mixSel.size < 2) { mixSel.clear(); mixSel.add('robotics'); mixSel.add('bioelectronics'); } setMix(); nameInput.focus(); }); return t;
     })();
-    host.replaceChildren(...Object.entries(WORKSPACES).filter(([, w]) => w.available && !w.mix).map(([id, w]) => {
+    host.replaceChildren(...Object.entries(WORKSPACES).filter(([id, w]) => w.available && !w.mix && (!locked() || id === locked())).map(([id, w]) => {
       const t = document.createElement('button'); t.type = 'button'; t.className = `proj-tile${wsSelect.value === id ? ' on' : ''}`; t.dataset.ws = id; t.setAttribute('role', 'radio'); t.setAttribute('aria-checked', String(wsSelect.value === id));
       const b = document.createElement('b'); b.textContent = w.name; const s = document.createElement('span'); s.textContent = w.blurb;
       t.append(wsIcon(id), b, s); t.addEventListener('click', () => { mixOn = false; wsSelect.value = id; delete boardSel.dataset.touched; if (typeof fillBoards === 'function') fillBoards(); paintTiles(); $('projNewBoard').hidden = id === 'robotics'; paintMix(); nameInput.focus(); }); return t;
-    }), mixTile);
+    }), ...(locked() ? [] : [mixTile]));
     $('projNewBoard').hidden = wsSelect.value === 'robotics';
     t_paint_mix();
   }
@@ -134,6 +138,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     await saveNow();
     const p = await store.load(id);
     if (!p) { editor.status('That project could not be opened.'); return renderList(); }
+    if (locked() && p.workspace !== locked()) { editor.status(`An admin keeps this account in ${WORKSPACES[locked()]?.name || 'one workspace'}, so that project cannot be opened.`); return; }
     show(p); close();
     editor.status(`Opened “${p.name}”`);
   }
@@ -160,6 +165,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   });
 
   async function create({ name, workspace = DEFAULT_WORKSPACE, data = null, board, before = null } = {}) {
+    workspace = locked() || workspace;
     await saveNow();
     const taken = (await store.list()).map(m => m.name);
     const ws = getWorkspace(workspace), fresh = !data;
@@ -237,7 +243,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   /* ── the dialog ──────────────────────── */
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
   async function renderList() {
-    const all = await store.list(), items = projQuery ? all.filter(m => `${m.name} ${WORKSPACES[m.workspace]?.name || m.workspace}`.toLowerCase().includes(projQuery)) : all;
+    const all = visible(await store.list()), items = projQuery ? all.filter(m => `${m.name} ${WORKSPACES[m.workspace]?.name || m.workspace}`.toLowerCase().includes(projQuery)) : all;
     $('projCount').textContent = all.length ? `(${all.length})` : '';
     const empty = $('projEmpty'); empty.hidden = !!items.length; empty.textContent = all.length ? `Nothing matches “${projQuery}”.` : 'No projects yet. Pick a kind above to start your first one.';
     listEl.replaceChildren(...items.map(m => {
@@ -302,7 +308,7 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
   const pbtn = $('projectBtn');
   let swConfirm = null;
   async function renderSwitch() {
-    const items = await store.list(), ul = el('ul');
+    const items = visible(await store.list()), ul = el('ul');
     for (const m of items) {
       const li = el('li', m.id === current?.id ? 'current' : ''), b = el('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
       b.append(el('b', '', m.name), el('span', '', `${WORKSPACES[m.workspace]?.name || m.workspace} · edited ${ago(m.updatedAt)}${m.id === current?.id ? ' · open now' : ''}`));
@@ -355,6 +361,17 @@ export function initProjects({ editor, code, sim = null, store = createLocalStor
     if (p) show(p);
     return current;
   })();
+
+  /** An admin keeps this account in one workspace (or lets it go again): the open project moves there at once, and the choices on offer follow. */
+  async function enforceLock() {
+    fillWorkspaces();
+    const w = locked(); if (!w || !current || current.workspace === w) return;
+    const mine = (await store.list()).find(m => m.workspace === w);
+    if (mine) await open(mine.id); else await create({ name: WORKSPACES[w]?.name || 'Project', workspace: w });
+    editor.status(`An admin keeps this account in ${WORKSPACES[w]?.name || 'one workspace'}.`);
+  }
+  window.addEventListener('cb-session', () => { enforceLock(); });
+  ready.then(() => enforceLock());
 
   const gallery = initGallery({ projects: { copyPublic }, status: t => editor.status(t) });
   return {

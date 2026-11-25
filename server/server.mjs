@@ -5,7 +5,7 @@
 //   POST /api/auth/google {credential} → { token, me }   ·   GET /api/me · POST /api/presence (Bearer token)
 //   POST /api/account/kind {kind}   ·   /api/classes … (teachers: create/settings/roster/review; students: join/submit)   ·   POST /api/admin/kind
 //   GET /api/projects · GET/PUT/DELETE /api/projects/:id   (signed-in people: a cloud copy of their projects)
-//   GET/POST/DELETE /api/admin/users   (admins; the owner also manages admins)
+//   GET/POST/DELETE /api/admin/users   (admins; the owner also manages admins)   ·   POST /api/admin/permissions {email, perms}   (limits for one account; the page is /admin)
 //   Key sync (opt-in, encrypted): KEY_VAULT_SECRET (falls back to DATABASE_URL)
 //   Env for accounts: OWNER_EMAIL, DATABASE_URL, SESSION_SECRET, MAX_FREE_CONCURRENT, FREE_HOSTED_AI=1, HOSTED_AI_KEY/_PROVIDER/_MODEL
 // Env: PORT (8787), HOST (127.0.0.1), VLAB_CORS_ORIGIN (e.g. * — only needed when the page is served from somewhere else),
@@ -30,7 +30,9 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
   const bearer = req => /^Bearer (\S+)$/.exec(req.headers.authorization || '')?.[1] || '';
   /** A student whose class turned a feature off may not use it, even by calling the API directly. */
   async function gate(req, feature, what) {
-    if (!classes || !bearer(req)) return;
+    if (!bearer(req)) return;
+    if (accounts && !(await accounts.allows(bearer(req), feature))) throw new RequestError(`An admin turned ${what} off for your account.`, 403);       // limits set in the admin console
+    if (!classes) return;
     if (!(await classes.allowed(bearer(req), feature, { personal: req.headers['x-cb-profile'] === 'personal' }))) throw new RequestError(`Your teacher turned ${what} off for your class.`, 403);
   }
   async function readJson(req, max) {
@@ -69,6 +71,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
         if (limited(req.socket.remoteAddress || 'local')) return send(res, 429, { ok: false, error: 'Too many requests — wait a moment.' });
         const out = await accounts.signIn((await readJson(req, 20_000)).credential);
+        if (out?.blocked) return send(res, 403, { ok: false, error: out.note ? `This account is blocked: ${out.note}` : 'This account has been blocked by an admin.' });
         return out ? send(res, 200, { ok: true, ...out }) : send(res, 401, { ok: false, error: 'Google sign-in could not be verified.' });
       }
       if (url.pathname === '/api/me' || url.pathname === '/api/presence') {
@@ -78,6 +81,7 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
       }
       if (url.pathname === '/api/projects' || url.pathname.startsWith('/api/projects/')) {
         if (!cloudProjects) return send(res, 404, { ok: false, error: 'Project sync is not enabled on this server.' });
+        if (accounts && await accounts.isBlocked(bearer(req))) return send(res, 403, { ok: false, error: 'An admin paused your access.' });
         const id = decodeURIComponent(url.pathname.split('/')[3] || ''), tok = bearer(req);
         const out = r => send(res, r.ok ? 200 : r.status, r.ok ? r : { ok: false, error: r.error });
         if (!id && req.method === 'GET') return out(await cloudProjects.list(tok));
@@ -155,6 +159,21 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
         else if (parts[1] === 'students' && req.method === 'DELETE') return out(await classes.removeStudent(tok, id, url.searchParams.get('email')));
         return send(res, 404, { ok: false, error: 'Unknown endpoint.' });
       }
+      if (url.pathname === '/api/live') {                                       // a page that is open holds this request; the server writes a line when an admin changes its access
+        if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
+        const a = await accounts.auth(bearer(req)); if (!a) return send(res, 401, { ok: false, error: 'Please sign in again.' });
+        res.writeHead(200, { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no' });
+        res.write('retry: 3000\n\n');
+        const off = accounts.watch(a.email, () => res.write('data: refresh\n\n')), beat = setInterval(() => res.write(': ok\n\n'), 25_000);
+        req.on('close', () => { clearInterval(beat); off(); });
+        return;
+      }
+      if (url.pathname === '/api/admin/permissions') {
+        if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
+        if (req.method !== 'POST') return send(res, 405, { ok: false, error: 'Use POST.' }, { allow: 'POST' });
+        const b = await readJson(req, 4_000), out = await accounts.setPerms(bearer(req), b.email, b.perms);
+        return send(res, out.ok ? 200 : out.status, out.ok ? { ok: true, user: out.user } : { ok: false, error: out.error });
+      }
       if (url.pathname === '/api/admin/users') {
         if (!accounts) return send(res, 404, { ok: false, error: 'Accounts are not enabled on this server.' });
         if (req.method === 'GET') {
@@ -226,9 +245,9 @@ export function createServer({ compiler = createCompiler(), ai = createAiService
 
       if (staticDir) {                                                     // serve the built app
         const blogPage = url.pathname === '/blog' || /^\/blog\/\d+\/?$/.test(url.pathname);        // the public blog: one page for the list and for every post
-        const privacyPage = url.pathname === '/privacy' || url.pathname === '/privacy/';
+        const privacyPage = url.pathname === '/privacy' || url.pathname === '/privacy/', adminPage = url.pathname === '/admin' || url.pathname === '/admin/';
         const landing = url.pathname === '/', appPage = url.pathname === '/app' || url.pathname === '/app/';      // the website's front page at /, the lab itself at /app
-        let rel = privacyPage ? 'privacy.html' : blogPage ? 'blog.html' : landing ? 'landing.html' : appPage ? 'index.html' : normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
+        let rel = adminPage ? 'admin.html' : privacyPage ? 'privacy.html' : blogPage ? 'blog.html' : landing ? 'landing.html' : appPage ? 'index.html' : normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, '');
         if (rel.split(sep).includes('..')) return send(res, 400, { ok: false, error: 'Bad path.' });
         let file = join(staticDir, rel || 'index.html');
         try { if ((await stat(file)).isDirectory()) file = join(file, 'index.html'); } catch { file = join(staticDir, 'index.html'); }
