@@ -229,14 +229,89 @@ APP_DEFER_HO = ['how come it will not simulate', 'whats the export button for', 
 STEP_PHRASES = {'left': ['left', 'to the left', 'leftwards', 'a bit left'], 'right': ['right', 'to the right', 'rightwards', 'a bit right'], 'up': ['up', 'upwards', 'higher up', 'a bit up'], 'down': ['down', 'downwards', 'lower down', 'a bit down']}
 PART_FOR_MOVE = ['led', 'resistor', 'pushbutton', 'potentiometer', 'ssd1306', 'lcd1602', 'dht', 'servo', 'battery', 'dc-motor']
 
+
+# ───────── second round: much more wording variety for the app functions ─────────
+# EXTRA[name] = more idioms (the LAST ONE is held out). COMPOSE[name] = (verbs, objects, held-out verbs, held-out objects): "<verb> <object>" is trained on the plain pools and tested on unseen ones.
+EXTRA = {
+ 'run': ['could you maybe start running the thing', 'lets see it working', 'make it go', 'let me see what happens', 'i want to see my circuit in action', 'turn the simulation on', 'play the simulation', 'give it a go', 'see if it works', 'put it in motion', 'start the thing', 'power up the simulation', 'get the simulation going', 'animate it', 'let it go'],
+ 'stop': ['make it stop', 'thats enough stop it', 'turn the simulation off', 'end it', 'stop everything', 'please make it stop running', 'i want it to stop', 'switch the simulation off', 'finish the run', 'cancel the simulation', 'enough already'],
+ 'pause': ['hold on pause it', 'make it pause', 'put the simulation on pause', 'i need to pause the simulation', 'stop it for a moment but keep it', 'freeze the circuit', 'hold everything', 'just pause'],
+ 'sound': ['can you silence the buzzer', 'the buzzer is too annoying turn it off', 'make the beeping stop', 'i dont want to hear the buzzer', 'turn the audio off', 'turn the audio on', 'switch the speaker on', 'let me hear the buzzer', 'cut the noise'],
+ 'undo': ['i made a mistake undo it', 'take back my last change', 'revert my last change', 'go back to before that', 'cancel my last edit', 'roll back the last change', 'oops go back', 'i didnt mean that undo', 'forget that last thing i did', 'reverse that'],
+ 'redo': ['redo what i just undid', 'bring back what i undid', 'put back what i undid', 'redo the thing i just undid', 'redo the last undo', 'reapply the change', 'restore that change', 'actually do that again after the undo', 'bring that change back'],
+ 'zoomin': ['i cant see the parts zoom in', 'everything is too small', 'the parts are too small', 'closer please', 'make the parts bigger', 'make everything bigger', 'let me see it up close', 'bigger view please', 'get in closer on the board', 'i need to see more detail', 'scale it up'],
+ 'zoomout': ['i cant see all my parts make the view smaller', 'everything is too big', 'the parts are too big', 'make everything smaller', 'zoom out so i can see more', 'pull the camera back', 'show me more of the workspace', 'i want a wider view', 'step back so i can see everything', 'smaller please', 'shrink everything'],
+ 'fit': ['i cant find my parts', 'where did my circuit go', 'center the view', 'show all my parts', 'make everything visible', 'fit the circuit on screen', 'zoom to show everything', 'recenter the view', 'bring everything back into view', 'show me the full picture', 'reset my view'],
+ 'serial': ['hey can u bring up the serial output window', 'i want to see what the arduino prints', 'show me what its printing', 'let me read the serial prints', 'display the serial monitor', 'pull up the serial console', 'show me the serial console', 'where do the serial prints go show me', 'open the monitor that shows the prints', 'switch to the serial monitor tab', 'show me the serial window'],
+ 'code': ['id like to look at my arduino code', 'let me look at the sketch', 'i want to see the program', 'show me what the code looks like', 'can i see my sketch', 'bring up the code', 'display the sketch', 'take a look at the code', 'let me see the source', 'open up the code editor', 'get the code out of the way', 'collapse the code editor', 'i want to read my sketch'],
+ 'blocks': ['i prefer blocks', 'let me use blocks', 'give me the blocks', 'visual programming please', 'coding with blocks', 'i dont want to type code use blocks', 'use the block editor', 'show the block programming', 'drag blocks instead of typing'],
+ 'text': ['let me type the code myself', 'i prefer typing code', 'switch to the text editor', 'give me the code editor', 'i want to write the code by hand', 'no blocks just code', 'type code instead of blocks', 'i want to write real arduino code', 'get rid of the blocks and show text', 'use text programming'],
+ 'compile': ['compile the program', 'build my code', 'verify my sketch', 'verify the program', 'compile and check for errors', 'press the compile button', 'run the compiler on my sketch', 'see if the sketch compiles', 'make sure the code builds', 'try compiling it'],
+ 'output': ['show me the output tab', 'switch to the output view', 'go to the output panel', 'i want to see the output', 'back to the output', 'open output'],
+ 'clearserial': ['empty the console', 'flush the serial monitor', 'wipe the serial window', 'clear everything in the serial monitor', 'reset the serial monitor', 'clean out the serial output', 'get rid of the serial text', 'erase the serial prints'],
+ 'newproject': ['begin another project', 'open a fresh project', 'create another project', 'i want to start a different project', 'make me a new blank project', 'start over in a new project', 'a new project please', 'lets start a brand new project', 'new empty project', 'open a clean project'],
+ 'projects': ['take me to my other projects', 'show all my projects', 'switch to a different project', 'list my saved projects', 'go to my project list', 'open another project', 'i want to open a different project', 'where are my projects', 'let me pick another project', 'see my saved projects'],
+ 'gallery': ['show me what other students made', 'browse the shared projects', 'look at projects other people shared', 'open shared projects', 'show me examples from other people', 'see projects from the community', 'whats been shared by others'],
+ 'export': ['save my whole project as a file', 'download this project', 'save the circuit to a file', 'give me a file of my project', 'back up my project', 'save my project to my computer', 'i want a copy of my project as a file', 'write the project out to a file', 'download everything i built', 'export everything'],
+ 'copy': ['copy my project to the clipboard', 'copy the project data', 'copy the circuit as json', 'put the project json on my clipboard', 'copy everything as json', 'give me the json of my circuit'],
+ 'import': ['load a project from a file', 'open a project file from my computer', 'upload a circuit file', 'bring in a saved project', 'import a circuit', 'i have a project file to open', 'i want to load my backup', 'bring in a kicad file', 'open my saved file', 'load a pcb'],
+ 'packs': ['get me more boards to choose from', 'i want more parts', 'show me extra boards and parts', 'where can i get more components', 'add new boards to my parts menu', 'install extra parts', 'show the parts library packs', 'let me add more part packs', 'more boards please'],
+ 'community': ['whats new', 'show me the latest updates', 'see what changed in circuitbench', 'open the news page', 'show the discussions', 'go to the community page', 'any news from the team'],
+ 'feedback': ['i want to tell you guys something is broken', 'i found a bug in circuitbench', 'i have a suggestion for the team', 'send a message to the makers', 'contact the team', 'tell the developers about a problem', 'this is not working tell the devs', 'i want to complain about something', 'i have an idea for a feature', 'let the makers know'],
+ 'settings': ['open the settings window', 'change my preferences', 'i want to change the app settings', 'switch the theme', 'change how the app looks', 'where are the settings', 'give me the settings', 'set up my api key', 'let me change the colors of the app'],
+ 'partmaker': ['i want to build my own custom component', 'help me make a new part from scratch', 'i need a part that isnt in the list so make one', 'open the tool for making parts', 'create my own component', 'make a part that does not exist yet', 'let me design a new part', 'start the custom part tool', 'i need to define a new part'],
+ 'robots': ['i want to change what kind of robot im building', 'switch to a different robot', 'set what robot this is', 'change the kind of robot', 'which robot type should this project be', 'change the type of machine', 'pick what kind of robot im making'],
+ 'rotatesel': ['rotate the thing i selected', 'turn the part i clicked', 'spin the selected part', 'rotate whatever is selected', 'turn what i picked', 'rotate the highlighted part'],
+ 'duplicate': ['make another copy of the selected part', 'copy the part i selected', 'make a duplicate of this part', 'duplicate whatever is selected', 'clone what i picked', 'copy this part'],
+ 'select': ['go back to the normal tool', 'switch to the regular cursor', 'i want to drag parts around', 'use the arrow', 'normal mode', 'stop drawing wires'],
+ 'wiretool': ['let me connect things with wires', 'i want to draw connections myself', 'start drawing wires by hand', 'switch to wiring', 'get the wire drawing tool', 'let me draw the wires myself'],
+}
+COMPOSE = {
+ 'run': (['run', 'start', 'launch', 'begin', 'play', 'kick off', 'fire up', 'get going with', 'execute', 'try', 'test'], ['it', 'the simulation', 'the sim', 'my circuit', 'the circuit', 'my project', 'this', 'the program', 'my design', 'the thing'], ['boot', 'trigger', 'commence'], ['my build', 'the whole thing']),
+ 'stop': (['stop', 'halt', 'end', 'kill', 'cancel', 'quit', 'shut down', 'terminate', 'abort'], ['it', 'the simulation', 'the sim', 'my circuit', 'the run', 'this', 'everything', 'the thing'], ['wind down', 'cease'], ['my simulation', 'the whole run']),
+ 'pause': (['pause', 'freeze', 'hold', 'suspend'], ['it', 'the simulation', 'the sim', 'this', 'everything', 'the circuit'], ['stall', 'put on hold'], ['my simulation']),
+ 'sound': (['mute', 'unmute', 'silence', 'quiet', 'toggle'], ['it', 'the sound', 'the buzzer', 'the speaker', 'the audio', 'the beeping'], ['hush', 'dampen'], ['the noise', 'the tone']),
+ 'zoomin': (['zoom in on', 'zoom into', 'magnify', 'enlarge', 'make bigger', 'get closer to'], ['the board', 'the view', 'the workspace', 'the parts', 'the circuit', 'the canvas', 'everything', 'the screen'], ['blow up', 'scale up'], ['my parts', 'the diagram']),
+ 'zoomout': (['zoom out of', 'zoom out from', 'shrink', 'make smaller', 'reduce', 'back away from'], ['the board', 'the view', 'the workspace', 'the parts', 'the circuit', 'the canvas', 'everything'], ['scale down', 'minimize'], ['my parts', 'the diagram']),
+ 'serial': (['open', 'show', 'bring up', 'display', 'pull up', 'go to', 'switch to', 'let me see'], ['the serial monitor', 'the serial output', 'the serial window', 'serial', 'the serial tab', 'the serial console'], ['reveal', 'summon'], ['the serial readout', 'the serial log']),
+ 'code': (['show', 'open', 'reveal', 'display', 'hide', 'close', 'toggle', 'collapse'], ['the code', 'my code', 'the sketch', 'my sketch', 'the code editor', 'the arduino code', 'the program text', 'the source code'], ['expose', 'fold away'], ['the listing', 'my program']),
+ 'compile': (['compile', 'build', 'verify'], ['my sketch', 'the sketch', 'my code', 'the code', 'the program', 'my program'], ['assemble'], ['the source']),
+ 'clearserial': (['clear', 'wipe', 'empty', 'reset', 'erase', 'flush', 'clean'], ['the serial monitor', 'serial', 'the monitor', 'the serial output', 'the serial window', 'the console'], ['scrub'], ['the serial log', 'the serial readout']),
+ 'export': (['export', 'download', 'save', 'back up'], ['my project', 'this project', 'the project', 'my circuit', 'everything', 'my work'], ['archive'], ['my build']),
+ 'projects': (['show', 'open', 'list', 'switch to', 'go to'], ['my projects', 'all my projects', 'my saved projects', 'the project list', 'another project'], ['browse'], ['my saved work']),
+ 'newproject': (['start', 'create', 'make', 'open', 'begin'], ['a new project', 'a fresh project', 'another project', 'a blank project', 'a new empty project'], ['spin up'], ['a clean slate']),
+ 'settings': (['open', 'show', 'go to', 'change', 'bring up'], ['the settings', 'settings', 'my settings', 'the preferences', 'the app settings'], ['pull up'], ['the options']),
+ 'partmaker': (['open', 'start', 'launch', 'use'], ['the part maker', 'the part creator', 'the part builder', 'the custom part tool'], ['fire up'], ['the part designer']),
+ 'import': (['import', 'load', 'open', 'bring in', 'upload'], ['a project', 'a project file', 'a saved project', 'a circuit file', 'a pcb file', 'a kicad board'], ['pull in'], ['an old project']),
+}
+LEADS = ['', '', '', '', 'can you', 'could you', 'could you maybe', 'please', 'id like to', 'i want to', 'i wanna', 'lets', 'hey can u', 'go ahead and', 'would you', 'i need you to', 'ok now', 'now', 'just', 'can u', 'i would like you to']
+LEADS_HO = ['kindly', 'hows about you', 'if you would']
+Q_STEMS = ['how do i', 'how can i', 'why wont', 'why cant i', 'why is', 'why does', 'what does', 'what is', 'where is', 'where do i find', 'can you explain', 'how does', 'whats the', 'is there a way to', 'i dont understand', 'what happens when i press', 'how come', 'when should i use', 'what is the point of']
+Q_STEMS_HO = ['could you tell me how to', 'im confused about']
+Q_NOUNS = ['the simulation', 'the serial monitor', 'zoom', 'undo', 'the compile button', 'export', 'import', 'the wire tool', 'the part maker', 'projects', 'resource packs', 'blocks', 'the sketch editor', 'settings', 'run', 'the stop button',
+           'the pause button', 'the output tab', 'the select tool', 'duplicate', 'the project gallery', 'the feedback form']
+Q_NOUNS_HO = ['the community page', 'the robot picker']
+
 def gen_app(rng, held, suf):
     def fin(req, state, prog): return {'request': (req + ' ' + suf).strip(), 'state': state, 'program': prog}
     _, st = make_state(rng)
     k = rng.random()
-    if k < 0.74:                                    # one app button
+    if k < 0.70:                                    # one app button
         name = rng.choice(list(APP)); tr, ho = APP[name]
-        return fin(rng.choice(ho if held else tr), st, f'app {name}')
-    if k < 0.80: return fin(rng.choice(APP_DEFER_HO if held else APP_DEFER), st, 'defer')
+        ex = EXTRA.get(name, []); ex_tr, ex_ho = (ex[:-1], ex[-1:]) if ex else ([], [])
+        cp = COMPOSE.get(name); lead = rng.choice(LEADS_HO if held else LEADS)
+        r = rng.random()
+        if cp and r < 0.45:
+            v, o = (rng.choice(cp[2] + cp[0][:2]), rng.choice(cp[3])) if held else (rng.choice(cp[0]), rng.choice(cp[1]))
+            if held and rng.random() < 0.5: v, o = rng.choice(cp[2]), rng.choice(cp[1])
+            if name == 'sound' and v in ('mute', 'unmute', 'silence', 'quiet', 'toggle') and o == 'it': o = 'it'
+            return fin(f'{lead} {v} {o}'.strip(), st, f'app {name}')
+        if ex and r < 0.80: return fin(f'{lead} {rng.choice(ex_ho if held else ex_tr)}'.strip(), st, f'app {name}')
+        return fin(f'{lead} {rng.choice(ho + ex_ho if held else tr)}'.strip(), st, f'app {name}')
+    if k < 0.80:
+        if rng.random() < 0.5: return fin(rng.choice(APP_DEFER_HO if held else APP_DEFER), st, 'defer')
+        stem = rng.choice(Q_STEMS_HO if held else Q_STEMS); noun = rng.choice(Q_NOUNS_HO if held else Q_NOUNS)
+        return fin(f'{stem} {noun}' + rng.choice(['', '', ' work', ' start', ' do that']) , st, 'defer')
     if k < 0.90:                                    # move / rotate / unwire a named part
         what = rng.choice(['move', 'move', 'rotate', 'rotate', 'unwire', 'unwire'])
         t = rng.choice(PART_FOR_MOVE if what != 'unwire' else PART_FOR_MOVE + ['plane-fc', 'plane-esc'])

@@ -30,3 +30,8 @@ export function looksLikeQuestion(text) {
   if (/^(whats new|what is new|what s new)\b/.test(t.replace(/[’']/g, ' '))) return false;
   return /\?\s*$/.test(t) || /^(how|why|what|whats|what s|where|when|which|who|is|are|does|do|did|will|would|should|explain|tell me)\b/.test(t.replace(/[’']/g, ' '));
 }
+
+/** "run it faster", "run it for ten minutes", "zoom in twice": the button does one plain thing, so a request for more is not answered by pressing it. */
+export function asksMoreThanAButton(text) {
+  return /\b(faster|slower|quicker|speed|speeds|minutes?|hours?|seconds?|twice|double|triple|half speed|slow motion|times|repeatedly|every|schedule|automatically|automatic|loop)\b/.test(String(text || '').toLowerCase());
+}

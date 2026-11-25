@@ -6,7 +6,7 @@
 // server/ai-service.mjs. Bring-your-own-key for now: src/sim/ai-client.mjs. Proposed circuit edits are
 // validated against the real part/pin catalogue by src/core/ai-actions.js before anything renders.
 import { runAppOps } from './app-ops.js';
-import { looksLikeAppRequest, looksLikeQuestion } from '../core/app-intent.js';
+import { looksLikeAppRequest, looksLikeQuestion, asksMoreThanAButton } from '../core/app-intent.js';
 import { getRobotType } from '../core/robot-context.js';
 import { loadTiny, loadTinyLarge, understandRouted } from '../sim/tiny-model.mjs';
 import { looksRelevant, NOT_RELEVANT } from '../core/relevance.js';
@@ -404,7 +404,7 @@ export function initAiPanel(editor, code, sim = null) {
       const tiny = await Promise.race([loadTiny(), new Promise((_, no) => setTimeout(() => no(new Error('slow')), 4000))]);
       const big = () => Promise.race([loadTinyLarge(), new Promise(r => setTimeout(() => r(null), 6000))]);
       const u = await understandRouted({ small: tiny, large: big }, step, circ);
-      if (u?.appOps?.length && looksLikeQuestion(step)) return null;          // a question about a button is not a request to press it
+      if (u?.appOps?.length && (looksLikeQuestion(step) || asksMoreThanAButton(step))) return null;          // a question about a button is not a request to press it
       if (u && u.kind !== 'off' && !coversNamedParts(step, circ, u)) return null;          // a model answer that leaves out a named part is not an answer
       return u ? (u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation, kind: 'off' } : { ...u, viaModel: true }) : null;
     };

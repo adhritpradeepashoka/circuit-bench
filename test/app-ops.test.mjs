@@ -85,3 +85,9 @@ test('questions are told apart from requests', () => {
   for (const t of ['why wont the simulation start', 'how do i export my project?', 'what does the compile button do', 'where is the serial monitor', 'is the simulation accurate']) assert.ok(looksLikeQuestion(t), t);
   for (const t of ['run it', 'start the simulation', 'zoom in', 'can you run it', 'whats new in circuitbench', 'export my project', 'open the serial monitor']) assert.ok(!looksLikeQuestion(t), t);
 });
+
+import { asksMoreThanAButton } from '../src/core/app-intent.js';
+test('a request for more than the button does is not answered by pressing it', () => {
+  for (const t of ['can you make my simulation run faster', 'run it for ten minutes', 'zoom in twice', 'run it at double speed']) assert.ok(asksMoreThanAButton(t), t);
+  for (const t of ['run my circuit please', 'zoom in a little', 'open the serial monitor', 'export this project']) assert.ok(!asksMoreThanAButton(t), t);
+});
