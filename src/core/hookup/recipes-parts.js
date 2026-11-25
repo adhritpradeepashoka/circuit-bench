@@ -201,6 +201,11 @@ const drone = phase(OTHER)((c, { type }) => {
   c.mem.informational = true;
 });
 
+const plane = phase(OTHER)(c => {
+  c.say('Plane parts are wired to each other, not to an Arduino: the battery to the ESC, the motor\'s A, B, C to the ESC\'s A, B, C, the ESC\'s SIG to the flight controller\'s MOT pad, and the ESC\'s 5V and ground to the flight controller, the receiver and the servos (never the battery). Ask me to "build a flying wing with an EDF" and I will place and wire it all.');
+  c.mem.informational = true;
+});
+
 const esp32 = phase(OTHER)(c => {
   c.say('The ESP32-C3 board runs on 3.3 V and is wired on its own, not to an Arduino. For a coreless brushed drone: GPIO0, 1, 3 and 4 each go to the gate of one logic-level MOSFET (with a 100 kΩ pull-down to ground), the motors sit between battery + and the MOSFET drains, and an MPU-6050 goes to 3V3, GND, GPIO8 (SDA) and GPIO9 (SCL). CircuitBench does not run ESP32 code yet; this is for wiring and planning.');
   c.mem.informational = true;
@@ -221,5 +226,5 @@ const devboard = phase(OTHER)(c => {
   c.mem.informational = true;
 });
 
-export const PARTS_BY_TYPE = { ...Object.fromEntries(BOARD_TEMPLATES.map(t => [`custom-${t.id}`, devboard])), 'custom-drv8833': hbridge, 'custom-tb6612': hbridge, 'custom-l9110s': hbridge, 'custom-bmotor-cw': bmotor, 'custom-bmotor-ccw': bmotor, 'custom-esp32-c3-mini': esp32, ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
+export const PARTS_BY_TYPE = { ...Object.fromEntries(BOARD_TEMPLATES.map(t => [`custom-${t.id}`, devboard])), 'custom-drv8833': hbridge, 'custom-tb6612': hbridge, 'custom-l9110s': hbridge, 'custom-bmotor-cw': bmotor, 'custom-bmotor-ccw': bmotor, 'custom-esp32-c3-mini': esp32, ...Object.fromEntries(['aio', 'fc', 'esc', 'cap', 'rx', 'vtx', 'motor', 'motor-fr', 'motor-fl', 'motor-bl', 'motor-br', 'battery', 'camera'].map(k => [`custom-drone-${k}`, drone])), ...Object.fromEntries(['motor', 'esc', 'fc'].map(k => [`custom-plane-${k}`, plane])), battery, resistor, 'custom-ic-74hc595': shift595, 'custom-slime-mold': slime };
 export const PARTS_BY_KIND = { diode, npn: transistor, pnp: transistor, nmos: transistor, pmos: transistor, regulator, capacitor, inductor, opamp, inamp: bioAmp, 'signal-source': bioAmp, logic: logicChip };

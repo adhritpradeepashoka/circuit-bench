@@ -28,7 +28,7 @@ test('a servo horn hole and a link hole agree on the screw, so a joint between t
   assert.equal(big.diameter, long.diameter);
 });
 test('robot types: a known list, cleaned from anything', () => {
-  assert.deepEqual(ROBOT_TYPES.map(t => t.id), ['arm', 'rover', 'drone', 'walker', 'standalone']);
+  assert.deepEqual(ROBOT_TYPES.map(t => t.id), ['arm', 'rover', 'drone', 'plane', 'walker', 'standalone']);
   assert.equal(cleanRobotType('arm'), 'arm'); assert.equal(cleanRobotType('submarine'), null); assert.equal(cleanRobotType(undefined), null);
 });
 test('each type leads with parts that exist, and the Test tab opens in the right place', () => {

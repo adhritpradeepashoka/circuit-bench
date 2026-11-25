@@ -184,7 +184,18 @@ function devboard(spec, w, h, pins) {
     ${pins.map(pad).join('')}`);
 }
 
+/** A plain board with solder pads, for the parts that are not a stack (a plane's single ESC and its flight controller): a rounded board, a title, every pin a labelled pad. */
+function padBoard(spec, w, h, pins, { title, sub, color }) {
+  const pads = pins.map(p => {
+    const o = p.x < w / 3 ? { dx: 9, dy: 2, anchor: 'start' } : p.x > w * 2 / 3 ? { dx: -9, dy: 2, anchor: 'end' } : p.y < h / 4 ? { dy: 12.5 } : { dy: -8 };
+    return pad(p, { r: 4.6, size: 5.6, label: p.id === 'G' ? 'GND' : p.id, ...o });
+  }).join('');
+  return svg(w, h, `<rect x="6" y="6" width="${w - 12}" height="${h - 12}" rx="8" fill="${color}" stroke="#0a0c0f" stroke-width="1.4"/><rect x="${w / 2 - 22}" y="${h / 2 - 16}" width="44" height="22" rx="3" fill="#10161a" stroke="#3a4650"/>`
+    + `<text x="${w / 2}" y="${h / 2 - 1}" text-anchor="middle" font-size="9" font-family="sans-serif" font-weight="800" fill="#e8eeeb">${esc(title)}</text><text x="${w / 2}" y="${h / 2 + 15}" text-anchor="middle" font-size="5.6" font-family="sans-serif" fill="#c8ced6">${esc(sub)}</text>${pads}`);
+}
 export function droneSprite(art, spec, w, h, pins) {
+  if (art === 'plane-fc') return padBoard(spec, w, h, pins, { title: 'FC', sub: spec.sprite?.note || 'fixed-wing flight controller', color: '#1a3a2a' });
+  if (art === 'plane-esc') return padBoard(spec, w, h, pins, { title: 'ESC', sub: spec.sprite?.note || 'single brushless ESC + 5 V BEC', color: '#1f2733' });
   if (art === 'drone-fc') return fcBoard(spec, w, h, pins);
   if (art === 'drone-esc') return escBoard(spec, w, h, pins);
   if (art === 'drone-cap') return capacitor(spec, w, h, pins);

@@ -4,6 +4,8 @@ import { BUILTIN_WORKSPACES, activeWorkspace, setActiveWorkspace } from '../core
 import { PACKS, packTypes, isInstalled, installPack, removePack, dependentsOf, onPacksChange } from '../core/packs.js';
 import { PART_DEFS } from '../core/parts.js';
 import { quickDrone } from '../core/quick-drone.js';
+import { quickPlane } from '../core/quick-plane.js';
+import { planeWiring, SURFACE } from '../core/plane-wiring.js';
 import { applyCircuitActions } from '../core/ai-actions.js';
 import { FORMAT, VERSION } from '../core/project.js';
 
@@ -80,6 +82,32 @@ export function initWorkspaces({ editor, code, projects }) {
   $('canvas')?.append(dronePrompt);
   const syncDronePrompt = () => { dronePrompt.hidden = activeWorkspace().id !== 'robotics' || (!!getRobotType() && getRobotType() !== 'drone') || editor.state.parts.some(p => /^custom-(drone-(aio|esc|fc|motor)|bmotor-|esp32-c3)/.test(p.type)); };
   onRobotType(() => syncDronePrompt()); editor.on('workspace', syncDronePrompt); projects.onSwitch(() => setTimeout(syncDronePrompt, 0)); syncDronePrompt();
+
+  // A plane project: one tap builds and wires the plane circuit, and the check on the canvas says what is wrong with the wires (the same check the AI is told about)
+  const planeCard = el('div', 'drone-start plane-card'); planeCard.hidden = true; planeCard.setAttribute('role', 'status');
+  $('canvas')?.append(planeCard);
+  const build = ask => {
+    const q = quickPlane(ask, editor.exportProject()); if (!q?.actions.length) return;
+    const r = applyCircuitActions(editor.exportProject(), q.actions);
+    editor.importProject({ format: FORMAT, version: VERSION, parts: r.parts, wires: r.wires });
+    editor.status('Plane parts placed and wired. The flight controller is generic: match its pads to your real board.');
+  };
+  function paintPlane() {
+    const on = activeWorkspace().id === 'robotics' && getRobotType() === 'plane';
+    planeCard.hidden = !on; if (!on) return;
+    const w = planeWiring(editor.state); planeCard.classList.toggle('bad', !!w.fatal);
+    if (!w.present) {
+      const kids = [el('b', '', 'Building a plane?'), el('span', '', 'Place and wire the parts for me:')];
+      for (const [label, ask] of [['Flying wing with an EDF', 'build a flying wing with an edf'], ['Plane with a propeller', 'build a plane with a propeller motor']]) { const b = el('button', '', label); b.type = 'button'; b.addEventListener('click', () => build(ask)); kids.push(b); }
+      planeCard.replaceChildren(...kids); return;
+    }
+    const head = el('b', '', 'Plane check');
+    if (w.fatal) { planeCard.replaceChildren(head, el('span', 'plane-msg', w.fatal)); return; }
+    if (!w.problems.length) { const on = Object.keys(w.servos).map(k => SURFACE[k]).join(' and '); planeCard.replaceChildren(head, el('span', '', `All good: the wires match a working plane${on ? ` (${on} wired)` : ''}.`)); return; }
+    const ul = el('ul', 'plane-list'); for (const t of w.problems.slice(0, 4)) ul.append(el('li', '', t)); if (w.problems.length > 4) ul.append(el('li', '', `…and ${w.problems.length - 4} more.`));
+    planeCard.replaceChildren(head, ul);
+  }
+  onRobotType(paintPlane); editor.on('workspace', paintPlane); editor.on('change', paintPlane); projects.onSwitch(() => setTimeout(paintPlane, 0)); paintPlane();
 
   $('workspacesClose').addEventListener('click', close);
   modal.addEventListener('click', e => { if (e.target === modal) close(); });

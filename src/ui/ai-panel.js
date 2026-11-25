@@ -13,6 +13,8 @@ import { quickEdit } from '../core/quick-edits.js';
 import { solveSteps, splitSteps, coversNamedParts } from '../core/compound.js';
 import { quickAssembly } from '../core/quick-assembly.js';
 import { quickDrone } from '../core/quick-drone.js';
+import { quickPlane } from '../core/quick-plane.js';
+import { planeWiring } from '../core/plane-wiring.js';
 import { recipeEdit } from '../core/recipes.js';
 import { eligibleForLearning, prepareLearning, templatizeInstruction } from '../core/learned.js';
 import { learnedRecipes, addLearned, learningOn, setLearning } from '../core/learned-store.js';
@@ -403,7 +405,7 @@ export function initAiPanel(editor, code, sim = null) {
       return u ? (u.kind === 'off' ? { actions: [], code: null, explanation: u.explanation, kind: 'off' } : { ...u, viaModel: true }) : null;
     };
     const solveStep = async (step, circ) => recipeEdit(step, circ, { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }) || quickEdit(step, circ) || (globalThis.VLAB_NO_TINY ? null : await modelStep(step, circ).catch(() => null));
-    let quick = in3d ? null : quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }), tinyMs = 0;
+    let quick = in3d ? null : quickPlane(text, editor.exportProject()) || quickDrone(text, editor.exportProject()) || recipeEdit(text, editor.exportProject(), { sketchIsCustom: isCustomSketch(code.source), learned: learnedRecipes() }), tinyMs = 0;
     const multi = !quick && !in3d && !!splitSteps(text);
     if (multi) {        // "add a servo and connect it to pin 9": step by step, all on this device. If any step is not understood the whole request goes on untouched: no half answers.
       const t0 = Date.now();
@@ -458,7 +460,7 @@ export function initAiPanel(editor, code, sim = null) {
     const stopped = () => { messages.push({ id: ++seq, role: 'error', text: 'Stopped. Nothing was changed.' }); };
     try {
       const circuit = in3d ? { parts: [], wires: [] } : editor.exportProject();
-      const args = { signal, instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, ...(activeWorkspace().mix ? { mix: activeWorkspace().id } : {}), robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
+      const args = { signal, instruction: text, circuit, code: in3d ? '' : code.source, context: in3d ? null : { ...gatherContext(code, sim), ...(activeWorkspace().robotics ? { drone: droneWiring(editor.state), plane: planeWiring(editor.state) } : {}) }, history, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, ...(activeWorkspace().mix ? { mix: activeWorkspace().id } : {}), robotType: getRobotType(), ...(in3d ? { assembly: await asmApi.describe() } : {}) };
       let res, localErr = '';
       if (quick) res = { ok: true, ...quick, meta: quick.viaModel ? { provider: 'CircuitBench model', model: 'tiny · in your browser', ms: tinyMs } : { provider: 'Instant assistant', model: 'built in', ms: 0 } };
       else if (hostedOn() || (approvedNow && hasHostedAi() && !providersWithKeys().length)) {
