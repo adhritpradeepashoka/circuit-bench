@@ -369,8 +369,8 @@ export function initPartCreator(editor, { createPart = defaultCreatePart } = {})
     const progress = (id, name, tried) => { status.textContent = tried ? `${tried} provider${tried > 1 ? 's' : ''} could not answer — trying ${name}…` : `Designing your part with ${name}…`; };
     try {
       if (!refine && !opts.photoUrl && createPart === defaultCreatePart) {      // a fresh part: template → brain (small) + picture (big), combined
-        const [{ TEMPLATES }, web] = await Promise.all([import('../core/part-templates.js'), import('../sim/webllm.mjs')]);
-        const onDevice = (() => { try { return localStorage.getItem('virtual-lab:ai-local') === '1'; } catch { return false; } })() && web.webgpuAvailable();
+        const [{ TEMPLATES }, web] = await Promise.all([import('../core/part-templates.js'), import('../sim/webllm.mjs').catch(() => null)]);   // the on-device WebGPU brain is optional: a stale tab or a blocked file must not stop the hosted route
+        const onDevice = (() => { try { return localStorage.getItem('virtual-lab:ai-local') === '1'; } catch { return false; } })() && !!web && web.webgpuAvailable();
         res = await createPartSplit({ description, workspace: activeWorkspace().robotics ? 'robotics' : activeWorkspace().id, signal: aiBusy.signal, templates: TEMPLATES, learned: learnedTemplates(), device: d => deviceModel(d, TEMPLATES), local: onDevice ? d => web.brainLocal({ description: d, onProgress: p => { status.textContent = `Loading the on-device model… ${Math.round((p?.progress || 0) * 100)}%`; } }) : null,
           onProgress: msg => { status.textContent = msg; },
           onPartial: r => { draft = { ...clone(r.spec), id: editing || draft.id }; paintForm(); $('pcFix').hidden = false; status.textContent = 'Pins and behaviour are ready — drawing it in detail (you can already save this)…'; } });

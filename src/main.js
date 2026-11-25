@@ -1,4 +1,5 @@
 import '@wokwi/elements';
+import { watchStaleTab } from './ui/stale-tab.js';
 import './styles.css';
 import './theme-forge.css';
 import { Editor } from './ui/editor.js';
@@ -186,5 +187,6 @@ $('importPcbFile').onchange = async e => { const file = e.target.files[0]; e.tar
 $('newProject').onclick = () => { setMenu(false); projects.openModal({ focusNew: true }); };
 $('openProjects').onclick = () => { setMenu(false); projects.openModal(); };
 
+watchStaleTab();
 window.__vlab = { robotPicker, editor, sim, code, projects, workspaces, tour, account, assembly };
 if (/[?&]diag=1/.test(location.search)) import('./ui/diag.js').then(m => m.startDiag(editor));   // handy in the browser console
