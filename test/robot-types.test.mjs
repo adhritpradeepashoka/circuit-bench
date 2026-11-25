@@ -37,7 +37,7 @@ test('each type leads with parts that exist, and the Test tab opens in the right
   assert.ok(circuitPartsFor('rover', t => have.has(t)).includes('l298n'));
   assert.equal(circuitPartsFor('standalone'), null); assert.equal(parts3dFor('standalone'), null); assert.equal(circuitPartsFor('nonsense'), null);
   assert.equal(testFor('arm'), 'robot'); assert.equal(testFor('rover'), 'robot'); assert.equal(testFor('drone'), 'fly'); assert.equal(testFor('standalone'), 'auto'); assert.equal(testFor(null), 'auto');
-  for (const t of ROBOT_TYPES) if (t.parts3d) for (const id of t.parts3d) assert.ok(makeKitPart(id) || /^(motor|prop|frame|board|battery|camera|standoff)-/.test(id), `${t.id}: ${id} is not a part`);
+  for (const t of ROBOT_TYPES) if (t.parts3d) for (const id of t.parts3d) assert.ok(makeKitPart(id) || /^(motor|prop|frame|board|battery|camera|standoff|edf|fcwing|rx|antenna)-/.test(id), `${t.id}: ${id} is not a part`);
 });
 test('every circuit part a type leads with is really in the catalogue', async () => {
   globalThis.HTMLElement ||= class {};

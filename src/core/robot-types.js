@@ -1,6 +1,6 @@
 // What kind of robot is this project? A robotics project starts by asking, and the answer shapes the rest: which circuit parts lead the sidebar, which 3D parts
 // lead the Assembly list, what the AI assumes, and which Test view opens first. Pure data, so tests and the AI prompt can use it without a browser.
-import { DRONE_PRESETS } from './drone-parts.js';
+import { DRONE_PRESETS, PLANE_PRESETS } from './drone-parts.js';
 import { KIT_PRESETS } from './robot-kit.js';
 
 export const ROBOT_TYPES = [
@@ -18,7 +18,7 @@ export const ROBOT_TYPES = [
     notes: 'This is a DRONE (quadcopter). Prefer the Drone parts: frame, four motors (two CW, two CCW), props, a flight controller or AIO board, an ESC, a battery, optionally a camera. Motors must alternate direction diagonally. Check the battery cell count against the motors\' Kv and the props\' size, and keep thrust above twice the weight.' },
   { id: 'plane', name: 'Plane / fixed wing', blurb: 'Wings, an EDF or a propeller, elevon servos and a flight controller', test: 'auto',
     circuit: ['plane-fc', 'plane-esc', 'plane-motor', 'drone-battery', 'drone-rx', 'servo', 'mpu6050', 'battery', 'pushbutton', 'led'],
-    parts3d: null,
+    parts3d: [...PLANE_PRESETS.map(([, id]) => id), 'servo-x-micro', 'servo-x-mini'],
     notes: 'This is a FIXED-WING PLANE, often a flying wing, sometimes with an EDF (a ducted fan). Use the Plane parts: "Fixed-wing flight controller (generic)", "Plane ESC (single, with 5 V BEC)", "Brushless motor or EDF (3 wires)", the drone LiPo, a receiver and ordinary servos on the control surfaces. The ESC takes battery + and −, drives the motor\'s three wires A, B, C in order, sends its SIG lead to the flight controller\'s MOT pad, and its 5V powers the flight controller, receiver and servos (never put a servo or receiver on the battery: it burns out). On a flying wing S1 is the left elevon and S2 the right. A motor with two wires swapped spins backwards (an EDF then gives almost no thrust). Do not use the quadcopter AIO or a 4-in-1 ESC. CircuitBench has no 3D parts for planes yet, so the Assembly tab is not used for this build. If the student names a real flight controller (a CoreWing F405 Wing Mini, say), do not invent its pinout: tell them its pads are named differently and to match them by job from its datasheet.' },
   { id: 'walker', name: 'Walker', blurb: 'Legs on servos — walks on two, four or more', test: 'robot',
     circuit: ['arduino-uno', 'arduino-nano', 'esp32-devkit', 'raspberry-pi-pico', 'servo', 'mpu6050', 'hc-sr04', 'pushbutton', 'led', 'battery', 'buzzer'],
@@ -43,6 +43,6 @@ export const testFor = id => robotType(id)?.test || 'auto';
 /** A short paragraph for the AI: what the person is building, so it does not have to guess. */
 export function robotTypeNotes(id) { const t = robotType(id); return t ? `The person chose "${t.name}" when starting this project. ${t.notes}` : ''; }
 /** Preset names (for lookups in tests and the list): id → name. */
-export const PRESET_NAMES = Object.fromEntries([...DRONE_PRESETS, ...KIT_PRESETS].map(([n, id]) => [id, n]));
+export const PRESET_NAMES = Object.fromEntries([...DRONE_PRESETS, ...PLANE_PRESETS, ...KIT_PRESETS].map(([n, id]) => [id, n]));
 /** When the project has not said what it is building, the short AI prompt still lists these (template parts are stored as custom-<id>). */
 export const ROBOTICS_STARTERS = ['servo', 'dc-motor', 'l298n', 'custom-tb6612', 'hc-sr04', 'mpu6050', 'battery', 'custom-drone-aio', 'custom-drone-motor', 'custom-drone-battery'];

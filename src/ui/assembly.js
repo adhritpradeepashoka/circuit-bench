@@ -7,7 +7,7 @@ import { featureEdges, circleNear, slotNear, findHoles } from '../core/hole-find
 import { Assembly, worldFrame, mateTransform, turn, bomCsv } from '../core/assembly-scene.js';
 import { explainJoin, findProblems } from '../core/assembly-check.js';
 import { quickAssembly } from '../core/quick-assembly.js';
-import { makeDronePart, parseDroneId, DRONE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
+import { makeDronePart, parseDroneId, DRONE_PRESETS, PLANE_PRESETS, DRONE_ID_HELP, MOTOR_SIZE_LIST, motorId, defaultBore } from '../core/drone-parts.js';
 import { MOTOR_SIZES, STACKS, makeMotor, makeProp, makeBattery, analyseQuad } from '../core/drone.js';
 import { buildDroneMesh } from './drone-models.js';
 import { buildKitMesh } from './kit-models.js';
@@ -428,7 +428,7 @@ export function initAssembly({ editor, projects = null, circuitServos = null, ci
   const bsay = (t, bad) => { bnote.textContent = t; bnote.classList.toggle('bad', !!bad); };
   const dyn = new Map();                                                   // drone parts, made from their ids on demand
   const genPart = id => { if (dyn.has(id)) return dyn.get(id); const raw = makeDronePart(id) || makeKitPart(id), v = raw && validateRobotPart(raw); if (!v?.ok) return null; const p = { ...v.part, drone: raw.drone, kit: raw.kit, generated: true }; dyn.set(id, p); return p; };
-  const everyPart = () => [...libraryParts(), ...DRONE_PRESETS.map(([, id]) => genPart(id)).filter(Boolean), ...KIT_PRESETS.map(([, id]) => genPart(id)).filter(Boolean)];
+  const everyPart = () => [...libraryParts(), ...DRONE_PRESETS.map(([, id]) => genPart(id)).filter(Boolean), ...PLANE_PRESETS.filter(([, id]) => !DRONE_PRESETS.some(d => d[1] === id)).map(([, id]) => genPart(id)).filter(Boolean), ...KIT_PRESETS.map(([, id]) => genPart(id)).filter(Boolean)];
   const findPart = id => everyPart().find(p => p.id === id) || genPart(id);
   // the floating bar over the 3D view
   const mkBtn = (label, title, fn, id) => { const b = el('button', { type: 'button', className: 'asm-tool', textContent: label, title, ariaLabel: title, id }); b.addEventListener('click', fn); return b; };
@@ -483,7 +483,24 @@ export function initAssembly({ editor, projects = null, circuitServos = null, ci
       make = () => `prop-${Number(dia.value)}x${Number(pitch.value)}x${bl.value}-b${Number(bore.value) > 0 ? Number(bore.value) : defaultBore(Number(dia.value))}`;
     } else if (k === 'Battery') {
       const cells = bSel([1, 2, 3, 4, 5, 6], 4), mah = bNum(1500, { step: 50, min: 100 }), c = bNum(75, { step: 5, min: 10 });
-      bBody.append(bField('Cells (S)', cells, 'asmBBS'), bField('Capacity, mAh', mah, 'asmBBM'), bField('Discharge rating, C', c, 'asmBBC')); make = () => `battery-${cells.value}s-${Math.round(Number(mah.value))}-${Math.round(Number(c.value))}`;
+      const bl = bNum('', { step: 0.5, min: 10 }), bw = bNum('', { step: 0.5, min: 5 }), bh = bNum('', { step: 0.5, min: 3 }), sizeNote = el('p', { className: 'asm-note', id: 'asmBBNote' });
+      const typ = () => { const b = makeBattery({ cells: Number(cells.value), mAh: Number(mah.value) || 1500, c: Number(c.value) || 75 }); [bl.placeholder, bw.placeholder, bh.placeholder] = b.sizeMm.map(v => `${v} (estimated)`); sizeNote.textContent = `Without your numbers the size is a guess from the capacity (about ${b.sizeMm.join(' × ')} mm, ${Math.round(b.massGrams)} g). Measure the pack and type its size below if yours differs.`; };
+      for (const x of [cells, mah, c]) x.addEventListener('input', typ); typ();
+      bBody.append(bField('Cells (S)', cells, 'asmBBS'), bField('Capacity, mAh', mah, 'asmBBM'), bField('Discharge rating, C', c, 'asmBBC'), sizeNote, el('details', { className: 'asm-adv' }, el('summary', { textContent: 'My pack is a different size' }), bField('Length, mm', bl, 'asmBBL'), bField('Width, mm', bw, 'asmBBW'), bField('Height, mm', bh, 'asmBBH')));
+      make = () => `battery-${cells.value}s-${Math.round(Number(mah.value))}-${Math.round(Number(c.value))}${[bl, bw, bh].every(x => Number(x.value) > 0) ? `-${Number(bl.value)}x${Number(bw.value)}x${Number(bh.value)}` : ''}`;
+    } else if (k === 'EDF') {
+      const dia = bNum(50, { step: 1, min: 25, max: 120 }), g = bNum('', { step: 1, min: 5 }), note = el('p', { className: 'asm-note' });
+      const typ = () => { g.placeholder = `${Math.round(70 * (Number(dia.value) / 50) ** 3)} (estimated)`; note.textContent = 'Fan diameter is the size on the box (a "50 mm" EDF is 50). The duct length and weight are guesses: weigh yours and type it below.'; }; dia.addEventListener('input', typ); typ();
+      bBody.append(bField('Fan diameter, mm', dia, 'asmBED'), note, bField('Weight with motor, g (optional)', g, 'asmBEM')); make = () => `edf-${Number(dia.value)}${Number(g.value) > 0 ? `-m${Number(g.value)}` : ''}`;
+    } else if (k === 'Flight controller') {
+      const L = bNum(36, { step: 0.5, min: 12, max: 90 }), W = bNum(36, { step: 0.5, min: 12, max: 90 }), px = bNum(30.5, { step: 0.5, min: 6 }), py = bNum(30.5, { step: 0.5, min: 6 }), g = bNum('', { step: 0.5, min: 0.5 });
+      bBody.append(el('p', { className: 'asm-note', textContent: 'Type the size of your board from its datasheet or a ruler. Hole spacing is centre to centre.' }), bField('Board length, mm', L, 'asmBFL'), bField('Board width, mm', W, 'asmBFWd'), bField('Hole spacing across, mm', px, 'asmBFPX'), bField('Hole spacing along, mm', py, 'asmBFPY'), bField('Weight, g (optional)', g, 'asmBFG'));
+      make = () => `fcwing-${Number(L.value)}x${Number(W.value)}-${Number(px.value)}x${Number(py.value)}${Number(g.value) > 0 ? `-m${Number(g.value)}` : ''}`;
+    } else if (k === 'Receiver') {
+      const L = bNum(20, { step: 0.5, min: 8 }), W = bNum(12, { step: 0.5, min: 6 }), H = bNum(6, { step: 0.5, min: 2 });
+      bBody.append(bField('Length, mm', L, 'asmBRL'), bField('Width, mm', W, 'asmBRW'), bField('Height, mm', H, 'asmBRH')); make = () => `rx-${Number(L.value)}x${Number(W.value)}x${Number(H.value)}`;
+    } else if (k === 'Antenna') {
+      const len = bNum(90, { step: 5, min: 15, max: 400 }); bBody.append(bField('Length, mm', len, 'asmBAL')); make = () => `antenna-${Number(len.value)}`;
     } else if (k === 'Frame') {
       const wb = bNum(220, { step: 5, min: 40 }), mp = bSel([9, 12, 16, 19, 't6.6'], 16), st = bSel(Object.keys(STACKS), '30.5');
       bBody.append(bField('Wheelbase (motor to motor), mm', wb, 'asmBFW'), bField('Motor mount, mm (t6.6 = 3-prong whoop)', mp, 'asmBFM'), bField('Stack, mm', st, 'asmBFS')); make = () => `frame-quad-${Math.round(Number(wb.value))}-${mp.value}-${st.value}`;
@@ -1109,7 +1126,7 @@ export function initAssembly({ editor, projects = null, circuitServos = null, ci
   const ai = {
     active: () => view === 'assembly',
     async describe() { if (!three && asm.instances.length) { try { attach(await load3d()); } catch { /* no 3D here: the prompt just has no sizes */ } }
-      const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId, worldBoxes()); const presets = DRONE_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
+      const d = describeAssembly(asm, everyPart().filter(p => !p.generated), anchorId, worldBoxes()); const presets = [...DRONE_PRESETS, ...PLANE_PRESETS.filter(([, id]) => !DRONE_PRESETS.some(d => d[1] === id))].map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (Drone), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).join(', ')}` : null; }).filter(Boolean);
       const kit = KIT_PRESETS.map(([name, id]) => { const p = genPart(id); return p ? `- ${id} — ${name} (${p.category}), ${p.mass?.grams ?? '?'} g. Holes: ${p.frames.map(f => f.id).slice(0, 14).join(', ')}${p.frames.length > 14 ? ', …' : ''}` : null; }).filter(Boolean);
       d.parts += `\n${presets.join('\n')}\n${kit.join('\n')}\n${DRONE_ID_HELP}\n${KIT_ID_HELP}`; return d; },
     /** What the instant 3D assistant needs: placed parts (with their kind, hole ids and frame size), the joints, and the parts list. */
@@ -1130,7 +1147,9 @@ export function initAssembly({ editor, projects = null, circuitServos = null, ci
   };
   projects?.onSwitch(p => { switchScene(p.id); });
   /** The robot type changed: lists and the Test tab's default follow it. */
-  function typeChanged() { testChoice = null; bld.hidden = !!getRobotType() && getRobotType() !== 'drone'; renderCards(); if (view === 'test') show('test'); }
+  const KINDS_DRONE = ['Servo', 'Motor', 'Prop', 'Battery', 'Frame', 'Standoff'], KINDS_PLANE = ['Battery', 'EDF', 'Motor', 'Prop', 'Flight controller', 'Receiver', 'Antenna', 'Servo', 'Standoff'];
+  function paintKinds() { const plane = getRobotType() === 'plane', list = plane ? KINDS_PLANE : KINDS_DRONE; if ([...dKind.options].map(o => o.value).join() === list.join()) return; dKind.replaceChildren(...list.map(o => el('option', { value: o, textContent: o }))); bld.querySelector('summary').textContent = plane ? 'Make a battery, EDF, flight controller…' : 'Make a servo or drone part…'; paintBuilder(); }
+  function typeChanged() { testChoice = null; bld.hidden = !!getRobotType() && !['drone', 'plane'].includes(getRobotType()); paintKinds(); renderCards(); if (view === 'test') show('test'); }
   onRobotType(typeChanged); typeChanged();
   return { ai, show, sync, onRobotType: typeChanged, scene: asm, draft, importFile, pick: (x, y) => three?.pick(x, y), get three() { return three; }, get view() { return view; } };
 }

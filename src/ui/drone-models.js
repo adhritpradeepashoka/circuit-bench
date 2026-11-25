@@ -70,6 +70,24 @@ export function buildDroneMesh(THREE, part) {
     const wedge = new THREE.Shape(); wedge.moveTo(0, 0); wedge.lineTo(w, 0); wedge.lineTo(w, w * Math.tan(th)); wedge.lineTo(0, 0);               // the wedge it sits on (side view: y along, z up)
     const wg = new THREE.ExtrudeGeometry(wedge, { depth: l * 0.8, bevelEnabled: false }); wg.applyMatrix4(new THREE.Matrix4().set(0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1)); wg.translate(-l * 0.4, 0, 0);
     add(wg, 0, piv, 0, C.carbon);
+  } else if (d.kind === 'fcwing') {
+    const pcb = rrect(d.l, d.w, 2);
+    plate(holes(pcb, sq(d.px, d.py), d.hd / 2), 1.6, 0, C.fc, { rough: 0.4 });
+    add(new THREE.BoxGeometry(Math.min(8, d.l * 0.25), Math.min(8, d.w * 0.25), 1.2), 0, -d.w * 0.06, 1.6 + 0.6, C.chip);                                   // the processor
+    add(new THREE.BoxGeometry(Math.min(8, d.l * 0.25), 6, 3), 0, d.w / 2 - 3, 1.6 + 1.5, C.usb, { metal: 0.8, rough: 0.3 });                              // USB port
+    for (const sx of [-1, 1]) add(new THREE.BoxGeometry(2.5, Math.max(4, d.w * 0.35), Math.max(1.5, d.H - 1.6)), sx * (d.l / 2 - 3.2), 0, 1.6 + Math.max(1.5, d.H - 1.6) / 2, C.chip);   // pin headers down the sides
+  } else if (d.kind === 'rx') {
+    add(new THREE.BoxGeometry(d.l, d.w, d.h), 0, 0, d.h / 2, C.fc, { rough: 0.5 }); add(new THREE.BoxGeometry(d.l * 0.3, d.w * 0.5, 0.3), -d.l * 0.1, 0, d.h + 0.1, C.chip);
+    const sock = new THREE.CylinderGeometry(1.2, 1.2, 2, 14); sock.rotateZ(Math.PI / 2); add(sock, d.l / 2 + 0.5, 0, d.h / 2, C.steel, { metal: 0.8, rough: 0.3 });        // the antenna socket
+  } else if (d.kind === 'antenna') {
+    cyl(3, 3, 0, C.steel, 20, { metal: 0.7 }); cyl(1, d.len, 3, C.chip, 12);
+  } else if (d.kind === 'edf') {
+    const ro = d.outer / 2, ri = ro - 1.6, hub = d.dia * 0.2;
+    const tube = (r, len, o = {}) => { const g = new THREE.CylinderGeometry(r, r, len, 48, 1, true); return add(g, 0, 0, ro, C.carbon, { metal: 0.25, ...o }); };
+    tube(ro, d.L); tube(ri, d.L);
+    const hubG = new THREE.CylinderGeometry(hub, hub, d.L * 0.6, 28); add(hubG, 0, -d.L * 0.05, ro, C.motorBase, { metal: 0.4 });
+    for (let k = 0; k < 9; k++) { const blade = new THREE.BoxGeometry(ri - hub, d.L * 0.12, 0.8); blade.translate((ri + hub) / 2, 0, 0); blade.rotateY(k * 2 * Math.PI / 9); blade.rotateX(0); add(blade, 0, d.L / 2 - d.L * 0.2, ro, C.prop, { rough: 0.35 }); }   // the fan, near the inlet
+    plate(holes(rrect(16, d.L * 0.85, 2), [[0, -d.L / 4], [0, d.L / 4]], 1.7), 2, 0, C.carbon, { metal: 0.3 });                                                // the saddle the two mount holes go through
   } else if (d.kind === 'standoff') { const s = new THREE.Shape(); s.absarc(0, 0, d.r, 0, Math.PI * 2, false); const h = new THREE.Path(); h.absarc(0, 0, d.hd / 2, 0, Math.PI * 2, true); s.holes.push(h); plate(s, d.h, 0, C.brass, { metal: 0.8, rough: 0.3 }); }
   return g;
 }
